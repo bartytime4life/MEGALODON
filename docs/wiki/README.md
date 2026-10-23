@@ -2,56 +2,81 @@
 
 ![MEGALODON field guide: understand the signal, inspect the evidence, keep authority explicit.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/395f5f311799743bdf443a69bbb0f0b16e573654/assets/docs/field-guide-cover.png)
 
-## A defense workspace you can inspect
+## Local defense. Inspectable evidence. Human decisions.
 
-MEGALODON connects bounded network metadata, a private SQLite evidence trail,
-visual Linux investigation, and separately scoped local workflows. Its design
-keeps three questions visible: **What was observed? What supports this finding?
-Who authorizes the next step?**
+MEGALODON brings bounded network metadata, private SQLite evidence, visual Linux
+investigation and separately scoped host workflows into one workspace. It is
+useful for investigating connections, understanding recorded findings, reviewing
+host changes and preparing evidence-led reports. Optional local AI explains
+bounded context; it cannot turn its own proposal into permission.
 
-Built under [Andy’s project direction](https://github.com/bartytime4life), this
-is an inspectable portfolio of AI-assisted product design, systems engineering,
-security judgment and evidence-led delivery.
+**Linux reference · Python 3.11+ · Apache-2.0 · No core subscription or cloud account**
 
-## Take the two-minute tour
-
-| Explore | What you will find |
+| Start here | Go deeper |
 | --- | --- |
-| [Visual tour](visual-tour.md) | Actual synthetic desktop/mobile captures, architecture and readable limits |
-| [Engineering case studies](engineering-case-studies.md) | Concrete problems, decisions, tradeoffs and source evidence |
-| [Builder profile](builder-profile.md) | Product direction, collaboration method and technical interview prompts |
-| [Evidence index](evidence-index.md) | Exact revisions, capture provenance, historical measurements and open gates |
+| [Quick start](quick-start.md) — open the local app | [Technical deep dive](technical-deep-dive.md) — contracts, bounds, identity and authority |
+| [Visual tour](visual-tour.md) — synthetic screenshots and animated explainers | [Engineering case studies](engineering-case-studies.md) — decisions and measurable tradeoffs |
+| [Practical applications](practical-applications.md) — useful real-world tasks | [Evidence index](evidence-index.md) — exact revisions and interpretation limits |
+| [Operator guide](operator-guide.md) — sources, findings and reports | [Security boundaries](security-boundaries.md) — what each interface can do |
 
-## Follow a finding all the way back
+## Follow the evidence
 
-![Synthetic Findings inspector showing one finding, linked event, ingestion receipt and separate timestamps.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/395f5f311799743bdf443a69bbb0f0b16e573654/assets/docs/finding-inspector-desktop.png)
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/finding-walkthrough.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/finding-walkthrough.gif" alt="Moving emphasis over a historical synthetic Findings capture identifies finding, linked event, ingestion receipt and distinct clocks." width="1200">
+</picture>
 
-*Actual rendered synthetic candidate, PR #654 / `424d957` / run
-[39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
-No live PC telemetry is shown. [Read the capture scope](visual-tour.md#actual-interface-synthetic-evidence).*
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/finding-walkthrough.png). Brief motion repeats twice and stops; all labels remain visible.
 
-## Choose your next step
+**Annotated still, not a live session.** The original rendered synthetic capture
+is from PR #654 / `424d957` /
+[run 39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
+[Provenance and interpretation](visual-tour.md#actual-interface-synthetic-evidence).
 
-| Task | Guide |
-| --- | --- |
-| Open the local Linux app | [Quick start](quick-start.md) |
-| Understand sources, findings and reports | [Operator guide](operator-guide.md) |
-| Understand what local AI and tools can do | [Integrations and local AI](integrations-and-qwen.md) |
-| Review trust and authority | [Security boundaries](security-boundaries.md) |
-| Inspect current capability limits | [Roadmap and current limits](roadmap-and-limits.md) |
-| Build or improve the project | [Development and validation](development-and-validation.md) |
-| Find every repository document | [Complete documentation catalog](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-map.md) |
+## Understand the system
 
-## A measured tradeoff, openly reported
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/evidence-flow.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/evidence-flow.gif" alt="Explanatory flow from bounded metadata through fixed heuristics and private SQLite evidence to the local inspector and reports." width="1200">
+</picture>
 
-The October 1 synthetic benchmark recorded **98.1% fewer OS-written bytes** for
-10,000 retained packet records; history-query p95 rose from 4.21 ms to 27.06 ms.
-Both the result and cost are visible in the [storage case study](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff).
-It is a historical finite measurement, not a production-capacity promise.
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/evidence-flow.png). Brief motion repeats twice and stops; all labels remain visible.
 
-**Documentation basis:** [`main@0acdf72663804c9ae8380522e344a515ac65978c`](https://github.com/bartytime4life/MEGALODON/commit/0acdf72663804c9ae8380522e344a515ac65978c),
-October 22, 2026 (America/Chicago). Historical case studies and
-captures retain their own pins. [Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md)
-explains what exists and what remains unproved. The host application is the
-local Linux HUD; the separate [PC Snapshot Console](https://github.com/bartytime4life/MEGALODON/blob/main/site/README.md)
-has no live host connection. This Wiki is generated from `docs/wiki/`.
+The three core heuristics identify SYN bursts, distinct-port patterns and long
+DNS/UDP query-length metadata. They produce evidence for review, not malware
+verdicts. Source qualification, ingestion completion and observation time stay
+visible. [Architecture and exact thresholds](technical-deep-dive.md).
+
+## Explore the current capabilities
+
+| Area | Available in source | Keep this distinction |
+| --- | --- | --- |
+| Network investigation | Atlas, own-account program/socket context, finding inspector, managed history | Approximate geography and bounded observations are not whole-network visibility |
+| Host review | Lynis/AIDE, hardening, persistence and passive gateway review | Differences and suggestions need operator interpretation |
+| Local AI | Installed-model selection, listener posture admission, bounded advice | Canonical Qwen acceptance remains UNBOUND |
+| Recovery evidence | Read-only readiness plus pinned backup/isolated-test receipts | No host restore, backup probing or malware causality |
+| Explicit defense | Separate protected Linux workflows and temporary containment | No automatic or permanent blocking; legacy CLI apply still refuses |
+| Hosted reference | Address-free snapshot viewer in tab memory | No live PC connection |
+
+## Keep ambition and evidence together
+
+The project explores how local visual investigation, deterministic records,
+AI assistance and operator decisions can work together. Its value is the
+inspectable connection between those parts. The [builder profile](builder-profile.md)
+and [case studies](engineering-case-studies.md) connect design choices to public
+artifacts without claiming customer deployment, independent certification or
+production detection accuracy.
+
+The historical October 1 benchmark recorded **98.1% fewer OS-written bytes** for
+10,000 retained synthetic packet records; query p95 increased from 4.21 ms to
+27.06 ms. [Both result and cost](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff)
+remain visible.
+
+**Source basis:** [`main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c), October 22, 2026
+(America/Chicago). [Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) records
+the source map, passing source-head CI/browser/CodeQL runs, open #445/#446 and
+remaining host/platform gates. Historical captures and benchmarks keep their
+own revisions. This Wiki is generated from `docs/wiki/` after review and merge.
+
+[Local AI](integrations-and-qwen.md) · [Roadmap and limits](roadmap-and-limits.md) ·
+[Development](development-and-validation.md) · [Every document](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-map.md)

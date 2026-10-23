@@ -1,111 +1,107 @@
 # Current state and evidence boundaries
 
 **Documentation basis — October 22, 2026 (America/Chicago).**
-Repository: [bartytime4life/MEGALODON](https://github.com/bartytime4life/MEGALODON).
-Source pin: [`0acdf72663804c9ae8380522e344a515ac65978c`](https://github.com/bartytime4life/MEGALODON/commit/0acdf72663804c9ae8380522e344a515ac65978c);
-tree `028f67a172b011ab4281e68b2162597a21a05920`.
+Source: [`main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c);
+tree `3c4773603fa90e13d627d0fb107b45f8e986b079`.
 
-This is an orientation and correction layer. It preserves dated records and
-does not approve a model, host action, release, or deployment. **OBSERVED** below
-means source or external state was read; tests need their own revision and result.
+**OBSERVED** below means source or authoritative external state was read in this
+pass. **VERIFIED** requires a named local check and its result. Code presence,
+passing CI, approval, merge, publication and installed-host acceptance are
+different facts. This page is descriptive; the specification and security
+review retain their normative authority.
 
 ## What exists at this pin
 
-| Area | OBSERVED implementation | Boundary and primary source |
+| Area | OBSERVED implementation | Limit / primary source |
 | --- | --- | --- |
-| Metadata core | Bounded typed input, three fixed rules, private SQLite audit | Payloads and payload-derived hashes are outside the event model. [Specification](../SPECIFICATION.md), [models](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/megalodon/models.py), [detectors](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/megalodon/detector.py) |
-| Linux workspace | HUD, Findings, Sensors, Setup, Reports, Evidence and Help | Loopback host application; read projections and protected actions are different routes. [HTTP contract](dashboard-http-contract.md) |
-| Finding inspector | A qualified finding links to its stored event and ingestion-run receipt | Returned-page scope, recorded times and ingestion completion are visible. It does not establish current sensor liveness. [PR #654](https://github.com/bartytime4life/MEGALODON/pull/654), [control room contract](control-room-contract.md) |
-| History and reports | Segmented private evidence, bounded history, compact summaries and local visual reports | Gaps, packet/flow units and report windows remain explicit. Defaults: 14 days / 20 GiB, daily reports at 9 AM local time. [Managed evidence](managed-evidence.md), [reports](efficient-recording-reports.md) |
-| Companion catalog | Twelve static entries, including Lynis and AIDE | Presence is distinct from running, configured and admitted data. Static catalog commands execute nothing. [Catalog](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/megalodon/capabilities.py), [background tools](background-tools.md) |
-| Host security | Explicit Lynis audits, AIDE baseline/comparison, fixed public threat-reference refresh | Unprivileged audit coverage; file differences and feed matches need interpretation. No automatic hardening, quarantine or containment. [Host security](host-security.md) |
-| Offline sources | Bounded TShark, Zeek and Suricata paths with separate contracts | A completed-file importer does not operate or qualify a producer. [Offline analysis](offline-analysis.md), [Suricata projection](suricata-evidence-projection.md) |
-| Local models | Optional installed-model selection, bounded explanation and closed proposals | Runtime selection does not complete canonical Qwen Airlock acceptance; model output is untrusted. [Model selection](local-model-selection.md), [canonical binding](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/config/model-bindings/qwen.unbound.json) |
-| Firewall interfaces | Legacy CLI apply refuses; separate protected Linux HUD containment exists | Distinguish existing implementation from authorization to use it. This documentation task authorizes no host operation. [Defense contract](visual-operations-defense.md), [legacy backend](https://github.com/bartytime4life/MEGALODON/blob/0acdf72663804c9ae8380522e344a515ac65978c/megalodon/firewall.py) |
-| Hosting | A separate address-free snapshot viewer; local HUD remains the host application | Last recorded publication: **PC Snapshot Console v67**, October 17. Hosting was not re-read for this documentation pass; current deployment and source parity are UNKNOWN. [Site scope](../site/README.md), [publication history](site-source-alignment.md) |
-| Desktop startup | Installed launcher starts/reuses a managed user HUD service; login startup is a separate opt-in | Saved monitoring preferences can resume collectors; opening a tab is not a new capture authorization. [Local setup](local-pc-setup.md), [background workflows](background-tools.md) |
-| Dependency qualification | Pluggy 1.7.0 merged through #657; main still pins Playwright 1.63.0 and its exact native-focus driver profile | The 1.64.0 update and correction are open proposals, not installed runtime capabilities. [Dependency policy](dependency-policy.md), [browser acceptance](dashboard-browser-acceptance.md) |
-| License | Apache-2.0 | Packaging and redistribution obligations remain applicable. [LICENSE](../LICENSE), [notices](../NOTICE) |
+| Metadata core | Typed `PacketEvent`, three fixed heuristics, private SQLite audit | No packet payloads or payload-derived hashes. [Models](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/megalodon/models.py), [detector](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/megalodon/detector.py), [specification](../SPECIFICATION.md) |
+| Linux workspace | HUD, Findings, Sensors, Setup, Reports, Evidence and Help | Core reader and protected action routes have different authority. [HTTP contract](dashboard-http-contract.md) |
+| Finding inspector | Finding → linked event → ingestion run; distinct clocks | Bounded returned-page evidence, not sensor liveness. [Control room](control-room-contract.md#qualified-finding-evidence-inspector) |
+| History and reporting | Segments, compact summaries, local visual reports and fixed schedules | Defaults: 14 days / 20 GiB; reports 9 AM local time. Gaps and source units remain explicit. [Managed history](managed-evidence.md), [reports](efficient-recording-reports.md) |
+| Sources and companions | Twelve catalog entries; bounded TShark, Zeek, Suricata and separate HUD collector paths | Installed/running/configured/admitted are distinct. Static plans execute nothing. [Offline analysis](offline-analysis.md), [background tools](background-tools.md) |
+| Host review | Lynis, AIDE, hardening posture, persistence, passive gateway and own-account process/network context | Source-specific coverage and bounds; no compromise verdict. [Host security](host-security.md) |
+| Recovery readiness | Validated AIDE projection; missing backups/causality/conflict evidence stays visible | Always `restore_eligible=False`, `backup_state=not_integrated`. [Projection](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/megalodon/recovery_readiness.py), [PR #664](https://github.com/bartytime4life/MEGALODON/pull/664) |
+| External backup evidence | Read-only trust/backup/isolated-test receipt admission; raw-byte pins, identities, chronology and expiry | Opens no backup, runs no test and grants no host restore. [Contract](host-backup-evidence.md), [validator](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/megalodon/backup_evidence.py), [PR #665](https://github.com/bartytime4life/MEGALODON/pull/665) |
+| Local models | Optional installed-model selection, bounded explanations, closed proposals; listener admission precedes inventory | Runtime selection is distinct from canonical Airlock acceptance. [Provider](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/megalodon/ai_provider.py), [PR #663](https://github.com/bartytime4life/MEGALODON/pull/663), [model selection](local-model-selection.md) |
+| Firewall interfaces | Legacy CLI apply refuses; separate protected Linux HUD temporary containment exists | Documentation grants no permission to operate it. [Defense contract](visual-operations-defense.md) |
+| Desktop lifecycle | Private per-user install/update/rollback; managed user HUD; optional login startup | Saved monitoring choices retain separate scope. [Setup](local-pc-setup.md) |
+| Browser qualification | Playwright 1.64.0, exact native-focus driver profile and lock from merged #660 | No operational/platform acceptance follows from a dependency repair. [Dependency policy](dependency-policy.md), [browser acceptance](dashboard-browser-acceptance.md) |
+| License | Apache-2.0 | Artifact notices, provenance and release gates remain separate. [LICENSE](../LICENSE), [NOTICE](../NOTICE) |
+
+## Hosting observation
+
+The Sites service was re-read in this pass: existing **PC Snapshot Console v67**,
+owner-private access configuration, same Site identity and current URL. This is
+an **OBSERVED metadata result**, not a rendered browser test or a new deployment.
+No Site source, audience or deployment was changed. Current deployment-source
+parity and installed-PC revision remain UNKNOWN. The
+[documented viewer](../site/README.md) imports address-free summaries into tab
+memory and has no live PC connection. Older empty-410 retirement records remain
+historical; v67 metadata does not recreate their source proofs.
 
 ## Corrections to older orientation material
 
-| Older statement | Present interpretation |
+| Older claim | Present interpretation |
 | --- | --- |
-| “The hosted console is retired” | Correct for the historical empty-410 publication. The existing Site was later restored as a separate snapshot viewer. It does not control the PC. |
-| “The catalog has ten tools” | The current static catalog includes Lynis and AIDE, for twelve entries including the core. Old twelve-tool references containing OSSEC/Zabbix describe a different historical catalog. |
-| “The dashboard is read-only” | Correct for core telemetry-reader interfaces. Current Linux HUD actions are separately protected capabilities. Never use a read-only claim to describe all application routes. |
-| “All firewall application is unsupported” | Applies to the retained legacy CLI/backend. A separate HUD workflow exists; its implementation does not itself authorize its use. |
-| “No scheduler or feed path exists” | Applies to the inert general automation contract. Fixed local report/companion schedules and explicit public reference downloads are separate implemented workflows. No general-purpose SOAR executor follows. |
-| “No license” or September issue/test counts | Preserved research/history only. Re-read current source, issue state and exact-head checks before use. |
-
-These distinctions supplement the scope notes in the specification and security
-review. They do not silently change their normative security requirements.
-Where a contract and implementation disagree, treat it as a review question;
-do not infer permission from the presence of code.
+| “The whole application is read-only/plan-only” | True for named core reader / legacy CLI interfaces; protected Linux HUD workflows are separate |
+| “No scheduler, feed or watcher exists” | General automation remains inert; fixed local schedules, configured collectors and explicit public reference refreshes exist |
+| “File changes prove malware or recoverability” | AIDE differences lack malicious causality and host restoration authority |
+| “Valid backup receipts mean backups are integrated” | They are external evidence admission only; no executable host-recovery integration |
+| “A working local model completes Qwen acceptance” | Runtime selection is separate; canonical record remains UNBOUND / NOT_RECORDED |
+| “Playwright 1.64.0 is an open proposal” | Superseded by merged #660; earlier 1.63.0 timeout and macOS fixture failures keep their original run identities |
+| “No license” or old issue counts | Historical research; Apache-2.0 exists and live tracking must be re-read |
 
 ## Remaining public gates
 
-GitHub readback on October 22 found two open issues (#445 and #446) and two
-open pull requests (#658 and #660), before this documentation candidate. Issue
-#345 closed as completed on October 19 after [PR #656](https://github.com/bartytime4life/MEGALODON/pull/656).
-Its closure does not complete native macOS acceptance. This is a dated queue
-snapshot, not an acceptance result.
+At this readback there were two open issues and no open PRs before this
+documentation branch. These queue facts are dated observations, not acceptance.
 
-| Issue | Remaining gate |
+| Issue | Gate |
 | --- | --- |
-| [#445](https://github.com/bartytime4life/MEGALODON/issues/445) | One exact Zeek offline producer profile; owner selection and fixture checks do not complete qualification |
-| [#446](https://github.com/bartytime4life/MEGALODON/issues/446) | Canonical Qwen Airlock binding and zero-effect/containment/evaluation acceptance; record remains UNBOUND / operator decision NOT_RECORDED |
+| [#445](https://github.com/bartytime4life/MEGALODON/issues/445) | One exact Zeek offline producer qualification; owner selection is not producer acceptance |
+| [#446](https://github.com/bartytime4life/MEGALODON/issues/446) | Canonical Qwen binding, zero-effect, containment and evaluation acceptance; [record](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/config/model-bindings/qwen.unbound.json) remains UNBOUND / NOT_RECORDED |
 
-Native macOS JSONL, dashboard/browser, Intel, second-major-version and operator
-evidence remain separate in the [M-track](macos-core-acceptance.md). Closed
-#260/#261/#327 and historical September roadmap checklists must not be treated
-as current issue queues or proof of release, producer or provider acceptance.
+Merged #662 changes the macOS fixture/workflow qualification, not production
+ancestry policy. Native JSONL/browser, Intel, second-major-version and retained
+operator evidence remain separate in the [macOS M-track](macos-core-acceptance.md).
+Neither source presence nor synthetic Windows/macOS jobs establish Linux parity.
 
 ## Exact source-head checks observed
 
-These are GitHub results at the source pin above, not checks of this documentation
-candidate or a reproduction on the owner's PC.
+GitHub returned these completed results for the exact source SHA above:
 
-| Check / run | OBSERVED result and limit |
+| Workflow / run | OBSERVED result / scope |
 | --- | --- |
-| [Core CI 39787193798](https://github.com/bartytime4life/MEGALODON/actions/runs/39787193798) | `test`, `wheel-smoke` and `sqlite-lock-acceptance` succeeded; the two identity-packet jobs were skipped |
-| [CodeQL 39787193851](https://github.com/bartytime4life/MEGALODON/actions/runs/39787193851) | `Analyze Python source` succeeded; no whole-product security clearance follows |
-| [Browser 39787193736 / job 119853424560](https://github.com/bartytime4life/MEGALODON/actions/runs/39787193736/job/119853424560) | Failed with `TimeoutError`, suite line 701. Playwright 1.63.0 driver preparation succeeded; four setup checks passed. Cause is unproved; this is not the 1.64.0 driver-version mismatch |
+| [CI 39878396530](https://github.com/bartytime4life/MEGALODON/actions/runs/39878396530) | success; repository workflow result, not installed-host acceptance |
+| [Linux browser acceptance 39878396547](https://github.com/bartytime4life/MEGALODON/actions/runs/39878396547) | success; hosted browser suite, not a fresh documentation-candidate run |
+| [CodeQL 39878396556](https://github.com/bartytime4life/MEGALODON/actions/runs/39878396556) | success; static-analysis workflow result, not whole-product security clearance |
 
-[PR #658](https://github.com/bartytime4life/MEGALODON/pull/658) proposes the
-Playwright bump; [PR #660](https://github.com/bartytime4life/MEGALODON/pull/660)
-proposes its compatibility/lock correction. Keep their exact-head results
-separate from main's browser timeout. The source head is not wholly green.
-
-The [owner lifecycle gate](exact-head-owner-lifecycle.md) has documented workflow
-trust and enforcement limits. Green technical CI, an advisory owner status, a
-merge, and human GitHub approval are different evidence. No protection setting
-was changed in this task.
+The earlier `0acdf72` browser timeout and #660/#661 macOS `/var` failures
+remain in their historical run/PR records. They are not current-head failures.
+No native macOS/Windows, release, recovery, producer or real-model acceptance at
+this pin is claimed from these three runs. The [owner lifecycle contract](exact-head-owner-lifecycle.md)
+retains its workflow-trust and enforcement limits; no protection setting changed.
 
 ## What the visuals prove
 
-The [visual tour](wiki/visual-tour.md) includes historical synthetic browser
-captures from PR #654, bound to candidate
-`424d957472ad121becec635171bc281bec2de995`, run
-[39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
-They show that candidate's rendered interface with documentation addresses.
-They do not show a live PC, current host configuration, fresh browser acceptance
-at this documentation head, detection accuracy, or an accepted release.
-The [asset record](../assets/docs/README.md) identifies exact bytes and sources.
+Original Findings captures come from PR #654, candidate
+`424d957472ad121becec635171bc281bec2de995`,
+[run 39180659477](https://github.com/bartytime4life/MEGALODON/actions/runs/39180659477).
+The animated walkthrough adds emphasis to a still image; it is not a recording
+of a running session. Other new animations are technical diagrams built from
+public constants. [Asset provenance](../assets/docs/README.md) records bytes,
+scope and still alternatives. No private workstation or Drive data is published.
 
-The October 1 recording benchmark remains a **historical finite synthetic
-measurement**. Its 98.1% lower OS-written bytes comes with increased query p95;
-it is not a current performance guarantee. See [the case study](wiki/engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff).
+The October 1 98.1% write-reduction benchmark is a finite historical synthetic
+measurement with increased query p95. It is not a current performance guarantee.
+[Tradeoff and source](wiki/engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff).
 
 ## Keep the documentation current
 
-1. Read `main`, the relevant code, tests, PRs and issues at an exact SHA.
-2. Update current task guides and this orientation only where evidence changed.
-3. Preserve dates, original pins and result counts in historical records.
-4. Validate links and the generated Wiki, then review the exact candidate.
-5. Merge and Wiki publication require their separate repository lifecycle gates.
-
-The [October 22 reconciliation](documentation-refresh-2026-10-22.md) records
-the supplied September planning inputs, documentation scope and validation.
-
-[Field guide](README.md) · [Complete catalog](documentation-map.md) · [Contribution contract](../CONTRIBUTING.md)
+Read code/tests at a named revision; update maintained guides when behavior
+changes; preserve original dates, pins and results in historical records.
+Validate the complete catalog, local links and generated Wiki. The Wiki's
+post-merge publisher owns native publication; a draft does not update it live.
+[Current polish scope](documentation-polish-2026-10-22.md) and
+[earlier October 22 reconciliation](documentation-refresh-2026-10-22.md)
+record separate passes, not interchangeable test receipts.

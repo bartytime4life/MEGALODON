@@ -33,3 +33,30 @@ immutable asset commit; the Wiki is generated only through the normal
 post-merge workflow. Do not publish Wiki source manually ahead of its reviewed
 assets. Reverting this documentation commit removes only presentation changes;
 there are no runtime migrations or data changes.
+
+## Finite animated explainers — October 22, 2026
+
+| GIF and matching PNG | Meaning / input |
+| --- | --- |
+| `evidence-flow` | Typed metadata, fixed rules, private evidence and bounded local inspection; explanatory diagram |
+| `model-authority` | Listener-first admission, untrusted advice and separate operator authority; explanatory diagram |
+| `recovery-evidence` | AIDE, external pinned records and held host restoration; explanatory diagram |
+| `finding-walkthrough` | Entire historical synthetic desktop capture scaled proportionally with moving outlines and a separate annotation strip; no fabricated UI interaction |
+
+These assets use public constants at `2cb706039724d9ea0bda09cbd3c17698b15ba55c` and the previously recorded
+synthetic capture. No new private source, host read or Drive material is used.
+[motion-provenance.json](motion-provenance.json) records exact bytes/digests.
+Reproduce with `python tools/render_documentation_motion.py` using Pillow and
+local DejaVu fonts; no application import or network is used.
+
+Each GIF plays twice for 4.8 seconds total, then stops. Labels do not animate,
+flash or disappear. PNGs show all emphasis regions simultaneously. README/Wiki
+pictures request PNGs for reduced motion and always expose an explicit still
+link; GitHub rendering behavior and client preferences may vary. All essential
+meaning also appears in adjacent Markdown tables. No video player, script,
+analytics, live badge or external rendering service is embedded.
+
+Wiki motion URLs pin immutable asset commit `b24c1d38e1d30b108a021a9ef1d78ef5afdd120c`. The root README uses
+relative paths so branch previews load their matching bytes. The native Wiki
+publishes through its existing post-merge workflow, after those assets exist on
+reviewed main. Reverting documentation does not change application state.

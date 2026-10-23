@@ -1,6 +1,6 @@
 # Complete documentation catalog
 
-**160 Markdown documents accounted for.** Basis: `main@0acdf72663804c9ae8380522e344a515ac65978c`
+**164 Markdown documents accounted for.** Basis: `main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`
 (October 22, 2026, America/Chicago), plus the documentation additions in this candidate. This
 catalog includes root documents, all `docs/` and versioned-contract guides, Wiki
 source, Site scope, templates, fixture notes, and visual provenance.
@@ -65,6 +65,7 @@ capability is accepted. Schema and code files are linked by their owning guides.
 | [Exact-head evidence and owner lifecycle gate](exact-head-owner-lifecycle.md) | `docs/exact-head-owner-lifecycle.md` |
 | [Threat context and SIEM/SOAR exchange contract](external-exchange-contract.md) | `docs/external-exchange-contract.md` |
 | [Start with the visual workspace](gui-quick-start.md) | `docs/gui-quick-start.md` |
+| [Read-only host-backup evidence admission](host-backup-evidence.md) | `docs/host-backup-evidence.md` |
 | [Local host security and dated threat context](host-security.md) | `docs/host-security.md` |
 | [Visual HUD and companion setup](hud-workflow.md) | `docs/hud-workflow.md` |
 | [Ingestion integrity and reconciliation](ingestion-integrity.md) | `docs/ingestion-integrity.md` |
@@ -200,6 +201,8 @@ capability is accepted. Schema and code files are linked by their owning guides.
 | [Evidence Index](wiki/evidence-index.md) | `docs/wiki/evidence-index.md` |
 | [Integrations and Local AI](wiki/integrations-and-qwen.md) | `docs/wiki/integrations-and-qwen.md` |
 | [Operator Guide](wiki/operator-guide.md) | `docs/wiki/operator-guide.md` |
+| [Practical Applications](wiki/practical-applications.md) | `docs/wiki/practical-applications.md` |
+| [Technical Deep Dive](wiki/technical-deep-dive.md) | `docs/wiki/technical-deep-dive.md` |
 | [Quick Start](wiki/quick-start.md) | `docs/wiki/quick-start.md` |
 | [Roadmap and Current Limits](wiki/roadmap-and-limits.md) | `docs/wiki/roadmap-and-limits.md` |
 | [Security Boundaries](wiki/security-boundaries.md) | `docs/wiki/security-boundaries.md` |
@@ -220,6 +223,12 @@ capability is accepted. Schema and code files are linked by their owning guides.
 | Document | Repository path |
 | --- | --- |
 | [Documentation visual sources](../assets/docs/README.md) | `assets/docs/README.md` |
+
+## Current reconciliation
+
+| Document | Repository path |
+| --- | --- |
+| [Documentation polish and source reconciliation](documentation-polish-2026-10-22.md) | `docs/documentation-polish-2026-10-22.md` |
 
 ## Maintaining the catalog
 

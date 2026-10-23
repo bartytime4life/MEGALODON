@@ -1,6 +1,6 @@
 # Operator Guide
 
-> Documentation basis: `main@0acdf72663804c9ae8380522e344a515ac65978c` (October 22, 2026). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance.
+> Documentation basis: `main@2cb706039724d9ea0bda09cbd3c17698b15ba55c` (October 22, 2026). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance.
 
 The HUD combines evidence views with separately authorized local workflows. Read source, time, scope and action state before interpreting any display.
 
@@ -47,3 +47,12 @@ Setup’s **Host security and threat context** offers explicit Lynis/AIDE and
 reference-refresh workflows. Audit suggestions, changed files, baseline state
 and cached indicator matches remain separate from qualified network findings.
 See [the current host-security guide](https://github.com/bartytime4life/MEGALODON/blob/main/docs/host-security.md).
+
+## Recovery evidence and current technical detail
+
+Setup now includes read-only recovery readiness and separately pinned external
+backup/isolated-test receipts. The validator opens no backup and runs no test;
+host restoration remains unavailable and `restore_eligible` is false. AIDE,
+dated reference context and AI commentary cannot change that boundary.
+[Receipt contract](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/host-backup-evidence.md) and
+[technical deep dive](technical-deep-dive.md#recovery-evidence-without-a-restore-engine).
