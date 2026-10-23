@@ -53,7 +53,7 @@ def test_projection_preserves_ids_units_large_integers_and_privacy(audit):
     assert writer.summary() == before
     assert not reader._connection.in_transaction
     assert reader._connection.execute("PRAGMA query_only").fetchone()[0] == 1
-    for query in ("SELECT metadata_json FROM events", "SELECT interface FROM events", "SELECT evidence_json FROM detections",
+    for query in ("SELECT metadata_json FROM events", "SELECT interface FROM events",
                   "SELECT recommendation FROM detections", "SELECT details_json FROM actions", "DELETE FROM events", "PRAGMA journal_mode=WAL"):
         with pytest.raises(sqlite3.DatabaseError):
             reader._connection.execute(query)
@@ -164,3 +164,58 @@ def test_http_unavailable_is_not_zero_and_query_cannot_choose_path():
                 assert value["build"]["projection_sha256"] == unavailable()["build"]["projection_sha256"]
     finally:
         server.shutdown(); server.server_close(); worker.join(timeout=2)
+
+
+@pytest.mark.parametrize('rule,quantity,threshold,window,unit', [
+    ('SYN_FLOOD', 3, 3, 17, 'SYN events'),
+    ('PORT_SCAN', 3, 3, 13, 'distinct destination ports'),
+    ('DNS_TUNNELING', 1, 73, None, 'DNS query length'),
+])
+def test_recorded_measurement_survives_settings_change(tmp_path, rule, quantity, threshold, window, unit):
+    from megalodon.config import DetectionSettings
+    from megalodon.detector import Detector
+    settings=DetectionSettings(syn_flood_threshold=3, syn_flood_window_seconds=17,
+                               port_scan_distinct_ports=3, port_scan_window_seconds=13,
+                               dns_query_length=73)
+    detector=Detector(settings)
+    path=tmp_path/'measurements'/'audit.db'
+    with Store(path) as writer:
+        run=writer.start_ingestion_run('jsonl', started_at=TIME)
+        for index in range(quantity):
+            event=PacketEvent(TIME,'192.0.2.1','198.51.100.1',
+                'UDP' if rule=='DNS_TUNNELING' else 'TCP', dst_port=index+100,
+                tcp_flags=frozenset({'SYN'}) if rule=='SYN_FLOOD' else frozenset(),
+                dns_query_length=73 if rule=='DNS_TUNNELING' else None)
+            findings=[f for f in detector.analyze(event) if f.rule_id==rule]
+            actions=[ActionRecord(TIME,'alert','192.0.2.1','not_attempted','Synthetic test') for _ in findings]
+            writer.record_event_bundle(event,findings,actions,run_id=run)
+        writer.finish_ingestion_run(run,'source_exhausted',finished_at=TIME)
+        detector.settings=DetectionSettings()  # Must not supply current defaults to history.
+        with TrafficDashboardStore(path) as reader:
+            value=reader.traffic()['findings'][0]['measurement']
+            assert value==dict(value=73 if rule=='DNS_TUNNELING' else quantity,
+                               threshold=threshold,window_seconds=window,unit=unit)
+            history=reader.traffic_history('2026-09-17T11:00:00Z','2026-09-17T13:00:00Z')
+            assert history['traffic']['findings'][0]['measurement']==value
+
+
+@pytest.mark.parametrize('raw,expected', [
+    ('{"distinct_ports":20,"window_seconds":5}', {'value':20,'threshold':None,'window_seconds':5,'unit':'distinct destination ports'}),
+    ('{"distinct_ports":20,"threshold":20,"window_seconds":5,"secret":"PRIVATE_DATA"}', {'value':20,'threshold':20,'window_seconds':5,'unit':'distinct destination ports'}),
+    ('{"distinct_ports":true}', None),
+    ('{"distinct_ports":20,"threshold":21}', None),
+    ('{"distinct_ports":20,"window_seconds":0}', None),
+    ('{"distinct_ports":20,"distinct_ports":21}', None),
+    ('{"distinct_ports":NaN}', None),
+    ('[', None),
+    ('x'*2049, None),
+    ('{"distinct_ports":'+'['*1000+'0'+']'*1000+'}', None),
+])
+def test_measurement_projection_never_exposes_raw_evidence(audit,raw,expected):
+    _,writer,reader=audit
+    writer.connection.execute('UPDATE detections SET evidence_json=?',(raw,))
+    writer.connection.commit()
+    result=reader.traffic()
+    assert result['status']=='available'
+    assert result['findings'][0]['measurement']==expected
+    assert 'PRIVATE_' not in json.dumps(result)

@@ -91,8 +91,13 @@ not the full evidence window that caused the detector to fire.
 
 Observation time, detection time, and projection generation time remain
 separate. The displayed time range is a browsing filter, not a detector window.
-Historical detector version and evaluation-window provenance remain unknown;
-the current package version and current rule thresholds cannot fill those gaps.
+The inspector displays validated counts, thresholds and evaluation windows only
+when recorded in the finding evidence. Missing or invalid measurements display
+“Not recorded”; current settings never fill historical gaps. DNS uses a single
+event rather than a sliding window. Detector version remains unknown. The
+traffic reader admits at most 2,048 bytes of evidence JSON per candidate into
+the projection parser and returns only fixed units and validated numeric fields,
+never raw evidence. See [recorded finding measurements](dashboard-operations.md#recorded-finding-measurements).
 Run status describes a recorded ingestion attempt, not a running process.
 JSONL provenance identifies operator-supplied input, not authenticated capture.
 

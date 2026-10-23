@@ -29,7 +29,8 @@ def test_inspector_has_explicit_limits_and_fixed_followups():
     assert 'id="room-evidence-content" hidden' in panel
     assert 'id="room-evidence-status" role="status"' in panel
     assert 'Detector evaluation window' in panel
-    assert 'Unknown; not supplied by this projection.' in panel
+    assert 'Threshold at detection' in panel
+    assert 'id="room-evidence-window"' in panel
     assert 'Current software settings cannot establish historical detector behavior.' in panel
     assert 'its running or completed state does not prove a process is active' in panel
     assert 'not the complete evidence evaluated by the detector' in panel
