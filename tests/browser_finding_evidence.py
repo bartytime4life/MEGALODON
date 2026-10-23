@@ -128,6 +128,12 @@ async def exercise_finding_evidence(browser, port, password, passed):
         requests.clear()  # The explicit login is outside passive review acceptance.
         await capture("candidate-unselected-1440.png", "room-findings-title", 1440)
 
+        await expect(page.locator("#room-case-summary")).to_contain_text("3 linked metadata events and 2 findings")
+        await expect(page.locator("#room-case-coverage")).to_contain_text("Completeness beyond")
+        await page.locator("#room-case-timeline button").first.click()
+        await expect(page.locator("#room-evidence-finding")).to_have_text("1")
+        passed("native automatic address case links retained records to the existing inspector")
+
         first = buttons.first
         await first.focus()
         await page.keyboard.press("Enter")

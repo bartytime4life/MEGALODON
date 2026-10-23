@@ -1,5 +1,6 @@
 """Anchored control-room presentation; all traffic comes from the local reader."""
 
+from .dashboard_case import CASE_HTML, CASE_CSS, CASE_JS
 from .dashboard_inventory import INVENTORY_HTML
 from .dashboard_clamav import CLAMAV_HTML
 from .dashboard_osquery import OSQUERY_HTML
@@ -92,7 +93,10 @@ TRAFFIC_HTML = """
 </section>
 <section class="workspace-view" id="workspace-findings" role="tabpanel" aria-labelledby="workspace-tab-findings" hidden>
   <h2 id="room-findings-title" tabindex="-1">Findings</h2><p>Fixed detector results linked to the qualified event set. A finding is a reason to review, not proof of malware.</p>
-  <a class="hud-return" href="#room-home-title">Return to visual HUD →</a><div id="room-findings-table" class="room-table"></div>
+  <a class="hud-return" href="#room-home-title">Return to visual HUD →</a>
+__CASE_VIEW__
+<h3>All findings in this window</h3>
+<div id="room-findings-table" class="room-table"></div>
 __FINDING_EVIDENCE__
 </section>
 """ + REPORTS_HTML + """
@@ -128,7 +132,7 @@ __FINDING_EVIDENCE__
 """
 if "__STATUS_GLOSSARY__" not in TRAFFIC_HTML:
     raise AssertionError("status glossary placeholder missing from TRAFFIC_HTML")
-TRAFFIC_HTML = TRAFFIC_HTML.replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML).replace("__FINDING_EVIDENCE__", FINDING_EVIDENCE_HTML)
+TRAFFIC_HTML = TRAFFIC_HTML.replace("__CASE_VIEW__", CASE_HTML).replace("__STATUS_GLOSSARY__", STATUS_GLOSSARY_HTML).replace("__FINDING_EVIDENCE__", FINDING_EVIDENCE_HTML)
 
 
 def compose_control_room(html: str) -> str:
@@ -366,7 +370,7 @@ ROOM_CSS += r"""
 @media(max-width:700px) { .hud-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 """
 
-ROOM_CSS += COVERAGE_CSS + FINDING_EVIDENCE_CSS
+ROOM_CSS += COVERAGE_CSS + FINDING_EVIDENCE_CSS + CASE_CSS
 
 ROOM_JS = r"""
 const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, history:null};
@@ -500,7 +504,7 @@ function roomDirectionUnknown(parent) {
   parent.append(graphic,textNode('p','Unavailable — no qualified local-subnet or sensor-vantage contract. Private addresses alone do not establish direction.','room-empty'));
 }
 function renderRoom() {
-  if(roomState.history && roomState.managedHistory){renderManagedHistory();return;}
+  if(roomState.history && roomState.managedHistory){clearRoomCase("Managed history uses separate references; address case view is unavailable in this mode.");renderManagedHistory();return;}
   let selected;
   try {selected=roomSelection(roomState.snapshot,roomState.history?'custom':roomState.range,roomState.history||roomState.custom);} catch(error) {byId('room-notice').textContent=error.message;return;}
   roomState.selection=selected;
@@ -544,6 +548,7 @@ function renderRoom() {
   panel=roomVisual(grid,'Coverage and gaps',selected,snapshot?.status==='available'?'Bounded read':'Unavailable',snapshot?.status==='available'?'data':'unavailable');panel.append(textNode('p',`Candidate window limited: ${snapshot?.truncated?'Yes':'Unknown beyond returned window'}. Excluded sample/unlinked/legacy/held event candidates: ${snapshot?snapshot.excluded_event_candidates:'Unknown'}. Drops: Unknown. Rejected records: Unknown. Missing intervals: Unknown. Clock accuracy: Unknown.`,'room-meta'));
   const findings=byId('room-findings-visual');findings.replaceChildren();panel=roomVisual(findings,'Findings over time',selected,selected.findings.length?`${selected.findings.length} linked findings`:'No linked findings',selected.findings.length?'data':'unavailable');roomTimeline(panel,selected,selected.findings,'detected_at');panel=roomVisual(findings,'Detector and severity',selected,selected.findings.length?'Recorded labels':'No linked findings',selected.findings.length?'data':'unavailable');roomBars(panel,roomCounts(selected.findings.map(f=>`${f.rule_id} · ${f.severity}`)),'findings','No linked finding labels returned');
   renderRoomFindings(selected,stale,has);
+  renderRoomCase(selected,stale);
   if(typeof renderTelemetryConnections==='function')renderTelemetryConnections();
 }
 const roomRequests=new Map();
@@ -626,4 +631,4 @@ byId('room-refresh').addEventListener('click',refreshRoom);
 """
 
 from .dashboard_history import HISTORY_JS
-ROOM_JS += FINDING_EVIDENCE_JS + HISTORY_JS
+ROOM_JS += FINDING_EVIDENCE_JS + CASE_JS + HISTORY_JS
