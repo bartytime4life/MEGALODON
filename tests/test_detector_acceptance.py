@@ -76,8 +76,8 @@ def test_default_threshold_receipt(case_id, rule, quantity, expected):
         assert result.recommendation == "ALERT"
         assert result.suppressed_reason is None
         assert result.evidence == {
-            "SYN_FLOOD": {"count": 100, "window_seconds": 10},
-            "PORT_SCAN": {"distinct_ports": 20, "window_seconds": 5},
+            "SYN_FLOOD": {"count": 100, "threshold": 100, "window_seconds": 10},
+            "PORT_SCAN": {"distinct_ports": 20, "threshold": 20, "window_seconds": 5},
             "DNS_TUNNELING": {"dns_query_length": quantity, "threshold": 50},
         }[rule]
 

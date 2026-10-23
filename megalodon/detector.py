@@ -253,6 +253,7 @@ class Detector:
                             f"{len(syn_window)} TCP SYN packets from one source in {self.settings.syn_flood_window_seconds}s",
                             {
                                 "count": len(syn_window),
+                                "threshold": self.settings.syn_flood_threshold,
                                 "window_seconds": self.settings.syn_flood_window_seconds,
                             },
                             now,
@@ -279,6 +280,7 @@ class Detector:
                             f"{distinct_port_count} destination ports targeted in {self.settings.port_scan_window_seconds}s",
                             {
                                 "distinct_ports": distinct_port_count,
+                                "threshold": self.settings.port_scan_distinct_ports,
                                 "window_seconds": self.settings.port_scan_window_seconds,
                             },
                             now,

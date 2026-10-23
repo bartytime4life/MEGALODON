@@ -146,6 +146,24 @@ const copy = () => JSON.parse(JSON.stringify(payload));
   for (const expression of ['p.events.push({...p.events[0]})', 'p.findings.push({...p.findings[0]})',
     'p.findings[0].event_id="999"', 'p.events[0].byte_count="9223372036854775808"'])
     assert.throws(() => run('{const p=JSON.parse(JSON.stringify(payload));' + expression + ';validateTraffic(p)}'));
+  accept(payload); openFirst();
+  assert.equal(byId('room-evidence-measured').textContent,'Not recorded');
+  assert.equal(byId('room-evidence-threshold').textContent,'Not recorded');
+  const measured=copy();
+  measured.findings[0].measurement={value:23,threshold:20,window_seconds:5,unit:'distinct destination ports'};
+  accept(measured);
+  assert.equal(byId('room-evidence-content').hidden,true,'changed measurement requires reselection');
+  openFirst();
+  assert.equal(byId('room-evidence-measured').textContent,'23 distinct destination ports');
+  assert.equal(byId('room-evidence-threshold').textContent,'20 (at least)');
+  assert.equal(byId('room-evidence-window').textContent,'5 seconds; inclusive cutoff');
+  for(const field of ['value','threshold','window_seconds','unit']) {
+    context.forged=JSON.parse(JSON.stringify(measured));
+    context.forged.findings[0].measurement[field]=field==='unit'?'<script>':-1;
+    assert.throws(()=>run('validateTraffic(forged)'));
+  }
+  accept(payload); openFirst();
+  assert.equal(byId('room-evidence-threshold').textContent,'Not recorded');
   assert.ok(calls.every(call => call.options.method === 'GET' && call.path.startsWith('/api/traffic')
     && call.options.mode === 'same-origin' && call.options.redirect === 'error'));
   console.log('qualified finding lineage, identity, exact bytes, independent clocks, passive reads, stale/recovery and history transitions passed');

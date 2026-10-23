@@ -13,9 +13,11 @@ FINDING_EVIDENCE_HTML = '''
     </ol>
     <dl class="finding-evidence-times"><div><dt>Event observed (UTC)</dt><dd id="room-evidence-observed"></dd></div><div><dt>Finding detected (UTC)</dt><dd id="room-evidence-detected"></dd></div><div><dt>Projection generated (UTC)</dt><dd id="room-evidence-generated"></dd></div></dl>
     <p id="room-evidence-age"></p>
+    <dl class="finding-evidence-facts" aria-label="Recorded detector measurements"><div><dt>Measured value</dt><dd id="room-evidence-measured"></dd></div><div><dt>Threshold at detection</dt><dd id="room-evidence-threshold"></dd></div><div><dt>Detector evaluation window</dt><dd id="room-evidence-window"></dd></div></dl>
+    <p>Recorded metadata measurements, not proof of malicious intent. Source limits and missing observations may affect counts.</p>
     <details id="room-evidence-details"><summary>Metadata, provenance and limits</summary>
-      <dl class="finding-evidence-facts"><div><dt>Recorded endpoints</dt><dd id="room-evidence-endpoints"></dd></div><div><dt>Protocol / TCP flags</dt><dd id="room-evidence-protocol"></dd></div><div><dt>Reported bytes</dt><dd id="room-evidence-bytes"></dd></div><div><dt>Receipt termination reason</dt><dd id="room-evidence-termination"></dd></div><div><dt>Detector version</dt><dd id="room-evidence-version"></dd></div><div><dt>Detector evaluation window</dt><dd>Unknown; not supplied by this projection.</dd></div><div><dt>Selected display range</dt><dd id="room-evidence-range"></dd></div><div><dt>Returned candidate bounds</dt><dd id="room-evidence-bounds"></dd></div></dl>
-      <p>The linked event is a source record, not the complete evidence evaluated by the detector. Its counts and configured thresholds are not supplied here. Current software settings cannot establish historical detector behavior.</p>
+      <dl class="finding-evidence-facts"><div><dt>Recorded endpoints</dt><dd id="room-evidence-endpoints"></dd></div><div><dt>Protocol / TCP flags</dt><dd id="room-evidence-protocol"></dd></div><div><dt>Reported bytes</dt><dd id="room-evidence-bytes"></dd></div><div><dt>Receipt termination reason</dt><dd id="room-evidence-termination"></dd></div><div><dt>Detector version</dt><dd id="room-evidence-version"></dd></div><div><dt>Selected display range</dt><dd id="room-evidence-range"></dd></div><div><dt>Returned candidate bounds</dt><dd id="room-evidence-bounds"></dd></div></dl>
+      <p>The linked event is a source record, not the complete evidence evaluated by the detector. Only validated measurements recorded with this finding are shown; missing values are not reconstructed. Current software settings cannot establish historical detector behavior.</p>
       <p>JSONL source declarations are operator supplied. An ingestion receipt describes stored work; its running or completed state does not prove a process is active. Sensor liveness, drops, clock accuracy and complete network coverage remain unknown.</p>
       <p>Ports, protocol labels and TCP flags do not establish application identity or connection state. This view does not supply action receipts or authorize a response.</p>
     </details>
@@ -62,13 +64,13 @@ const roomEvidenceExplanations=Object.freeze({
   DNS_TUNNELING:'The recorded DNS_TUNNELING rule identifies DNS metadata for review. A long DNS query can be legitimate; this finding does not prove tunneling.'
 });
 function roomEvidenceText(id,value) {const node=byId(id);if(node.textContent!==value)node.textContent=value;}
-function roomEvidenceKey(f,e) {return JSON.stringify([f.id,e.id,e.run_id,e.source,e.observed_at,f.detected_at,f.rule_id,f.severity,f.detector_version,e.src_ip,e.dst_ip,e.src_port,e.dst_port,e.protocol,e.tcp_flags,e.byte_count]);}
+function roomEvidenceKey(f,e) {return JSON.stringify([f.id,e.id,e.run_id,e.source,e.observed_at,f.detected_at,f.rule_id,f.severity,f.detector_version,e.src_ip,e.dst_ip,e.src_port,e.dst_port,e.protocol,e.tcp_flags,e.byte_count,f.measurement??null]);}
 function roomEvidenceContext() {const h=roomState.history;return JSON.stringify(h?['history',h.start,h.end,h.before]:['latest',roomState.range,roomState.custom]);}
 function roomEvidenceFocused() {return byId('room-evidence-inspector').contains?.(document.activeElement);}
 function clearRoomEvidence(message='Select Inspect evidence on a qualified finding to trace its stored source.') {
   const focused=roomEvidenceFocused();roomEvidenceState.key=null;
   byId('room-evidence-content').hidden=true;byId('room-evidence-close').hidden=true;
-  for(const field of ['explanation','finding','event','run','rule','source','run-state','observed','detected','generated','endpoints','protocol','bytes','termination','version','range','bounds','age'])roomEvidenceText('room-evidence-'+field,'');
+  for(const field of ['explanation','finding','event','run','rule','source','run-state','observed','detected','generated','endpoints','protocol','bytes','termination','version','range','bounds','age','measured','threshold','window'])roomEvidenceText('room-evidence-'+field,'');
   roomEvidenceText('room-evidence-title','Inspect the evidence');roomEvidenceText('room-evidence-status',message);
   for(const button of roomEvidenceState.buttons.values())button.setAttribute('aria-expanded','false');
   if(focused)byId('room-evidence-title').focus?.({preventScroll:true});
@@ -84,6 +86,10 @@ function renderRoomEvidence(selected,stale) {
   roomEvidenceText('room-evidence-status',stale?'Stale evidence — the last valid snapshot is preserved. Refresh failed or this projection expired.':'Stored evidence — linked records in the current returned page. Sensor liveness remains unknown.');
   roomEvidenceText('room-evidence-explanation',(roomEvidenceExplanations[finding.rule_id]||'Recorded fixed-rule finding for review.')+' Recorded severity: '+finding.severity+'. A finding is not proof of malware or authority to act.');
   for(const [id,value] of Object.entries({finding:finding.id,event:event.id,run:event.run_id,rule:finding.rule_id+' · '+finding.severity,source:event.source==='jsonl'?'JSONL · operator-declared provenance':'Scapy · recorded source', 'run-state':'Recorded state: '+event.run_status,observed:event.observed_at,detected:finding.detected_at,generated:snapshot.generated_at,endpoints:roomEndpoint(event.src_ip,event.src_port)+' → '+roomEndpoint(event.dst_ip,event.dst_port),protocol:event.protocol+' / '+(event.tcp_flags.join(', ')||'no TCP flags recorded'),bytes:event.byte_count+' reported bytes',termination:event.termination_reason||'Not recorded for a running receipt',version:finding.detector_version,range:new Date(selected.start).toISOString()+' → '+new Date(selected.end).toISOString(),bounds:'At most '+snapshot.limits.events+' event candidates and '+snapshot.limits.findings+' finding candidates. '+(snapshot.truncated?'Candidate window truncated. ':'Completeness beyond the returned window is unknown. ')+snapshot.excluded_event_candidates+' excluded event candidates.'}))roomEvidenceText('room-evidence-'+id,value);
+  const measurement=finding.measurement;
+  roomEvidenceText('room-evidence-measured',measurement?measurement.value+' '+measurement.unit:'Not recorded');
+  roomEvidenceText('room-evidence-threshold',measurement?.threshold!=null?String(measurement.threshold)+' (at least)':'Not recorded');
+  roomEvidenceText('room-evidence-window',finding.rule_id==='DNS_TUNNELING'&&measurement?'Single event; no sliding window':measurement?.window_seconds!=null?measurement.window_seconds+' seconds; inclusive cutoff':'Not recorded');
   const age=Date.now()-Date.parse(event.observed_at);
   roomEvidenceText('room-evidence-age',age<0?'Observation time is ahead of this browser clock; clock agreement is unknown.':'Observation age: '+(age<60000?'less than one minute':age<3600000?Math.floor(age/60000)+' minutes':age<86400000?Math.floor(age/3600000)+' hours':Math.floor(age/86400000)+' days')+'. A refreshed projection does not make this observation new.');
   for(const [key,button] of roomEvidenceState.buttons)button.setAttribute('aria-expanded',String(key===roomEvidenceState.key));
