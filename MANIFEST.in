@@ -28,4 +28,5 @@ include scripts/start-hud-data.sh
 include scripts/start-local.sh
 include scripts/start-support-apps.sh
 include scripts/configure-support-apps.sh
+include scripts/configure-suricata-offline.py
 include scripts/defense.sh

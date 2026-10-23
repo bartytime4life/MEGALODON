@@ -62,6 +62,22 @@ function mount(id, override=null, clipboardFails=false, local=false, command=nul
 
 CASES = [
     r"""
+const r=mount('suricata');
+assert.ok(r.guide);
+assert.equal(all(r.guide).filter(n=>n.tag==='strong').length,3);
+assert.ok(all(r.guide).some(n=>n.href?.endsWith('/docs/installing-suricata.md')));
+assert.ok(all(r.guide).some(n=>n.href?.endsWith('/scripts/configure-suricata-offline.py')));
+assert.ok(all(r.parent).some(n=>n.href==='https://suricata.io/download/'));
+assert.match(all(r.guide).map(n=>n.textContent).join(' '),/no detection coverage/);
+await r.find('Copy step 2: Preview offline configuration').listeners.click();
+assert.match(r.copied[0],/python3 scripts\/configure-suricata-offline.py/);
+assert.doesNotMatch(r.copied[0],/--write|sudo/);
+await r.find('Copy step 3: Write private configuration').listeners.click();
+assert.match(r.copied[1],/--write$/);
+assert.match(r.feedback.textContent,/not executed or verified/);
+assert.deepEqual([r.writes,r.checks,r.network],[[],[],[]]);
+""",
+    r"""
 for(const [id,count] of [['scapy',5]]) {
   const r=mount(id);
   assert.ok(r.guide);
@@ -145,6 +161,7 @@ assert.deepEqual(installed.network,[]);
 
 
 @pytest.mark.parametrize("case", CASES, ids=[
+    "suricata-copy-only-offline-configuration",
     "ordered-inert-steps", "scapy-environment", "serving-interpreter",
     "clipboard-failure", "closed-registry", "no-execution", "availability-and-installed-commands",
 ])
