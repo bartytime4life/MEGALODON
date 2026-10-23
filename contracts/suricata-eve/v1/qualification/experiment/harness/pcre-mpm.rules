@@ -1,0 +1,2 @@
+alert tcp any any -> any any (msg:"MEGALODON PCRE stream progress oracle"; flow:established,to_server; pcre:"/.*mc|\H+$/"; sid:9900002; rev:1;)
+alert tcp any any -> any any (flow:established,to_server; content:"*mcH"; sid:9900003; rev:1;)

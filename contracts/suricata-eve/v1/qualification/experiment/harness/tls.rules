@@ -1,0 +1,1 @@
+alert tls any any -> any any (msg:"MEGALODON fragmented TLS continuity oracle"; flow:established,to_server; tls.sni; content:"fragmented.example"; nocase; isdataat:!1,relative; sid:9900001; rev:1;)

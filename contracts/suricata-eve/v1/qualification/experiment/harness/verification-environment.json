@@ -1,0 +1,22 @@
+{
+  "acceptance_authority": false,
+  "containment_probe": {
+    "exit_code": 1,
+    "max_rss_kib": 11644,
+    "output_bytes": 60,
+    "process_cpu_ns": 2624999,
+    "state": "nonzero_exit",
+    "wall_ns": 7736974
+  },
+  "engine_execution": "not_attempted",
+  "inputs_sha256": "aad5d5afa69b5f321314c5009055661514fe1523ceb4c5b13a5f122106d0c870",
+  "network_access": false,
+  "producer_acceptance": "not_established",
+  "profiles": {},
+  "report_sha256": "4d530882fd22f8a21d7052183f7cee77c364c4ff0dfb2289d553472db053679a",
+  "schema_version": "suricata-offline-lab-observations-v1",
+  "status": "prerequisite_unavailable",
+  "unavailable_prerequisites": [
+    "network_namespace_containment_unavailable"
+  ]
+}

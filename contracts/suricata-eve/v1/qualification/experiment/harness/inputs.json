@@ -1,0 +1,90 @@
+{
+  "schema_version": "suricata-offline-lab-inputs-v1",
+  "artifacts": [
+    {
+      "path": "fixture_source.py",
+      "bytes": 6810,
+      "sha256": "8c54a93de7f9280b89bdf721864b19c4ba771ac488d19c1dee3b66d9bab08eff"
+    },
+    {
+      "path": "fixtures/fragmented-tls-handshake-header.pcap",
+      "bytes": 528,
+      "sha256": "61f4377cb320c9c5de0bd3e3fe33568916411560b405049fa5fd85f9f2547bd1"
+    },
+    {
+      "path": "fixtures/pcre-stream-128.pcap",
+      "bytes": 74870,
+      "sha256": "0c788c12aa8f49cb72cca5c32d3bb5b1aff0eba26fd8582da9d231ee0087aa50"
+    },
+    {
+      "path": "fixtures/pcre-stream-32.pcap",
+      "bytes": 18998,
+      "sha256": "e7f8adf7c5b75183ba56a70a0562172fb596f01e8832ee2c1fdf84c23367a9a2"
+    },
+    {
+      "path": "fixtures/pcre-stream-64.pcap",
+      "bytes": 37622,
+      "sha256": "2a5e2af12a664d77b2b813cd7d44371c68af1325cbf78a6020848aa8a37d4a1d"
+    },
+    {
+      "path": "harness/control_source.py",
+      "bytes": 1895,
+      "sha256": "d7c826d0ef8adaa78994f3ab4e10c6072a26489acc3a16bc985176ed9b7c092a"
+    },
+    {
+      "path": "harness/lab.yaml",
+      "bytes": 1069,
+      "sha256": "06cfbb46de72657f94a87b6804caa5f96f4fec09ab7217235b8f477f3412c36c"
+    },
+    {
+      "path": "harness/offline.py",
+      "bytes": 20843,
+      "sha256": "9585e238c66e9e87ad158a96fc56d99dc0469422f7550c13b4945e7e7ab0a8b0"
+    },
+    {
+      "path": "harness/pcre-mpm.rules",
+      "bytes": 239,
+      "sha256": "1b938852f0e28b8f6878f992aeb9d61afd06f68016f3f81e7fb5a9401d42a13a"
+    },
+    {
+      "path": "harness/pcre-negative.pcap",
+      "bytes": 886,
+      "sha256": "f3507b38180b6c0df5d2ef64591d47ef07e8a56d477abbb8084116d1977f7810"
+    },
+    {
+      "path": "harness/pcre.rules",
+      "bytes": 144,
+      "sha256": "e5f685a998646c73217c317734ae96c4e402116415ab958250982dc0c541b6b8"
+    },
+    {
+      "path": "harness/tls-unsplit.pcap",
+      "bytes": 453,
+      "sha256": "8ca03f893bcf0c1f2afce13572b6c6ea662ed481b5634007c8b65c0e7011a747"
+    },
+    {
+      "path": "harness/tls-wrong-sni.pcap",
+      "bytes": 453,
+      "sha256": "62610bb80452274d1443a6b67bcc0f22beaa53bb972f8bfea78a641640e2f616"
+    },
+    {
+      "path": "harness/tls.rules",
+      "bytes": 198,
+      "sha256": "52fbcd039c683a2bc52b3f8b72f395b2eb50be47325f9d94f0ac02f98d0fea77"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 5574,
+      "sha256": "8d1a559e127033165f66c50d1b5eec6aa5c63a0c79b6da7a6faf8cc61199a498"
+    },
+    {
+      "path": "rules/local.rules",
+      "bytes": 342,
+      "sha256": "bbb8ba14c4769f90c61073008482341c2d30f890f43c316ae74d50d9dfd2ee01"
+    },
+    {
+      "path": "suricata.yaml",
+      "bytes": 1040,
+      "sha256": "d3c73203c2b1dabd814cf049effb5e1e35eb80db62fa42d5a0f728df2d37f834"
+    }
+  ]
+}
