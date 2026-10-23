@@ -13,6 +13,53 @@
     "disposition",
     "remaining_holds"
   ],
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "upstream_commit",
+        "upstream_url",
+        "upstream_date",
+        "ticket",
+        "verified_observation",
+        "fixture_status",
+        "execution_status",
+        "evidence_status"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "fragmented_tls_handshake_header",
+            "pcre_only_stream_progress"
+          ]
+        },
+        "upstream_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "upstream_url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/OISF/suricata/commit/[0-9a-f]{40}$"
+        },
+        "upstream_date": {"const": "2026-10-22"},
+        "ticket": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99999
+        },
+        "verified_observation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "fixture_status": {"const": "not_supplied"},
+        "execution_status": {"const": "not_run"},
+        "evidence_status": {"const": "research_only"}
+      }
+    }
+  },
   "properties": {
     "schema_version": {
       "const": "suricata-engine-regression-research-v1"
@@ -31,51 +78,37 @@
       "type": "array",
       "minItems": 2,
       "maxItems": 2,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "upstream_commit",
-          "upstream_url",
-          "upstream_date",
-          "ticket",
-          "verified_observation",
-          "fixture_status",
-          "execution_status",
-          "evidence_status"
-        ],
-        "properties": {
-          "id": {
-            "enum": [
-              "fragmented_tls_handshake_header",
-              "pcre_only_stream_progress"
-            ]
-          },
-          "upstream_commit": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{40}$"
-          },
-          "upstream_url": {
-            "type": "string",
-            "pattern": "^https://github\\.com/OISF/suricata/commit/[0-9a-f]{40}$"
-          },
-          "upstream_date": {"const": "2026-10-22"},
-          "ticket": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 99999
-          },
-          "verified_observation": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 512
-          },
-          "fixture_status": {"const": "not_supplied"},
-          "execution_status": {"const": "not_run"},
-          "evidence_status": {"const": "research_only"}
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "#/$defs/case"},
+            {
+              "properties": {
+                "id": {"const": "fragmented_tls_handshake_header"},
+                "upstream_commit": {"const": "bea218e7b1dd8ffb09f250e62c096c6b3da749b4"},
+                "upstream_url": {"const": "https://github.com/OISF/suricata/commit/bea218e7b1dd8ffb09f250e62c096c6b3da749b4"},
+                "upstream_date": {"const": "2026-10-22"},
+                "ticket": {"const": 9167}
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/case"},
+            {
+              "properties": {
+                "id": {"const": "pcre_only_stream_progress"},
+                "upstream_commit": {"const": "f87b8e64a5fb80788897f7a9073c5407a2f5bc96"},
+                "upstream_url": {"const": "https://github.com/OISF/suricata/commit/f87b8e64a5fb80788897f7a9073c5407a2f5bc96"},
+                "upstream_date": {"const": "2026-10-22"},
+                "ticket": {"const": 8684}
+              }
+            }
+          ]
         }
-      }
+      ],
+      "items": false
     },
     "proposed_limits": {
       "type": "object",
@@ -127,22 +160,16 @@
     },
     "disposition": {"const": "not_run_research_candidate"},
     "remaining_holds": {
-      "type": "array",
-      "minItems": 5,
-      "maxItems": 8,
-      "uniqueItems": true,
-      "items": {
-        "enum": [
-          "OWNER_AUTHORIZATION",
-          "SYNTHETIC_FIXTURE_PROVENANCE",
-          "EXACT_BINARY_IDENTITY",
-          "NATIVE_RESOURCE_CONTAINMENT",
-          "EXPECTED_OUTPUT_ORACLE",
-          "INDEPENDENT_REVIEW",
-          "INSTALLED_PRODUCER_ACCEPTANCE",
-          "OPERATIONAL_PRIVACY"
-        ]
-      }
+      "const": [
+        "OWNER_AUTHORIZATION",
+        "SYNTHETIC_FIXTURE_PROVENANCE",
+        "EXACT_BINARY_IDENTITY",
+        "NATIVE_RESOURCE_CONTAINMENT",
+        "EXPECTED_OUTPUT_ORACLE",
+        "INDEPENDENT_REVIEW",
+        "INSTALLED_PRODUCER_ACCEPTANCE",
+        "OPERATIONAL_PRIVACY"
+      ]
     }
   }
 }

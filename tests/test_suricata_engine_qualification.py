@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path
 
@@ -41,6 +42,23 @@ def test_packet_pins_the_two_reviewed_upstream_changes() -> None:
     for case in cases.values():
         assert case["upstream_url"].endswith(case["upstream_commit"])
         assert case["evidence_status"] == "research_only"
+
+
+def test_schema_rejects_missing_hold_or_substituted_case_provenance() -> None:
+    missing_hold = deepcopy(PACKET)
+    missing_hold["remaining_holds"].remove("OWNER_AUTHORIZATION")
+    assert list(Draft202012Validator(SCHEMA).iter_errors(missing_hold))
+
+    duplicated_case = deepcopy(PACKET)
+    duplicated_case["cases"][1] = deepcopy(duplicated_case["cases"][0])
+    assert list(Draft202012Validator(SCHEMA).iter_errors(duplicated_case))
+
+    substituted_commit = deepcopy(PACKET)
+    substituted_commit["cases"][0]["upstream_commit"] = "0" * 40
+    substituted_commit["cases"][0]["upstream_url"] = (
+        "https://github.com/OISF/suricata/commit/" + "0" * 40
+    )
+    assert list(Draft202012Validator(SCHEMA).iter_errors(substituted_commit))
 
 
 def test_proposed_experiment_is_small_and_single_threaded() -> None:
