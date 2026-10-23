@@ -93,8 +93,10 @@ TRAFFIC_HTML = """
 </section>
 <section class="workspace-view" id="workspace-findings" role="tabpanel" aria-labelledby="workspace-tab-findings" hidden>
   <h2 id="room-findings-title" tabindex="-1">Findings</h2><p>Fixed detector results linked to the qualified event set. A finding is a reason to review, not proof of malware.</p>
-  <a class="hud-return" href="#room-home-title">Return to visual HUD →</a><div id="room-findings-table" class="room-table"></div>
+  <a class="hud-return" href="#room-home-title">Return to visual HUD →</a>
 __CASE_VIEW__
+<h3>All findings in this window</h3>
+<div id="room-findings-table" class="room-table"></div>
 __FINDING_EVIDENCE__
 </section>
 """ + REPORTS_HTML + """

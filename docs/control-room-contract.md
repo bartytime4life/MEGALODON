@@ -239,3 +239,17 @@ records between projections.
 This first integration does not persist case notes, export a case package, run
 an AI model, or operate the host. Flight Lab remains a separate synthetic
 prototype; its session notebook is not an installed-dashboard capability.
+
+The automatic address case precedes the all-findings table. When linked findings exist,
+a review button opens the first finding in observation-time order in the existing
+evidence inspector. The button clears when the selected address or qualified
+records are absent. Address tuning remains in the collapsed Advanced disclosure.
+
+The automatic “What changed?” briefing compares the selected address's returned
+records against its previous fresh in-memory snapshot. It counts newly visible
+events, findings and addresses, links up to 20 added findings to the inspector,
+and flags changes to truncation/exclusion indicators. Newly visible does not mean
+newly occurred, and disappearing records do not establish resolution. Changing
+address or filter resets the baseline. Stale snapshots do not replace a fresh
+baseline; unavailable records and managed-history transitions clear it. This
+comparison does not persist across reloads or request additional data.
