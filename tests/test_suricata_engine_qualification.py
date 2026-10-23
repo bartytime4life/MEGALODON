@@ -60,6 +60,12 @@ def test_schema_rejects_missing_hold_or_substituted_case_provenance() -> None:
     )
     assert list(Draft202012Validator(SCHEMA).iter_errors(substituted_commit))
 
+    fabricated_pass = deepcopy(PACKET)
+    fabricated_pass["cases"][0]["verified_observation"] = (
+        "Suricata was executed and passed production acceptance."
+    )
+    assert list(Draft202012Validator(SCHEMA).iter_errors(fabricated_pass))
+
 
 def test_proposed_experiment_is_small_and_single_threaded() -> None:
     limits = PACKET["proposed_limits"]

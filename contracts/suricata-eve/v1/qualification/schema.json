@@ -88,7 +88,8 @@
                 "upstream_commit": {"const": "bea218e7b1dd8ffb09f250e62c096c6b3da749b4"},
                 "upstream_url": {"const": "https://github.com/OISF/suricata/commit/bea218e7b1dd8ffb09f250e62c096c6b3da749b4"},
                 "upstream_date": {"const": "2026-10-22"},
-                "ticket": {"const": 9167}
+                "ticket": {"const": 9167},
+                "verified_observation": {"const": "Upstream reports that a TLS handshake header shorter than four bytes could make the parser error and disable further protocol inspection; the candidate commit buffers the header across records."}
               }
             }
           ]
@@ -102,7 +103,8 @@
                 "upstream_commit": {"const": "f87b8e64a5fb80788897f7a9073c5407a2f5bc96"},
                 "upstream_url": {"const": "https://github.com/OISF/suricata/commit/f87b8e64a5fb80788897f7a9073c5407a2f5bc96"},
                 "upstream_date": {"const": "2026-10-22"},
-                "ticket": {"const": 8684}
+                "ticket": {"const": 8684},
+                "verified_observation": {"const": "Upstream reports that a PCRE-only TCP stream rule group could re-evaluate the whole growing stream for each packet, producing quadratic work when no multipattern prefilter advanced raw-stream progress."}
               }
             }
           ]
