@@ -24,7 +24,7 @@ from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 from .host_security import HostSecurity
-from . import gateway_review, hardening_review, persistence_review, process_network, recovery_readiness
+from . import backup_evidence, gateway_review, hardening_review, persistence_review, process_network, recovery_readiness
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -385,6 +385,7 @@ class SupportConfiguration:
         return self._background('process', PROCESS_TTL, process_network.review, process_network.SCHEMA)
 
     def snapshot(self, include_token=False):
+        backups = backup_evidence.snapshot(self.home)
         hardening = self._hardening_snapshot()
         persistence = self._persistence_snapshot()
         gateway = self._gateway_snapshot()
@@ -402,6 +403,7 @@ class SupportConfiguration:
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
                          host_security=host_security, recovery_readiness=recovery_readiness.review(host_security),
+                         backup_evidence=backups,
                          hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             if include_token:

@@ -51,8 +51,26 @@ def test_real_projections_render_and_forged_or_stale_readiness_is_cleared():
 
 def test_existing_setup_route_renders_and_clears_panel_without_actions():
     assert 'id="recovery-readiness"' in SUPPORT_CONFIG_HTML
-    assert "renderRecoveryReadiness(el('recovery-readiness'),v.recovery_readiness)" in SUPPORT_CONFIG_JS
+    assert "renderRecoveryReadiness(el('recovery-readiness'),v.recovery_readiness,v.backup_evidence)" in SUPPORT_CONFIG_JS
     assert "function fail(error){renderRecoveryReadiness(el('recovery-readiness'),null)" in SUPPORT_CONFIG_JS
     assert 'fetch(' not in RECOVERY_READINESS_JS
     assert 'innerHTML' not in RECOVERY_READINESS_JS
     assert '<button' not in SUPPORT_CONFIG_HTML.split('id="recovery-readiness-title"', 1)[1].split('id="hardening-title"', 1)[0]
+
+
+def test_external_evidence_renders_without_granting_restoration_and_clears_on_invalid_or_expired_data():
+    from test_backup_evidence import NOW, packet, records
+    from megalodon.backup_evidence import review as backup_review, unavailable
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node unavailable')
+    backup, test, trust = records()
+    valid = backup_review(*packet(backup, test, trust), now=NOW)
+    test['conflicts'] = 'reported_legitimate_changes'
+    conflict = backup_review(*packet(backup, test, trust), now=NOW)
+    result = subprocess.run([node, str(Path(__file__).with_name('backup_evidence_browser.cjs'))],
+                            input=json.dumps(dict(code=RECOVERY_READINESS_JS,
+                                readiness=projections()['missing'], valid=valid,
+                                conflict=conflict, missing=unavailable())),
+                            text=True, capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr

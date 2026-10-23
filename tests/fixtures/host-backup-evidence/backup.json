@@ -1,0 +1,13 @@
+{
+  "artifact_bytes": 4096,
+  "artifact_sha256": "e0a7134bfe832df12fe9d4b949c5268237196b75a34c215309e037d7241423a2",
+  "availability": "observed_available",
+  "backup_id": "synthetic-backup-001",
+  "created_at": "2026-10-21T09:00:00Z",
+  "expires_at": "2026-10-23T10:00:00Z",
+  "producer_id": "synthetic-producer-A",
+  "schema": "megalodon-host-backup-receipt-v1",
+  "source_id": "synthetic-host-A-system-files",
+  "source_snapshot_sha256": "c553eba669ca1ee6b5721a0acbd3d1b0ab6152ef1745ef9e6a750918258971c7",
+  "verified_at": "2026-10-22T10:00:00Z"
+}

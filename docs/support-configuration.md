@@ -118,3 +118,10 @@ whose one action records an initial persistence baseline and is refused once
 a baseline exists, the passive [local gateway review](host-security.md#local-gateway-review),
 which has no action, and the read-only map of
 [programs on the network](host-security.md#programs-on-the-network).
+
+Recovery readiness also displays [pinned external backup evidence](host-backup-evidence.md)
+from three fixed private files. The separate `backup_evidence` summary admits
+only matching, dated backup and independent isolated restore-test receipts against
+operator-established digest pins. GET performs bounded read-only validation; it
+does not open a backup, execute a test or change restoration eligibility. There
+is no backup import, trust approval or recovery action in the POST contract.
