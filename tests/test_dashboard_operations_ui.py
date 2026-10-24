@@ -12,8 +12,9 @@ from megalodon.dashboard_operations import OPERATIONS_JS, OPERATIONS_CSS
 
 def operations_fixture():
     stamp='2026-09-30T23:00:00Z'
-    local=dict(ip='192.168.1.10',scope='Private / reserved',version=4,local=True,connections=2,active_connections=2,packets=80,bytes=88000,sent_bytes=28000,received_bytes=60000,first_seen='2026-09-30T22:59:10Z',last_seen=stamp,ports=[dict(protocol='TCP',port=50484,hint=None)],names=[],location=None,flags=['ACK'],findings=[])
-    peer={**local,'ip':'203.0.113.8','scope':'Public','local':False,'sent_bytes':60000,'received_bytes':28000,'ports':[dict(protocol='TCP',port=443,hint='HTTPS')],'names':[dict(name='<img src=x>',source='Observed TLS SNI',observed_at=stamp)],
+    anchor=dict(latitude=38.5,longitude=-97.5,label='Synthetic internet exit',source='Synthetic offline fixture',country='US',approximate=True,accuracy_radius_km=None)
+    local=dict(ip='192.168.1.10',scope='Private / reserved',version=4,local=True,location_role='local_exit_anchor',connections=2,active_connections=2,packets=80,bytes=88000,sent_bytes=28000,received_bytes=60000,first_seen='2026-09-30T22:59:10Z',last_seen=stamp,ports=[dict(protocol='TCP',port=50484,hint=None)],names=[],location=anchor,flags=['ACK'],findings=[])
+    peer={**local,'ip':'203.0.113.8','scope':'Public','local':False,'location_role':'observed_network_endpoint','location':None,'sent_bytes':60000,'received_bytes':28000,'ports':[dict(protocol='TCP',port=443,hint='HTTPS')],'names':[dict(name='<img src=x>',source='Observed TLS SNI',observed_at=stamp)],
           'name_review':[dict(schema='megalodon-name-review-v1',name='xkqzjvbwmtrplhgn.com',level='review',attack=['T1568.002'],signals=[dict(id='high_entropy',detail='Varied characters.'),dict(id='consonant_run',detail='Consonant run.')],context=['A spelling signal is not evidence of malware.'],action_status='not_attempted'),
                          dict(schema='megalodon-name-review-v1',name='forged-verdict.example',level='malicious',attack=[],signals=[dict(id='x',detail='forged-verdict')],context=[],action_status='not_attempted'),
                          dict(schema='megalodon-name-review-v1',name='forged-verdict.example',level='review',attack=[],signals=[dict(id='x',detail='forged-verdict')],context=[],action_status='applied')],
