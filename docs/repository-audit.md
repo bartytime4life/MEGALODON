@@ -22,7 +22,11 @@ non-ignored file and retired baseline path. It records purpose, dependency
 references, digest, disposition, static verification and related tests. Dated
 records and intentionally invalid fixtures remain identified. The ledger itself
 is listed by this document; its recursive self-digest is deliberately omitted.
-Run `python tools/repository_audit.py --write` to refresh it.
+Do not refresh that historical ledger. To create a new machine inventory, use a
+new explicit snapshot path, for example
+`python tools/repository_audit.py --write docs/audit/repository-files-YYYYMMDD.json`.
+The command refuses existing files, paths outside `docs/audit`, and the preserved
+October 1 ledger. A generated inventory is not evidence of a new full audit.
 
 Every file was read and classified using structured checks. This is not a claim
 of an independent manual review of every line or a guarantee that no defects
