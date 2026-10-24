@@ -22,7 +22,7 @@ def live_fixture():
                 background=dict(enabled=True, state='running', message='Saved background monitoring is running.', session_count=1),
                 geography=dict(status='ready', source='DB-IP City Lite', build_date='2026-09-01', updated_at=stamp, anchor=anchor, anchor_checked_at=stamp, message='Local database ready.', attribution_url='https://db-ip.com'),
                 totals=dict(active=1, returned=1, unmapped=0, truncated=False, evicted=0, packets=5, bytes=500),
-                connections=[dict(id='abcdef1234', protocol='TCP', a=dict(ip='192.168.1.2', port=49152, local=True, location=anchor), b=dict(ip='1.1.1.1', port=443, local=False, location=peer), a_to_b=dict(packets=5, bytes=500, last_seen=stamp), b_to_a=dict(packets=0, bytes=0, last_seen=None), first_seen=stamp, last_seen=stamp, active=True, state='recent')],
+                connections=[dict(id='abcdef1234', protocol='TCP', a=dict(ip='192.168.1.2', port=49152, local=True, location=anchor, location_role='local_exit_anchor'), b=dict(ip='1.1.1.1', port=443, local=False, location=peer, location_role='observed_network_endpoint'), a_to_b=dict(packets=5, bytes=500, last_seen=stamp), b_to_a=dict(packets=0, bytes=0, last_seen=None), first_seen=stamp, last_seen=stamp, active=True, state='recent')],
                 limits=dict(idle_seconds=15, retention_seconds=60, max_connections=128, tracked_connections=512))
 
 
