@@ -25,6 +25,9 @@ Private, reserved, shared and mapped IPv6 addresses receive no public-IP map
 position, including when the globe has this PC's internet-exit anchor. Missing
 location data shows **Location unknown** and still allows a location-context
 export. Traffic evidence remains available in Address investigation.
+An address assigned to the selected local interface also cannot inherit that
+shared exit position, even when the local address is globally routable. Its
+export records the explicit `local_exit_anchor` role with no endpoint position.
 
 **Save location context** downloads `megalodon-address-location.json`. It preserves
 unknown values, source dates, radius and capture state, and is outside automatic
