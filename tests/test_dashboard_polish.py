@@ -201,6 +201,16 @@ def test_help_routes_common_tasks_to_existing_gui_controls_and_keeps_commands_ad
     for href in hrefs:
         if href.startswith("#"):
             assert len(by_id[href[1:]]) == 1, f"Help route must have one real destination: {href}"
+            target = by_id[href[1:]][0]
+            attrs = target["attrs"]
+            native_control = target["tag"] in {"button", "input", "select", "textarea", "summary"}
+            native_link = target["tag"] in {"a", "area"} and "href" in attrs
+            # The workspace router calls focus() after revealing the destination.
+            # A fragment scrolls to a plain heading or section without focusing it.
+            focusable = (attrs.get("tabindex") == "-1" or attrs.get("tabindex", "").isdigit()
+                         or native_control or native_link)
+            assert focusable and "disabled" not in attrs and attrs.get("type") != "hidden", (
+                f"Help route must move keyboard focus to its destination: {href}")
     assert not any(item["tag"] in {"button", "form"} for item in help_elements), "Help links only navigate; they never execute a task"
     advanced = next(item for item in help_elements if item["tag"] == "details" and "help-advanced" in item["attrs"].get("class", "").split())
     assert "open" not in advanced["attrs"], "advanced terminal instructions start collapsed"

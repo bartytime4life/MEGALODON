@@ -12,7 +12,7 @@ SUPPORT_CONFIG_HTML = r'''
   <div class="support-config-head"><div><p class="eyebrow">CONFIGURE THIS PC</p><h4 id="support-config-title" tabindex="-1">Configure local tools</h4><p>Set up capture and collectors, or check the tools you use. Settings stay on this computer.</p></div><button type="button" id="support-config-close" class="button-secondary">Close configuration</button></div>
   <div class="support-config-feedback"><p id="support-config-status" role="status" aria-live="polite" aria-atomic="true">Checking available tools and capture settings…</p><button type="button" id="support-config-retry" hidden>Check again</button></div>
   <section class="support-capture" aria-labelledby="support-capture-title">
-    <div class="support-config-section-head"><h5 id="support-capture-title">Network capture</h5><span id="support-capture-state" class="support-config-badge">Not checked</span></div>
+    <div class="support-config-section-head"><h5 id="support-capture-title" tabindex="-1">Network capture</h5><span id="support-capture-state" class="support-config-badge">Not checked</span></div>
     <div class="support-capture-steps">
       <div><label for="support-config-interface"><span class="support-step">1</span> Select your network interface</label><select id="support-config-interface" disabled><option value="">Checking interfaces…</option></select><p id="support-config-interface-note" class="support-config-note">Your active default interface is suggested when available.</p></div>
       <div><h6><span class="support-step">2</span> Allow capture for this user</h6><button type="button" id="support-config-permissions" disabled>Configure capture access</button><p class="support-config-note">An operating-system prompt grants packet-capture access to your user. Wireshark stays a normal-user app.</p></div>
@@ -39,7 +39,7 @@ SUPPORT_CONFIG_HTML = r'''
     <section><h5>Zeek</h5><p>Prepare the automatic background sampler and its private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek sampler</button><p class="support-config-note">Source summaries appear in Actions; they are separate from HUD packet totals and detector findings.</p></section>
     <section><h5>Suricata</h5><p>Configure the passive sensor on the selected network interface.</p><div class="support-config-actions"><button type="button" id="support-config-suricata-setup" disabled>Configure background Suricata</button><button type="button" id="support-config-suricata" disabled>Check configuration</button></div><p class="support-config-note">A one-time system prompt configures the service and access to its local logs.</p></section>
   </div></details>
-  <section id="support-host-security" class="support-capture" aria-labelledby="host-security-title">
+  <section id="support-host-security" class="support-capture" aria-labelledby="host-security-title" tabindex="-1">
     <h5 id="host-security-title">Host security and threat context</h5>
     <p>Audit Linux configuration, compare critical files with an initial AIDE baseline, and match observed IPs against dated public references.</p>
     <div class="support-config-actions"><button type="button" id="host-security-audit" disabled>Run Lynis audit</button><button type="button" id="host-security-baseline" disabled>Create initial AIDE baseline</button><button type="button" id="host-security-check" disabled>Check file changes</button><button type="button" id="host-security-refresh" disabled>Refresh threat references</button></div>
