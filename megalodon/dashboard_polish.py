@@ -8,6 +8,8 @@ existing ``<select>`` or fill an existing input, then dispatch the same
 and validation rule stays the single source of truth.
 """
 
+from .status_glossary import STATUS_GLOSSARY_HTML
+
 # Fixed order and short names match ``workflowToolIds`` and the heartbeat probes.
 APP_RAIL_TOOLS = (
     ("core", "MEGALODON"), ("tshark", "TShark"), ("zeek", "Zeek"), ("suricata", "Suricata"),
@@ -54,8 +56,64 @@ APP_TILES_HTML = (
 )
 
 
+HELP_HTML = r'''
+<section class="workspace-view" id="workspace-help" role="tabpanel" aria-labelledby="workspace-tab-help" hidden>
+  <header class="help-heading"><p class="eyebrow">HELP / YOUR NEXT STEP</p><h2 id="room-help-title" tabindex="-1">Find your way forward</h2>
+    <p>Choose what you want to do. These links open the right controls; you review and start each action there.</p>
+  </header>
+  <div class="room-help-grid help-guide">
+    <section class="help-tasks" aria-labelledby="help-here"><h3 id="help-here">What would you like to do?</h3>
+      <nav aria-label="Help tasks"><ul class="help-task-list">
+        <li><a href="#support-capture-title"><span><strong>Collect live traffic</strong><small>Choose an interface, allow capture, then start HUD traffic.</small></span><span aria-hidden="true">→</span></a></li>
+        <li><a href="#support-model-title"><span><strong>Check local AI</strong><small>Choose an installed model and verify a reply on this PC.</small></span><span aria-hidden="true">→</span></a></li>
+        <li><a href="#network-setup-title"><span><strong>Find devices on my network</strong><small>Review private networks you manage before enabling discovery.</small></span><span aria-hidden="true">→</span></a></li>
+        <li><a href="#room-findings-title"><span><strong>Review a finding</strong><small>Read the recorded evidence. A finding is a reason to investigate.</small></span><span aria-hidden="true">→</span></a></li>
+      </ul></nav>
+      <div class="help-more-links" aria-label="More setup help"><a href="#support-config-clamav-title">File scans &amp; signatures</a><a href="#storage-history-title">Storage &amp; history</a><a href="#support-host-security">Host security checks</a></div>
+      <p class="help-note">Need a tool first? <a href="#setup-software-title">Find software in Setup</a>. For current collector activity, open <a href="#integrations-title">Sensors</a>.</p>
+    </section>
+    <section class="help-troubleshoot" aria-labelledby="help-data"><p class="help-kicker">TRAFFIC TROUBLESHOOTING</p><h3 id="help-data">Why is there no traffic?</h3>
+      <p>The HUD can be working while capture is stopped or no metadata has been accepted. Check these in order.</p>
+      <ol class="help-checklist">
+        <li><strong>Check the interface and capture status.</strong> Open Network capture in Setup. Choose the interface that carries the traffic you want to observe.</li>
+        <li><strong>Allow capture when requested.</strong> Choose <span class="help-control">Configure capture access</span> and approve the operating-system prompt on this PC. Refreshing alone cannot grant permission.</li>
+        <li><strong>Start and check the counts.</strong> Choose <span class="help-control">Start HUD traffic</span>. Look for increasing <span class="help-control">Received packets</span> and <span class="help-control">Accepted records</span>; read any error shown there.</li>
+        <li><strong>Match the view to the evidence.</strong> Live traffic shows its own recent capture window. Use “Stored evidence time range” for saved metadata and Findings, or open <a href="#storage-evidence-title">retained history</a> for older records. A quiet interface or a stopped session can leave an empty live view.</li>
+      </ol>
+      <a class="help-primary-link" href="#support-capture-title">Open Network capture <span aria-hidden="true">→</span></a>
+      <details><summary>Packets arrive, but the view is still empty</summary><p>Received packets and accepted metadata answer different questions. Read skipped-packet counts and the capture message, then choose <span class="help-control">Check this computer</span> in <a href="#setup-title">Setup</a> to check whether the selected store is readable. A store error needs review; do not weaken file permissions to force it open.</p><p>Device discovery finds addresses; it does not make every device’s traffic visible. A switched or Wi-Fi network usually shows this PC’s traffic. <a href="#network-setup-title">Review discovery and visibility settings</a>.</p></details>
+    </section>
+    <section class="help-status" aria-labelledby="help-language"><h3 id="help-language">Read the status with confidence</h3>
+      <p>Read each result next to its label and check time. An installed tool, a running process, an AI reply and collected evidence are separate checks. None is a certificate that the network is safe.</p>
+      <p><a href="#integrations-title">Sensors</a> refreshes local workflow status while its view is open. Capability references keep their startup observations; <span class="help-control">Check this computer</span> in Setup does not refresh that older reference. <strong>Stale</strong> means an observation is old or its refresh failed.</p>
+      <details><summary>Full status glossary (every page)</summary>
+        __HELP_STATUS_GLOSSARY__
+      </details>
+      <details><summary>What stays on this computer?</summary><p>Traffic metadata, findings, local AI requests and saved reports are processed locally by these workflows. Download links open external publisher websites; explicit reference updates fetch public data. Discovery sends checks to the networks you select. Exported files are yours to manage. Local AI provides advice; its reply alone never proves an attack or runs a generated command.</p></details>
+    </section>
+    <details class="help-advanced"><summary id="help-terminal">Advanced: imports, desktop apps and launch options</summary><div class="help-advanced-body">
+      <p>Routine capture, local AI and collector settings are available in <a href="#support-config-title">Setup</a>. The steps below cover work that still needs a desktop app or terminal.</p>
+      <h4>Import an existing metadata file</h4><p>Other saved-file imports use their adapter commands. Import only sources you are authorized to inspect. To see supported run options, use <code>python -m megalodon run --help</code> in your MEGALODON terminal. Choose <span class="help-control">Refresh metadata</span> after importing into the selected store. If that store was missing at launch, refresh can read it once a valid store exists at the same location. Selecting a different data source needs a new session.</p>
+      <h4>Change data for a new session</h4><p>In <a href="#setup-title">Setup → Data and tools</a>, expand “Change data for the next launch” to prepare a command for an existing completed offline run or another supported source. It affects only a new session. Review that run’s snapshots under Evidence.</p>
+      <h4>Use optional desktop apps or advanced commands</h4><p>Setup also contains “Advanced actions, desktop apps and capability reference.” Software downloads open the official publisher instructions. Availability does not establish that a tool is feeding the HUD.</p>
+      <h4>Reopen or stop MEGALODON</h4><p id="help-launch-intro">Reading the launch method for this HUD…</p><code id="help-reopen-command">Launch command unavailable</code><p>A foreground HUD stays in its launch terminal; Ctrl+C there stops that session. An automatically started HUD runs in the background. Explicit launch options affect only a new session: use an unused local port to keep the existing HUD running. The <code>--no-auto-companions</code> option disables collection only in the new session. Reopening does not create sample traffic or start network capture.</p><p id="help-source-launch" hidden>From your reviewed repository folder, you can also run <code>./scripts/start-local.sh --check</code>, then <code>./scripts/start-local.sh</code>.</p>
+      <p><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Local PC setup and troubleshooting <span aria-hidden="true">↗</span></a></p>
+    </div></details>
+  </div>
+</section>
+'''.replace('__HELP_STATUS_GLOSSARY__', STATUS_GLOSSARY_HTML)
+
+
+def _compose_help(html: str) -> str:
+    """Replace the final Help workspace without changing its handlers or actions."""
+    start = html.index('<section class="workspace-view" id="workspace-help"')
+    end = html.index('\n</section>', start) + len('\n</section>')
+    return html[:start] + HELP_HTML.strip() + html[end:]
+
+
 def compose_polish(html: str) -> str:
-    """Place the status rail in the top bar and the tiles in Background tools."""
+    """Compose task-first Help, the top status rail and Background tools tiles."""
+    html = _compose_help(html)
     html = html.replace(
         '    <div class="connection-state">',
         '    ' + APP_RAIL_HTML + '\n    <div class="connection-state">', 1)
@@ -297,6 +355,46 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
   .app-dot-chip,.shell .polish-chip,.shell .polish-presets .polish-chip { min-height:44px; }
   .app-rail-recheck { width:44px; height:44px; min-height:44px; }
 }
+/* ---- Help: task routing first, a practical capture checklist, advanced work on request. ---- */
+.help-heading { max-width:76ch; margin:8px 0 26px; }
+.help-heading h2 { margin:.35rem 0 .65rem; font-size:clamp(1.55rem,2.5vw,2rem); letter-spacing:-.025em; }
+.help-heading > p:last-child { color:#bfd0d9; font-size:1rem; line-height:1.65; }
+.room-help-grid.help-guide { grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:24px 32px; align-items:start; }
+.help-guide > section { padding:0; border:0; border-radius:0; background:transparent; }
+.help-guide h3 { font-size:1.08rem; line-height:1.45; margin:0 0 14px; }
+.help-task-list { list-style:none; padding:0!important; margin:0; border-top:1px solid #365765; }
+.help-task-list > li { margin:0; border-bottom:1px solid #365765; }
+.help-task-list a { display:flex; justify-content:space-between; gap:20px; align-items:center; min-height:76px; padding:14px 12px; color:#e6f5f5; text-decoration:none; }
+.help-task-list a:hover { background:#12313b; }
+.help-task-list a:focus-visible { outline:3px solid #a6f4df; outline-offset:-3px; }
+.help-task-list a > span:first-child { min-width:0; }
+.help-task-list strong { display:block; font-size:.98rem; font-weight:650; line-height:1.5; color:#def7ef; }
+.help-task-list small { display:block; margin-top:4px; font-size:.86rem; line-height:1.55; color:#b8cfd9; }
+.help-task-list a > span[aria-hidden] { flex:none; font-size:1.25rem; color:#a6f4df; }
+.help-more-links { display:flex; flex-wrap:wrap; gap:0 20px; margin-top:14px; }
+.help-more-links a,.help-primary-link { display:inline-flex; align-items:center; gap:12px; min-height:44px; font-size:.88rem; line-height:1.5; }
+.help-guide .help-note { margin:10px 0 0; font-size:.84rem; color:#acc4d0; }
+.help-note a { display:inline-block; padding-block:10px; }
+.help-guide > .help-troubleshoot { border:1px solid #46616c; border-top:3px solid #d5b272; padding:20px 22px; background:#0b202b; border-radius:4px; }
+.help-troubleshoot .help-kicker { margin:0 0 8px; color:#edcc92; font-size:.72rem; font-weight:700; letter-spacing:.08em; }
+.help-checklist { padding-left:22px; margin:16px 0 8px; }
+.help-checklist li { margin:0 0 14px; padding-left:5px; }
+.help-checklist li::marker { color:#edcc92; font-weight:700; }
+.help-checklist strong { display:block; color:#dfedf1; font-weight:650; }
+.help-control { color:#e1efef; font-weight:600; }
+.help-guide > .help-status { grid-column:1/-1; border-top:1px solid #365765; padding-top:22px; }
+.help-status > p { max-width:98ch; }
+.help-guide > .help-advanced { grid-column:1/-1; margin:0; border-block:1px solid #365765; }
+.help-advanced > summary { padding:14px 0; font-weight:650; }
+.help-advanced-body { max-width:98ch; padding:0 0 20px; }
+.help-advanced h4 { margin:24px 0 8px; color:#deeeed; font-size:.95rem; }
+.help-guide .help-advanced-body a,.help-troubleshoot details a { display:inline-block; padding-block:10px; }
+@media (max-width:760px) {
+  .room-help-grid.help-guide { grid-template-columns:minmax(0,1fr); gap:24px; }
+  .help-guide > .help-troubleshoot { padding:18px 16px; }
+  .help-heading { margin-bottom:22px; }
+  .help-task-list a { padding-inline:8px; gap:12px; }
+}
 @media (prefers-reduced-motion: reduce) {
   body::after, .mark, .mark::after, .app-dot, .app-dot::after, .app-rail-recheck span, .workspace-view > *, .ops-desk > *, .support-apps::before, .shell details[open] > * { animation:none !important; }
   .shell button, .app-tile, .app-dot-chip, .polish-chip { transition:none !important; transform:none !important; }
@@ -322,7 +420,7 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 
 POLISH_JS = r'''
 // ---- Supporting-app status rail and tiles: painted from the shared heartbeat. ----
-const appRailLabels = {running: 'Running', ready: 'Installed', stopped: 'Stopped', attention: 'Needs setup', missing: 'Not installed', unknown: 'Status unknown'};
+const appRailLabels = {running: 'Running', ready: 'Installed', stopped: 'Stopped', attention: 'Needs attention', missing: 'Not installed', unknown: 'Status unknown'};
 function appRailState(tool, stale) {
   if (!tool || stale) return 'unknown';
   if (tool.light === 'green') return tool.service === 'running' ? 'running' : 'ready';
@@ -330,7 +428,17 @@ function appRailState(tool, stale) {
   if (tool.light === 'red') return 'missing';
   return 'unknown';
 }
-function appRailDetail(tool, state) {
+function appRailDetail(tool, state, stale = false) {
+  // A present model without a recent accepted reply is not a setup failure.
+  // The heartbeat light remains authoritative; these labels never promote it.
+  const selected = !stale && tool && tool.id === 'qwen' && tool.selected_model;
+  if (selected) {
+    if (selected.state === 'ready' && tool.light === 'amber') return 'Model available · verify response';
+    if (selected.state === 'connected' && tool.light === 'green') return 'Recent AI response';
+    if (selected.state === 'needs_setup' && tool.light === 'amber') return 'Local AI needs setup';
+    if (selected.state === 'error' && tool.light === 'amber') return 'AI check needs attention';
+    if (selected.state === 'collecting' && tool.light === 'grey') return 'Checking local AI';
+  }
   if (state === 'running' && tool && tool.running_since && typeof heartbeatAge === 'function') return 'Running · up ' + heartbeatAge(tool.running_since);
   if (state === 'ready') return tool && tool.service === 'standalone' ? 'Installed · runs on demand' : 'Installed';
   if (state === 'attention' && tool && tool.model === 'missing') return 'Running · model missing';
@@ -344,7 +452,7 @@ function renderAppStatusRail() {
     const id = node.getAttribute('data-app-rail') || node.getAttribute('data-app-tile');
     const tool = heartbeatState.byId.get(id);
     const state = appRailState(tool, stale);
-    const detail = appRailDetail(tool, state);
+    const detail = appRailDetail(tool, state, stale);
     if (node.dataset) node.dataset.state = state;
     const full = typeof heartbeatText === 'function' ? heartbeatText(tool) : detail;
     node.title = full;
@@ -365,9 +473,9 @@ function renderAppStatusRail() {
     else {
       const parts = [counts.running + ' running'];
       if (counts.ready) parts.push(counts.ready + ' installed');
-      // Match the chips: needs-setup and unknown tools are neither stopped nor omitted.
+      // Attention includes unverified models; it does not always mean setup is missing.
       if (counts.stopped) parts.push(counts.stopped + ' stopped');
-      if (counts.attention) parts.push(counts.attention + ' need setup');
+      if (counts.attention) parts.push(counts.attention + ' need attention');
       if (counts.missing) parts.push(counts.missing + ' missing');
       if (counts.unknown) parts.push(counts.unknown + ' status unknown');
       summary.textContent = parts.join(' · ');

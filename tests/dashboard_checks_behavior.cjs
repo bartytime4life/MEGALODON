@@ -156,7 +156,7 @@ process.stdin.on('end', async () => {
     assert.equal(byId('setup-check').focusOptions.preventScroll, true);
     assert.equal(byId('setup-download-report').disabled, false);
     assert.match(allText(byId('setup-check-results')), /Python.*SQLite/);
-    assert.match(allText(byId('setup-check-results')), /first successful import, reopen the HUD/);
+    assert.match(allText(byId('setup-check-results')), /importing into the configured location, refresh the HUD/);
     assert.equal(timers.size, 0);
     byId('setup-download-report').listeners.click();
     assert.deepEqual(downloads, ['megalodon-local-checks.json']);

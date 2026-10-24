@@ -2,6 +2,7 @@
 import re
 import shutil
 import subprocess
+from html.parser import HTMLParser
 
 import pytest
 
@@ -63,10 +64,31 @@ assert.equal(tiles[0].label.textContent,'Running · up 2h 0m');
 assert.equal(tiles[4].label.textContent,'Installed · runs on demand');
 assert.equal(tiles[8].label.textContent,'Running · model missing');
 assert.equal(rail[2].title,'light red','the full heartbeat wording stays in the tooltip');
-assert.equal(byId['app-rail-summary'].textContent,'2 running · 3 installed · 1 stopped · 1 need setup · 2 missing · 1 status unknown');
+assert.equal(byId['app-rail-summary'].textContent,'2 running · 3 installed · 1 stopped · 1 need attention · 2 missing · 1 status unknown');
 assert.equal(byId['app-rail'].dataset.stale,'false');assert.equal(refilters,1);
+const qwen=context.heartbeatState.byId.get('qwen');
+qwen.model='present';qwen.selected_model={state:'ready',model:'installed-model',message:'Present; verify a reply.'};
+context.renderAppStatusRail();
+assert.equal(rail[8].dataset.state,'attention','an available model without a recent reply stays amber');
+assert.equal(tiles[8].label.textContent,'Model available · verify response','availability is not described as missing setup');
+assert.match(byId['app-rail-summary'].textContent,/1 need attention/);
+qwen.selected_model.state='error';context.renderAppStatusRail();
+assert.equal(tiles[8].label.textContent,'AI check needs attention');
+assert.equal(rail[8].dataset.state,'attention','an AI failure cannot turn the dot green');
+qwen.selected_model.state='needs_setup';context.renderAppStatusRail();
+assert.equal(tiles[8].label.textContent,'Local AI needs setup');
+qwen.selected_model.state='collecting';qwen.light='grey';context.renderAppStatusRail();
+assert.equal(tiles[8].label.textContent,'Checking local AI');
+assert.equal(rail[8].dataset.state,'unknown','work in progress is not readiness');
+qwen.selected_model.state='connected';qwen.light='amber';context.renderAppStatusRail();
+assert.equal(rail[8].dataset.state,'attention');
+assert.notEqual(tiles[8].label.textContent,'Recent AI response','a conflicting amber light cannot advertise a verified reply');
+qwen.light='green';context.renderAppStatusRail();
+assert.equal(rail[8].dataset.state,'running');
+assert.equal(tiles[8].label.textContent,'Recent AI response');
 stale=true;context.renderAppStatusRail();
 assert.ok(rail.every(n=>n.dataset.state==='unknown'),'stale observations never show green');
+assert.equal(tiles[8].label.textContent,'Status unknown','stale AI observations must not retain recent-response wording');
 assert.equal(byId['app-rail-summary'].textContent,'Status stale · retrying');
 context.heartbeatState.report=null;context.heartbeatState.failed=true;stale=false;context.renderAppStatusRail();
 assert.equal(byId['app-rail-summary'].textContent,'Status unavailable');
@@ -139,3 +161,64 @@ def test_help_names_only_workspaces_that_exist():
         assert stale not in help_panel
     assert '<a href="#integrations-title">Sensors</a>' in help_panel
     assert 'id="integrations-title"' in INDEX_HTML
+
+
+class HelpStructure(HTMLParser):
+    """Read composed HTML so moved copy cannot silently leave routes or hooks behind."""
+
+    def __init__(self, html):
+        super().__init__()
+        self.stack = []
+        self.elements = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        item = {"tag": tag, "attrs": dict(attrs), "ancestors": tuple(self.stack)}
+        self.elements.append(item)
+        if tag not in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
+            self.stack.append(item)
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index]["tag"] == tag:
+                del self.stack[index:]
+                break
+
+
+def test_help_routes_common_tasks_to_existing_gui_controls_and_keeps_commands_advanced():
+    structure = HelpStructure(INDEX_HTML)
+    help_elements = [item for item in structure.elements if any(
+        ancestor["attrs"].get("id") == "workspace-help" for ancestor in item["ancestors"])]
+    by_id = {}
+    for item in structure.elements:
+        if "id" in item["attrs"]:
+            by_id.setdefault(item["attrs"]["id"], []).append(item)
+    links = [item for item in help_elements if item["tag"] == "a"]
+    hrefs = {item["attrs"].get("href") for item in links}
+    assert {"#support-capture-title", "#support-model-title", "#network-setup-title", "#room-findings-title",
+            "#support-config-clamav-title", "#storage-history-title", "#support-host-security"} <= hrefs
+    assert "#support-apps-title" not in hrefs, "starting background tools is not capture setup"
+    for href in hrefs:
+        if href.startswith("#"):
+            assert len(by_id[href[1:]]) == 1, f"Help route must have one real destination: {href}"
+    assert not any(item["tag"] in {"button", "form"} for item in help_elements), "Help links only navigate; they never execute a task"
+    advanced = next(item for item in help_elements if item["tag"] == "details" and "help-advanced" in item["attrs"].get("class", "").split())
+    assert "open" not in advanced["attrs"], "advanced terminal instructions start collapsed"
+    assert all(advanced in item["ancestors"] for item in help_elements if item["tag"] == "code")
+    for hook in ("room-help-title", "help-here", "help-data", "help-language", "help-terminal",
+                 "help-launch-intro", "help-reopen-command", "help-source-launch", "status-glossary"):
+        assert len(by_id[hook]) == 1, f"existing Help hook remains unique: {hook}"
+    assert "Refreshing alone cannot grant permission" in INDEX_HTML
+    assert "Setup also contains “Advanced actions, desktop apps and capability reference.”" in INDEX_HTML
+    assert "Live traffic shows its own recent capture window." in INDEX_HTML
+    assert "Use “Stored evidence time range” for saved metadata and Findings" in INDEX_HTML
+    assert "After the first import into a previously missing store, restart the HUD." not in INDEX_HTML
+    assert "refresh can read it once a valid store exists at the same location" in INDEX_HTML
+
+
+def test_help_task_links_have_touch_targets_focus_and_narrow_layout():
+    assert ".help-task-list a { display:flex;" in POLISH_CSS
+    assert "min-height:76px" in POLISH_CSS
+    assert ".help-task-list a:focus-visible { outline:3px solid #a6f4df;" in POLISH_CSS
+    assert ".room-help-grid.help-guide { grid-template-columns:minmax(0,1fr);" in POLISH_CSS
+    assert 'data-apps-filter="attention" aria-pressed="false">Stopped or needs attention' in INDEX_HTML

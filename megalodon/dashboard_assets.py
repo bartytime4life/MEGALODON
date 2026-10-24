@@ -770,6 +770,7 @@ const state = {
   timer: null,
   lastSuccessfulRefresh: null,
   lastRefreshFailed: false,
+  evidenceUnavailable: false,
   telemetryNotConfigured: false,
   configDegraded: false,
   config: {event_limit: 50, refresh_seconds: 5}
@@ -1680,7 +1681,7 @@ function renderEvents(events) {
 function renderInitialUnavailable() {
   const row = document.createElement('tr');
   const cell = textNode('td', state.telemetryNotConfigured
-    ? 'No audit store was available at launch. Import real data, then restart this HUD to review detections.'
+    ? 'No audit store was available at launch. Import real data into the configured location, then refresh this HUD to review detections.'
     : 'Recent detections are unavailable until a complete dashboard refresh succeeds.', 'empty');
   cell.colSpan = 5; row.append(cell); byId('events').replaceChildren(row);
   const filterStatus = state.telemetryNotConfigured
@@ -1980,7 +1981,7 @@ function setSnapshotStatus(mode) {
   const healthLimit = 'Dashboard API reachability does not measure capture or ingestion health.';
   let message;
   if (mode === 'unconfigured') {
-    message = `No audit store was available at launch. Import real data, then restart the HUD.${state.paused ? ' Automatic refresh is paused.' : ''} ${healthLimit}`;
+    message = `No audit store was available at launch. Import real data into the configured location, then refresh the HUD.${state.paused ? ' Automatic refresh is paused.' : ''} ${healthLimit}`;
     setUpdatedTime('No audit store available at launch');
   } else if (mode === 'current') {
     message = `Dashboard data fetched successfully. ${healthLimit}`;
@@ -2034,18 +2035,19 @@ async function refresh(announce = true) {
   byId('triage-panel').setAttribute('aria-busy', 'true');
   if (!state.lastSuccessfulRefresh) byId('triage-controls').disabled = true;
   const button = byId('refresh-button'); button.disabled = true; button.textContent = 'Refreshing…';
+  state.evidenceUnavailable = false;
   try {
     const [summaryResult, eventsResult, trafficResult] = await Promise.allSettled([
       requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`), requestRoomSnapshot()
     ]);
     acceptRoomResult(trafficResult);
-    const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh
-      && [summaryResult, eventsResult].every(result => result.status === 'rejected'
+    const evidenceUnavailable = [summaryResult, eventsResult].every(result => result.status === 'rejected'
         && result.reason && result.reason.status === 503
         && result.reason.payload && typeof result.reason.payload === 'object' && !Array.isArray(result.reason.payload)
         && referenceExactKeys(result.reason.payload, ['error']) && result.reason.payload.error === 'telemetry unavailable')
       && trafficResult.status === 'rejected' && trafficResult.reason && trafficResult.reason.status === 503
       && unavailableTrafficResponse(trafficResult.reason.payload);
+    const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh && evidenceUnavailable;
     if (expectedMissingStore) {
       state.telemetryNotConfigured = true;
       state.lastRefreshFailed = false;
@@ -2053,10 +2055,11 @@ async function refresh(announce = true) {
       renderTrafficUnavailable(false);
       setSnapshotStatus('unconfigured');
       setConnection(state.paused ? 'Dashboard API · reachable, no audit store, refresh paused' : 'Dashboard API · reachable, no audit store', '');
-      if (announce) byId('refresh-announcement').textContent = 'No audit store was available at launch. Import real data, then restart this HUD.';
+      if (announce) byId('refresh-announcement').textContent = 'No audit store was available at launch. Import real data into the configured location, then refresh this HUD.';
       return;
     }
     state.telemetryNotConfigured = false;
+    state.evidenceUnavailable = evidenceUnavailable;
     if (summaryResult.status !== 'fulfilled' || eventsResult.status !== 'fulfilled' || trafficResult.status !== 'fulfilled') {
       throw new Error('dashboard refresh failed');
     }
@@ -2081,7 +2084,8 @@ async function refresh(announce = true) {
     state.lastRefreshFailed = true;
     renderTrafficUnavailable(Boolean(state.traffic));
     if (!state.lastSuccessfulRefresh) renderInitialUnavailable();
-    setConnection(state.paused ? 'Dashboard API · unavailable, refresh paused' : 'Dashboard API · unavailable', 'error');
+    const label = state.evidenceUnavailable ? 'Dashboard API · reachable, evidence unavailable' : 'Dashboard API · unavailable';
+    setConnection(label + (state.paused ? ', refresh paused' : ''), 'error');
     setSnapshotStatus('stale');
     if (announce) {
       byId('refresh-announcement').textContent = state.lastSuccessfulRefresh
@@ -2104,7 +2108,7 @@ function togglePause() {
       setConnection('Dashboard API · reachable, no audit store, refresh paused', '');
       setSnapshotStatus('unconfigured');
     } else if (state.lastRefreshFailed) {
-      setConnection('Dashboard API · unavailable, refresh paused', 'error');
+      setConnection(state.evidenceUnavailable ? 'Dashboard API · reachable, evidence unavailable, refresh paused' : 'Dashboard API · unavailable, refresh paused', 'error');
       setSnapshotStatus('stale');
     } else {
       const pausedLabel = state.lastSuccessfulRefresh
