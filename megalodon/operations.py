@@ -148,11 +148,14 @@ class Operations:
                     key = endpoint['ip']
                     once = endpoint is a or b['ip']!=a['ip']  # one flow per IP even when both ends share it
                     row = peers.setdefault(key,dict(ip=key,scope=address_scope(key),version=ip_address(key).version,
-                        local=endpoint['local'],connections=0,active_connections=0,packets=0,bytes=0,sent_bytes=0,received_bytes=0,
+                        local=endpoint['local'],connections=0,local_connections=0,active_connections=0,packets=0,bytes=0,sent_bytes=0,received_bytes=0,
                         first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],protocols=[],measurement_sources=[],names=list(context.get(key,{}).get('names',[])),
                         findings=list(context.get(key,{}).get('findings',[])),services=list(context.get(key,{}).get('services',[])),tls=list(context.get(key,{}).get('tls',[])),location=endpoint['location'],location_role=endpoint['location_role'],flags=[]))
                     if once:
                         row['connections']+=1;row['active_connections']+=int(flow['active'])
+                        # A retained endpoint alone does not prove a link to this PC.
+                        # Only an observed flow with exactly one local end does.
+                        row['local_connections']+=int(a['local'] != b['local'])
                         row['packets']+=packets;row['bytes']+=size
                     # Per-IP sent/received means this endpoint's direction.
                     row['sent_bytes']+=outbound['bytes'];row['received_bytes']+=inbound['bytes']

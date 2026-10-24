@@ -26,6 +26,7 @@ def test_observed_endpoint_directions_flags_timeline_and_storage(tmp_path):
     assert remote['flags']==['ACK'] and remote['ports']==[dict(protocol='TCP',port=443,hint='HTTPS')]
     assert remote['location'] is None
     assert remote['location_role']=='observed_network_endpoint'
+    assert remote['local_connections']==1
     assert operations.endpoint('10.0.0.2')['location_role']=='local_exit_anchor'
     assert result['coverage']['unmapped']==1
     note=operations.investigate('1.1.1.1')
@@ -34,6 +35,25 @@ def test_observed_endpoint_directions_flags_timeline_and_storage(tmp_path):
     assert note['traffic']['measurement_sources']==[dict(source='Accepted packet metadata',byte_basis='reported_bytes')]
     assert note['observation_context']['recording_mode']=='packet_metadata'
     assert note['original_address'] is None
+
+
+def test_only_observed_local_counterparts_establish_device_relationships(tmp_path):
+    cache=LiveConnections(SimpleNamespace(snapshot=lambda:{'anchor':None},lookup=lambda ip:None))
+    cache._local={'10.0.0.2','10.0.0.3'}
+    stamp=datetime.now(timezone.utc)
+    for src,dst in [('10.0.0.8','1.1.1.1'),('10.0.0.2','1.1.1.1'),
+                    ('8.8.8.8','10.0.0.2'),('10.0.0.2','10.0.0.3')]:
+        cache.observe(PacketEvent(stamp,src,dst,'TCP',50000,443,byte_count=100))
+    config=SimpleNamespace(settings=Settings(db_path=tmp_path/'absent.db'),
+        live_snapshot=lambda:cache.snapshot({'state':'running'},{}))
+    result=Operations(config,context_reader=lambda:{}).snapshot()
+    peers={row['ip']:row for row in result['endpoints']}
+    assert peers['10.0.0.8']['local_connections']==0
+    assert peers['1.1.1.1']['connections']==2
+    assert peers['1.1.1.1']['local_connections']==1
+    assert peers['8.8.8.8']['local_connections']==1
+    assert peers['10.0.0.3']['local_connections']==0
+    assert result['summary']['unattributed_bytes']==200
 
 
 def test_dns_questions_do_not_attribute_names_to_dns_server(tmp_path):

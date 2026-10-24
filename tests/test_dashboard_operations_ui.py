@@ -13,7 +13,7 @@ from megalodon.dashboard_operations import OPERATIONS_JS, OPERATIONS_CSS
 def operations_fixture():
     stamp='2026-09-30T23:00:00Z'
     anchor=dict(latitude=38.5,longitude=-97.5,label='Synthetic internet exit',source='Synthetic offline fixture',country='US',approximate=True,accuracy_radius_km=None)
-    local=dict(ip='192.168.1.10',scope='Private / reserved',version=4,local=True,location_role='local_exit_anchor',connections=2,active_connections=2,packets=80,bytes=88000,sent_bytes=28000,received_bytes=60000,first_seen='2026-09-30T22:59:10Z',last_seen=stamp,ports=[dict(protocol='TCP',port=50484,hint=None)],names=[],location=anchor,flags=['ACK'],findings=[])
+    local=dict(ip='192.168.1.10',scope='Private / reserved',version=4,local=True,location_role='local_exit_anchor',connections=2,local_connections=2,active_connections=2,packets=80,bytes=88000,sent_bytes=28000,received_bytes=60000,first_seen='2026-09-30T22:59:10Z',last_seen=stamp,ports=[dict(protocol='TCP',port=50484,hint=None)],names=[],location=anchor,flags=['ACK'],findings=[])
     peer={**local,'ip':'203.0.113.8','scope':'Public','local':False,'location_role':'observed_network_endpoint','location':None,'sent_bytes':60000,'received_bytes':28000,'ports':[dict(protocol='TCP',port=443,hint='HTTPS')],'names':[dict(name='<img src=x>',source='Observed TLS SNI',observed_at=stamp)],
           'name_review':[dict(schema='megalodon-name-review-v1',name='xkqzjvbwmtrplhgn.com',level='review',attack=['T1568.002'],signals=[dict(id='high_entropy',detail='Varied characters.'),dict(id='consonant_run',detail='Consonant run.')],context=['A spelling signal is not evidence of malware.'],action_status='not_attempted'),
                          dict(schema='megalodon-name-review-v1',name='forged-verdict.example',level='malicious',attack=[],signals=[dict(id='x',detail='forged-verdict')],context=[],action_status='not_attempted'),
@@ -25,6 +25,41 @@ def operations_fixture():
 
 def defense_fixture():
     return dict(schema='megalodon-defense-v1',token='b'*32,job=dict(state='idle',action=None,message='Ready for a local workflow.',started_at=None,finished_at=None,result=None),plans=[],recent=[],active=[],audit_ready=True,scope=dict(nmap_target='127.0.0.1/32',scan_folders=['Downloads']))
+
+
+def connection_lens_fixture():
+    """Synthetic documentation addresses only; no inference or response service."""
+    from copy import deepcopy
+    value=deepcopy(operations_fixture())
+    base=value['endpoints'][1]
+    base.update(names=[],name_review=[],tls=[],services=[],protocols=['TCP'],
+                ports=[],findings=[],measurement_sources=[dict(source='Synthetic packet fixture',byte_basis='reported_bytes')])
+    peers=[]
+    for index in range(6):
+        row=deepcopy(base);row.update(ip=f'203.0.113.{index+8}',local_connections=1)
+        peers.append(row)
+    stamp=value['observed_at']
+    peers[0]['names']=[dict(name='api.example.test',source='Synthetic TLS SNI',observed_at=stamp)]
+    peers[0]['ports']=[dict(protocol='TCP',port=443,hint='HTTPS')]
+    peers[1]['services']=[dict(name='DNS',role='responder',source='Synthetic sensor context',peer='192.168.1.10',observed_at=stamp)]
+    peers[1]['protocols']=['UDP'];peers[1]['ports']=[dict(protocol='UDP',port=53,hint='DNS')]
+    peers[2]['findings']=[dict(signature='Synthetic review signal',severity='medium',source='Synthetic fixture',observed_at=stamp)]
+    peers[4]['local_connections']=0
+    peers[4]['location']=dict(label='Synthetic regional network location',source='Synthetic offline geography',approximate=True)
+    # An older payload can omit the new relationship evidence, never imply a link.
+    peers[5].pop('local_connections')
+    value['endpoints']=[value['endpoints'][0],*peers]
+    value['summary']['peers']=len(value['endpoints'])
+    value['coverage']['notes']=['SYNTHETIC ACCEPTANCE DATA. No live sensors or host actions.']
+    return value
+
+
+def test_connection_lens_relationship_accessibility_focus_search_and_pause():
+    if not shutil.which('node'):pytest.skip('Node unavailable')
+    result=subprocess.run([shutil.which('node'),str(Path(__file__).with_name('connection_lens_browser.cjs'))],
+        input=json.dumps(dict(code=OPERATIONS_JS,fixture=connection_lens_fixture())),
+        text=True,capture_output=True,timeout=10)
+    assert result.returncode==0,result.stderr
 
 
 def facts_fixture():
