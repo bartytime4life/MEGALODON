@@ -68,7 +68,9 @@ async def exercise_connection_lens(browser, port, password, passed):
     async def capture(name, target_id, width, height):
         output.mkdir(parents=True, exist_ok=True)
         scroll = await page.evaluate('''targetId => {
-            const target=document.getElementById(targetId);
+            let target=document.getElementById(targetId);
+            if(targetId==='ops-lens-title')target=target.closest('.ops-lens');
+            if(targetId==='ops-inspector-title')target=target.closest('.ops-inspector');
             const usePage=matchMedia('(max-width: 560px), (max-height: 500px)').matches;
             const surface=usePage?document.scrollingElement:document.getElementById('workspace-content');
             const top=usePage?0:surface.getBoundingClientRect().top;
@@ -159,8 +161,19 @@ async def exercise_connection_lens(browser, port, password, passed):
         passed('native reduced-motion preference leaves lens and globe static')
         for width,height in ((1440,1000),(390,844)):
             await page.set_viewport_size(dict(width=width,height=height))
-            await refresh('dense');await expect(nodes).to_have_count(24)
+            await refresh('dense');await expect(nodes).to_have_count(24 if width==1440 else 6)
             await capture(f'{width}-dense-lens.png','ops-lens-title',width,height)
+            boxes=await nodes.locator('text').evaluate_all('(ns)=>ns.map(n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};})')
+            for i,a in enumerate(boxes):
+                for b in boxes[i+1:]:
+                    assert not (min(a['right'],b['right'])>max(a['left'],b['left']) and min(a['bottom'],b['bottom'])>max(a['top'],b['top'])), 'overlapping lens labels'
+            if width==390:
+                sizes=await nodes.locator('circle').evaluate_all('(ns)=>ns.map(n=>{const r=n.getBoundingClientRect();return Math.min(r.width,r.height);})')
+                assert min(sizes)>=44, 'compact endpoint target below 44px'
+                await expect(page.locator('#ops-lens-summary')).to_contain_text('6 of 24')
+                await expect(page.locator('#ops-endpoint-list .ops-endpoint')).to_have_count(25)
+                await expect(page.locator('#ops-lens-summary')).to_contain_text('full connection roster')
+            passed('native dense labels do not overlap and compact nodes retain touch-sized targets '+str(width))
         await refresh('failed');await expect(page.locator('#ops-lens-summary')).to_contain_text('refresh unavailable')
         passed('native failed refresh labels retained evidence unavailable')
         assert not violations and not errors

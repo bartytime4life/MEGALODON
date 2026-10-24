@@ -64,6 +64,28 @@ and limits. A script being present is not a passed run. Workflow results and
 visual inspection of those exact artifacts must be recorded before calling the
 synthetic graphical gate accepted.
 
+## Screenshot-driven corrections
+
+The first successful native run was `40137521277`, candidate `9f0a2f9`,
+synthetic merge commit `fb7f5440626bde02675ba7ddbc3731fa53d563f1`.
+It passed the browser journey and produced eight real PNGs. Visual inspection
+found unreadably scaled phone labels and overlapping dense labels despite the
+passing reflow checks. That visual gate was rejected.
+
+The correction gives compact screens at most six nodes in a full-size SVG
+coordinate system with 46px circle targets and separate, readable label slots.
+The searchable roster retains every endpoint. Desktop dense labels use separate
+columns with leader lines. Full identity/provenance remains available through
+accessible names and the inspector; abbreviated visible names are not new
+identities. Browser regression checks now measure label intersections, compact
+hit targets, bounded display counts, and preservation of the full roster.
+Screenshots capture complete panel headers rather than starting at the title.
+
+The earlier full local run collected 6,420 tests and reported 42 failures. All
+42 failed cases reproduced on unchanged base `6d85147`; no whole-suite pass is
+claimed. The independent review of `9f0a2f9` completed with no findings. The
+visual correction needs its own exact-candidate run and review.
+
 ## Remaining acceptance gates
 
 - Read the exact-candidate CI results and independently review the follow-up diff.

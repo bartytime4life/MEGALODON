@@ -10,6 +10,11 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  const svg=()=>get('ops-lens').children[0],lensNodes=()=>svg().children.filter(n=>n.attributes.role==='button'),links=()=>svg().children.filter(n=>n.attributes.class==='ops-lens-link');
  assert.equal(svg().attributes.role,'group');assert.equal(svg().attributes['aria-hidden'],undefined);
  assert.equal(lensNodes().length,6);assert.equal(links().length,4,'unattributed endpoints never gain a device link');
+ // The compact graph preserves readable viewBox units, 44px targets, and a
+ // bounded first six without dropping the searchable full roster.
+ get('ops-lens').clientWidth=310;await poll(2000);assert.equal(svg().dataset.layout,'compact');
+ assert.ok(lensNodes().every(n=>Number(n.children.find(c=>c.tag==='circle').attributes.r)>=22));
+ get('ops-lens').clientWidth=0;await poll(2000);assert.equal(svg().dataset.layout,'radial');
  for(const n of lensNodes()){assert.match(n.attributes['aria-label'],new RegExp(n.dataset.ip));assert.equal(n.attributes['aria-controls'],'ops-endpoint-detail');}
  assert.match(lensNodes().at(-1).attributes['aria-label'],/Local relationship not established/);
  const chosen=lensNodes()[0];chosen.events.keydown({key:'Enter',preventDefault(){}});
