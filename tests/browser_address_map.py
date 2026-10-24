@@ -24,7 +24,7 @@ async def exercise_address_map(browser, port, password, passed):
             ip=target.query.removeprefix('ip=')
             point=dict(latitude=37.5,longitude=-97.5,label='Synthetic map-test region',source='Synthetic offline fixture',
                        country='US',approximate=True,accuracy_radius_km=50)
-            value=project(dict(ip=ip,location=point if ip=='8.8.8.8' else None),snapshot_at=stamp(),capture_state='failed')
+            value=project(dict(ip=ip,local=ip!='8.8.8.8',location=point if ip=='8.8.8.8' else None),snapshot_at=stamp(),capture_state='failed')
         else:
             await route.continue_();return
         await route.fulfill(status=200,content_type='application/json',body=json.dumps(value))

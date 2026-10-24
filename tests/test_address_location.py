@@ -22,11 +22,11 @@ from megalodon.operations import Operations
 STAMP='2026-10-24T12:00:00Z'
 
 
-def endpoint(ip='8.8.8.8', **location):
+def endpoint(ip='8.8.8.8', local=False, **location):
     point=dict(latitude=37.5,longitude=-97.5,label='<img src=x> Synthetic region',source='Synthetic offline fixture',
                country='us',approximate=True,accuracy_radius_km=50)
     point.update(location)
-    return dict(ip=ip,first_seen=STAMP,last_seen=STAMP,location=point)
+    return dict(ip=ip,local=local,first_seen=STAMP,last_seen=STAMP,location=point)
 
 
 def note(row=None, **context):
@@ -49,6 +49,21 @@ def test_local_region_requires_no_origin_identity_or_network(monkeypatch):
 @pytest.mark.parametrize('ip',['10.0.0.1','127.0.0.1','100.64.0.1','192.0.2.1','224.0.0.1','::1','fe80::1','2001:db8::1','::ffff:8.8.8.8'])
 def test_private_reserved_and_mapped_addresses_never_inherit_a_public_exit_position(ip):
     value=note(endpoint(ip))
+    assert value['status']=='unmapped' and value['location'] is None
+
+
+def test_public_local_address_preserves_exit_anchor_role_without_exporting_its_position():
+    value=note(endpoint('2001:4860:4860::8888',local=True))
+    assert value['status']=='unmapped' and value['location'] is None
+    assert value['location_role']=='local_exit_anchor'
+
+
+@pytest.mark.parametrize('local',[None,0,1,'false'])
+def test_missing_or_malformed_local_role_fails_closed(local):
+    row=endpoint()
+    if local is None:row.pop('local')
+    else:row['local']=local
+    value=note(row)
     assert value['status']=='unmapped' and value['location'] is None
 
 

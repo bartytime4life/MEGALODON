@@ -11,9 +11,11 @@ def project(endpoint, *, snapshot_at, capture_state, geography_context=None):
     address = ip_address(endpoint['ip'])
     value = endpoint.get('location')
     location = None
+    local = endpoint.get('local')
+    location_role = 'local_exit_anchor' if local is True else 'observed_network_endpoint'
     public = (address.is_global and not address.is_multicast and not address.is_reserved
               and getattr(address, 'ipv4_mapped', None) is None)
-    if public and type(value) is dict and value.get('approximate') is True:
+    if local is False and public and type(value) is dict and value.get('approximate') is True:
         lat, lon = value.get('latitude'), value.get('longitude')
         label, source = _text(value.get('label'), 160), _text(value.get('source'), 128)
         if (type(lat) in (int, float) and type(lon) in (int, float)
@@ -35,5 +37,5 @@ def project(endpoint, *, snapshot_at, capture_state, geography_context=None):
     return dict(schema=SCHEMA, observed_address=str(address), snapshot_at=snapshot_at,
                 first_seen=_stamp(endpoint.get('first_seen')), last_seen=_stamp(endpoint.get('last_seen')),
                 capture_state=capture_state, status='mapped' if location else 'unmapped', location=location,
-                location_role='observed_network_endpoint', original_address=None, person_identity=None,
+                location_role=location_role, original_address=None, person_identity=None,
                 physical_address=None, network_access_performed=False, action_authority='none')

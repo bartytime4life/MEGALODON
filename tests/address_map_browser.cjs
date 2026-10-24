@@ -27,9 +27,12 @@ async function run(){
   assert.equal(frame.hidden,true);assert.equal(frame.getAttribute('src'),null);assert.equal(el('address-map-save').disabled,true);
   for(const invalid of [NaN,91,true]){payload={...fixture,observed_address:'1.1.1.1',location:{...fixture.location,latitude:invalid}};await el('address-map-read').click();assert.equal(frame.hidden,true);assert.equal(el('address-map-save').disabled,true);}
   payload={...fixture,observed_address:'1.1.1.1',physical_address:'forged street'};await el('address-map-read').click();assert.equal(el('address-map-save').disabled,true);
+  payload={...fixture,observed_address:'1.1.1.1',location_role:'local_exit_anchor'};await el('address-map-read').click();assert.equal(frame.hidden,true);assert.equal(el('address-map-save').disabled,true);
   payload={...fixture,observed_address:'1.1.1.1',location:{...fixture.location,accuracy_radius_km:null}};await el('address-map-read').click();assert.match(text(el('address-map-evidence')),/Accuracy radius unknown/);
   select('10.0.0.1');payload={...fixture,observed_address:'10.0.0.1',status:'unmapped',location:null};await el('address-map-read').click();assert.equal(frame.hidden,true);assert.match(text(el('address-map-evidence')),/Location unknown/);assert.equal(el('address-map-save').disabled,false);
   await el('address-map-save').click();assert.equal(JSON.parse(blobs[blobs.length-1][0]).location,null);
+  select('2001:4860:4860::8888');payload={...fixture,observed_address:'2001:4860:4860::8888',status:'unmapped',location:null,location_role:'local_exit_anchor'};await el('address-map-read').click();assert.equal(frame.hidden,true);assert.match(text(el('address-map-evidence')),/shared internet-exit anchor/);
+  await el('address-map-save').click();const localCopy=JSON.parse(blobs[blobs.length-1][0]);assert.equal(localCopy.location,null);assert.equal(localCopy.location_role,'local_exit_anchor');
 
   const {radiusBoundary,regionZoom,EARTH_KM}=await import(pathToFileURL(geometry));
   const rad=x=>x*Math.PI/180;

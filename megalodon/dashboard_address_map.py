@@ -36,9 +36,10 @@ MAP_JS = r'''
     if(!keys(v,['schema','observed_address','snapshot_at','first_seen','last_seen','capture_state','status','location','location_role','original_address','person_identity','physical_address','network_access_performed','action_authority'])
       ||v.schema!=='megalodon-address-location-v1'||v.observed_address!==ip||!stamp(v.snapshot_at)||v.snapshot_at===null||!stamp(v.first_seen)||!stamp(v.last_seen)
       ||!['idle','starting','running','stopped','failed'].includes(v.capture_state)||!['mapped','unmapped'].includes(v.status)
-      ||v.location_role!=='observed_network_endpoint'||v.original_address!==null||v.person_identity!==null||v.physical_address!==null||v.network_access_performed!==false||v.action_authority!=='none')throw Error('Invalid location context');
+      ||!['observed_network_endpoint','local_exit_anchor'].includes(v.location_role)||v.original_address!==null||v.person_identity!==null||v.physical_address!==null||v.network_access_performed!==false||v.action_authority!=='none')throw Error('Invalid location context');
     const p=v.location;
     if(v.status==='unmapped'){if(p!==null)throw Error('Unexpected position');return v;}
+    if(v.location_role!=='observed_network_endpoint')throw Error('Exit anchor is not an endpoint location');
     if(!keys(p,['latitude','longitude','label','source','country','approximate','accuracy_radius_km','database_build_at','database_downloaded_at'])
       ||!finite(p.latitude,-90,90)||!finite(p.longitude,-180,180)||!text(p.label,160)||!text(p.source,128)||p.approximate!==true
       ||!(p.country===null||(typeof p.country==='string'&&/^[A-Z]{2}$/.test(p.country)))||!(p.accuracy_radius_km===null||finite(p.accuracy_radius_km,Number.MIN_VALUE,20000))
@@ -54,7 +55,7 @@ MAP_JS = r'''
   function render(v){
     const out=el('address-map-evidence');out.replaceChildren();out.hidden=false;
     out.append(node('p',`${v.observed_address} · Snapshot: ${v.snapshot_at} · Capture: ${v.capture_state}`));
-    if(!v.location){out.append(node('p','Location unknown. No map position was recorded for this address. Its retained traffic remains available in Address investigation.'));return;}
+    if(!v.location){out.append(node('p',v.location_role==='local_exit_anchor'?'Location unknown. This local address cannot inherit this computer’s shared internet-exit anchor as an endpoint location. No endpoint position is exported.':'Location unknown. No map position was recorded for this address. Its retained traffic remains available in Address investigation.'));return;}
     const p=v.location;
     out.append(node('p',`${p.label} · ${p.source}`),node('p',`Database coordinates: ${p.latitude}, ${p.longitude}. These estimate a network endpoint, not a street address or a person.`),node('p',p.accuracy_radius_km===null?'Accuracy radius unknown. The marker does not imply building or street precision.':`Reported accuracy radius: ${p.accuracy_radius_km} km. The dashed boundary shows that distance from the database estimate; it does not verify the true location.`),node('p',`Database build: ${p.database_build_at||'unknown'} · Local database download: ${p.database_downloaded_at||'unknown'}`),node('p','Location uses the database loaded at this snapshot. It may not represent where this IP was during an earlier connection.'));
     frame.hidden=false;frame.setAttribute('src','/address-map');
