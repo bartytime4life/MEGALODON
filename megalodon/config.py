@@ -37,7 +37,7 @@ class BlockingSettings:
 class DashboardSettings:
     enabled: bool = True
     host: str = "127.0.0.1"
-    port: int = 8787
+    port: int = 8797
     refresh_seconds: int = 5
     event_limit: int = 50
 
@@ -190,7 +190,7 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
             "keep blocking.dry_run true"
         )
 
-    port = _bounded_integer(dashboard.get("port", 8787), "dashboard.port", 1, 65535)
+    port = _bounded_integer(dashboard.get("port", 8797), "dashboard.port", 1, 65535)
     max_database_bytes = _bounded_integer(
         storage.get("max_database_bytes", DEFAULT_MAX_DATABASE_BYTES),
         "storage.max_database_bytes",

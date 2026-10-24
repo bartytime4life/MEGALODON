@@ -694,7 +694,7 @@ def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,
                         lambda path:Settings(dashboard=DashboardSettings(host=configured)))
     monkeypatch.setattr(config,'HTTPConnection',Connection)
     assert config.main(['qwen_check'])==0
-    assert requests==[('GET',None),('POST',f'http://{expected}:8787')]
+    assert requests==[('GET',None),('POST',f'http://{expected}:8797')]
 
 
 def test_setup_action_refuses_while_a_tool_install_runs(manager):
