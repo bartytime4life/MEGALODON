@@ -34,7 +34,7 @@ the next launch → Local port** to prepare a command on an unused port, then op
 the address printed by the new session. See [separate-session launch options](local-pc-setup.md#open-a-separate-session-with-explicit-options).
 
 To try the checkout without installing it, run `./scripts/start-local.sh` and
-open the printed local address (normally <http://127.0.0.1:8787/>).
+open the printed local address (normally <http://127.0.0.1:8797/>).
 
 If Python is missing or startup fails, use [software downloads](software-downloads.md)
 and [startup troubleshooting](local-pc-setup.md#troubleshooting). The browser

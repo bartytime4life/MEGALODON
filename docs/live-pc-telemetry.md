@@ -1,6 +1,6 @@
 # Live PC graphs and free local tools
 
-Open the installed **MEGALODON** app or <http://127.0.0.1:8787/> while the
+Open the installed **MEGALODON** app or <http://127.0.0.1:8797/> while the
 local HUD is running. **Live PC** starts collecting automatically with the HUD.
 No account, additional package, data upload, API key, or separate monitoring
 service is needed. The hosted Defense Console links to this local view; its

@@ -227,7 +227,7 @@ From the repository directory:
 ```
 
 Open the localhost address printed in the terminal, normally
-<http://127.0.0.1:8787/>. Keep that terminal open. Press **Ctrl+C** there to stop
+<http://127.0.0.1:8797/>. Keep that terminal open. Press **Ctrl+C** there to stop
 the HUD cleanly. Run the launcher again whenever you want to use it; it does not
 add a login item or background service. From another directory, use the full
 path to `scripts/start-local.sh`.

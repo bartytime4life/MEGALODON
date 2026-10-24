@@ -134,7 +134,7 @@ timeout_seconds = 900
 [dashboard]
 enabled = true
 host = "127.0.0.1"
-port = 8787
+port = 8797
 ```
 
 Run from the checkout root: configuration and `data/megalodon.db` are relative
@@ -210,11 +210,11 @@ CRITICAL findings are demonstration output, not a diagnosis of the workstation.
 Then, in the same checkout, start the foreground UI:
 
 ```bash
-.venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8787
+.venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8797
 ```
 
-Visit `http://127.0.0.1:8787/`, check summary/detection rendering, and stop with
-Ctrl+C. In another terminal, `ss -ltn 'sport = :8787'` can inspect the listener;
+Visit `http://127.0.0.1:8797/`, check summary/detection rendering, and stop with
+Ctrl+C. In another terminal, `ss -ltn 'sport = :8797'` can inspect the listener;
 only the selected loopback address is acceptable. No port-opening rule is needed.
 A passing ordinary suite does not prove the optional installed-TShark lane ran.
 
@@ -256,12 +256,12 @@ Invoke-Checked -Program $Python -Arguments @('-m', 'compileall', '-q', 'megalodo
 Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'run', '--source', 'sample', '--max-events', '13')
 Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'run', '--source', 'sample', '--demo-threat', '--max-events', '114')
 Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'run', '--source', 'jsonl', '--input', 'examples/events.jsonl', '--max-events', '100')
-Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'dashboard', '--host', '127.0.0.1', '--port', '8787')
+Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'dashboard', '--host', '127.0.0.1', '--port', '8797')
 ```
 
-The last command stays in the foreground; visit `http://127.0.0.1:8787/` and stop
+The last command stays in the foreground; visit `http://127.0.0.1:8797/` and stop
 with Ctrl+C. A separate PowerShell session can inspect the listener with
-`Get-NetTCPConnection -State Listen -LocalPort 8787`; require loopback only.
+`Get-NetTCPConnection -State Listen -LocalPort 8797`; require loopback only.
 The ACL command displays permissions; it does **not** certify or repair them.
 Stop if the location/ACL is unsafe, a command fails, or a security exception is
 requested. Do not disable protections to make a smoke check pass.

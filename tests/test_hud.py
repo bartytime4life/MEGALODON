@@ -30,7 +30,7 @@ def test_hud_launch_without_store_never_creates_files(tmp_path, monkeypatch):
     def serve(reader, host, port, **kwargs):
         observed.append(kwargs)
         assert isinstance(reader, dashboard.UnconfiguredDashboardReader)
-        assert (host, port) == ("127.0.0.1", 8787)
+        assert (host, port) == ("127.0.0.1", 8797)
         for method in (reader.summary, reader.recent, reader.ingestion_runs, reader.traffic):
             with pytest.raises(StorageSchemaError):
                 method()

@@ -53,7 +53,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e .
 .venv/bin/python -m megalodon run --source sample --max-events 14
 .venv/bin/python -m megalodon run --source sample --demo-threat --max-events 115
-.venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8787
+.venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8797
 ```
 
 Record `sw_vers`, `python3 --version`, `uname -m`, and the pass/fail of each

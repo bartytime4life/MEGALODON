@@ -381,7 +381,7 @@ records the operator's current Ollama exposure and GPU uncertainty.
 - metadata only: packet payloads and payload-derived hashes are not represented;
 - closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
   provenance and cannot carry arbitrary payload-like fields;
-- local only: the dashboard defaults to `127.0.0.1:8787`; its optional AI
+- local only: the dashboard defaults to `127.0.0.1:8797`; its optional AI
   question POST requires an ephemeral operator token and can write only the
   separate AI receipt ledger and bounded report snapshots;
 - isolated dashboard storage: on POSIX, reading telemetry requires an existing compatible private
@@ -407,7 +407,7 @@ Read [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the threat assessment and
 [`SPECIFICATION.md`](SPECIFICATION.md) for the implemented MVP contract and
 production-readiness gaps.
 
-The local HUD at **http://127.0.0.1:8787/** is MEGALODON's application.
+The local HUD at **http://127.0.0.1:8797/** is MEGALODON's application.
 The separate hosted PC Snapshot Console imports an address-free summary in tab
 memory; it has no live host connection. Its source and publication history remain under [`site/`](site/README.md) and
 [`docs/site-source-alignment.md`](docs/site-source-alignment.md).
@@ -871,10 +871,10 @@ it with Ctrl+C.
 cd "$HOME/Projects/MEGALODON"
 .venv312/bin/python -m megalodon dashboard \
   --config "$HOME/.config/megalodon/local-settings.toml" \
-  --host 127.0.0.1 --port 8787
+  --host 127.0.0.1 --port 8797
 ~~~
 
-Open <http://127.0.0.1:8787/> locally. Do not use remote-listening options,
+Open <http://127.0.0.1:8797/> locally. Do not use remote-listening options,
 port forwarding, a reverse proxy, or a tunnel. Re-run the static catalog after
 any tool update; successful installation does not expand the supported
 integration boundary.
@@ -906,7 +906,7 @@ baseline's POSIX permission or Windows NTFS ACL checks first.
   .venv/bin/python -m pip install -e .
   .venv/bin/python -m megalodon run --source sample --max-events 13
   .venv/bin/python -m megalodon run --source sample --demo-threat --max-events 114
-  .venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8787
+  .venv/bin/python -m megalodon dashboard --host 127.0.0.1 --port 8797
 )
 ```
 
@@ -927,7 +927,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Package installation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Synthetic sample failed.' }
 & .\.venv\Scripts\python.exe -m megalodon run --source sample --demo-threat --max-events 114
 if ($LASTEXITCODE -ne 0) { throw 'Synthetic detection sample failed.' }
-& .\.venv\Scripts\python.exe -m megalodon dashboard --host 127.0.0.1 --port 8787
+& .\.venv\Scripts\python.exe -m megalodon dashboard --host 127.0.0.1 --port 8797
 if ($LASTEXITCODE -ne 0) { throw 'Dashboard failed.' }
 ```
 
@@ -946,7 +946,7 @@ From the environment where this MEGALODON revision is installed:
 python -m megalodon hud
 ```
 
-Open **http://127.0.0.1:8787** on the same computer. No account, subscription,
+Open **http://127.0.0.1:8797** on the same computer. No account, subscription,
 configuration file, companion installation, or readiness-report export is needed
 to open the workspace. Existing default audit data is read automatically.
 Sign-in is off by default. To require it for a launch, add `--require-sign-in`;
@@ -1060,7 +1060,7 @@ See [HUD operation](docs/dashboard-operations.md) for details.
 
 ### Local dashboard and storage
 
-Open <http://127.0.0.1:8787/> after starting the dashboard. The first sample run
+Open <http://127.0.0.1:8797/> after starting the dashboard. The first sample run
 is benign. `--demo-threat` adds synthetic SYN-flood and long-DNS-query metadata
 so detections appear in the audit store and UI; it is not a diagnosis of the
 host network.
@@ -1414,7 +1414,7 @@ a separately reviewed change requires otherwise.
 | `[capture]` | `source = "sample"`, empty `interface` | The CLI can override the source and interface per run |
 | `[detection]` | 10-second/100-event SYN threshold; 5-second/20-port scan threshold; DNS length 50; cooldown 30 seconds | TOML integers only; windows max at 3,600s, cooldown at 86,400s, DNS length at 65,535, and both state ceilings at 65,536. Thresholds cannot exceed the per-source event ceiling |
 | `[blocking]` | `enabled = false`, `dry_run = true`, `auto_block = false`, timeout 900 seconds, `public_only = true` | Timeout is a TOML integer from 1–604,800s; `auto_block = true` is rejected unless `dry_run = true`; detections can plan but cannot apply |
-| `[dashboard]` | `enabled = true`, `host = "127.0.0.1"`, `port = 8787`, `refresh_seconds = 5`, `event_limit = 50` | Polling accepts 2–300 seconds; recent rows accept 1–200; only numeric IPv4 loopback or the literal `localhost` alias is accepted; `--allow-remote` refuses startup |
+| `[dashboard]` | `enabled = true`, `host = "127.0.0.1"`, `port = 8797`, `refresh_seconds = 5`, `event_limit = 50` | Polling accepts 2–300 seconds; recent rows accept 1–200; only numeric IPv4 loopback or the literal `localhost` alias is accepted; `--allow-remote` refuses startup |
 
 The dashboard accepts dotted-decimal IPv4 addresses in `127.0.0.0/8`. The
 literal `localhost` is mapped directly to `127.0.0.1`, without DNS resolution.

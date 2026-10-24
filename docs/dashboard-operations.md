@@ -15,7 +15,7 @@ For the user-scoped desktop installation, open **MEGALODON** from the applicatio
 menu or run `~/.local/bin/megalodon-hud`. The browser opens only after the
 loopback server binds. From a reviewed source checkout, use
 `./scripts/start-local.sh`. An ordinary installed environment can still run
-`python -m megalodon hud` and open `http://127.0.0.1:8787` on that computer.
+`python -m megalodon hud` and open `http://127.0.0.1:8797` on that computer.
 There is no local cloud login or subscription. The HUD opens directly by
 default. For an optional password-only sign-in page, launch with
 `--require-sign-in` and enter the password shown in the terminal, or the

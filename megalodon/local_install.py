@@ -449,7 +449,7 @@ def _default_settings(paths: InstallPaths) -> bytes:
         "auto_block = false\n\n"
         "[dashboard]\n"
         'host = "127.0.0.1"\n'
-        "port = 8787\n"
+        "port = 8797\n"
     ).encode("utf-8")
 
 
