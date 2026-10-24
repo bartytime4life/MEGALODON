@@ -26,7 +26,7 @@ def endpoint(ip='8.8.8.8', local=False, **location):
     point=dict(latitude=37.5,longitude=-97.5,label='<img src=x> Synthetic region',source='Synthetic offline fixture',
                country='us',approximate=True,accuracy_radius_km=50)
     point.update(location)
-    return dict(ip=ip,local=local,first_seen=STAMP,last_seen=STAMP,location=point)
+    return dict(ip=ip,local=local,location_role='local_exit_anchor' if local is True else 'observed_network_endpoint',first_seen=STAMP,last_seen=STAMP,location=point)
 
 
 def note(row=None, **context):
@@ -63,6 +63,15 @@ def test_missing_or_malformed_local_role_fails_closed(local):
     row=endpoint()
     if local is None:row.pop('local')
     else:row['local']=local
+    value=note(row)
+    assert value['status']=='unmapped' and value['location'] is None
+
+
+@pytest.mark.parametrize('role',[None,'local_exit_anchor','endpoint',''])
+def test_missing_or_conflicting_location_role_fails_closed(role):
+    row=endpoint()
+    if role is None:row.pop('location_role')
+    else:row['location_role']=role
     value=note(row)
     assert value['status']=='unmapped' and value['location'] is None
 
