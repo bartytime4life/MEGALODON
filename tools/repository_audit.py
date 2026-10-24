@@ -87,7 +87,12 @@ def inventory_output(value):
     if path.is_absolute():raise ValueError('Inventory output must be repository-relative')
     audit=(ROOT/'docs/audit').resolve()
     historical=(ROOT/HISTORICAL_OUTPUT).resolve()
-    candidate=(ROOT/path).resolve()
+    requested=ROOT/path
+    # Refuse the directory entry before resolving it. A dangling link to a
+    # sibling otherwise resolves to an apparently new, admissible target.
+    if requested.is_symlink():
+        raise ValueError('Inventory output already exists; choose a new file name')
+    candidate=requested.resolve()
     if candidate==historical:raise ValueError('Historical repository audit is immutable')
     if candidate.parent!=audit or candidate.suffix!='.json':
         raise ValueError('Inventory output must be a JSON file directly under docs/audit')
