@@ -150,7 +150,7 @@ class Operations:
                     row = peers.setdefault(key,dict(ip=key,scope=address_scope(key),version=ip_address(key).version,
                         local=endpoint['local'],connections=0,active_connections=0,packets=0,bytes=0,sent_bytes=0,received_bytes=0,
                         first_seen=flow['first_seen'],last_seen=flow['last_seen'],ports=[],protocols=[],measurement_sources=[],names=list(context.get(key,{}).get('names',[])),
-                        findings=list(context.get(key,{}).get('findings',[])),services=list(context.get(key,{}).get('services',[])),tls=list(context.get(key,{}).get('tls',[])),location=endpoint['location'],flags=[]))
+                        findings=list(context.get(key,{}).get('findings',[])),services=list(context.get(key,{}).get('services',[])),tls=list(context.get(key,{}).get('tls',[])),location=endpoint['location'],location_role=endpoint['location_role'],flags=[]))
                     if once:
                         row['connections']+=1;row['active_connections']+=int(flow['active'])
                         row['packets']+=packets;row['bytes']+=size
