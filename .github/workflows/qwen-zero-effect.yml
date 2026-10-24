@@ -1,0 +1,104 @@
+name: Qwen zero-effect acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PIP_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
+  PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+  PYTEST_PLUGINS: ""
+  PYTEST_ADDOPTS: ""
+
+jobs:
+  scoped-disabled-and-unbound:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install the locked test environment
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(git rev-parse --verify HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          mkdir "$RUNNER_TEMP/qwen-zero-effect-wheelhouse"
+          python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
+            --dest "$RUNNER_TEMP/qwen-zero-effect-wheelhouse" -r constraints/test-linux-cp311.txt
+          wheels=("$RUNNER_TEMP"/qwen-zero-effect-wheelhouse/*.whl)
+          [ "${#wheels[@]}" -eq 13 ]
+          sha256sum constraints/test-linux-cp311.txt "${wheels[@]}"
+          python -m pip install -c constraints/ci.txt --no-index \
+            --find-links "$RUNNER_TEMP/qwen-zero-effect-wheelhouse" --require-hashes \
+            --only-binary=:all: --no-cache-dir --force-reinstall \
+            -r constraints/test-linux-cp311.txt
+          PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/qwen-zero-effect-wheelhouse" \
+            PIP_ONLY_BINARY=:all: python -m pip install -c constraints/ci.txt \
+            --no-cache-dir -e ".[test]"
+          python -m pip check
+      - name: Prove scoped denial and UNBOUND behavior
+        run: |
+          set -euo pipefail
+          python -m pytest -p no:cacheprovider -q \
+            tests/test_qwen_zero_effect.py \
+            tests/test_ai_doctor_consent.py \
+            tests/test_ai_control.py \
+            tests/test_dashboard_ai_control.py \
+            tests/test_qwen_advisory.py \
+            tests/test_anomaly_advisory.py \
+            tests/test_local_model_binding.py \
+            tests/test_local_model_readiness.py \
+            tests/test_model_selection.py \
+            tests/test_model_evaluation_manifest.py
+      - name: Retain exact-head UNBOUND projections
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_COMMIT"
+          python tools/local_model_binding.py validate \
+            config/model-bindings/qwen.unbound.json \
+            > "$RUNNER_TEMP/qwen-unbound-binding.json"
+          python tools/local_model_readiness.py \
+            --binding config/model-bindings/qwen.unbound.json \
+            > "$RUNNER_TEMP/qwen-unbound-readiness.json"
+          python - "$RUNNER_TEMP/qwen-unbound-binding.json" \
+            "$RUNNER_TEMP/qwen-unbound-readiness.json" <<'PYVERIFY'
+          import json
+          from pathlib import Path
+          import sys
+
+          binding = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          readiness = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+          assert binding["status"] == "validated"
+          assert binding["binding"]["status"] == "UNBOUND"
+          assert binding["binding"]["operator_decision"]["status"] == "NOT_RECORDED"
+          assert not any(binding["binding"]["effects"].values())
+          assert readiness["state"] == readiness["binding_status"] == "UNBOUND"
+          assert readiness["gate_failures"] == ["OWNER_MODEL_BINDING_NOT_RECORDED"]
+          assert readiness["tools_used_or_authorized"] is False
+          assert not any(readiness["authority"].values())
+          PYVERIFY
+      - name: Upload bounded exact-head evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qwen-zero-effect-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/qwen-unbound-binding.json
+            ${{ runner.temp }}/qwen-unbound-readiness.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+          include-hidden-files: false

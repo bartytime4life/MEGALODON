@@ -53,6 +53,17 @@ offline consistency reaches at most `CANDIDATE_PACKET_CONSISTENT`.
 
 ## Disabled / UNBOUND regression boundary
 
+The dedicated `Qwen zero-effect acceptance` workflow now runs the scoped
+disabled/UNBOUND sentinels on every pull-request head and `main` push. It checks
+out the exact candidate, installs the locked CPython 3.11 test profile, runs the
+bounded denial/readiness/evaluation suite, and retains the canonical UNBOUND
+binding and readiness projections for 30 days. The retained files contain no
+prompts, model responses, credentials, host identity, or provider traffic.
+Their success proves only the named source-level denial paths and canonical
+UNBOUND state at that commit; it does not complete native containment, corpus
+execution, signature verification, evidence-origin authentication, loaded-byte
+attestation, owner acceptance, or model authority.
+
 The [October 7 current-main reconciliation](qwen-446-zero-effect-reconciliation-2026-10-07.md)
 retains dated sentinel evidence and an entry-point/acceptance matrix. Its
 [passive telemetry follow-up](qwen-446-zero-effect-reconciliation-2026-10-07.md#follow-up-disabled-cached-telemetry-correction)
