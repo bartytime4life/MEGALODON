@@ -95,3 +95,25 @@ visual correction needs its own exact-candidate run and review.
   installed-PC sensor coverage remain distinct checks. No complete accessibility
   compliance, location precision, complete network visibility, or malicious
   classification is inferred from synthetic acceptance.
+
+
+## Connection lens polish follow-up
+
+Continues from accepted main `a2d4637`. The shared retained-endpoint search and
+its live result count now precede the graph instead of sitting below the long
+phone inspector. Inspector and roster buttons return focus to the same search
+without clearing evidence selection or triggering a host action. The field uses
+16px text and a 44px minimum height on compact layouts. In-page links identify
+their destination sections instead of presenting a permanently active Flow tab.
+
+The caption and bounded-view summary describe retained endpoint evidence. They
+do not imply that every endpoint or every node omitted by the compact bound has
+a proven relationship to this device. The prior anchor/endpoint role boundary,
+passive-only scope, filters, pause behavior, and all retained records remain.
+
+The focused 107-case regression suite passed during preparation. The native
+browser journey now checks search tab order, inspector-to-search return, search
+placement and text size at desktop/phone widths, empty-result announcements,
+selection preservation, and the existing graphical/evidence acceptance suite.
+Exact-head CI, fresh captures, visual inspection, and independent review remain
+qualification gates for this follow-up. Installed-PC acceptance stays separate.

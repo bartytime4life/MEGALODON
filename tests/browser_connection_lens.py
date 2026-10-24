@@ -103,12 +103,17 @@ async def exercise_connection_lens(browser, port, password, passed):
         await expect(page.locator('#ops-filter-all')).to_be_focused()
         for target in ('observed','review','unknown'):
             await page.keyboard.press('Tab');await expect(page.locator('#ops-filter-'+target)).to_be_focused()
+        await page.keyboard.press('Tab');await expect(page.locator('#ops-search')).to_be_focused()
         await page.keyboard.press('Tab');await expect(nodes.first).to_be_focused()
         await page.keyboard.press('Enter');await expect(page.locator('#ops-inspector-title')).to_be_focused()
         await expect(page.locator('#ops-inspector-title')).to_have_text('203.0.113.8')
         await expect(page.locator('#ops-endpoint-detail')).to_contain_text('Synthetic TLS SNI')
         await nodes.nth(1).press('Space');await expect(page.locator('#ops-inspector-title')).to_have_text('203.0.113.9')
         passed('native Tab Enter Space selection updates and focuses the same inspector')
+        await page.locator('#ops-back-to-connections').click()
+        await expect(page.locator('#ops-search')).to_be_focused()
+        await expect(page.locator('#ops-inspector-title')).to_have_text('203.0.113.9')
+        passed('native return to search preserves selected evidence')
         await nodes.nth(2).focus()
         before=scenario['reads']
         # Predicate wait for an actual scheduled refresh, never a fixed delay-as-proof.
@@ -155,6 +160,17 @@ async def exercise_connection_lens(browser, port, password, passed):
             assert await page.locator('#ops-inspector-title').evaluate('''n=>{
                 const r=n.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;
             }''')
+            await page.locator('#ops-back-to-connections').click()
+            await expect(page.locator('#ops-search')).to_be_focused()
+            assert await page.locator('#ops-search').evaluate('''n=>{const r=n.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}''')
+            before=await page.locator('#ops-search').bounding_box()
+            stage=await lens.bounding_box()
+            assert before['y']+before['height']<=stage['y'], 'search must precede the graph'
+            assert await page.locator('#ops-search').evaluate('n=>parseFloat(getComputedStyle(n).fontSize)>=16'), 'search text must remain readable without mobile auto-zoom'
+            await page.locator('#ops-search').fill('no-such-evidence')
+            await expect(page.locator('#ops-roster-status')).to_contain_text('0 of')
+            await page.locator('#ops-search').fill('')
+            passed('native shared search and inspector return are reachable '+str(width))
             passed('native lens inspector scrolling and reflow '+str(width))
         assert await lens.evaluate("n=>n.getAnimations({subtree:true}).filter(a=>a.playState==='running').length===0")
         await expect(page.locator('#live-motion-status')).to_contain_text('Reduced motion')

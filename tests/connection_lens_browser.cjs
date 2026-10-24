@@ -20,6 +20,8 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  assert.match(lensNodes().at(-1).attributes['aria-label'],/Local relationship not established/);
  const chosen=lensNodes()[0];chosen.events.keydown({key:'Enter',preventDefault(){}});
  assert.equal(get('ops-inspector-title').textContent,'203.0.113.8');assert.equal(document.activeElement,get('ops-inspector-title'));
+ await click('ops-back-to-connections');assert.equal(document.activeElement,get('ops-search'));assert.equal(get('ops-inspector-title').textContent,'203.0.113.8');
+ await click('ops-roster-search');assert.equal(document.activeElement,get('ops-search'));
  assert.match(text(get('ops-endpoint-detail')),/Synthetic TLS SNI/);
  lensNodes()[1].events.keydown({key:' ',preventDefault(){}});assert.equal(get('ops-inspector-title').textContent,'203.0.113.9');
  lensNodes()[2].focus();await poll(2000);assert.equal(document.activeElement.dataset.lensIp,'203.0.113.10');assert.ok(lensNodes().includes(document.activeElement),'poll preserves focus on a connected node');
