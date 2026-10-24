@@ -37,6 +37,10 @@ MapLibre GL JS **6.15.0** is bundled with its BSD-3-Clause license. The original
 tarball was checked against its published SHA-512 integrity value. Exact vendored
 file sizes and SHA-256 hashes are in
 [`manifest.json`](../megalodon/assets/address-map/manifest.json).
+Large static files are stored with deterministic gzip compression to remain
+within the existing installed-recovery package-size bound. The local asset reader
+caps both stored and decoded input at 2 MiB; the original decoded identities and
+compressed identities are recorded separately. No recovery size bound is raised.
 The [MapLibre documentation](https://maplibre.org/maplibre-gl-js/docs/) describes
 its same-origin worker setting; this integration serves the worker locally.
 

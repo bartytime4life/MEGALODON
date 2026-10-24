@@ -1,5 +1,7 @@
 """Location is local context with explicit unknowns, not physical attribution."""
 import hashlib
+import gzip
+from io import BytesIO
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
@@ -133,6 +135,19 @@ def test_vendored_library_and_land_match_their_pinned_manifests():
     for name,record in value['boundaries'].items():
         raw=asset(name)[1]
         assert len(raw)==record['bytes'] and hashlib.sha256(raw).hexdigest()==record['sha256']
+
+
+@pytest.mark.parametrize('raw',[gzip.compress(b'x'*(2*1024*1024+1),mtime=0),b'not gzip'])
+def test_compressed_assets_refuse_invalid_or_excessive_inflation(monkeypatch,raw):
+    class Resource:
+        def joinpath(self,*args):return self
+        def open(self,*args):return BytesIO(raw)
+    asset.cache_clear()
+    monkeypatch.setattr('megalodon.dashboard_address_map.files',lambda _:Resource())
+    try:
+        with pytest.raises(ValueError):asset('land.geojson')
+    finally:
+        asset.cache_clear()
 
 
 def test_map_interactions_geometry_and_graphics_failure():

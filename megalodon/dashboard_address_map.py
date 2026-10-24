@@ -1,6 +1,8 @@
 """Local map document and explicit inspector controls; the HUD keeps its own CSP."""
 from functools import lru_cache
+import gzip
 from importlib.resources import files
+from io import BytesIO
 
 MAP_HTML = r'''
 <section class="ops-address-map" aria-labelledby="address-map-title">
@@ -100,13 +102,28 @@ ASSETS = {'maplibre-gl.mjs':'text/javascript; charset=utf-8', 'maplibre-gl-worke
           'geometry.mjs':'text/javascript; charset=utf-8', 'viewer.css':'text/css; charset=utf-8',
           'land.geojson':'application/geo+json', 'countries.geojson':'application/geo+json', 'states.geojson':'application/geo+json',
           'LICENSE.txt':'text/plain; charset=utf-8', 'manifest.json':'application/json'}
+PACKED = frozenset({'maplibre-gl.mjs','maplibre-gl-worker.mjs','maplibre-gl.css',
+                    'land.geojson','countries.geojson','states.geojson'})
+
+
+def storage_name(name):
+    return name+'.gz' if name in PACKED else name
 
 
 @lru_cache(maxsize=len(ASSETS))
 def asset(name):
     if name not in ASSETS:
         raise ValueError('Unknown map asset')
-    raw = files('megalodon.assets').joinpath('address-map',name).read_bytes()
-    if len(raw) > 2*1024*1024:
+    with files('megalodon.assets').joinpath('address-map',storage_name(name)).open('rb') as source:
+        raw = source.read(2*1024*1024+1)
+    if len(raw)>2*1024*1024:
         raise ValueError('Map asset exceeds its bound')
+    if name in PACKED:
+        try:
+            with gzip.GzipFile(fileobj=BytesIO(raw)) as source:
+                raw=source.read(2*1024*1024+1)
+        except (OSError,EOFError):
+            raise ValueError('Invalid compressed map asset') from None
+        if len(raw)>2*1024*1024:
+            raise ValueError('Decoded map asset exceeds its bound')
     return ASSETS[name], raw

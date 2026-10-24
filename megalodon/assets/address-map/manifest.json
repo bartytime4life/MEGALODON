@@ -9,15 +9,27 @@
   "files": {
     "maplibre-gl.mjs": {
       "bytes": 1098062,
-      "sha256": "41198b23679a7d8892183408bbef2eabdc74745beb90261f6be0f660b7aeb2fd"
+      "sha256": "41198b23679a7d8892183408bbef2eabdc74745beb90261f6be0f660b7aeb2fd",
+      "storage": "maplibre-gl.mjs.gz",
+      "encoding": "gzip",
+      "compressed_bytes": 292144,
+      "compressed_sha256": "58961ff028811c8fe3a93186ee3afd8c15324f3b2d3f0c796e107353862293d2"
     },
     "maplibre-gl-worker.mjs": {
       "bytes": 518806,
-      "sha256": "1c69066368331aae63967ed24a9affcf962cf55fcc6d8f532a8b040f736dbcfa"
+      "sha256": "1c69066368331aae63967ed24a9affcf962cf55fcc6d8f532a8b040f736dbcfa",
+      "storage": "maplibre-gl-worker.mjs.gz",
+      "encoding": "gzip",
+      "compressed_bytes": 147120,
+      "compressed_sha256": "7a3b4887447c202f5f0d02ec61f7d72bdfac054609f561755f4222318db987f7"
     },
     "maplibre-gl.css": {
       "bytes": 71596,
-      "sha256": "a90798a1953017790e590f7e1bd35ff103a8a4263972cb47290b78adf86f8c20"
+      "sha256": "a90798a1953017790e590f7e1bd35ff103a8a4263972cb47290b78adf86f8c20",
+      "storage": "maplibre-gl.css.gz",
+      "encoding": "gzip",
+      "compressed_bytes": 10191,
+      "compressed_sha256": "4796d3cb015615c9898cc712998f450692d9db352f76dbdbdb6f403b9b0ff4be"
     },
     "LICENSE.txt": {
       "bytes": 5984,
@@ -29,7 +41,11 @@
     "license": "Public domain",
     "version": "Natural Earth 1:110m land 4.0.0",
     "bytes": 138160,
-    "sha256": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9"
+    "sha256": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9",
+    "storage": "land.geojson.gz",
+    "encoding": "gzip",
+    "compressed_bytes": 51269,
+    "compressed_sha256": "8b989ca0a29e092353a81403dc2f93ca80b8d6360f3353b217e747e752be8742"
   },
   "boundaries": {
     "countries.geojson": {
@@ -39,7 +55,11 @@
       "license": "Public domain",
       "derivation": "Geometry only; source coordinates unchanged",
       "bytes": 248549,
-      "sha256": "625a29c39f24e9d56fe669cc0bd73a0ec67d4a787e1756590d7f42f878c38ef5"
+      "sha256": "625a29c39f24e9d56fe669cc0bd73a0ec67d4a787e1756590d7f42f878c38ef5",
+      "storage": "countries.geojson.gz",
+      "encoding": "gzip",
+      "compressed_bytes": 91028,
+      "compressed_sha256": "449640ad3d9a855f4237819886f08669da24a6895f5abae686b2d26e2e31166c"
     },
     "states.geojson": {
       "source": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_110m_admin_1_states_provinces_lines.geojson",
@@ -48,7 +68,11 @@
       "license": "Public domain",
       "derivation": "Geometry only; source coordinates unchanged",
       "bytes": 29958,
-      "sha256": "c405e08072bf8788739f86994e401e3763a4f8063739c492f638805a4ed4ba1d"
+      "sha256": "c405e08072bf8788739f86994e401e3763a4f8063739c492f638805a4ed4ba1d",
+      "storage": "states.geojson.gz",
+      "encoding": "gzip",
+      "compressed_bytes": 8217,
+      "compressed_sha256": "e790e4ce9964161503fd5be106dd5f3bdbafdeb544fcc2dda34dd1809ad034d6"
     }
   }
 }
