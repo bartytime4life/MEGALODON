@@ -123,6 +123,12 @@ def test_operations_layout_ownership_and_closed_history():
     assert 'prefers-reduced-motion:reduce' in OPERATIONS_CSS
     assert '@media(max-width:900px),(pointer:coarse)' in OPERATIONS_CSS
     assert 'min-height:44px!important;font-size:.875rem!important' in OPERATIONS_CSS
+    assert p.ids.index('ops-filter-unknown') < p.ids.index('ops-search') < p.ids.index('ops-lens')
+    assert any(a.get('class') == 'ops-lens' for _,a in p.owners['ops-search'])
+    assert 'ops-back-to-connections' in p.ids and 'ops-roster-search' in p.ids
+    assert 'Retained endpoint evidence.' in INDEX_HTML
+    assert 'aria-label="Jump to connection section"' in INDEX_HTML
+    assert 'class="ops-view-current"' not in INDEX_HTML
     assert 'Unknown is not malicious.' in INDEX_HTML
     assert 'Best available identity' in OPERATIONS_JS
     assert 'no live DNS, WHOIS, reputation, service probe, payload inspection, or credential collection' in OPERATIONS_JS
