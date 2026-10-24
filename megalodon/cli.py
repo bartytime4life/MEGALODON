@@ -1095,10 +1095,12 @@ def _dashboard(args: argparse.Namespace) -> int:
     except OSError as exc:
         if exc.errno == errno.EADDRINUSE:
             print(
-                "megalodon: dashboard address is already in use; this launch did not "
-                "apply the requested settings or start companion collection. Existing "
-                "sessions keep their settings. Choose an unused port with --port 8788 "
-                "(or another free port), or stop a foreground HUD with Ctrl+C in its terminal.",
+                "megalodon: dashboard address is already in use by another program or "
+                "HUD; this launch did not apply the requested settings or start companion "
+                "collection. Existing sessions keep their settings. Choose an unused port "
+                "once with --port 8798 (or another free port), or for every launch with "
+                "port under [dashboard] in settings.toml. Stop a foreground HUD with "
+                "Ctrl+C in its terminal.",
                 file=sys.stderr,
             )
         else:
