@@ -6,6 +6,7 @@ constants to preserve the existing public/test interface.
 """
 
 from .dashboard_address_investigation import INVESTIGATION_JS
+from .dashboard_address_map import MAP_CSS, MAP_JS
 from .dashboard_network import NETWORK_CSS, NETWORK_JS
 from .dashboard_storage import STORAGE_CSS, STORAGE_JS
 from .dashboard_reports import REPORTS_CSS, REPORTS_JS
@@ -2202,7 +2203,7 @@ INDEX_HTML = compose_operations(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<section class="storage-panel" id="storage-setup"', APPS_SETUP_HTML + '<section class="storage-panel" id="storage-setup"', 1)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
 INDEX_HTML = compose_polish(compose_intelligence(INDEX_HTML))
-DASHBOARD_CSS += KNOWLEDGE_CSS + POLISH_CSS
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + POLISH_JS + "\nbootstrap();\n"
+DASHBOARD_CSS += MAP_CSS + KNOWLEDGE_CSS + POLISH_CSS
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))

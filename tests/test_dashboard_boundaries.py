@@ -202,9 +202,19 @@ def test_asset_composition_preserves_bootstrap_and_navigation():
     assert "height: 100dvh" in DASHBOARD_CSS
     assert "overflow: hidden" in DASHBOARD_CSS
     assert ".workspace-scroll" in DASHBOARD_CSS
-    assert INDEX_HTML.lower().count("<iframe") == 1
+    assert INDEX_HTML.lower().count("<iframe") == 2
     assert 'id="reports-document"' in INDEX_HTML
     assert 'sandbox="allow-same-origin allow-modals"' in INDEX_HTML
+    from html.parser import HTMLParser
+    class Frames(HTMLParser):
+        def __init__(self):super().__init__();self.frames={}
+        def handle_starttag(self,tag,attrs):
+            if tag=='iframe':
+                values=dict(attrs);self.frames[values['id']]=values
+    frames=Frames();frames.feed(INDEX_HTML)
+    assert set(frames.frames)=={'reports-document','address-map-frame'}
+    assert frames.frames['address-map-frame']['sandbox']=='allow-scripts allow-same-origin'
+    assert 'src' not in frames.frames['address-map-frame']  # No renderer before an explicit read.
     assert 'id="integrations-presence-filter"' in INDEX_HTML
     for label in ("Presence", "MEGALODON support", "Administration", "Health"):
         assert label in DASHBOARD_JS

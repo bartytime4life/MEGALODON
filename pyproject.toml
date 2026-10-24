@@ -34,7 +34,7 @@ include = ["megalodon*"]
 version = {attr = "megalodon.__version__"}
 
 [tool.setuptools.package-data]
-"megalodon.assets" = ["*.svg"]
+"megalodon.assets" = ["*.svg", "address-map/*.mjs", "address-map/*.css", "address-map/*.gz", "address-map/*.json", "address-map/*.txt"]
 "megalodon.reference" = [
   "iana-v1/*.json",
   "iana-v1/*.jsonl",

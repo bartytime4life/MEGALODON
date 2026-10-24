@@ -2,6 +2,7 @@
 import re
 
 from .dashboard_address_investigation import INVESTIGATION_HTML
+from .dashboard_address_map import MAP_HTML
 
 
 def _take(html: str, element_id: str) -> tuple[str, str]:
@@ -95,7 +96,7 @@ def compose_operations(html: str) -> str:
     start_range = html.index('<div class="room-range"')
     end_range = html.index('</div>\n', start_range)+len('</div>\n')
     html = html[:start_range] + '<details class="ops-range"><summary>Stored evidence time range</summary>' + html[start_range:end_range] + '</details>' + html[end_range:]
-    return html.replace('<!-- ADDRESS_INVESTIGATION -->', INVESTIGATION_HTML, 1)
+    return html.replace('<!-- ADDRESS_INVESTIGATION -->', INVESTIGATION_HTML + MAP_HTML, 1)
 
 
 OPERATIONS_CSS = r'''
