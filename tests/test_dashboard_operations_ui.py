@@ -68,6 +68,9 @@ def test_operations_layout_ownership_and_closed_history():
     p=Parse();p.feed(INDEX_HTML)
     assert not [k for k,v in Counter(p.ids).items() if v>1]
     assert p.ids.index('live-globe') < p.ids.index('network-panel') < p.ids.index('ops-pulse-title')
+    assert p.ids.index('ops-lens') < p.ids.index('ops-endpoint-list') < p.ids.index('ops-inspector-title')
+    for key in ('ops-pause','ops-filter-all','ops-filter-observed','ops-filter-review','ops-filter-unknown'):
+        assert key in p.ids
     assert any(a.get('class') == 'ops-visual-grid' for _, a in p.owners['network-panel'])
     assert not any(a.get('class') == 'ops-atlas' for _, a in p.owners['network-panel'])
     for key in ('live-globe-camera', 'live-globe-zoom', 'network-page-size'):
@@ -85,3 +88,8 @@ def test_operations_layout_ownership_and_closed_history():
     assert 'prefers-reduced-motion:reduce' in OPERATIONS_CSS
     assert '@media(max-width:900px),(pointer:coarse)' in OPERATIONS_CSS
     assert 'min-height:44px!important;font-size:.875rem!important' in OPERATIONS_CSS
+    assert 'Unknown is not malicious.' in INDEX_HTML
+    assert 'Best available identity' in OPERATIONS_JS
+    assert 'no live DNS, WHOIS, reputation, service probe, payload inspection, or credential collection' in OPERATIONS_JS
+    assert "function endpointState(e)" in OPERATIONS_JS
+    assert "function lens()" in OPERATIONS_JS
