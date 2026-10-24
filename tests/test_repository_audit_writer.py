@@ -34,6 +34,14 @@ def test_existing_file_and_symlink_are_refused(tmp_path,monkeypatch):
     with pytest.raises(ValueError):repository_audit.inventory_output('docs/audit/link.json')
 
 
+def test_dangling_in_directory_symlink_is_refused_before_resolution(tmp_path,monkeypatch):
+    root=audit_root(tmp_path,monkeypatch)
+    link=root/'docs/audit/snapshot.json';link.symlink_to('other.json')
+    with pytest.raises(ValueError,match='already exists'):
+        repository_audit.inventory_output('docs/audit/snapshot.json')
+    assert link.is_symlink() and not (root/'docs/audit/other.json').exists()
+
+
 def test_late_file_creation_cannot_replace_a_snapshot(tmp_path,monkeypatch):
     root=audit_root(tmp_path,monkeypatch)
     target=repository_audit.inventory_output('docs/audit/new.json')
