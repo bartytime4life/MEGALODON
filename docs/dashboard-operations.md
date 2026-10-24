@@ -90,6 +90,30 @@ and sensor operation remain explicit separate workflows.
 
 ## Read the interface in evidence order
 
+### Read live connections through the connection lens
+
+The **Live network** workspace leads with a passive connection lens and keeps
+the roster and endpoint inspector beside it. The lens draws retained endpoint
+relationships around **This device**; it is a visualization of accepted
+metadata, not a network scan or proof of complete traffic coverage. Its
+**Observed**, **Unknown**, **Needs review**, and **Unavailable** states describe
+evidence quality. In particular, unknown does not mean malicious.
+
+Use the evidence-state controls or search by address, observed DNS/TLS name,
+transport, port, or service hint. **Pause view** freezes dashboard refresh only;
+it does not stop capture or another sensor. Selecting a node or roster row opens
+the same inspector. The inspector reports the best available identity and its
+provenance, timing, byte and packet direction, ports, protocols, findings,
+measurement sources, and metadata coverage. These fields remain separately
+qualified so a port hint, approximate location, or observed name cannot silently
+become a verified application or owner identity.
+
+This view performs no live DNS or WHOIS lookup, reputation request, service
+probe, payload inspection, or credential collection. Enrichment comes only from
+bounded passive metadata already accepted by the local HUD. Installed-machine
+acceptance must still verify layout, interactions, and real sensor coverage on
+the target computer.
+
 Seven persistent tabs organize the interface without reloading the page:
 **HUD** shows live network status, background tools and qualified traffic
 visuals; **Findings** shows linked detector results; **Sensors** shows what each
