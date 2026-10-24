@@ -140,7 +140,7 @@ async def exercise_connection_lens(browser, port, password, passed):
         await page.locator('#ops-pause').click();await expect(lens).to_contain_text('No external endpoint')
         await refresh('ready');await expect(nodes).to_have_count(6)
         passed('native pause discards in-flight refresh and resume reads the new snapshot')
-        await nodes.first.click()
+        await nodes.first.locator('text').click()
         for width,height in ((1440,1000),(390,844),(320,740)):
             await page.set_viewport_size(dict(width=width,height=height))
             await capture(f'{width}-lens.png','ops-lens-title',width,height)
@@ -175,5 +175,15 @@ async def exercise_connection_lens(browser, port, password, passed):
                     'Screenshots require visual inspection; assertions do not establish label legibility',
                     'Request monitoring does not establish OS-level no-egress'])
         (output/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+    except Exception as error:
+        # Preserve real pixels and the actual locator failure before the driver
+        # reports its generic outer failure line.
+        print('CONNECTION_LENS_FAILURE', type(error).__name__, str(error), flush=True)
+        try:
+            viewport=page.viewport_size
+            await capture('failure-state.png','ops-lens-title',viewport['width'],viewport['height'])
+        except Exception as capture_error:
+            print('CONNECTION_LENS_CAPTURE_FAILURE',type(capture_error).__name__,flush=True)
+        raise
     finally:
         release.set();await context.close()
