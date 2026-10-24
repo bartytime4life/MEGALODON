@@ -103,6 +103,11 @@ invent activity when the capture is stopped, unavailable or stale.
 `GET /api/live-connections` requires the existing local Host/sign-in boundary and
 one `X-Megalodon-Check: 1` header. It rejects query parameters, starts no process,
 and returns `megalodon-live-connections-v1`, capped by 128 rows and 256 KiB.
+Every returned endpoint has a `location_role`. A local interface uses
+`local_exit_anchor`; its coordinates are a shared routing reference for globe
+paths, not a location claim about that address. An independently looked-up peer
+uses `observed_network_endpoint`. The operations API carries the same role, and
+both HUD consumers reject missing or contradictory role/local combinations.
 It has no cross-origin permission. Existing nonce/Origin/JSON restrictions protect
 the new fixed actions on `POST /api/support-config`:
 
