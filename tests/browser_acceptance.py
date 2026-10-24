@@ -759,6 +759,8 @@ async def run() -> None:
                             await exercise(browser, port, password, nonempty)
                             if nonempty:
                                 await exercise_endpoint_facts(browser,port,password)
+                                from browser_connection_lens import exercise_connection_lens
+                                await exercise_connection_lens(browser,port,password,passed)
                                 from browser_address_map import exercise_address_map
                                 await exercise_address_map(browser,port,password,passed)
                                 from browser_workflow_overview import exercise_workflow_overview
