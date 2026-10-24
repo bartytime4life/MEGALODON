@@ -66,6 +66,9 @@ and retired transition/test space. A supernet overlapping excluded space is
 refused as a whole; it is never silently split or partially accepted. This is
 input admission, not proof that an address is reachable or hostile. An unsafe
 previously saved cache becomes unavailable without being rewritten or deleted.
+Repeated HUD checks reuse at most 32,768 pure address classifications in memory.
+Private-file admission, feed parsing, provenance validation and expiry checks
+still run on every read; no feed result or freshness decision is cached.
 An explicit successful refresh may replace semantically invalid/obsolete cache
 content after all replacement sources validate. That invalid content is not
 promoted to the previous-valid slot; an existing previous-valid cache is retained.

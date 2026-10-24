@@ -483,6 +483,10 @@ process.stdin.on('end', async () => {
     // The same 503 is a real failure for a configured or unverified source.
     for (const [source, extra] of [['connected', {}], ['not_configured', {extra: true}], ['not_configured', {readiness: {}}]]) {
       await setup(source, extra); await run('refresh(true)');
+      if (source === 'connected') {
+        assert.match(nodeFor('setup-source').textContent, /selected at startup.*verify current access/);
+        assert.doesNotMatch(nodeFor('setup-source').textContent, /file is open/);
+      }
       assert.equal(run('state.telemetryNotConfigured'), false);
       assert.equal(run('state.lastRefreshFailed'), true);
       assert.equal(nodeFor('connection').className, 'connection error');

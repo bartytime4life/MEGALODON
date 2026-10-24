@@ -5,6 +5,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from functools import lru_cache
 try:
     import fcntl
 except ImportError:
@@ -59,9 +60,17 @@ _SPECIAL_V6 = tuple(ip_network(value) for value in (
 
 def public_unicast(value):
     """Admit ordinary public unicast only, identically on ingest and reload."""
-    if '%' in str(value):
+    text = str(value)
+    if '%' in text:
         return False
-    network = ip_network(str(value), strict=True)
+    return _public_unicast(text)
+
+
+@lru_cache(maxsize=32768)
+def _public_unicast(value):
+    # Only this pure address classification is reused. Every feed read still
+    # validates private-file identity, schema, provenance and current expiry.
+    network = ip_network(value, strict=True)
     if not network.is_global:
         return False
     if network.version == 4:

@@ -226,6 +226,9 @@ pairs; it omits process IDs, command lines, paths, users and host identity.
 Standalone tools report `not_applicable`. Query arguments and POST are refused.
 Repeated GETs and browser refresh never repeat either startup observation. The
 client validates both receipts; no report import is needed locally.
+The source status describes the startup selection, not present readability or
+capture health. Setup directs the operator to **Check this computer** for current
+access; traffic and capture retain their separate status checks.
 
 **Check this computer** uses a separate `/api/local-checks` endpoint. It is
 enabled only for `serve(..., inspect_tools=True)` (the `hud` command), accepts no
@@ -650,9 +653,12 @@ Nodes add `on_link`, `protocols`, and source/time-qualified `services`; optional
 `last_discovered_at` distinguishes actual discovery replies from refreshed local
 cache observations. Per-direction edge activity expires independently.
 Observed flows to the limited broadcast address, or to the network or broadcast
-address of any local IPv4 interface subnet of /30 or wider (public subnets
-included), are not devices; such a flow adds
-no node, edge or counter to either endpoint.
+address on the capture interface's IPv4 subnet of /30 or wider (public subnets
+included), are not devices; such a flow adds no node, edge or counter to either
+endpoint. Without a known capture interface, all local subnets are excluded
+conservatively. Broadcast refusal also applies to passive routes, neighbor rows
+and displayed discovery results, using each observation's interface. An address
+on another interface's /24 boundary can remain an ordinary host on a /20.
 `persistence` reports history-write state independently of live inventory health.
 
 `GET /api/network/history?ip=<IP>&interface=<interface>&limit=20&cursor=<cursor>`

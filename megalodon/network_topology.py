@@ -29,6 +29,7 @@ MAX_SCOPES = 64
 MAX_RESPONSE_BYTES = 256 * 1024
 PRIVATE_V4 = tuple(ip_network(value) for value in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'))
 PRIVATE_V6 = tuple(ip_network(value) for value in ('fc00::/7','fe80::/10'))
+LIMITED_BROADCAST = ip_address('255.255.255.255')
 
 
 def _now():
@@ -90,7 +91,7 @@ def parse_inventory(addresses, routes, neighbors, stamp):
     """Turn bounded ip JSON into interface facts; a neighbor is not a flow."""
     if any(type(value) is not list for value in (addresses,routes,neighbors)):
         raise ValueError('Invalid local network response')
-    groups, nodes, edges, networks, known6, broadcast4 = {}, {}, [], [], set(), set()
+    groups, nodes, edges, networks, known6, broadcast4 = {}, {}, [], [], set(), {}
     if len(addresses)>128 or len(routes)>2048 or len(neighbors)>4096:
         raise ValueError('Local network table exceeds bounds')
     for row in addresses:
@@ -110,7 +111,8 @@ def parse_inventory(addresses, routes, neighbors, stamp):
                 if _private(iface.network) and kind!='loopback': networks.append((iface.network,name))
                 # Every local IPv4 subnet's network/broadcast address, public ones
                 # included, is a broadcast destination rather than a device.
-                if iface.version==4 and kind!='loopback' and iface.network.prefixlen<=30: broadcast4.update((iface.network.network_address,iface.network.broadcast_address))
+                if iface.version==4 and kind!='loopback' and iface.network.prefixlen<=30:
+                    broadcast4.setdefault(name,set()).update((iface.network.network_address,iface.network.broadcast_address))
         except (KeyError,ValueError,TypeError,AttributeError):
             continue
     for row in routes:
@@ -119,6 +121,7 @@ def parse_inventory(addresses, routes, neighbors, stamp):
             if name not in groups: continue
             gateway=str(ip_address(row['gateway']))
             if ip_address(gateway).is_unspecified or ip_address(gateway).is_multicast: continue
+            if ip_address(gateway)==LIMITED_BROADCAST or ip_address(gateway) in broadcast4.get(name,()): continue
             item=_node(gateway,name,'gateway','Kernel route',stamp)
             if item['id'] not in nodes: nodes[item['id']]=item
             for local in list(nodes.values()):
@@ -132,6 +135,7 @@ def parse_inventory(addresses, routes, neighbors, stamp):
             if name not in groups: continue
             address=ip_address(row['dst'])
             if address.is_unspecified or address.is_multicast or address.is_loopback: continue
+            if address==LIMITED_BROADCAST or address in broadcast4.get(name,()): continue
             states=row.get('state',[])
             if isinstance(states,str): states=[states]
             if not states or any(value in {'FAILED','INCOMPLETE','NONE'} for value in states): continue
@@ -424,6 +428,7 @@ class NetworkTopology:
         nodes=inventory['nodes'];edges=inventory['edges'];groups=inventory['groups']
         for key,row in discovered.items():
             if row['interface'] not in groups: continue
+            if ip_address(row['ip'])==LIMITED_BROADCAST or ip_address(row['ip']) in inventory.get('broadcast4',{}).get(row['interface'],()): continue
             if key in nodes:
                 nodes[key]['discovered']=True
                 nodes[key]['last_discovered_at']=row.get('last_discovered_at',row['last_seen'])
@@ -437,10 +442,11 @@ class NetworkTopology:
         if selected not in groups: selected='unattributed'
         groups.setdefault('unattributed',dict(id='unattributed',label='Observed peers / route unknown',kind='other'))
         # Broadcast destinations are not devices: the limited broadcast and the
-        # network/broadcast addresses of each local IPv4 subnet (/30 or wider).
-        refused={ip_address('255.255.255.255'),*inventory.get('broadcast4',())}
-        for network,_name in inventory['networks']:
-            if network.version==4 and network.prefixlen<=30: refused.update((network.network_address,network.broadcast_address))
+        # network/broadcast addresses on the capture interface (/30 or wider).
+        # A .255 on another interface's /24 can be a host on this one's /20.
+        refused={LIMITED_BROADCAST,*inventory.get('broadcast4',{}).get(selected,())}
+        if selected=='unattributed':
+            for addresses in inventory.get('broadcast4',{}).values():refused.update(addresses)
         for flow in live.get('connections',[])[:128]:
             pair=[]
             try:
