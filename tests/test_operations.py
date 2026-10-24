@@ -25,6 +25,8 @@ def test_observed_endpoint_directions_flags_timeline_and_storage(tmp_path):
     assert remote['sent_bytes']==250 and remote['received_bytes']==100
     assert remote['flags']==['ACK'] and remote['ports']==[dict(protocol='TCP',port=443,hint='HTTPS')]
     assert remote['location'] is None
+    assert remote['location_role']=='observed_network_endpoint'
+    assert operations.endpoint('10.0.0.2')['location_role']=='local_exit_anchor'
     assert result['coverage']['unmapped']==1
     note=operations.investigate('1.1.1.1')
     assert note['traffic']['packets']==2 and note['traffic']['sent_bytes']==250

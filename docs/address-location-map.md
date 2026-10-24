@@ -28,6 +28,8 @@ export. Traffic evidence remains available in Address investigation.
 An address assigned to the selected local interface also cannot inherit that
 shared exit position, even when the local address is globally routable. Its
 export records the explicit `local_exit_anchor` role with no endpoint position.
+The live-connections and operations APIs expose that same role explicitly; only
+`observed_network_endpoint` coordinates can become an endpoint map export.
 
 **Save location context** downloads `megalodon-address-location.json`. It preserves
 unknown values, source dates, radius and capture state, and is outside automatic

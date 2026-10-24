@@ -254,8 +254,8 @@ def test_protected_service_survives_port_list_truncation(tmp_path):
 
     def flow(index,remote_port,local_port):
         side=dict(packets=1,bytes=100,last_seen='2026-10-10T00:00:00Z')
-        return dict(id=str(index),protocol='TCP',a=dict(ip='192.168.1.10',port=local_port,local=True,location=None),
-                    b=dict(ip='8.8.4.4',port=remote_port,local=False,location=None),
+        return dict(id=str(index),protocol='TCP',a=dict(ip='192.168.1.10',port=local_port,local=True,location=None,location_role='local_exit_anchor'),
+                    b=dict(ip='8.8.4.4',port=remote_port,local=False,location=None,location_role='observed_network_endpoint'),
                     a_to_b=dict(side),b_to_a=dict(side),first_seen='2026-10-10T00:00:00Z',
                     last_seen='2026-10-10T00:00:00Z',state='recent',flags=[],active=True)
 

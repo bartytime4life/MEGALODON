@@ -13,9 +13,10 @@ def project(endpoint, *, snapshot_at, capture_state, geography_context=None):
     location = None
     local = endpoint.get('local')
     location_role = 'local_exit_anchor' if local is True else 'observed_network_endpoint'
+    role_valid = type(local) is bool and endpoint.get('location_role') == location_role
     public = (address.is_global and not address.is_multicast and not address.is_reserved
               and getattr(address, 'ipv4_mapped', None) is None)
-    if local is False and public and type(value) is dict and value.get('approximate') is True:
+    if role_valid and local is False and public and type(value) is dict and value.get('approximate') is True:
         lat, lon = value.get('latitude'), value.get('longitude')
         label, source = _text(value.get('label'), 160), _text(value.get('source'), 128)
         if (type(lat) in (int, float) and type(lon) in (int, float)

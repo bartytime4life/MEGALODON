@@ -38,6 +38,8 @@ def test_directions_come_from_observed_packets_and_exact_local_addresses():
     cache.observe(packet())
     row=snapshot(cache)['connections'][0]
     assert row['a']['local'] and row['a']['location']['latitude']==38.9137
+    assert row['a']['location_role']=='local_exit_anchor'
+    assert row['b']['location_role']=='observed_network_endpoint'
     assert row['a_to_b']['packets']==1 and row['b_to_a']['packets']==0
     cache.observe(packet('8.8.8.8','10.0.0.3',443,40000,size=60))
     data=snapshot(cache)
@@ -78,6 +80,22 @@ def test_ipv6_reverse_packets_share_one_flow_and_unknown_peers_stay_unmapped():
     assert data['connections'][0]['a']['ip']=='fd00::3'
     cache.observe(packet('fd00::3','fd00::4'))
     assert snapshot(cache)['totals']['unmapped']==1
+
+
+def test_dual_stack_local_addresses_share_only_the_explicit_vpn_exit_anchor():
+    class VpnGeo(Geo):
+        def snapshot(self):
+            return {'anchor':dict(LOCATION,label='Synthetic VPN exit')}
+    cache=LiveConnections(VpnGeo())
+    cache._local={'10.0.0.3','2001:4860:4860::8844'}
+    cache.observe(packet('10.0.0.3','8.8.8.8'))
+    cache.observe(packet('2001:4860:4860::8844','2606:4700:4700::1111'))
+    data=snapshot(cache)
+    local=[endpoint for row in data['connections'] for endpoint in (row['a'],row['b']) if endpoint['local']]
+    peers=[endpoint for row in data['connections'] for endpoint in (row['a'],row['b']) if not endpoint['local']]
+    assert {endpoint['location_role'] for endpoint in local}=={'local_exit_anchor'}
+    assert {endpoint['location']['label'] for endpoint in local}=={'Synthetic VPN exit'}
+    assert {endpoint['location_role'] for endpoint in peers}=={'observed_network_endpoint'}
 
 
 def test_live_cache_and_response_are_bounded():
