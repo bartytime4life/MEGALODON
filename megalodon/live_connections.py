@@ -193,6 +193,7 @@ class LiveConnections:
             for key in ('a','b'):
                 endpoint = row[key]
                 endpoint['location'] = deepcopy(anchor) if endpoint['local'] else self.geography.lookup(endpoint['ip'])
+                endpoint['location_role'] = 'local_exit_anchor' if endpoint['local'] else 'observed_network_endpoint'
             if not row['a']['location'] or not row['b']['location']:
                 unmapped += 1
         value = dict(schema='megalodon-live-connections-v1', generated_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
