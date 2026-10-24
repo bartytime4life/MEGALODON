@@ -43,7 +43,7 @@ SETUP_HTML = """
           <summary>Authorize Install, Start and Open</summary>
           <p id="tool-management-status" role="status">Observation mode. To use Install, Start and Open, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
           <div class="tool-management-launch">
-            <p>Copy the restart command for Install/Start/Open from this exact HUD launcher. Copying does not stop, restart, install, start, or open anything. To leave an existing session running, append <code>--port 8788</code> (or another unused port) before running it in a terminal.</p>
+            <p>Copy the restart command for Install/Start/Open from this exact HUD launcher. Copying does not stop, restart, install, start, or open anything. To leave an existing session running, append <code>--port 8798</code> (or another unused port) before running it in a terminal.</p>
             <code id="tool-management-command">Restart command for Install/Start/Open unavailable</code>
             <button id="tool-management-copy" class="setup-primary" type="button" disabled>Copy restart command for Install/Start/Open</button>
             <p id="tool-management-copy-status" role="status" aria-live="polite">Reading this HUD's launch method…</p>
@@ -71,7 +71,7 @@ SETUP_HTML = """
         </div>
         <code id="account-password-command">Password command unavailable</code>
         <p id="account-password-feedback" role="status" aria-live="polite">Reading this HUD's Python environment…</p>
-        <label class="field" for="account-port">Protected session port (optional)<input id="account-port" inputmode="numeric" placeholder="8788" maxlength="5" autocomplete="off"></label>
+        <label class="field" for="account-port">Protected session port (optional)<input id="account-port" inputmode="numeric" placeholder="8798" maxlength="5" autocomplete="off"></label>
         <p>The prepared command adds <code>--require-sign-in</code>. Choose an unused port if you want to leave this HUD running. A protected launch opens a separate session; it does not add sign-in to this one.</p>
         <div class="setup-account-actions">
           <button id="account-launch-build" type="button" disabled>Prepare protected launch</button>
@@ -98,7 +98,7 @@ SETUP_HTML = """
           <p id="setup-config-note">An explicit settings file overrides the launcher's default settings for this launch only.</p>
           <label class="field">Completed offline run<input id="setup-offline" placeholder="/absolute/private/completed-run" maxlength="512"></label>
           <label class="field">Suricata store<input id="setup-suricata" placeholder="/absolute/private/suricata.db" maxlength="512"></label>
-          <label class="field">Local port (optional)<input id="setup-port" inputmode="numeric" placeholder="8788" maxlength="5" aria-describedby="setup-port-note"></label>
+          <label class="field">Local port (optional)<input id="setup-port" inputmode="numeric" placeholder="8798" maxlength="5" aria-describedby="setup-port-note"></label>
           <p id="setup-port-note">Leave blank to use the configured port. Choose an unused port from 1 to 65535 to leave an existing HUD running.</p>
           <p>Launch options affect only the new session. For example, <code>--no-auto-companions</code> disables collection only in that session; an existing background HUD keeps running with its original settings.</p>
           <button id="setup-build" type="button">Prepare launch command</button>

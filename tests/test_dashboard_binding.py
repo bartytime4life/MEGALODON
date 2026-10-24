@@ -62,12 +62,13 @@ def test_occupied_port_refuses_before_collection_or_browser_open(monkeypatch, ca
     error = capsys.readouterr().err
     assert "did not apply the requested settings or start companion collection" in error
     assert "Existing sessions keep their settings" in error
-    assert "--port 8788" in error
+    assert "--port 8798" in error
+    assert "port under [dashboard] in settings.toml" in error
 
 
 @pytest.mark.parametrize("failure, expected_code, message", (
     (KeyboardInterrupt(), 0, "dashboard stopped"),
-    (OSError(errno.EADDRINUSE, "Address already in use"), 2, "--port 8788"),
+    (OSError(errno.EADDRINUSE, "Address already in use"), 2, "--port 8798"),
 ))
 def test_manual_dashboard_exit_closes_reader(monkeypatch, capsys, failure, expected_code, message):
     closed = []
