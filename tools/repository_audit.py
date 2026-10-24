@@ -10,6 +10,7 @@ from collections import Counter
 from hashlib import sha256
 from html.parser import HTMLParser
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -18,7 +19,7 @@ import tomllib
 
 ROOT=Path(__file__).resolve().parents[1]
 BASE='4b5f8f8'
-OUTPUT='docs/audit/repository-files.json'
+HISTORICAL_OUTPUT='docs/audit/repository-files.json'
 HISTORICAL=('review-2026','alignment-2026','source-alignment','evidence-alignment-review','ai-host-observation','owner-decision-packet','license-decision-','currentness','benchmarks/')
 
 def git(*args):
@@ -80,11 +81,34 @@ class Controls(HTMLParser):
         if tag=='a' and a.get('href','').startswith('#'):self.links.append(a['href'][1:])
         if tag in {'button','input','select','textarea'}:self.items.append(dict(element=tag,id=a.get('id'),type=a.get('type'),label=a.get('aria-label'),disabled='disabled' in a))
 
-def collect():
+def inventory_output(value):
+    """Require a new, ordinary JSON file beside the preserved audit ledger."""
+    path=Path(value)
+    if path.is_absolute():raise ValueError('Inventory output must be repository-relative')
+    audit=(ROOT/'docs/audit').resolve()
+    historical=(ROOT/HISTORICAL_OUTPUT).resolve()
+    candidate=(ROOT/path).resolve()
+    if candidate==historical:raise ValueError('Historical repository audit is immutable')
+    if candidate.parent!=audit or candidate.suffix!='.json':
+        raise ValueError('Inventory output must be a JSON file directly under docs/audit')
+    if candidate.exists() or candidate.is_symlink():
+        raise ValueError('Inventory output already exists; choose a new file name')
+    return candidate
+
+
+def write_inventory(path,result):
+    """Create one new snapshot without following a late-created link or file."""
+    flags=os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_NOFOLLOW',0)
+    descriptor=os.open(path,flags,0o600)
+    with os.fdopen(descriptor,'w') as target:
+        target.write(json.dumps(result,indent=2)+'\n')
+
+
+def collect(output=HISTORICAL_OUTPUT):
     names=set(git('ls-files','-z','--cached','--others','--exclude-standard').split('\0'))-{''}
     names.update(git('ls-tree','-r','--name-only',BASE).splitlines())
     changed=set(git('diff','--name-only',BASE).splitlines())
-    rows=[inspect_file(n,changed) for n in sorted(names) if n!=OUTPUT]
+    rows=[inspect_file(n,changed) for n in sorted(names) if n not in {HISTORICAL_OUTPUT,output}]
     sys.path.insert(0,str(ROOT))
     from megalodon.dashboard_assets import INDEX_HTML,DASHBOARD_JS
     c=Controls();c.feed(INDEX_HTML)
@@ -99,10 +123,11 @@ def collect():
                 verification_record='docs/repository-audit.md')
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--write',action='store_true');args=parser.parse_args()
-    result=collect()
-    if args.write:
-        path=ROOT/OUTPUT;path.parent.mkdir(exist_ok=True);path.write_text(json.dumps(result,indent=2)+'\n')
+    parser=argparse.ArgumentParser();parser.add_argument('--write',metavar='PATH');args=parser.parse_args()
+    try:path=inventory_output(args.write) if args.write else None
+    except ValueError as error:parser.error(str(error))
+    result=collect(args.write or HISTORICAL_OUTPUT)
+    if path is not None:write_inventory(path,result)
     print(json.dumps({k:result[k] for k in ['counts','control_count','duplicate_ids','missing_anchors']}))
     return int(bool(result['duplicate_ids'] or result['missing_anchors'] or any(any('REVIEW REQUIRED' in x or 'Missing relative' in x for x in r.get('verification',[])) for r in result['files'])))
 
