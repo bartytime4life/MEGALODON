@@ -226,6 +226,8 @@ class Operations:
                            'The timeline uses five-second bins of accepted packet metadata. Endpoint sent/received is relative to that IP.',
                            'Port names are registry hints, not identified applications. Observed hostnames do not establish ownership or safety.',
                            'Hostname naming signals describe spelling only; generated-looking names are common for cloud and CDN services.',sensor]))
+            geography=live.get('geography',{})
+            result['geography_context']={key:geography.get(key) for key in ('source','build_date','updated_at')}
             if live.get('recording_mode') in {'packet_metadata','connection_summaries'}:
                 result['recording_mode']=live['recording_mode']
             evidence=getattr(self.configuration,'evidence',None)
@@ -252,6 +254,16 @@ class Operations:
             return None
         return dict(investigate(row, recording_mode=value.get('recording_mode'), coverage=value.get('coverage')), snapshot_at=value['observed_at'],
                     capture_state=value['capture']['state'])
+
+    def address_location(self, ip):
+        from .address_location import project
+        canonical = str(ip_address(ip))
+        value = self.snapshot()
+        row = next((r for r in value['endpoints'] if r['ip'] == canonical), None)
+        if row is None:
+            return None
+        return project(row, snapshot_at=value['observed_at'], capture_state=value['capture']['state'],
+                       geography_context=value.get('geography_context'))
 
     def endpoint(self,ip):
         canonical = str(ip_address(ip))

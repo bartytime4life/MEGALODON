@@ -160,6 +160,7 @@ production service.
 | `/api/support-workflows` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Passive, bounded status and aggregate metrics for twelve background tools; never starts services, scans or model inference. See [background tools](background-tools.md). |
 | `/api/operations` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Bounded live traffic pulse, IP details, passive sensor context, review-only hostname naming and TLS handshake signals and storage counters; no network lookups or model call |
 | `/api/address-investigation` | Required canonical numeric `ip`; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Explicit read over an address in the retained endpoint window; at most 16 KiB. Records observations and non-authoritative relay port clues, never an original address or person identity. No external lookup. |
+| `/api/address-map` | Same explicit-read and canonical retained-address checks | At most 8 KiB of local `megalodon-address-location-v1` context. Includes an approximate region, nullable accuracy radius and source dates, or explicit unmapped state. No external lookup or acquisition. |
 | `/api/defense` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed workflow state, private audit summary, active/uncertain containment and separate POST nonce; [defense contract](visual-operations-defense.md) |
 | `/api/live-connections` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Up to 128 recent captured conversations, observed directions, approximate location context and background state; see [live connection globe](live-connection-globe.md). GET starts no action. |
 
@@ -673,6 +674,13 @@ bounded to three seconds per request. Model telemetry adds the configured budget
 `running`, and `started_at`. Cancellation does not grant host-action authority.
 
 ## Address investigation and capture diagnostics
+
+The separate [local map view](address-location-map.md) leaves the v1 traffic note
+unchanged. `/address-map` serves its fixed document; `/assets/address-map/` serves
+only pinned/packaged map assets from a name allowlist. Both retain Host/session
+checks. Only the map document permits same-origin workers and embedding; the main
+HUD keeps its existing CSP and frame refusal. Source coordinates and optional
+radius never establish an original source, person or physical street address.
 
 The endpoint inspector's **Investigate selected address** control performs an
 explicit local GET. Selection alone sends no request. Unknown endpoints return

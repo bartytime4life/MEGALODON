@@ -1,0 +1,8 @@
+:root{color-scheme:dark;font:13px/1.5 system-ui,sans-serif;color:#d7e9ef;background:#0a1e28}
+*{box-sizing:border-box}body{margin:0}main{padding:10px;min-width:0}nav{display:flex;gap:6px;flex-wrap:wrap}
+button{font:inherit;color:inherit;background:#173641;border:1px solid #456571;border-radius:4px;padding:6px 9px;min-height:36px}
+button:disabled{opacity:.5}button:focus-visible{outline:3px solid #8de4d6;outline-offset:2px}
+#map{height:225px;width:100%;border:1px solid #304e5b;border-radius:4px;position:relative}
+#map-status,.credit{font-size:11px;overflow-wrap:anywhere;margin:6px 0}.credit{color:#acc5ce}
+.maplibregl-canvas:focus-visible{outline:3px solid #8de4d6;outline-offset:-4px}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}

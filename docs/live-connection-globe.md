@@ -129,6 +129,11 @@ made-up location. DB-IP locations remain approximate internet locations.
 
 ## Investigating an observed address
 
+The inspector also offers **Show recorded region**, a [local MapLibre view](address-location-map.md)
+with source dates, an optional reported accuracy-radius boundary and a separate
+JSON location-context export. Unknown locations retain their traffic evidence.
+The map uses bundled outlines and makes no external tile or peer-IP lookup.
+
 Select a peer in the connection roster, then choose **Investigate selected
 address**. Even when the origin and location are unknown, the local note collects
 retained times, connection/packet/byte counts, sent/received direction relative

@@ -582,6 +582,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if route.path == "/":
             self._send(200, "text/html; charset=utf-8", INDEX_HTML.encode())
             return
+        if route.path == '/address-map' and not route.query:
+            from .dashboard_address_map import MAP_PAGE
+            self._send(200, 'text/html; charset=utf-8', MAP_PAGE, map_document=True)
+            return
+        if route.path.startswith('/assets/address-map/') and not route.query:
+            from .dashboard_address_map import asset
+            try:
+                content_type, payload = asset(route.path.removeprefix('/assets/address-map/'))
+                self._send(200, content_type, payload)
+            except ValueError:
+                self._send_json({'error':'unknown map asset'}, status=404)
+            return
         if route.path == "/assets/dashboard.css":
             self._send(200, "text/css; charset=utf-8", DASHBOARD_CSS.encode())
             return
@@ -642,7 +654,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 except (OSError, ValueError):
                     self._send_json({"error": "local operations unavailable"}, status=503)
             return
-        if route.path == '/api/address-investigation':
+        if route.path in {'/api/address-investigation','/api/address-map'}:
             if self.headers.get_all('X-Megalodon-Check', []) != ['1'] or self.operations is None or not _tool_management_user():
                 self._send_json({'error': 'explicit local investigation check required'}, status=403)
                 return
@@ -654,10 +666,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 address = query['ip'][0]
                 if len(address) > 45 or '%' in address or str(ip_address(address)) != address:
                     raise ValueError('Invalid address')
-                value = self.operations.investigate(address)
+                map_context = route.path == '/api/address-map'
+                value = self.operations.address_location(address) if map_context else self.operations.investigate(address)
                 if value is None:
                     self._send_json({'error': 'address is outside the retained endpoint window'}, status=404)
-                elif len(json.dumps(value, ensure_ascii=True).encode()) > 16384:
+                elif len(json.dumps(value, ensure_ascii=True).encode()) > (8192 if map_context else 16384):
                     self._send_json({'error': 'address investigation unavailable'}, status=503)
                 else:
                     self._send_json(value)
@@ -1834,6 +1847,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _send(
         self, status: int, content_type: str, payload: bytes, *,
         extra_headers: dict[str, str] | None = None,
+        map_document: bool = False,
     ) -> None:
         # BaseHTTPRequestHandler.send_header does not reject line breaks.
         # Validate every dynamic header before starting the response.
@@ -1846,9 +1860,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; "
+            ("default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; "
             "img-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; "
-            "frame-src http: https:; frame-ancestors 'none'; form-action 'none'; worker-src 'none'",
+            "frame-src 'none'; frame-ancestors 'self'; form-action 'none'; worker-src 'self'") if map_document else
+            ("default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; "
+            "img-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; "
+            "frame-src http: https:; frame-ancestors 'none'; form-action 'none'; worker-src 'none'"),
         )
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
@@ -1859,7 +1876,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         )
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-Frame-Options", "SAMEORIGIN" if map_document else "DENY")
         for name, value in headers:
             self.send_header(name, value)
         self.end_headers()
