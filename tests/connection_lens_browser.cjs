@@ -14,6 +14,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  // bounded first six without dropping the searchable full roster.
  get('ops-lens').clientWidth=310;await poll(2000);assert.equal(svg().dataset.layout,'compact');
  assert.ok(lensNodes().every(n=>Number(n.children.find(c=>c.tag==='circle').attributes.r)>=22));
+ assert.ok(lensNodes().every(n=>text(n).includes(n.dataset.ip)),'each compact node visibly identifies its address');
  get('ops-lens').clientWidth=0;await poll(2000);assert.equal(svg().dataset.layout,'radial');
  for(const n of lensNodes()){assert.match(n.attributes['aria-label'],new RegExp(n.dataset.ip));assert.equal(n.attributes['aria-controls'],'ops-endpoint-detail');}
  assert.match(lensNodes().at(-1).attributes['aria-label'],/Local relationship not established/);

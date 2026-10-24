@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from test_dashboard_operations_ui import connection_lens_fixture
-from megalodon.dashboard_assets import INDEX_HTML
+from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_JS, DASHBOARD_CSS
 
 
 async def exercise_connection_lens(browser, port, password, passed):
@@ -143,7 +143,7 @@ async def exercise_connection_lens(browser, port, password, passed):
         await refresh('ready');await expect(nodes).to_have_count(6)
         passed('native pause discards in-flight refresh and resume reads the new snapshot')
         await nodes.first.locator('text').click()
-        for width,height in ((1440,1000),(390,844),(320,740)):
+        for width,height in ((1440,1200),(390,844),(320,740)):
             await page.set_viewport_size(dict(width=width,height=height))
             await capture(f'{width}-lens.png','ops-lens-title',width,height)
             await capture(f'{width}-inspector.png','ops-inspector-title',width,height)
@@ -159,7 +159,7 @@ async def exercise_connection_lens(browser, port, password, passed):
         assert await lens.evaluate("n=>n.getAnimations({subtree:true}).filter(a=>a.playState==='running').length===0")
         await expect(page.locator('#live-motion-status')).to_contain_text('Reduced motion')
         passed('native reduced-motion preference leaves lens and globe static')
-        for width,height in ((1440,1000),(390,844)):
+        for width,height in ((1440,1200),(390,844)):
             await page.set_viewport_size(dict(width=width,height=height))
             await refresh('dense');await expect(nodes).to_have_count(24 if width==1440 else 6)
             await capture(f'{width}-dense-lens.png','ops-lens-title',width,height)
@@ -171,6 +171,7 @@ async def exercise_connection_lens(browser, port, password, passed):
                 sizes=await nodes.locator('circle').evaluate_all('(ns)=>ns.map(n=>{const r=n.getBoundingClientRect();return Math.min(r.width,r.height);})')
                 assert min(sizes)>=44, 'compact endpoint target below 44px'
                 await expect(page.locator('#ops-lens-summary')).to_contain_text('6 of 24')
+                await expect(nodes.first.locator('text')).to_contain_text('198.51.100.1')
                 await expect(page.locator('#ops-endpoint-list .ops-endpoint')).to_have_count(25)
                 await expect(page.locator('#ops-lens-summary')).to_contain_text('full connection roster')
             passed('native dense labels do not overlap and compact nodes retain touch-sized targets '+str(width))
@@ -181,7 +182,9 @@ async def exercise_connection_lens(browser, port, password, passed):
         passed('native Connection lens requests no host action or nonlocal resource and has no page errors')
         manifest=dict(schema='connection-lens-browser-captures-v1',status='passed',browser=browser.version,
             candidate_sha=os.environ.get('GITHUB_SHA'),run_id=os.environ.get('GITHUB_RUN_ID'),
-            dashboard_html_sha256=hashlib.sha256(INDEX_HTML.encode()).hexdigest(),captures=captures,
+            dashboard_html_sha256=hashlib.sha256(INDEX_HTML.encode()).hexdigest(),
+            dashboard_js_sha256=hashlib.sha256(DASHBOARD_JS.encode()).hexdigest(),
+            dashboard_css_sha256=hashlib.sha256(DASHBOARD_CSS.encode()).hexdigest(),captures=captures,
             limits=['Synthetic test server; installed-PC sensor coverage unverified',
                     'Accessible-tree and keyboard checks do not constitute human screen-reader acceptance',
                     'Viewport reflow does not establish native browser zoom or actual phone hardware acceptance',

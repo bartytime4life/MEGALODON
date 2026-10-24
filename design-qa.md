@@ -54,7 +54,7 @@ requests are refused by the fixture handler. It covers:
 3. Focus retention through a real scheduled refresh.
 4. Evidence filters, broad searches, empty results, and anchor qualification.
 5. Pause during an in-flight refresh, then resume to a changed snapshot.
-6. Desktop 1440×1000 and phone-sized 390×844 / 320×740 reflow and scrolling.
+6. Desktop 1440×1200 and phone-sized 390×844 / 320×740 reflow and scrolling.
 7. OS/browser reduced-motion preference and static lens/globe state.
 8. Dense 24-endpoint desktop/phone screenshots and failed-refresh wording.
 
