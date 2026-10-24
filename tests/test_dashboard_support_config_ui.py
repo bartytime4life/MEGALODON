@@ -10,7 +10,7 @@ from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS
 
 
-@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs"])
+@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs"])
 def test_support_config_behavior(script):
     node = shutil.which("node")
     if node is None:

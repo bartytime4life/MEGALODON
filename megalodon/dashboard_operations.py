@@ -42,6 +42,21 @@ OPERATIONS_HTML = r'''
 </section>
 '''
 
+SETUP_SHORTCUTS_HTML = r'''
+<section class="ops-setup-shortcuts" aria-labelledby="setup-shortcuts-title">
+  <h3 id="setup-shortcuts-title">Start here</h3>
+  <p>Choose a task to open its controls. Review your choices before applying them. System permission prompts appear on this PC.</p>
+  <nav aria-label="Common setup tasks">
+    <a href="#support-capture-title"><strong>Network capture <span aria-hidden="true">→</span></strong><span>Choose an interface, allow capture, and start or stop recording.</span></a>
+    <a href="#support-model-title"><strong>Local AI <span aria-hidden="true">→</span></strong><span>Choose an installed model, set its response limit, and verify a reply.</span></a>
+    <a href="#support-config-clamav-title"><strong>Antivirus <span aria-hidden="true">→</span></strong><span>Choose a scan folder or update installed virus signatures.</span></a>
+    <a href="#network-setup-title"><strong>Device discovery <span aria-hidden="true">→</span></strong><span>Select the local networks you manage and save discovery settings.</span></a>
+    <a href="#storage-history-title"><strong>Storage &amp; history <span aria-hidden="true">→</span></strong><span>Preview how much evidence to keep and set a disk budget.</span></a>
+    <a href="#support-host-security"><strong>Host security <span aria-hidden="true">→</span></strong><span>Review configuration checks, file changes, and available audit actions.</span></a>
+  </nav>
+</section>
+'''
+
 
 def compose_operations(html: str) -> str:
     """Compose the local visual desk while preserving all established handler IDs."""
@@ -88,6 +103,7 @@ def compose_operations(html: str) -> str:
     home_end = html.index('\n</section>', html.index('<div class="room-actions"', home_start))
     html = html[:home_end] + traffic + '</details>' + html[home_end:]
     setup_tab = '<section class="workspace-view" id="workspace-setup" role="tabpanel" aria-labelledby="workspace-tab-setup" hidden><header class="ops-setup-head"><p class="eyebrow">CONFIGURE THIS PC</p><h2>Setup &amp; integrations</h2><p>Prepare tools here. Run and investigate from the HUD.</p></header>' + STORAGE_SETUP_HTML + NETWORK_SETUP_HTML + setup + '<section class="ops-location-setup" aria-labelledby="setup-location-title"><h3 id="setup-location-title" tabindex="-1">IP location data</h3>' + geography + '</section>' + software + advanced + '</section>'
+    setup_tab = setup_tab.replace('</header>', '</header>' + SETUP_SHORTCUTS_HTML, 1)
     html = html.replace('  <noscript>', setup_tab + '  <noscript>', 1)
     marker = re.search(r'<section[^>]*id="workspace-analysis"[^>]*>', html)
     if not marker:
@@ -101,6 +117,7 @@ def compose_operations(html: str) -> str:
 
 
 OPERATIONS_CSS = r'''
+.ops-setup-shortcuts{margin:0 0 1.5rem;padding:1rem;border:1px solid #426270;background:#0b202b;border-radius:4px}.ops-setup-shortcuts h3{margin:0 0 .5rem;font-size:1.15rem}.ops-setup-shortcuts p{max-width:80ch;line-height:1.6;color:#b7ccd8;font-size:.9rem}.ops-setup-shortcuts nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem}.ops-setup-shortcuts a{display:grid;gap:.45rem;align-content:start;min-height:44px;padding:.9rem;border:1px solid #3e6877;border-radius:4px;background:#102b38;color:#e3f2f5;text-decoration:none;overflow-wrap:anywhere}.ops-setup-shortcuts a strong{display:flex;justify-content:space-between;gap:.5rem;color:#a6eee2}.ops-setup-shortcuts a>span{font-size:.875rem;line-height:1.5;color:#c6d8e2}.ops-setup-shortcuts a:hover{background:#183e4c;border-color:#87e8dc}.ops-setup-shortcuts a:focus-visible{outline:3px solid #edc883;outline-offset:3px}@media(max-width:900px){.ops-setup-shortcuts nav{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.ops-setup-shortcuts nav{grid-template-columns:1fr}}
 .ops-reference-coverage{border:1px solid var(--ops-line);border-left:3px solid var(--ops-amber);padding:.75rem;margin:.8rem 0;overflow-wrap:anywhere}.ops-reference-coverage .ops-reference-status{font-weight:700}.ops-reference-coverage p,.ops-reference-coverage li{line-height:1.6}
 .ops-name-review{border:1px solid var(--ops-line);border-left:3px solid var(--ops-teal);padding:.75rem;margin:.8rem 0;overflow-wrap:anywhere}.ops-name-signal[data-level=review]{border-left:3px solid var(--ops-amber);padding-left:.6rem}.ops-name-signal-title{font-weight:700}.ops-name-review p,.ops-name-review li{line-height:1.6}
 :is(.ops-retained-facts,.ops-address-investigation){margin:1rem;padding:1rem;border:1px solid var(--ops-line);background:#0d2630;border-radius:4px}:is(.ops-retained-facts,.ops-address-investigation) h4{margin:0 0 .4rem;font-size:1rem}:is(.ops-retained-facts,.ops-address-investigation) p,:is(.ops-retained-facts,.ops-address-investigation) li{font-size:.78rem;line-height:1.65;overflow-wrap:anywhere}:is(.ops-retained-facts,.ops-address-investigation) summary{padding:.5rem 0;cursor:pointer}:is(.ops-retained-facts,.ops-address-investigation) .ops-endpoint-facts{margin:.6rem 0}:is(.ops-retained-facts,.ops-address-investigation) h5{margin:.8rem 0 .4rem}

@@ -92,6 +92,16 @@ process.stdin.on('end',async()=>{
  failure=true;await poll(10000);assert.match(status(),/Unable to confirm/);failure=false;oversized=true;await click('support-config-retry');assert.equal(get('support-config-qwen').disabled,true);oversized=false;
  payload={...fixture,interfaces:Array.from({length:33},()=>fixture.interfaces[0])};await click('support-config-retry');assert.equal(get('support-config-qwen').disabled,true);
  payload={...fixture,token:'wrong'};await click('support-config-retry');assert.equal(get('support-config-qwen').disabled,true);
+ payload=fixture;await click('support-config-retry');
+ // A routine GET leaves the controls and the existing native options alone.
+ const option=get('support-config-interface').children[1],postsBeforeRead=postCount();
+ hold=new Promise(resolve=>release=resolve);const reading=poll(10000);await settle();
+ assert.equal(get('support-config-interface').disabled,false);assert.equal(get('support-config-qwen').disabled,false);assert.equal(get('support-config').attributes['aria-busy'],'false');
+ change('support-config-nmap-target','192.168.44.0/24');const queued=click('support-config-qwen');await settle();assert.equal(postCount(),postsBeforeRead,'an action waits for the in-flight status check');
+ release();hold=null;await reading;await queued;
+ assert.equal(postCount(),postsBeforeRead+1,'the deliberate action runs once after successful validation');assert.equal(get('support-config-interface').children[1],option,'unchanged options retain their native nodes');assert.equal(get('support-config-nmap-target').value,'192.168.44.0/24');
+ // An invalid refresh must revoke the queued action instead of using stale authority.
+ await click('support-config-retry');hold=new Promise(resolve=>release=resolve);const badReading=poll(10000);await settle();const refused=click('support-config-qwen');const beforeRefusal=postCount();payload={...fixture,token:'wrong'};release();hold=null;await badReading;await refused;assert.equal(postCount(),beforeRefusal);
  payload=fixture;await click('support-config-retry');hold=new Promise(resolve=>release=resolve);const pending=click('support-config-qwen');document.hidden=true;listeners.visibilitychange();release();hold=null;await pending;assert.match(status(),/paused/);assert.equal([...timers.values()].filter(v=>[2000,10000].includes(v.ms)).length,0);
  console.log('support configuration UI behavior passed');
 }).on('error',error=>{console.error(error);process.exitCode=1;});

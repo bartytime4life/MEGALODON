@@ -43,7 +43,7 @@ function renderHardening(panel, payload) {
   const counts=order.map(s=>[s,payload.checks.filter(c=>c.state===s).length]).filter(([,n])=>n);
   const children=[node('p',counts.map(([s,n])=>`${n} ${states[s].toLowerCase()}`).join(' · ')+' · checked '+payload.reviewed_at.replace('T',' ').replace('Z',' UTC'))];
   for(const c of payload.checks.filter(c=>['fail','review','unknown'].includes(c.state)).sort((a,b)=>order.indexOf(a.state)-order.indexOf(b.state))){
-    const item=document.createElement('details');item.dataset.state=c.state;
+    const item=document.createElement('details');item.dataset.state=c.state;item.dataset.refreshKey='check:'+c.id;
     item.append(node('summary',`${states[c.state]} · ${c.title}`));
     const facts=document.createElement('dl');
     for(const [label,value] of [['Observed',c.observed],['Expected',c.expected],['ATT&CK mitigation',c.mitigation],['Suggested remediation',c.remediation]].concat(c.note?[['Note',c.note]]:[]))facts.append(node('dt',label),node('dd',value));
@@ -51,7 +51,7 @@ function renderHardening(panel, payload) {
   }
   const rest=payload.checks.filter(c=>['pass','not_applicable'].includes(c.state));
   if(rest.length){
-    const item=document.createElement('details');item.append(node('summary',`Passing and not-applicable checks (${rest.length})`));
+    const item=document.createElement('details');item.dataset.refreshKey='passing';item.append(node('summary',`Passing and not-applicable checks (${rest.length})`));
     const list=document.createElement('ul');for(const c of rest)list.append(node('li',`${states[c.state]} · ${c.title} · ${c.observed}`));
     item.append(list);children.push(item);
   }

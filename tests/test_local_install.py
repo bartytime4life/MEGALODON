@@ -142,6 +142,25 @@ def release_factory(paths, ids):
     return create
 
 
+def test_forty_retained_releases_round_trip_and_next_update_is_refused(layout, source, monkeypatch):
+    identifiers = [f"1.0-20261024T1700{i:02d}Z-a{i:07x}" for i in range(41)]
+    monkeypatch.setattr(local_install, "_create_release", release_factory(layout, iter(identifiers)))
+    monkeypatch.setattr(install_lifecycle, "retire_releases", lambda paths, manifest: manifest)
+    for _ in range(40):
+        local_install.install(source, layout)
+    assert len(local_install._load_manifest(layout)['releases']) == 40
+    before = layout.manifest.read_bytes()
+    with pytest.raises(local_install.InstallError, match="Retained-release limit"):
+        local_install.install(source, layout)
+    assert layout.manifest.read_bytes() == before
+    assert len(list(layout.releases.iterdir())) == 40
+    invalid = json.loads(before)
+    invalid['releases'].append(dict(id=identifiers[-1], version=__version__, installed_at='2026-10-24T17:00:00Z'))
+    layout.manifest.write_text(json.dumps(invalid))
+    with pytest.raises(local_install.InstallError, match="invalid release list"):
+        local_install._load_manifest(layout)
+
+
 def test_paths_require_absolute_xdg_values(tmp_path):
     with pytest.raises(local_install.InstallError, match="XDG_DATA_HOME"):
         local_install.install_paths({"HOME": str(tmp_path), "XDG_DATA_HOME": "relative"})

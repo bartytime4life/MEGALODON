@@ -751,7 +751,7 @@ const workspaceTargets = {
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'action-plane-title': 'setup', 'app-service-start-title': 'setup', 'app-viewer-title': 'setup', 'analysis-window-title': 'analysis',
   ...Object.fromEntries(['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'].map(id=>['setup-app-'+id,'setup'])),
-  'support-host-security':'setup',
+  'support-host-security':'setup', 'support-config-clamav-title':'setup',
   ...Object.fromEntries(['zeek','suricata-setup','clamav-save','osquery','qwen-setup','nmap-save'].map(id=>['support-config-'+id,'setup'])),
   'help-language': 'help', 'status-glossary': 'help'
 };

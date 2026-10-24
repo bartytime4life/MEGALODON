@@ -63,20 +63,20 @@ function renderGateway(panel, payload) {
   if(!payload.findings.length)children.push(node('p','No review items.'));
   const labels={GATEWAY_MAC_CHANGED:'Gateway MAC address changed',GATEWAY_MAC_SHARED:'Gateway MAC address shared',GATEWAY_CHANGED:'Default gateway changed',SHARED_MAC:'Shared MAC address'};
   for(const f of payload.findings){
-    const item=document.createElement('details');item.dataset.rule=f.rule;
+    const item=document.createElement('details');item.dataset.rule=f.rule;item.dataset.refreshKey=JSON.stringify([f.rule,f.detail]);
     item.append(node('summary',`${f.level==='review'?'Review':'Note'} · ${labels[f.rule]}`));
     const facts=document.createElement('dl');
     for(const [label,value] of [['Detail',f.detail],['ATT&CK technique',f.attack]])facts.append(node('dt',label),node('dd',value));
     item.append(facts);children.push(item);
   }
   if(payload.shared.length){
-    const item=document.createElement('details');item.append(node('summary',`Shared MAC addresses (${payload.shared_total})`));
+    const item=document.createElement('details');item.dataset.refreshKey='shared';item.append(node('summary',`Shared MAC addresses (${payload.shared_total})`));
     const list=document.createElement('ul');
     for(const s of payload.shared)list.append(node('li',`${s.mac} on ${s.interface} · ${s.addresses.join(', ')}${s.count>s.addresses.length?` and ${s.count-s.addresses.length} more`:''}`));
     item.append(list);children.push(item);
   }
   if(payload.gaps.length){
-    const item=document.createElement('details');item.append(node('summary',`Coverage gaps (${payload.gaps.length})`));
+    const item=document.createElement('details');item.dataset.refreshKey='gaps';item.append(node('summary',`Coverage gaps (${payload.gaps.length})`));
     const list=document.createElement('ul');for(const gap of payload.gaps)list.append(node('li',gap));
     item.append(list);children.push(item);
   }

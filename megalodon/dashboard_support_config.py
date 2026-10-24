@@ -5,6 +5,7 @@ from .dashboard_persistence import PERSISTENCE_HTML, PERSISTENCE_CSS, PERSISTENC
 from .dashboard_gateway import GATEWAY_HTML, GATEWAY_CSS, GATEWAY_JS
 from .dashboard_process_network import PROCESS_NETWORK_HTML, PROCESS_NETWORK_CSS, PROCESS_NETWORK_JS
 from .dashboard_recovery_readiness import RECOVERY_READINESS_HTML, RECOVERY_READINESS_CSS, RECOVERY_READINESS_JS
+from .dashboard_refresh import REFRESH_JS
 
 SUPPORT_CONFIG_HTML = r'''
 <section class="support-config" id="support-config" aria-labelledby="support-config-title" hidden>
@@ -24,7 +25,7 @@ SUPPORT_CONFIG_HTML = r'''
   </section>
   <details class="support-collector-settings"><summary>Inventory and file-scan settings</summary><div class="support-tool-settings">
     <section aria-labelledby="support-config-nmap-title"><h5 id="support-config-nmap-title">Nmap</h5><p>Choose a private IPv4 address or network you manage, up to 256 addresses.</p><label for="support-config-nmap-target">Inventory target</label><input id="support-config-nmap-target" type="text" value="127.0.0.1/32" maxlength="18" spellcheck="false" disabled aria-describedby="support-nmap-help"><p id="support-nmap-help" class="support-config-note">Use /24–/32, such as 192.168.1.0/24. A single address uses /32.</p><button type="button" id="support-config-nmap-save" disabled>Save and collect inventory</button></section>
-    <section aria-labelledby="support-config-clamav-title"><h5 id="support-config-clamav-title">ClamAV</h5><p>Scan a folder in your home directory and update the HUD result.</p><label for="support-config-scan-folder">Folder to scan</label><select id="support-config-scan-folder" disabled><option value="Downloads">Downloads</option><option value="Documents">Documents</option></select><div class="support-config-actions"><button type="button" id="support-config-clamav-save" disabled>Save and scan folder</button><button type="button" id="support-config-signatures" disabled>Update virus signatures</button></div><p class="support-config-note">The installed signature updater may request operating-system authorization.</p></section>
+    <section aria-labelledby="support-config-clamav-title"><h5 id="support-config-clamav-title" tabindex="-1">ClamAV</h5><p>Scan a folder in your home directory and update the HUD result.</p><label for="support-config-scan-folder">Folder to scan</label><select id="support-config-scan-folder" disabled><option value="Downloads">Downloads</option><option value="Documents">Documents</option></select><div class="support-config-actions"><button type="button" id="support-config-clamav-save" disabled>Save and scan folder</button><button type="button" id="support-config-signatures" disabled>Update virus signatures</button></div><p class="support-config-note">The installed signature updater may request operating-system authorization.</p></section>
     <section aria-labelledby="support-config-osquery-title"><h5 id="support-config-osquery-title">osquery</h5><p>Enable the fixed package inventory and send its count to the HUD.</p><button type="button" id="support-config-osquery" disabled>Enable package inventory</button></section>
   </div></details>
   <details class="support-service-settings"><summary>Local AI and background sensors</summary><div class="support-tool-settings">
@@ -95,7 +96,13 @@ SUPPORT_CONFIG_CSS = HOST_FINDINGS_CSS + RECOVERY_READINESS_CSS + HARDENING_CSS 
 @media(max-width:640px) { .support-capture-steps,.support-capture-destinations { grid-template-columns:1fr; gap:1rem; } .support-capture { padding:.9rem; } .support-config-actions button { flex:1 1 12rem; } .support-config select,.support-config input { max-width:none; } .support-config-results li { grid-template-columns:minmax(0,1fr) auto; } }
 '''
 
-SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PERSISTENCE_JS + GATEWAY_JS + PROCESS_NETWORK_JS + r'''
+SUPPORT_CONFIG_JS = REFRESH_JS + HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PERSISTENCE_JS + GATEWAY_JS + PROCESS_NETWORK_JS + r'''
+renderHostFindings = stableReview(renderHostFindings);
+renderRecoveryReadiness = stableReview(renderRecoveryReadiness);
+renderHardening = stableReview(renderHardening);
+renderPersistence = stableReview(renderPersistence);
+renderGateway = stableReview(renderGateway);
+renderProcessNetwork = stableReview(renderProcessNetwork);
 (() => {
   const el=id=>document.getElementById(id);
   if(typeof localHudLaunch==='undefined' || !el('support-config') || !el('support-apps-configure'))return;
@@ -149,7 +156,8 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
   const viewVisible=()=>workspaceVisible()&&(setupVisible()||typeof IntersectionObserver==='undefined'||state.globeVisible||(state.open&&state.configVisible));
   function feedback(message,kind='ready'){if(state.liveAction && el('live-action-status'))el('live-action-status').textContent=message;el('support-config-status').textContent=message;el('support-config').dataset.state=kind;}
   function controls(){
-    const blocked=state.pending || !state.valid || !workspaceVisible();
+    const changing=state.pending && (!state.readDone || !state.hydrated);
+    const blocked=changing || !state.valid || !workspaceVisible();
     for(const [id,action] of Object.entries(actions)){
       if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
@@ -160,7 +168,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     el('support-model-adopt').disabled=blocked||!!working();
     for(const id of inputIds)el(id).disabled=blocked||!!working();
     el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
-    el('support-config').setAttribute('aria-busy',state.pending?'true':'false');
+    el('support-config').setAttribute('aria-busy',changing?'true':'false');
   }
   function render(v){
     const h=v.host_security;
@@ -183,9 +191,12 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     }
 
     if(v.model){
-      const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')?select.value:model.model;
+      const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')||document.activeElement===select?select.value:model.model;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});
-      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';select.replaceChildren(placeholder,...options);select.value=model.options.some(row=>row.name===chosen)?chosen:'';
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';
+      const key=JSON.stringify([placeholder.textContent,model.options.map(row=>[row.name,row.size_bytes])]);
+      if(select.dataset.optionsKey!==key){select.replaceChildren(placeholder,...options);select.dataset.optionsKey=key;}
+      const choice=model.options.some(row=>row.name===chosen)?chosen:'';if(select.value!==choice)select.value=choice;
       if(!state.dirty.has('timeout_seconds'))el('support-model-timeout').value=String(model.timeout_seconds||300);
       if(!state.dirty.has('compute_mode'))el('support-model-compute').value=model.compute_mode;
       el('support-model-status').textContent=model.message+(model.truncated?' First 64 installed artifacts shown.':'');
@@ -197,10 +208,12 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
       if(model.loaded===false)metrics.push('Selected model is unloaded');else if(model.loaded===true&&model.memory_bytes!==null&&model.vram_bytes!==null)metrics.push('Loaded allocation '+(model.memory_bytes/1024**3).toFixed(1)+' GiB · GPU '+(model.vram_bytes/1024**3).toFixed(1)+' GiB');
       if(model.updated_at)metrics.push('Availability checked '+time(model.updated_at));el('support-model-metrics').textContent=metrics.join(' · ');
     }
-    const selected=state.dirty.has('interface') ? el('support-config-interface').value : (v.settings.interface || (v.interfaces.find(i=>i.default&&i.up)||v.interfaces.find(i=>i.up)||{}).name || '');
+    const selected=state.dirty.has('interface')||document.activeElement===el('support-config-interface') ? el('support-config-interface').value : (v.settings.interface || (v.interfaces.find(i=>i.default&&i.up)||v.interfaces.find(i=>i.up)||{}).name || '');
     const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=v.interfaces.length?'Select an interface':'No interfaces returned';
     const options=v.interfaces.map(i=>{const option=document.createElement('option');option.value=i.name;option.textContent=`${i.name}${i.default?' · default':''}${i.up?'':' · down'}`;return option;});
-    el('support-config-interface').replaceChildren(placeholder,...options);el('support-config-interface').value=v.interfaces.some(i=>i.name===selected)?selected:'';
+    const interfaceSelect=el('support-config-interface'),interfaceKey=JSON.stringify(v.interfaces);
+    if(interfaceSelect.dataset.optionsKey!==interfaceKey){interfaceSelect.replaceChildren(placeholder,...options);interfaceSelect.dataset.optionsKey=interfaceKey;}
+    const interfaceChoice=v.interfaces.some(i=>i.name===selected)?selected:'';if(interfaceSelect.value!==interfaceChoice)interfaceSelect.value=interfaceChoice;
     if(!state.dirty.has('nmap_target'))el('support-config-nmap-target').value=v.settings.nmap_target;
     if(!state.dirty.has('scan_folder'))el('support-config-scan-folder').value=v.settings.scan_folder;
     if(!state.dirty.has('tool_directory'))el('support-config-tool-directory').value=v.tool_directories[el('support-config-tool-id').value]||'';
@@ -244,7 +257,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
   }
   function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='tool_directory_set')state.dirty.delete('tool_directory');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
   function fail(error){renderRecoveryReadiness(el('recovery-readiness'),null);renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);renderPersistence(el('persistence-review'),null);renderGateway(el('gateway-review'),null);renderProcessNetwork(el('process-network-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
-  async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;controls();schedule();}}
+  async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();let finished;state.readDone=new Promise(resolve=>{finished=resolve;});state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;state.readDone=null;controls();schedule();finished();}}
   function payloadFor(action){
     const value={action};
     if(interfaceActions.includes(action)){value.interface=el('support-config-interface').value;if(!state.payload.interfaces.some(i=>i.name===value.interface))throw Error('Select an available capture interface.');}
@@ -263,6 +276,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     return value;
   }
   async function act(action){
+    if(state.readDone)await state.readDone;
     const button=Object.entries(actions).find(([,value])=>value===action);
     if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible())return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
@@ -280,6 +294,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     el('support-model-select').value=model.model;state.dirty.delete('model');controls();act('model_select');
   });
   for(const [id,key] of [['support-model-timeout','timeout_seconds'],['support-model-select','model'],['support-model-compute','compute_mode'],['support-config-interface','interface'],['support-config-nmap-target','nmap_target'],['support-config-scan-folder','scan_folder']])el(id).addEventListener('change',()=>{state.dirty.add(key);controls();});
+  el('support-model-timeout').addEventListener('input',()=>{state.dirty.add('timeout_seconds');controls();});
   el('support-config-nmap-target').addEventListener('input',()=>state.dirty.add('nmap_target'));
   el('support-config-tool-id').addEventListener('change',()=>{state.dirty.delete('tool_directory');el('support-config-tool-directory').value=state.payload?.tool_directories?.[el('support-config-tool-id').value]||'';controls();});
   for(const event of ['input','change'])el('support-config-tool-directory').addEventListener(event,()=>state.dirty.add('tool_directory'));

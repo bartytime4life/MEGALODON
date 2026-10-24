@@ -10,6 +10,25 @@ from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_JS, DASHBOARD_CSS
 from megalodon.dashboard_operations import OPERATIONS_JS, OPERATIONS_CSS
 
 
+def test_common_setup_shortcuts_use_existing_gui_controls():
+    from megalodon.dashboard_operations import SETUP_SHORTCUTS_HTML
+    class Parse(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.ids = {}; self.targets = []
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if attrs.get('id'): self.ids[attrs['id']] = attrs
+            if tag == 'a' and 'href' in attrs: self.targets.append(attrs['href'])
+    page, shortcuts = Parse(), Parse()
+    page.feed(INDEX_HTML); shortcuts.feed(SETUP_SHORTCUTS_HTML)
+    assert len(shortcuts.targets) == 6
+    assert INDEX_HTML.index(SETUP_SHORTCUTS_HTML) < INDEX_HTML.index('id="apps-connections"')
+    for target in shortcuts.targets:
+        assert target.startswith('#') and target[1:] in page.ids
+    assert page.ids['support-model-title']['tabindex'] == '-1'
+    assert page.ids['support-config-clamav-title']['tabindex'] == '-1'
+
+
 def operations_fixture():
     stamp='2026-09-30T23:00:00Z'
     anchor=dict(latitude=38.5,longitude=-97.5,label='Synthetic internet exit',source='Synthetic offline fixture',country='US',approximate=True,accuracy_radius_km=None)
