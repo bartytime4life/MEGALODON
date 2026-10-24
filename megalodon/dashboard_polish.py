@@ -467,7 +467,7 @@ function renderAppStatusRail() {
     ['reports-time', 'Quick', [['07:00', '7:00'], ['09:00', '9:00'], ['12:00', '12:00'], ['18:00', '18:00']]],
     ['action-schedule-zone', 'Quick', [[zone, 'This PC’s time zone'], ['UTC', 'UTC']]],
     ['ki-search', 'Try', [['prompt injection', 'Prompt injection'], ['ransomware', 'Ransomware'], ['phishing', 'Phishing'], ['port scan', 'Port scan'], ['DNS tunneling', 'DNS tunneling']]],
-    ['setup-port', 'Quick', [[8788, '8788'], [8789, '8789'], [8790, '8790']]]
+    ['setup-port', 'Quick', [[8798, '8798'], [8799, '8799'], [8801, '8801']]]
   ].forEach(([id, title, values, submit]) => { try { presets(id, title, values, submit); } catch (_) { /* leave the input as typed-only */ } });
 
 })();

@@ -86,7 +86,7 @@ To open a separate HUD with companion collection disabled, run this from any
 directory, choosing an unused port:
 
 ```bash
-~/.local/bin/megalodon-hud --port 8788 --no-auto-companions
+~/.local/bin/megalodon-hud --port 8798 --no-auto-companions
 ```
 
 For a different data source, add `--config /absolute/private/settings.toml`.
@@ -386,7 +386,7 @@ not connect this PC, and this launcher does not publish site changes.
 | Installation needs repair | Run `~/.local/bin/megalodon-manage status`, then `repair`. Modified artifacts are refused so they can be reviewed instead of overwritten. |
 | MEGALODON is missing from the application menu | Run `status`; if ready, sign out/in or refresh the desktop application cache. The stable `~/.local/bin/megalodon-hud` launcher remains available. |
 | Capture permission required | On this computer, open **Setup → Configure local tools → Configure capture access** and complete the operating-system administrator prompt, then retry capture. Reading the message does not grant permissions. Other capture or storage failures keep their separate diagnostics. |
-| Address already in use | Requested settings were not applied. Choose an unused port with `--port 8788` (or another free port) on your installed or source launcher, then open its printed URL. Existing sessions keep their settings; only a foreground HUD can be stopped with Ctrl+C in its launch terminal. |
+| Address already in use | Another program or HUD holds that port, and the requested settings were not applied. Choose an unused port once with `--port 8798` (or another free port) on your installed or source launcher, or for every launch by setting `port` under `[dashboard]` in `settings.toml`, then open the printed URL. Existing sessions keep their settings; only a foreground HUD can be stopped with Ctrl+C in its launch terminal. |
 | `DASHBOARD_STORE:UNSAFE_ANCESTOR` | Check ownership and write permissions of the path's ancestors. In a remapped development sandbox, run from a normal local terminal. Keep the ownership checks enabled. |
 | `UNSAFE_DIRECTORY` or `UNSAFE_DATABASE` | Inspect the chosen path. The database's leaf directory must be owner-private (0700), and the database must be an owner-owned, single-link regular file (0600). Do not recursively change permissions or relocate live data as a shortcut. |
 | `SCHEMA_MISMATCH` | Preserve the database and review the explicit migration/recovery workflow in the README. Startup never migrates it. |
