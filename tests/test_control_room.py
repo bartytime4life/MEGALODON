@@ -80,7 +80,7 @@ def test_startup_controls_belong_to_home_outside_audit_history():
     for element_id, parents in parser.owners.items():
         if not element_id.startswith('setup-'):
             continue
-        workspaces = [attrs['id'] for _, attrs in parents if attrs.get('role') == 'tabpanel']
+        workspaces = [attrs['id'] for _, attrs in parents if attrs.get('role') == 'tabpanel' and attrs.get('id', '').startswith('workspace-')]
         assert workspaces == ['workspace-setup']
         assert not any('room-audit-history' in attrs.get('class', '').split() for _, attrs in parents)
     assert not any(tag == 'details' for tag, _ in parser.owners['setup-title'])

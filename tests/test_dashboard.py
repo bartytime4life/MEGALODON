@@ -425,7 +425,10 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "row.append(timeNode(event.detected_at))" not in DASHBOARD_JS
     assert "const timeCell = document.createElement('td');" in DASHBOARD_JS
     assert "timeCell.append(timeNode(event.detected_at));" in DASHBOARD_JS
-    assert "setInterval" not in DASHBOARD_JS
+    from megalodon.dashboard_findings import CAUTION_JS
+    # The open confirmation checks its local expiry; data polling stays serial.
+    assert "setInterval" not in DASHBOARD_JS.replace(CAUTION_JS, "")
+    assert "fetch(" not in CAUTION_JS
     assert "innerHTML" not in DASHBOARD_JS
     # Browser persistence is restricted to explicit companion-console bookmarks.
     from megalodon.dashboard_tool_assets import CONTROLS_JS
@@ -465,8 +468,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     # only the Start click sends this fixed action and separate action nonce.
     # The AI panel's Cancel posts an empty body that only frees the operator's
     # own inference slot.
-    assert DASHBOARD_JS.count("method: 'POST'") == 3
-    assert "heartbeatFetch('/api/install', {method: 'POST'" in DASHBOARD_JS
+    assert DASHBOARD_JS.count("method: 'POST'") == 2
+    assert re.search(r"heartbeatFetch\('/api/install', \{method:\s*'POST'", DASHBOARD_JS)
     assert "fetch('/api/offline-locations', {method: 'POST'" in DASHBOARD_JS
     assert "fetch('/api/ai/cancel', {method: 'POST', body: '{}'" in DASHBOARD_JS
     assert SUPPORT_APPS_JS.count("request('POST')") == 1

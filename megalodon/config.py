@@ -40,6 +40,7 @@ class DashboardSettings:
     port: int = 8797
     refresh_seconds: int = 5
     event_limit: int = 50
+    tool_management: bool = False
 
 
 def valid_model_name(value):
@@ -58,6 +59,7 @@ class AISettings:
     timeout_seconds: int = 300
     max_context: int = 2048
     compute_mode: str = "cpu"
+    keep_warm: bool = False
 
 
 DEFAULT_MAX_DATABASE_BYTES = 256 * 1024 * 1024
@@ -155,7 +157,7 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
     dashboard = _table(raw.get("dashboard", {}), "dashboard")
     storage = _table(raw.get("storage", {}), "storage")
     ai = _table(raw.get("ai", {}), "ai")
-    if set(ai) - {"enabled", "provider", "endpoint", "model", "model_digest", "timeout_seconds", "max_context", "compute_mode"}:
+    if set(ai) - {"enabled", "provider", "endpoint", "model", "model_digest", "timeout_seconds", "max_context", "compute_mode", "keep_warm"}:
         raise ValidationError("ai contains unsupported settings")
     if ai.get("provider", "ollama") != "ollama" or ai.get("endpoint", "http://127.0.0.1:11434") != "http://127.0.0.1:11434":
         raise ValidationError("ai provider must be Ollama at literal loopback")
@@ -299,11 +301,13 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
                 dashboard.get("refresh_seconds", 5), "dashboard.refresh_seconds", 2, 300
             ),
             event_limit=_bounded_integer(dashboard.get("event_limit", 50), "dashboard.event_limit", 1, 200),
+            tool_management=_boolean(dashboard.get("tool_management", False), "dashboard.tool_management"),
         ),
         ai=AISettings(
             enabled=_boolean(ai.get("enabled", False), "ai.enabled"),
             model=model, model_digest=digest, compute_mode=ai.get("compute_mode", "cpu"),
             timeout_seconds=_bounded_integer(ai.get("timeout_seconds", 300), "ai.timeout_seconds", 1, 1800),
             max_context=_bounded_integer(ai.get("max_context", 2048), "ai.max_context", 256, 4096),
+            keep_warm=_boolean(ai.get("keep_warm", False), "ai.keep_warm"),
         ),
     )

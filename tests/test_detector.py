@@ -76,7 +76,8 @@ class DetectorTests(unittest.TestCase):
         spellings = ("203.0.113.5", "::ffff:203.0.113.5")
         results = [detector.analyze(event(n, src_ip=spellings[n % 2])) for n in range(4)]
         self.assertEqual([len(r) for r in results], [0, 0, 0, 1])
-        self.assertEqual(results[3][0].src_ip, "::ffff:203.0.113.5", "the observed spelling is reported")
+        self.assertEqual(results[3][0].src_ip, str(ipaddress.ip_address(spellings[1])),
+                         "the runtime's canonical observed spelling is reported")
         # The shared cooldown also holds across spellings.
         self.assertEqual(detector.analyze(event(4, src_ip="203.0.113.5")), [])
         # And the shared watermark refuses a reordered record in either spelling.

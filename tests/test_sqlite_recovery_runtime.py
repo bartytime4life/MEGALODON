@@ -446,6 +446,7 @@ def test_non_private_source_and_unsafe_destination_ancestry_fail_closed(
     source.chmod(0o600)
     unsafe = private_directory / "unsafe"
     unsafe.mkdir(mode=0o755)
+    unsafe.chmod(0o755)  # Keep this negative fixture public under a private umask.
     receipt = backup_database(
         source,
         unsafe / "backup.db",

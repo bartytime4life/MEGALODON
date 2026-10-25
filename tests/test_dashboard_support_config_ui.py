@@ -32,7 +32,7 @@ def test_support_config_behavior(script):
 
 
 def test_support_config_composition():
-    assert 'id="support-config" aria-labelledby="support-config-title">' in INDEX_HTML
+    assert 'id="support-config" class="support-config settings-console" aria-labelledby="setup-title">' in INDEX_HTML
     assert SUPPORT_CONFIG_CSS in DASHBOARD_CSS
     assert SUPPORT_CONFIG_JS in DASHBOARD_JS
     assert INDEX_HTML.index('id="support-apps-configure"') < INDEX_HTML.index('id="pc-live-title"')

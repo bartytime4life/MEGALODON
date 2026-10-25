@@ -25,6 +25,9 @@ from .dashboard_snapshot import TELEMETRY_CONNECTIONS_JS
 from .dashboard_globe import GLOBE_HTML, GLOBE_CSS, GLOBE_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
+from .dashboard_settings import compose_settings, SETTINGS_CSS, SETTINGS_JS
+from .dashboard_visual_controls import VISUAL_CONTROLS_CSS, VISUAL_CONTROLS_JS
+from .dashboard_findings import compose_findings, FINDINGS_CSS, FINDINGS_JS, CAUTION_JS
 from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS
 from .dashboard_action_plane import ACTION_CSS, ACTION_JS
 from .status_glossary import GLOSSARY_ANCHOR_ID
@@ -840,9 +843,11 @@ function navigateWorkspace(workspace, moveFocus = false) {
 function workspaceFromHash(value) {
   if (typeof value !== 'string' || value.length > 128 || (value && !value.startsWith('#'))) return null;
   const target = value.startsWith('#') ? value.slice(1) : '';
-  return Object.prototype.hasOwnProperty.call(workspaceTargets, target) ? workspaceTargets[target] : null;
+  if (Object.prototype.hasOwnProperty.call(workspaceTargets, target)) return workspaceTargets[target];
+  return byId(target)?.closest?.('#workspace-setup') ? 'setup' : null;
 }
 function revealTargetDisclosure(target) {
+  window.megalodonSettings?.reveal(target);
   for (let parent = target; parent; parent = parent.parentElement) {
     if (parent.tagName === 'DETAILS') parent.open = true;
   }
@@ -2207,7 +2212,8 @@ INDEX_HTML = compose_operations(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<section class="storage-panel" id="storage-setup"', APPS_SETUP_HTML + '<section class="storage-panel" id="storage-setup"', 1)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
 INDEX_HTML = compose_polish(compose_intelligence(INDEX_HTML))
-DASHBOARD_CSS += MAP_CSS + KNOWLEDGE_CSS + POLISH_CSS
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + "\nbootstrap();\n"
+INDEX_HTML = compose_findings(compose_settings(INDEX_HTML))
+DASHBOARD_CSS += SETTINGS_CSS + MAP_CSS + KNOWLEDGE_CSS + POLISH_CSS + FINDINGS_CSS + VISUAL_CONTROLS_CSS
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + SETTINGS_JS + VISUAL_CONTROLS_JS + CAUTION_JS + FINDINGS_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))

@@ -1,40 +1,38 @@
-"""Evidence inspection is a passive view of the existing bounded projection."""
-import json
-from pathlib import Path
-import shutil
-import subprocess
+"""Composed Findings ownership and retained passive compatibility boundaries.
 
-import pytest
-
-from finding_evidence_fixture import finding_evidence_fixture
+The old finding_evidence_browser.cjs address-case harness is historical. Its
+room-case and threshold expectations were absent in baseline26f0d09 and the new
+source-bound feed owns active Findings. New interaction/escaping/unknown-gap and
+fixed response assertions live in test_dashboard_findings_ui.py.
+"""
+import re
 from megalodon.control_room_assets import ROOM_JS
 from megalodon.dashboard_assets import INDEX_HTML
-from megalodon.dashboard_traffic import unavailable
+from megalodon.dashboard_findings import FINDINGS_JS
 
 
-def test_qualified_finding_inspector_behavior():
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("Node required for inspector browser logic")
-    result = subprocess.run([node, str(Path(__file__).with_name("finding_evidence_browser.cjs"))],
-        input=json.dumps(dict(code=ROOM_JS, payload=finding_evidence_fixture(), empty=unavailable())),
-        text=True, capture_output=True, timeout=15, check=False)
-    assert result.returncode == 0, result.stderr
+def test_authoritative_findings_does_not_compete_with_legacy_evidence_renderer():
+    assert 'id="findings-workbench" data-findings-owned="true"' in INDEX_HTML
+    assert "getAttribute?.('data-findings-owned')==='true')return" in ROOM_JS
+    assert '<div class="fw-legacy" inert>' in INDEX_HTML
+    assert 'id="fw-facts"' in INDEX_HTML and 'id="fw-refs"' in INDEX_HTML
+    assert 'id="fw-gaps"' in INDEX_HTML and 'id="fw-context"' in INDEX_HTML
+    assert 'Recorded severity basis: ' in FINDINGS_JS
+    assert 'Unknown / not recorded' in FINDINGS_JS
+    assert 'textContent' in FINDINGS_JS and 'innerHTML' not in FINDINGS_JS
 
 
-def test_inspector_has_explicit_limits_and_fixed_followups():
-    start = INDEX_HTML.index('<section class="finding-evidence"')
-    end = INDEX_HTML.index('</section>', start)
-    panel = INDEX_HTML[start:end]
+def test_compatibility_evidence_limits_and_fixed_followups_remain_passive():
+    start=INDEX_HTML.index('<section class="finding-evidence"')
+    panel=INDEX_HTML[start:INDEX_HTML.index('</section>',start)]
     assert 'id="room-evidence-content" hidden' in panel
     assert 'id="room-evidence-status" role="status"' in panel
     assert 'Detector evaluation window' in panel
-    assert 'Threshold at detection' in panel
-    assert 'id="room-evidence-window"' in panel
+    assert 'missing values are not reconstructed' in panel
     assert 'Current software settings cannot establish historical detector behavior.' in panel
     assert 'its running or completed state does not prove a process is active' in panel
     assert 'not the complete evidence evaluated by the detector' in panel
-    assert 'href="#ingestion-runs-title"' in panel
-    assert 'href="#storage-evidence-title"' in panel
-    assert 'href="#room-reports-title"' in panel
+    for target in re.findall(r'href="([^"]+)"',panel):
+        assert target.startswith('#') and f'id="{target[1:]}"' in INDEX_HTML
     assert 'href="http' not in panel
+    assert 'This view does not supply action receipts or authorize a response.' in panel

@@ -63,6 +63,7 @@ ACTION_FIELDS = {
     'background_start': {'interface'}, 'background_stop': set(),
     'geography_refresh': set(), 'geography_disable': set(),
     'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
+    'model_policy': {'keep_ready'}, 'model_load': set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
 TOOL_NAMES = {'security':'Host security and threat context', 'persistence':'Persistence review', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
@@ -163,6 +164,8 @@ def validate_action(value):
         raise ValueError('Unexpected configuration fields.')
     if 'timeout_seconds' in value and (type(value['timeout_seconds']) is not int or not 1<=value['timeout_seconds']<=1800):
         raise ValueError('Choose an AI response limit from 1 to 1800 seconds.')
+    if action=='model_policy' and type(value['keep_ready']) is not bool:
+        raise ValueError('Choose whether to keep the selected model ready.')
     if 'interface' in value:
         valid_interface(value['interface'])
     if 'nmap_target' in value:
@@ -224,9 +227,27 @@ class SupportConfiguration:
             self._load()
         except (OSError, ValueError, TypeError, RecursionError):
             self._job.update(state='failed', message='Saved setup could not be validated. Review the private support configuration file.')
+        self._model_keep_ready = True
+        policy = self.home / '.config/megalodon/model-ready.json'
+        if os.path.lexists(policy):
+            try:
+                from .ai_provider import _strict_pairs
+                value = json.loads(_regular_owned_file(policy,maximum=256),object_pairs_hook=_strict_pairs)
+                if (type(value) is not dict or set(value)!={'schema','enabled'}
+                        or value['schema']!='megalodon-model-ready-v1' or type(value['enabled']) is not bool):
+                    raise ValueError('Invalid model readiness preference')
+                self._model_keep_ready = value['enabled']
+            except (OSError,ValueError,TypeError,RecursionError):
+                self._model_keep_ready = False
+                self._tool('qwen','needs_setup','Saved model readiness preference is unsafe; review it in Setup.')
+        self.settings = replace(self.settings,ai=replace(self.settings.ai,keep_warm=self._model_keep_ready))
         self._load_qwen()
+        if self.companions:
+            self.companions.ai=self.settings.ai
         from .model_telemetry import ModelTelemetry
         self.model_telemetry=ModelTelemetry(lambda:self.settings.ai)
+        from .model_lifecycle import ModelLifecycle
+        self.model_lifecycle=ModelLifecycle(lambda:self.settings.ai,on_change=self.model_telemetry.invalidate)
 
     def _load_qwen(self):
         from .config import AISettings, valid_model_name
@@ -245,7 +266,7 @@ class SupportConfiguration:
             if (not (legacy or selected) or not valid_model_name(value.get('model')) or type(value.get('model_digest')) is not str
                     or not re.fullmatch(r'[a-f0-9]{64}',value['model_digest'])):
                 raise ValueError('Unrecognized local model profile')
-            ai = replace(self.settings.ai,enabled=True,**{k:v for k,v in value.items() if k!='schema'})
+            ai = replace(self.settings.ai,enabled=True,keep_warm=self._model_keep_ready,**{k:v for k,v in value.items() if k!='schema'})
             self.settings = replace(self.settings,ai=ai)
             if self.companions:
                 self.companions.ai = ai
@@ -406,6 +427,8 @@ class SupportConfiguration:
                          backup_evidence=backups,
                          hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
+            value['model']['keep_ready'] = self._model_keep_ready
+            value['model']['lifecycle'] = self.model_lifecycle.snapshot()
             if include_token:
                 value['token'] = self.token
             return value
@@ -586,6 +609,29 @@ class SupportConfiguration:
                 self._execute(['/usr/bin/pkexec','/usr/bin/systemctl','start','clamav-freshclam.service'],90)
                 self._execute(['systemctl','is-active','--quiet','clamav-freshclam.service'])
                 message = 'ClamAV signature updater is active. Signature download completion and database freshness have not been verified.'
+            elif action == 'model_policy':
+                self._paths()
+                path = self.home / '.config/megalodon/model-ready.json'
+                if os.path.lexists(path):
+                    _regular_owned_file(path,maximum=256)
+                value = dict(schema='megalodon-model-ready-v1',enabled=request['keep_ready'])
+                _atomic_write(path,json.dumps(value).encode(),0o600)
+                self._model_keep_ready=request['keep_ready']
+                self.settings=replace(self.settings,ai=replace(self.settings.ai,keep_warm=self._model_keep_ready))
+                if self.companions:
+                    self.companions.ai=self.settings.ai
+                self.model_lifecycle.request()
+                message=('Selected model will load automatically and recover its local connection.' if self._model_keep_ready else
+                         'Selected model loads on demand. An existing memory lease expires within five minutes after its last use.')
+                tool='qwen'
+            elif action == 'model_load':
+                if not self.settings.ai.enabled:
+                    raise ValueError('Choose an installed model first.')
+                if not self._model_keep_ready:
+                    raise ValueError('Enable Keep model ready, or use Verify response to load on demand.')
+                self.model_lifecycle.request()
+                message='Selected-model load requested. Watch its loaded state; no inference response is implied.'
+                tool='qwen'
             elif action == 'qwen_configure':
                 from .config import AISettings, valid_model_name
                 from .ai_provider import status
@@ -622,6 +668,7 @@ class SupportConfiguration:
                 value=dict(schema='megalodon-local-model-v2',model=candidate.model,model_digest=candidate.model_digest,compute_mode=candidate.compute_mode,timeout_seconds=candidate.timeout_seconds)
                 _atomic_write(path,json.dumps(value).encode(),0o600)
                 self._load_qwen();self.model_telemetry.invalidate()
+                self.model_lifecycle.request()
                 result=status(self.settings.ai,probe=True)
                 message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
                     'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
@@ -678,6 +725,7 @@ class SupportConfiguration:
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
 
     def close(self):
+        self.model_lifecycle.close()
         from .ai_provider import cancel_current
         cancel_current()
         if self._thread:self._thread.join(3)
@@ -686,6 +734,7 @@ class SupportConfiguration:
         self.geography.close()
 
     def resume(self):
+        self.model_lifecycle.start()
         if self._background_enabled:
             try:
                 self._paths()

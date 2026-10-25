@@ -1047,7 +1047,8 @@ def _dashboard(args: argparse.Namespace) -> int:
         if first_launch:
             from .process_privileges import drop_inherited_capabilities
             drop_inherited_capabilities()
-        enable_tool_management = getattr(args, "enable_tool_management", False)
+        enable_tool_management = (getattr(args, "enable_tool_management", False)
+                                  or (first_launch and settings.dashboard.tool_management))
         validate_tool_management_mode(enable_tool_management, inspect_tools=first_launch)
         http_password_verifier = None
         if getattr(args, "require_sign_in", False) and args.config is not None and Path(args.config) == install_paths().settings:

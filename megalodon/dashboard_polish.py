@@ -496,41 +496,55 @@ function renderAppStatusRail() {
 
   const make = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
   const fire = node => { node.dispatchEvent(new Event('input', {bubbles: true})); node.dispatchEvent(new Event('change', {bubbles: true})); };
-  const labelFor = node => { const label = node.id && document.querySelector('label[for="' + node.id + '"]'); return (label ? label.textContent : node.closest('label')?.textContent || node.getAttribute('aria-label') || '').trim().slice(0, 80); };
+  const labelFor = node => { const label = node.id && document.querySelector('label[for="' + node.id + '"]') || node.closest('label');if(label){const copy=label.cloneNode(true);copy.querySelectorAll('input,select,button,.polish-chips').forEach(n=>n.remove());return copy.textContent.trim().slice(0,80);}return (node.getAttribute('aria-label')||'').trim().slice(0,80); };
 
   // Reviewed code often sets .value directly without events; keep chips in step with it.
   function watchValue(node, proto, sync) {
     const native = Object.getOwnPropertyDescriptor(proto, 'value');
     try { Object.defineProperty(node, 'value', {configurable: true, get() { return native.get.call(this); }, set(v) { native.set.call(this, v); sync(); }}); } catch (_) { /* chips still follow input and change events */ }
   }
-  // Segmented chips mirror a short <select>; the select stays the source of truth.
+  // Native radios provide one-of-many semantics and browser arrow-key behavior.
+  // The existing select remains authoritative for every application handler.
   function chipSelect(select, maxLabel = 26) {
     if (!select || select.dataset.polished || select.multiple) return;
-    const group = make('div', 'polish-chips'); group.setAttribute('role', 'group');
+    const group = make('div', 'polish-chips polish-radio-group'); group.setAttribute('role', 'radiogroup');
     const name = labelFor(select); if (name) group.setAttribute('aria-label', name);
     select.dataset.polished = 'true';
     select.insertAdjacentElement('afterend', group);
+    let key='';
+    const sync = () => group.querySelectorAll('input[type="radio"]').forEach(radio => {
+      const option=[...select.options].find(option=>option.value===radio.value);
+      radio.checked=radio.value===select.value;
+      radio.disabled=select.disabled||select.readOnly===true||!option||option.disabled;
+      radio.closest('label').classList.toggle('is-selected',radio.checked);
+      radio.closest('label').classList.toggle('is-disabled',radio.disabled);
+    });
     const build = () => {
       const options = [...select.options];
       const usable = options.length >= 2 && options.length <= 8 && options.every(o => o.textContent.trim().length <= maxLabel && o.value !== '');
       select.classList.toggle('polish-native', usable); group.hidden = !usable;
       if (usable) { select.tabIndex = -1; select.setAttribute('aria-hidden', 'true'); }
       else { select.removeAttribute('tabindex'); select.removeAttribute('aria-hidden'); }
-      group.replaceChildren(...(usable ? options.map(option => {
-        const chip = make('button', 'polish-chip', option.textContent.trim()); chip.type = 'button'; chip.dataset.value = option.value;
-        chip.addEventListener('click', () => { if (select.disabled || select.value === option.value) return; select.value = option.value; fire(select); sync(); });
-        return chip;
-      }) : []));
+      const next=JSON.stringify([usable,options.map(option=>[option.value,option.textContent,option.disabled])]);
+      if(next!==key){
+        const focused=group.contains(document.activeElement)?document.activeElement.value:null;key=next;
+        group.replaceChildren(...(usable ? options.map(option => {
+          const label=make('label','polish-chip polish-radio'),radio=make('input');radio.type='radio';radio.name='choice-'+select.id;radio.id=select.id+'-choice-'+option.index;radio.value=option.value;
+          const text=make('span','',option.textContent.trim());
+          radio.addEventListener('change',()=>{if(select.disabled||select.readOnly===true||!radio.checked||select.value===option.value)return;select.value = option.value; fire(select);sync();});
+          label.append(radio,text);return label;
+        }) : []));
+        if(focused!==null){const target=[...group.querySelectorAll('input[type="radio"]')].find(radio=>radio.value===focused&&!radio.disabled);if(target)target.focus({preventScroll:true});else if(!usable&&document.activeElement===document.body)select.focus({preventScroll:true});}
+      }
       sync();
     };
-    const sync = () => group.querySelectorAll('.polish-chip').forEach(chip => {
-      chip.setAttribute('aria-pressed', chip.dataset.value === select.value ? 'true' : 'false');
-      chip.disabled = select.disabled || [...select.options].some(o => o.value === chip.dataset.value && o.disabled);
-    });
     watchValue(select, HTMLSelectElement.prototype, sync);
-    select.addEventListener('change', sync);
+    select.addEventListener('input', sync);select.addEventListener('change', sync);
+    select.form?.addEventListener('reset',()=>queueMicrotask(sync));
+    const label=select.id&&document.querySelector('label[for="'+select.id+'"]');
+    if(label)label.addEventListener('click',event=>{if(group.hidden||group.contains(event.target)||event.target.closest?.('input,select,button'))return;event.preventDefault();const radios=[...group.querySelectorAll('input[type="radio"]')];(radios.find(radio=>radio.checked&&!radio.disabled)||radios.find(radio=>!radio.disabled))?.focus();});
     new MutationObserver(build).observe(select, {childList: true, subtree: true, characterData: true});
-    new MutationObserver(sync).observe(select, {attributes: true, attributeFilter: ['disabled']});
+    new MutationObserver(sync).observe(select, {attributes: true, attributeFilter: ['disabled','readonly']});
     build();
   }
   ['room-range', 'ops-speed-unit', 'live-globe-camera', 'network-view', 'network-page-size', 'filter-severity', 'ingestion-source',
@@ -568,11 +582,7 @@ function renderAppStatusRail() {
   }
   const zone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (_) { return ''; } };
   [
-    ['storage-days', 'Quick', [[7, '7 days'], [14, '14 days'], [30, '30 days']]],
-    ['storage-cap', 'Quick', [[5, '5 GiB'], [20, '20 GiB'], [100, '100 GiB'], [500, '500 GiB']]],
-    ['support-model-timeout', 'Quick', [[60, '1 min'], [300, '5 min'], [900, '15 min']]],
     ['reference-port', 'Look up', [[22, '22 SSH'], [53, '53 DNS'], [80, '80 HTTP'], [443, '443 HTTPS'], [3389, '3389 RDP'], [445, '445 SMB']], true],
-    ['reports-time', 'Quick', [['07:00', '7:00'], ['09:00', '9:00'], ['12:00', '12:00'], ['18:00', '18:00']]],
     ['action-schedule-zone', 'Quick', [[zone, 'This PC’s time zone'], ['UTC', 'UTC']]],
     ['ki-search', 'Try', [['prompt injection', 'Prompt injection'], ['ransomware', 'Ransomware'], ['phishing', 'Phishing'], ['port scan', 'Port scan'], ['DNS tunneling', 'DNS tunneling']]],
     ['setup-port', 'Quick', [[8798, '8798'], [8799, '8799'], [8801, '8801']]]

@@ -475,35 +475,33 @@ APPS_SETUP_HTML = r'''
 APPS_SETUP_JS = r'''
 (() => {
  const root=byId('apps-setup-cards');if(!root||typeof window.addEventListener!=='function')return;
- const names={core:'Python and SQLite',tshark:'Wireshark and TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI via Ollama',nmap:'Nmap',lynis:'Lynis',aide:'AIDE'};
- const settings={tshark:'support-capture-title',scapy:'support-capture-title',zeek:'support-config-zeek',suricata:'support-config-suricata-setup',clamav:'support-config-clamav-save',osquery:'support-config-osquery',qwen:'support-config-qwen-setup',nmap:'support-config-nmap-save',lynis:'support-host-security',aide:'support-host-security'};
+ const names={core:'Python and SQLite',tshark:'Wireshark / TShark',zeek:'Zeek',suricata:'Suricata',scapy:'Scapy',nftables:'nftables',clamav:'ClamAV',osquery:'osquery',qwen:'Local AI / Ollama',nmap:'Nmap',lynis:'Lynis',aide:'AIDE'};
+ const settings={tshark:'support-capture-title',scapy:'support-capture-title',zeek:'support-config-zeek',suricata:'support-config-suricata-setup',clamav:'support-config-clamav-save',osquery:'support-config-osquery',qwen:'support-model-title',nmap:'support-config-nmap-save',lynis:'support-host-security',aide:'support-host-security'};
  const cards=[];
  for(const id of MegalodonControls.ids){
   const card=textNode('details','','apps-setup-card');card.id='setup-app-'+id;
-  const summary=textNode('summary','');summary.append(heartbeatLight(id),textNode('span',names[id]));card.append(summary);
-  const content=textNode('div','','apps-setup-content');
-  const status=textNode('p');status.append(heartbeatLight(id),heartbeatDetail(id));content.append(status,installControl(id,names[id]));
-  if(settings[id]){const configure=textNode('a','Configure for MEGALODON →','companion-button');configure.href='#'+settings[id];content.append(configure);}
-  const options=Object.assign({local:true},typeof appConsole==='undefined'?{}:appConsole);MegalodonControls.mount(content,id,names[id],options);
-  card.append(content);root.append(card);cards.push({id,card,name:(names[id]+' '+id).toLowerCase()});
+  const summary=textNode('summary',''),status=textNode('span','Checking…','app-inline-status');summary.append(heartbeatLight(id),textNode('span',names[id]),status);card.append(summary);
+  const content=textNode('div','','apps-setup-content');content.append(heartbeatDetail(id));
+  const actions=textNode('div','','apps-setup-actions');actions.append(installControl(id,names[id]));
+  if(settings[id]){const configure=textNode('a','Configure','companion-button');configure.href='#'+settings[id];actions.append(configure);}
+  const check=textNode('button','Check','companion-button');check.type='button';check.setAttribute('aria-label','Check '+names[id]);check.addEventListener('click',async()=>{check.disabled=true;try{await pollHeartbeat(true);}finally{check.disabled=false;}});actions.append(check);content.append(actions);
+  const advanced=textNode('details','','settings-app-advanced');advanced.append(textNode('summary','Publisher, terminal and maintenance options'));
+  const options=Object.assign({local:true,compact:true},typeof appConsole==='undefined'?{}:appConsole);MegalodonControls.mount(advanced,id,names[id],options);
+  content.append(advanced);card.append(content);root.append(card);cards.push({id,card,status,name:(names[id]+' '+id).toLowerCase()});
  }
  let status='all';
  const statusGroups={running:['running','ready'],attention:['stopped','attention'],missing:['missing']};
- function statusMatches(id){
-  if(status==='all'||typeof heartbeatState==='undefined'||typeof appRailState!=='function')return true;
-  const state=appRailState(heartbeatState.byId.get(id),typeof heartbeatStale==='function'&&heartbeatStale());
-  return statusGroups[status].includes(state);
- }
- function filter(){const query=byId('apps-setup-query').value.trim().toLowerCase().slice(0,80);let shown=0;for(const item of cards){item.card.hidden=!item.name.includes(query)||!statusMatches(item.id);if(!item.card.hidden)shown++;}byId('apps-setup-status').textContent=shown+' of '+cards.length+' apps'+(status==='all'?'.':' with this status.');}
+ const stateLabels={running:'Running',ready:'Installed',stopped:'Stopped',attention:'Needs attention',missing:'Not installed',unknown:'Not checked'};
+ function current(id){return typeof heartbeatState==='undefined'||typeof appRailState!=='function'?'unknown':appRailState(heartbeatState.byId.get(id),typeof heartbeatStale==='function'&&heartbeatStale());}
+ function filter(){const query=byId('apps-setup-query').value.trim().toLowerCase().slice(0,80);let shown=0;for(const item of cards){const value=current(item.id);item.status.textContent=stateLabels[value]||'Not checked';item.card.hidden=!item.name.includes(query)||(status!=='all'&&!statusGroups[status].includes(value));if(!item.card.hidden)shown++;}byId('apps-setup-status').textContent=shown+' of '+cards.length+' apps'+(status==='all'?'.':' with this status.');}
  const filters=byId('apps-setup-filters');
  if(filters)filters.addEventListener('click',event=>{
   const button=event.target&&typeof event.target.closest==='function'?event.target.closest('[data-apps-filter]'):null;
   if(!button)return;status=button.getAttribute('data-apps-filter');
-  if(typeof filters.querySelectorAll==='function')filters.querySelectorAll('[data-apps-filter]').forEach(node=>node.setAttribute('aria-pressed',node===button?'true':'false'));
-  filter();
+  filters.querySelectorAll('[data-apps-filter]').forEach(node=>node.setAttribute('aria-pressed',String(node===button)));filter();
  });
  window.megalodonAppsRefilter=filter;
- function anchor(){const target=(window.location?.hash||'').slice(1),item=cards.find(item=>'setup-app-'+item.id===target);if(item){byId('apps-setup-query').value='';status='all';if(filters&&typeof filters.querySelectorAll==='function')filters.querySelectorAll('[data-apps-filter]').forEach(node=>node.setAttribute('aria-pressed',node.getAttribute('data-apps-filter')==='all'?'true':'false'));filter();item.card.open=true;item.card.querySelector('summary').focus({preventScroll:true});if(typeof item.card.scrollIntoView==='function')item.card.scrollIntoView({block:'start'});}}
+ function anchor(){const target=(window.location?.hash||'').slice(1),item=cards.find(item=>'setup-app-'+item.id===target);if(item){byId('apps-setup-query').value='';status='all';if(filters)filters.querySelectorAll('[data-apps-filter]').forEach(node=>node.setAttribute('aria-pressed',String(node.getAttribute('data-apps-filter')==='all')));filter();window.megalodonSettings?.reveal(item.card);item.card.open=true;item.card.querySelector('summary').focus({preventScroll:true});item.card.scrollIntoView?.({block:'start'});}}
  byId('apps-setup-query').addEventListener('input',filter);window.addEventListener('hashchange',anchor);filter();anchor();
 })();
 '''

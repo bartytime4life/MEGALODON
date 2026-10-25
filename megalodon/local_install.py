@@ -451,6 +451,7 @@ def _default_settings(paths: InstallPaths) -> bytes:
         "[dashboard]\n"
         'host = "127.0.0.1"\n'
         "port = 8797\n"
+        "tool_management = true\n"
     ).encode("utf-8")
 
 

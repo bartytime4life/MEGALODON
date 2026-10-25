@@ -22,7 +22,9 @@ def test_common_setup_shortcuts_use_existing_gui_controls():
     page, shortcuts = Parse(), Parse()
     page.feed(INDEX_HTML); shortcuts.feed(SETUP_SHORTCUTS_HTML)
     assert len(shortcuts.targets) == 6
-    assert INDEX_HTML.index(SETUP_SHORTCUTS_HTML) < INDEX_HTML.index('id="apps-connections"')
+    assert 'id="setup-category-traffic"' in INDEX_HTML
+    assert 'id="setup-category-ai"' in INDEX_HTML
+    assert 'id="setup-category-apps"' in INDEX_HTML, 'Setup categories replace the old duplicated shortcuts'
     for target in shortcuts.targets:
         assert target.startswith('#') and target[1:] in page.ids
     assert page.ids['support-model-title']['tabindex'] == '-1'
@@ -131,8 +133,10 @@ def test_operations_layout_ownership_and_closed_history():
         assert [a['id'] for _, a in p.owners[key] if a.get('role') == 'tabpanel'] == ['workspace-live']
     for key in ('operations-title','ops-pulse-title','live-globe','ops-endpoints-title','ops-defense-title','support-apps-start'):
         assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-live']
-    for key in ('support-config','setup-title','live-geography-refresh','action-plane-title','app-viewer-title'):
+    for key in ('support-config','setup-title'):
         assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-setup']
+    for key, category in [('live-geography-refresh','traffic'),('action-plane-title','advanced'),('app-viewer-title','advanced')]:
+        assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-setup','setup-category-'+category]
     for key in ('room-traffic-grid','room-findings-visual','room-activity-table','inventory-title','clamav-title'):
         assert any(a.get('id')=='operations-history' and 'open' not in a for _,a in p.owners[key])
     assert 'id="workspace-tab-traffic"' not in INDEX_HTML

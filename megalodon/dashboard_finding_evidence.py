@@ -101,6 +101,7 @@ function roomOpenEvidence(key) {
   byId('room-evidence-title').focus?.();
 }
 function renderRoomFindings(selected,stale,has) {
+    if(byId('findings-workbench')?.getAttribute?.('data-findings-owned')==='true')return;
   const context=roomEvidenceContext();
   if(roomEvidenceState.context!==null&&context!==roomEvidenceState.context)clearRoomEvidence('The reviewed page or time range changed. Select a finding in this view to inspect its evidence.');
   roomEvidenceState.context=context;

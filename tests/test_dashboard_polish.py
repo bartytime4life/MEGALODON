@@ -9,6 +9,7 @@ import pytest
 from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_polish import APP_RAIL_TOOLS, POLISH_CSS, POLISH_JS
 from megalodon.tool_heartbeat import TOOL_IDS
+from megalodon.dashboard_visual_controls import VISUAL_CONTROLS_CSS
 
 
 def test_status_dots_cover_every_heartbeat_tool_and_link_to_setup():
@@ -26,7 +27,7 @@ def test_status_dots_cover_every_heartbeat_tool_and_link_to_setup():
 
 
 def test_polish_layer_is_last_presentation_only_and_motion_safe():
-    assert DASHBOARD_CSS.endswith(POLISH_CSS)
+    assert POLISH_CSS in DASHBOARD_CSS and DASHBOARD_CSS.endswith(VISUAL_CONTROLS_CSS)
     assert POLISH_JS in DASHBOARD_JS and DASHBOARD_JS.index(POLISH_JS) < DASHBOARD_JS.rindex('bootstrap();')
     for forbidden in ('innerHTML', 'fetch(', 'localStorage', 'clipboard', 'XMLHttpRequest', 'eval('):
         assert forbidden not in POLISH_JS
@@ -101,7 +102,7 @@ def test_choice_chips_only_drive_existing_controls():
     # Chips change a control's value and dispatch the events its own handlers already accept.
     assert "select.value = option.value; fire(select)" in POLISH_JS
     assert "input.value = next; fire(input)" in POLISH_JS
-    for control in ('reports-range', 'filter-severity', 'storage-profile', 'storage-days', 'storage-cap', 'reference-port'):
+    for control in ('reports-range', 'filter-severity', 'storage-profile', 'reference-port'):
         assert f"'{control}'" in POLISH_JS and f'id="{control}"' in INDEX_HTML
     assert 'data-apps-filter="all" aria-pressed="true"' in INDEX_HTML
 

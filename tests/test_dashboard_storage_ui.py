@@ -34,7 +34,7 @@ def test_storage_and_expanded_workspace_composition():
     p=Parse();p.feed(INDEX_HTML)
     assert not [k for k,v in Counter(p.ids).items() if v>1]
     for key in ['storage-history-title','storage-profile','storage-preview']:
-        assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-setup']
+        assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-setup','setup-category-storage']
     assert [a['id'] for _,a in p.owners['storage-evidence-title'] if a.get('role')=='tabpanel']==['workspace-analysis']
     for key in ['ops-download','ops-upload','pc-network-chart','ops-storage-coverage']:
         assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-live']

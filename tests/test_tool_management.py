@@ -1,5 +1,6 @@
 """Only an opted-in ordinary Linux operator can invoke fixed HUD actions."""
 from contextlib import contextmanager
+from dataclasses import replace
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
@@ -92,6 +93,29 @@ def test_public_headers_and_invalid_tokens_cannot_start_jobs(endpoint, token):
     assert code == 403 and b"operator authorization required" in body
     assert endpoint[2].calls == []
     assert TOKEN.encode() not in body
+
+
+def test_desktop_session_can_recover_its_launch_nonce_without_terminal_paste(endpoint):
+    endpoint[1].support_config=object()
+    status,body=request(endpoint,path='/api/install/token',method='GET',token=None)
+    assert status==200 and json.loads(body)==dict(schema='megalodon-tool-session-v1',enabled=True,token=TOKEN)
+    assert endpoint[2].calls==[]
+    status,body=request(endpoint,body=b'{"tool":"lynis"}')
+    assert status==202 and endpoint[2].calls==[('lynis','install')]
+    endpoint[1].tool_management_enabled=False
+    status,body=request(endpoint,path='/api/install/token',method='GET',token=None)
+    assert status==200 and json.loads(body)['token'] is None
+
+
+@pytest.mark.parametrize('extra,omit',[
+    ((),('X-Megalodon-Check',)),
+    ((('X-Megalodon-Check','1'),),()),
+    ((('Origin','http://foreign.invalid'),),('Origin',)),
+])
+def test_install_nonce_requires_guarded_local_read(endpoint,extra,omit):
+    endpoint[1].support_config=object()
+    status,body=request(endpoint,path='/api/install/token',method='GET',token=None,extra=extra,omit=omit)
+    assert status==403 and TOKEN.encode() not in body
 
 
 @pytest.mark.parametrize("extra,omit,status", [
@@ -257,6 +281,22 @@ def test_cli_passes_explicit_opt_in_without_changing_default(monkeypatch):
     for tail in ([], ["--enable-tool-management"]):
         assert cli._dashboard(cli.build_parser().parse_args(["hud", *tail])) == 0
     assert [call["enable_tool_management"] for call in calls] == [False, True]
+
+
+def test_saved_desktop_opt_in_survives_hud_restart_without_enabling_dashboard_mode(monkeypatch):
+    calls=[]
+    settings=Settings()
+    settings=replace(settings,dashboard=replace(settings.dashboard,tool_management=True))
+    monkeypatch.setattr(dashboard,'_tool_management_user',lambda:True)
+    monkeypatch.setattr(cli,'_load',lambda _:settings)
+    @contextmanager
+    def reader(*args,**kwargs):
+        yield dashboard.UnconfiguredDashboardReader()
+    monkeypatch.setattr(cli,'_dashboard_reader',reader)
+    monkeypatch.setattr(dashboard,'serve',lambda *args,**kwargs:calls.append(kwargs))
+    for command in ('hud','dashboard'):
+        assert cli._dashboard(cli.build_parser().parse_args([command]))==0
+    assert [call['enable_tool_management'] for call in calls]==[True,False]
 
 
 def test_browser_requires_opt_in_token_and_confirmation():
