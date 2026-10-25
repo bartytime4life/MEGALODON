@@ -84,6 +84,8 @@ async def exercise_host_findings(browser, port, password, passed):
         scenario['signed_in'] = True
         requests.clear()  # The explicit sign-in is not a host-action request.
         await page.locator('#workspace-tab-setup').click()
+        # The reorganized Setup exposes host review in Overview's disclosure.
+        await page.goto(origin+'/#support-host-security')
         panel = page.locator('#host-findings')
         audit = panel.locator('details[data-source="audit"]')
         integrity = panel.locator('details[data-source="integrity"]')

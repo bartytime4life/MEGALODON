@@ -342,7 +342,14 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
                    "192.0.2." not in summary_text and "198.51.100." not in summary_text)
             await expect(page.locator("#hud-export-preview")).to_have_count(0)
             await page.locator("#workspace-tab-findings").click()
-            passed("qualified linked finding rows", await page.locator("#room-findings-table tbody tr").count() == 2)
+            # This standalone legacy-store fixture has no managed Findings service.
+            # The active workbench must refuse unavailable evidence, rather than
+            # rendering the retired compatibility table as a competing feed.
+            await expect(page.locator("#findings-workbench")).to_be_visible()
+            await expect(page.locator("#fw-status")).to_have_attribute("data-state", "unavailable")
+            await expect(page.locator("#fw-analyze")).to_be_disabled()
+            passed("unmanaged Findings stays unavailable without inventing a healthy empty feed")
+            await page.locator("#workspace-tab-live").click()
             await page.locator(".ops-range > summary").click()
             await page.locator("#room-range").select_option("hour")
             await page.locator("#room-apply").click()
@@ -767,8 +774,8 @@ async def run() -> None:
                                 await exercise_workflow_overview(browser,port,password,passed)
                                 from browser_host_findings import exercise_host_findings
                                 await exercise_host_findings(browser,port,password,passed)
-                                from browser_finding_evidence import exercise_finding_evidence
-                                await exercise_finding_evidence(browser,port,password,passed)
+                                from browser_findings_workbench import exercise_findings_workbench
+                                await exercise_findings_workbench(browser,port,password,passed)
                         passed("main database bytes unchanged " + str(nonempty),
                                hashlib.sha256(db.read_bytes()).hexdigest() == original)
                 finally:
