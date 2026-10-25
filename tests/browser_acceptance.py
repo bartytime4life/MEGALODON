@@ -445,6 +445,7 @@ async def exercise(browser, port: int, password: str, nonempty: bool) -> None:
         passed("unavailable live Sensors state survives filtering without invented tool observations")
         await page.locator("#integrations-clear").click()
         await page.locator("#workspace-tab-setup").click()
+        await page.locator("#settings-tab-advanced").click()
         await page.locator("#ops-advanced-setup > summary").click()
         await expect(page.locator("#workflow-reference-status")).to_contain_text("Integration map unavailable")
         await page.unroute("**/api/integrations?*", fail)
