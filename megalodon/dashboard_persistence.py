@@ -61,7 +61,7 @@ function renderPersistence(panel, payload) {
   const children=[node('p',`${payload.items} startup items reviewed · `+(payload.baseline_at?'baseline '+time(payload.baseline_at):'no baseline recorded')+' · checked '+time(payload.reviewed_at))];
   if(!payload.findings_total)children.push(node('p',payload.baseline_at?'No review items.':'No review items. Record an initial baseline to see later additions, changes and removals.'));
   for(const f of payload.findings){
-    const item=document.createElement('details');item.dataset.rule=f.rule;
+    const item=document.createElement('details');item.dataset.rule=f.rule;item.dataset.refreshKey=JSON.stringify([f.rule,f.path,f.category]);
     item.append(node('summary',`${labels[f.rule]} · ${f.path}`));
     const facts=document.createElement('dl');
     for(const [label,value] of [['Detail',f.detail],['Location type',f.category],['ATT&CK technique',f.attack]])facts.append(node('dt',label),node('dd',value));
@@ -69,7 +69,7 @@ function renderPersistence(panel, payload) {
   }
   if(payload.findings_total>payload.findings.length)children.push(node('p',`Showing the first ${payload.findings.length} of ${payload.findings_total} review items. python -m megalodon.persistence_review review lists up to the first ${__CLI_FINDINGS__}.`));
   if(payload.gaps.length){
-    const item=document.createElement('details');item.append(node('summary',`Coverage gaps (${payload.gaps_total})`));
+    const item=document.createElement('details');item.dataset.refreshKey='gaps';item.append(node('summary',`Coverage gaps (${payload.gaps_total})`));
     const list=document.createElement('ul');for(const gap of payload.gaps)list.append(node('li',gap));
     if(payload.gaps_total>payload.gaps.length)list.append(node('li',`${payload.gaps_total-payload.gaps.length} more gaps; the command-line review lists up to ${__CLI_GAPS__}.`));
     item.append(list);children.push(item);

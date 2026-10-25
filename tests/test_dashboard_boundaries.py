@@ -467,7 +467,7 @@ process.stdin.on('end', async () => {
     assert.equal(nodeFor('live-metrics').children.length, 0, 'no synthetic zero counters may be rendered');
     assert.match(nodeFor('connection').textContent, /reachable, no audit store/);
     assert.equal(nodeFor('connection').className, 'connection');
-    assert.match(nodeFor('snapshot-status').textContent, /Import real data, then restart/);
+    assert.match(nodeFor('snapshot-status').textContent, /Import real data into the configured location, then refresh/);
     assert.doesNotMatch(nodeFor('snapshot-status').textContent, /Refresh failed/);
     assert.match(nodeFor('refresh-announcement').textContent, /No audit store/);
     run('applyFilters()');
@@ -483,8 +483,14 @@ process.stdin.on('end', async () => {
     // The same 503 is a real failure for a configured or unverified source.
     for (const [source, extra] of [['connected', {}], ['not_configured', {extra: true}], ['not_configured', {readiness: {}}]]) {
       await setup(source, extra); await run('refresh(true)');
+      if (source === 'connected') {
+        assert.match(nodeFor('setup-source').textContent, /selected at startup.*verify current access/);
+        assert.doesNotMatch(nodeFor('setup-source').textContent, /file is open/);
+      }
       assert.equal(run('state.telemetryNotConfigured'), false);
       assert.equal(run('state.lastRefreshFailed'), true);
+      assert.equal(run('state.evidenceUnavailable'), true);
+      assert.match(nodeFor('connection').textContent, /reachable, evidence unavailable/);
       assert.equal(nodeFor('connection').className, 'connection error');
       assert.match(nodeFor('snapshot-status').textContent, /Refresh failed/);
     }
@@ -497,6 +503,7 @@ process.stdin.on('end', async () => {
     ]) {
       context.fetch = async () => response; await run('refresh(true)');
       assert.equal(run('state.telemetryNotConfigured'), false);
+      assert.equal(run('state.evidenceUnavailable'), false, 'malformed failures cannot claim a confirmed evidence response');
       assert.match(nodeFor('snapshot-status').textContent, /Refresh failed/);
     }
     context.fetch = async path => {
@@ -505,6 +512,8 @@ process.stdin.on('end', async () => {
     };
     await run('refresh(true)');
     assert.equal(run('state.lastRefreshFailed'), true);
+    assert.equal(run('state.evidenceUnavailable'), false);
+    assert.match(nodeFor('connection').textContent, /API · unavailable/);
     useMissingStoreResponses(); await run('refresh(true)');
     assert.equal(run('state.telemetryNotConfigured'), true, 'expected state must recover after transport failure');
     assert.equal(run('state.lastSuccessfulRefresh'), null);

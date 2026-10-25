@@ -5,13 +5,14 @@ from .dashboard_persistence import PERSISTENCE_HTML, PERSISTENCE_CSS, PERSISTENC
 from .dashboard_gateway import GATEWAY_HTML, GATEWAY_CSS, GATEWAY_JS
 from .dashboard_process_network import PROCESS_NETWORK_HTML, PROCESS_NETWORK_CSS, PROCESS_NETWORK_JS
 from .dashboard_recovery_readiness import RECOVERY_READINESS_HTML, RECOVERY_READINESS_CSS, RECOVERY_READINESS_JS
+from .dashboard_refresh import REFRESH_JS
 
 SUPPORT_CONFIG_HTML = r'''
 <section class="support-config" id="support-config" aria-labelledby="support-config-title" hidden>
   <div class="support-config-head"><div><p class="eyebrow">CONFIGURE THIS PC</p><h4 id="support-config-title" tabindex="-1">Configure local tools</h4><p>Set up capture and collectors, or check the tools you use. Settings stay on this computer.</p></div><button type="button" id="support-config-close" class="button-secondary">Close configuration</button></div>
   <div class="support-config-feedback"><p id="support-config-status" role="status" aria-live="polite" aria-atomic="true">Checking available tools and capture settings…</p><button type="button" id="support-config-retry" hidden>Check again</button></div>
   <section class="support-capture" aria-labelledby="support-capture-title">
-    <div class="support-config-section-head"><h5 id="support-capture-title">Network capture</h5><span id="support-capture-state" class="support-config-badge">Not checked</span></div>
+    <div class="support-config-section-head"><h5 id="support-capture-title" tabindex="-1">Network capture</h5><span id="support-capture-state" class="support-config-badge">Not checked</span></div>
     <div class="support-capture-steps">
       <div><label for="support-config-interface"><span class="support-step">1</span> Select your network interface</label><select id="support-config-interface" disabled><option value="">Checking interfaces…</option></select><p id="support-config-interface-note" class="support-config-note">Your active default interface is suggested when available.</p></div>
       <div><h6><span class="support-step">2</span> Allow capture for this user</h6><button type="button" id="support-config-permissions" disabled>Configure capture access</button><p class="support-config-note">An operating-system prompt grants packet-capture access to your user. Wireshark stays a normal-user app.</p></div>
@@ -24,21 +25,29 @@ SUPPORT_CONFIG_HTML = r'''
   </section>
   <details class="support-collector-settings"><summary>Inventory and file-scan settings</summary><div class="support-tool-settings">
     <section aria-labelledby="support-config-nmap-title"><h5 id="support-config-nmap-title">Nmap</h5><p>Choose a private IPv4 address or network you manage, up to 256 addresses.</p><label for="support-config-nmap-target">Inventory target</label><input id="support-config-nmap-target" type="text" value="127.0.0.1/32" maxlength="18" spellcheck="false" disabled aria-describedby="support-nmap-help"><p id="support-nmap-help" class="support-config-note">Use /24–/32, such as 192.168.1.0/24. A single address uses /32.</p><button type="button" id="support-config-nmap-save" disabled>Save and collect inventory</button></section>
-    <section aria-labelledby="support-config-clamav-title"><h5 id="support-config-clamav-title">ClamAV</h5><p>Scan a folder in your home directory and update the HUD result.</p><label for="support-config-scan-folder">Folder to scan</label><select id="support-config-scan-folder" disabled><option value="Downloads">Downloads</option><option value="Documents">Documents</option></select><div class="support-config-actions"><button type="button" id="support-config-clamav-save" disabled>Save and scan folder</button><button type="button" id="support-config-signatures" disabled>Update virus signatures</button></div><p class="support-config-note">The installed signature updater may request operating-system authorization.</p></section>
+    <section aria-labelledby="support-config-clamav-title"><h5 id="support-config-clamav-title" tabindex="-1">ClamAV</h5><p>Scan a folder in your home directory and update the HUD result.</p><label for="support-config-scan-folder">Folder to scan</label><select id="support-config-scan-folder" disabled><option value="Downloads">Downloads</option><option value="Documents">Documents</option></select><div class="support-config-actions"><button type="button" id="support-config-clamav-save" disabled>Save and scan folder</button><button type="button" id="support-config-signatures" disabled>Update virus signatures</button></div><p class="support-config-note">The installed signature updater may request operating-system authorization.</p></section>
     <section aria-labelledby="support-config-osquery-title"><h5 id="support-config-osquery-title">osquery</h5><p>Enable the fixed package inventory and send its count to the HUD.</p><button type="button" id="support-config-osquery" disabled>Enable package inventory</button></section>
   </div></details>
   <details class="support-service-settings"><summary>Local AI and background sensors</summary><div class="support-tool-settings">
-    <section aria-labelledby="support-model-title"><h5 id="support-model-title" tabindex="-1">Local AI · Ollama</h5><p>Choose an installed model for HUD analysis and automatic collector advice.</p>
-    <label for="support-model-select">Installed model</label><select id="support-model-select" disabled><option value="">Checking installed models…</option></select>
-    <label for="support-model-compute">Compute</label><select id="support-model-compute" disabled><option value="cpu">CPU · keep GPU available</option><option value="auto">Ollama automatic · may use GPU</option></select>
-    <label for="support-model-timeout">AI response limit (seconds)</label><input id="support-model-timeout" type="number" min="1" max="1800" step="1" value="300" disabled><p class="support-config-note">Default: 5 minutes. Up to 30 minutes for large models. Collection continues while AI works.</p>
-    <div class="support-config-actions"><button type="button" id="support-model-adopt" hidden>Use installed version</button><button type="button" id="support-model-save" disabled>Use selected model</button><button type="button" id="support-model-refresh" disabled>Refresh installed models</button><button type="button" id="support-model-cancel" disabled>Cancel AI request</button></div>
-    <p id="support-model-status" role="status" class="support-config-note">Checking the selected model…</p><p id="support-model-metrics" class="support-config-note"></p>
-    <p class="support-config-note">Selection checks local text completion and pins the exact installed version. The saved response limit applies to HUD analysis and background advice. Models are unloaded after MEGALODON replies; another app may keep them loaded. No downloads or cloud inference occur here.</p><div class="support-config-actions"><button type="button" id="support-config-qwen-setup" disabled>Configure Ollama access</button><button type="button" id="support-config-qwen" disabled>Verify selected model</button></div><p class="support-config-note">A one-time system prompt keeps Ollama on this PC. The selected model advises; generated commands do not run.</p></section>
+    <section aria-labelledby="support-model-title" class="settings-model">
+      <h5 id="support-model-title" tabindex="-1">Selected model</h5>
+      <div class="settings-model-fields"><div><label for="support-model-select">Installed model</label><select id="support-model-select" disabled><option value="">Checking installed models…</option></select></div><div><label for="support-model-compute">Compute</label><select id="support-model-compute" disabled><option value="cpu">CPU · keep GPU available</option><option value="auto">Ollama automatic · may use GPU</option></select></div></div>
+      <div class="support-config-actions"><button type="button" id="support-model-save" class="support-config-primary" disabled>Save model</button><button type="button" id="support-model-refresh" disabled>Refresh list</button><button type="button" id="support-model-adopt" hidden>Use installed version</button></div>
+      <div class="settings-switch-row"><label class="settings-switch-copy" for="support-model-ready"><strong>Keep model ready while HUD is running</strong><small>Load the saved model at startup and retry after a lost connection.</small></label><input id="support-model-ready" class="settings-switch" type="checkbox" role="switch" disabled></div>
+      <div id="support-model-loaded-state" class="settings-model-state" role="status" aria-live="polite"><strong id="support-model-loaded">Checking loaded state…</strong><button type="button" id="support-model-load" disabled>Load now</button></div>
+      <p id="support-model-lifecycle" class="support-config-note">Checking automatic loading…</p>
+      <p id="support-model-status" role="status" class="support-config-note">Checking the selected model…</p>
+      <details class="settings-disclosure"><summary>Response checks and connection options</summary>
+        <label for="support-model-timeout">AI response limit (seconds)</label><input id="support-model-timeout" type="number" min="1" max="1800" step="1" value="300" disabled><p class="support-config-note">Default: 5 minutes. Up to 30 minutes for large models. Collection continues while AI works.</p>
+        <p id="support-model-metrics" class="support-config-note"></p>
+        <div class="support-config-actions"><button type="button" id="support-config-qwen" disabled>Verify a response</button><button type="button" id="support-model-cancel" disabled>Cancel AI request</button><button type="button" id="support-config-qwen-setup" disabled>Configure Ollama access</button></div>
+        <p class="support-config-note">Saving verifies a local text response and pins the installed version. Loaded state and the last verified response are separate observations. Keeping a model ready uses memory; turn the switch off to release it after HUD requests. No downloads or cloud inference occur here. Ollama configuration may request system authorization.</p>
+      </details>
+    </section>
     <section><h5>Zeek</h5><p>Prepare the automatic background sampler and its private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek sampler</button><p class="support-config-note">Source summaries appear in Actions; they are separate from HUD packet totals and detector findings.</p></section>
     <section><h5>Suricata</h5><p>Configure the passive sensor on the selected network interface.</p><div class="support-config-actions"><button type="button" id="support-config-suricata-setup" disabled>Configure background Suricata</button><button type="button" id="support-config-suricata" disabled>Check configuration</button></div><p class="support-config-note">A one-time system prompt configures the service and access to its local logs.</p></section>
   </div></details>
-  <section id="support-host-security" class="support-capture" aria-labelledby="host-security-title">
+  <section id="support-host-security" class="support-capture" aria-labelledby="host-security-title" tabindex="-1">
     <h5 id="host-security-title">Host security and threat context</h5>
     <p>Audit Linux configuration, compare critical files with an initial AIDE baseline, and match observed IPs against dated public references.</p>
     <div class="support-config-actions"><button type="button" id="host-security-audit" disabled>Run Lynis audit</button><button type="button" id="host-security-baseline" disabled>Create initial AIDE baseline</button><button type="button" id="host-security-check" disabled>Check file changes</button><button type="button" id="host-security-refresh" disabled>Refresh threat references</button></div>
@@ -95,7 +104,13 @@ SUPPORT_CONFIG_CSS = HOST_FINDINGS_CSS + RECOVERY_READINESS_CSS + HARDENING_CSS 
 @media(max-width:640px) { .support-capture-steps,.support-capture-destinations { grid-template-columns:1fr; gap:1rem; } .support-capture { padding:.9rem; } .support-config-actions button { flex:1 1 12rem; } .support-config select,.support-config input { max-width:none; } .support-config-results li { grid-template-columns:minmax(0,1fr) auto; } }
 '''
 
-SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PERSISTENCE_JS + GATEWAY_JS + PROCESS_NETWORK_JS + r'''
+SUPPORT_CONFIG_JS = REFRESH_JS + HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PERSISTENCE_JS + GATEWAY_JS + PROCESS_NETWORK_JS + r'''
+renderHostFindings = stableReview(renderHostFindings);
+renderRecoveryReadiness = stableReview(renderRecoveryReadiness);
+renderHardening = stableReview(renderHardening);
+renderPersistence = stableReview(renderPersistence);
+renderGateway = stableReview(renderGateway);
+renderProcessNetwork = stableReview(renderProcessNetwork);
 (() => {
   const el=id=>document.getElementById(id);
   if(typeof localHudLaunch==='undefined' || !el('support-config') || !el('support-apps-configure'))return;
@@ -108,13 +123,13 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
   const state={configVisible:false,globeVisible:false,liveAction:false,open:false,pending:false,valid:false,token:null,payload:null,timer:null,dirty:new Set(),hydrated:false,submitted:null};
   const actions={
     'host-security-audit':'security_audit','host-security-baseline':'security_baseline','host-security-check':'security_check','host-security-refresh':'security_refresh','persistence-baseline':'persistence_baseline',
-    'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh',
+    'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh','support-model-load':'model_load','support-model-ready':'model_policy',
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
     'support-config-tool-directory-save':'tool_directory_set','support-config-qwen-setup':'qwen_configure','support-config-suricata-setup':'suricata_configure','support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
     'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
-  const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',persistence_baseline:'Recording initial persistence baseline',tool_directory_set:'Saving tool directory',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
+  const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',persistence_baseline:'Recording initial persistence baseline',tool_directory_set:'Saving tool directory',model_policy:'Saving model loading preference',model_load:'Loading the saved model',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout','support-config-tool-id','support-config-tool-directory'];
   const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
@@ -138,6 +153,8 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
       || typeof v.geography_enabled!=='boolean'
       || !text(v.command,512) || (needToken&&!/^[A-Za-z0-9_-]{32}$/.test(v.token||'')) || (v.token!==undefined&&!/^[A-Za-z0-9_-]{32}$/.test(v.token)))throw Error('Invalid configuration response');
     if(v.model!==undefined){const m=v.model;if(!object(m)||!text(m.model,96)||!text(m.message,512)||!['cpu','auto'].includes(m.compute_mode)||!Array.isArray(m.options)||m.options.length>64||!m.options.every(row=>object(row)&&text(row.name,96)&&/^[a-f0-9]{64}$/.test(row.digest)&&count(row.size_bytes))||!stamp(m.updated_at)||!stamp(m.last_response_at)||!stamp(m.last_attempt_at)||!(m.response_ms===null||count(m.response_ms))||!(m.drift===undefined||m.drift===null||['digest_changed','missing'].includes(m.drift))||!(m.installed_digest===undefined||m.installed_digest===null||/^[a-f0-9]{64}$/.test(m.installed_digest))||!['loaded','memory_bytes','vram_bytes'].every(key=>key==='loaded'?(m[key]===null||typeof m[key]==='boolean'):(m[key]===null||count(m[key]))))throw Error('Invalid model telemetry');}
+    if(v.model?.keep_ready!==undefined&&typeof v.model.keep_ready!=='boolean')throw Error('Invalid model policy');
+    if(v.model?.lifecycle!==undefined){const l=v.model.lifecycle;if(!object(l)||!['disabled','paused','checking','loading','ready','retrying','error'].includes(l.state)||!text(l.message,512)||!(l.error_code===null||text(l.error_code,80))||!(l.retry_in_seconds===null||count(l.retry_in_seconds))||!stamp(l.updated_at))throw Error('Invalid model lifecycle');}
     return v;
   }
   const capturing=()=>state.payload && ['starting','running'].includes(state.payload.capture.state);
@@ -149,7 +166,8 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
   const viewVisible=()=>workspaceVisible()&&(setupVisible()||typeof IntersectionObserver==='undefined'||state.globeVisible||(state.open&&state.configVisible));
   function feedback(message,kind='ready'){if(state.liveAction && el('live-action-status'))el('live-action-status').textContent=message;el('support-config-status').textContent=message;el('support-config').dataset.state=kind;}
   function controls(){
-    const blocked=state.pending || !state.valid || !workspaceVisible();
+    const changing=state.pending && (!state.readDone || !state.hydrated);
+    const blocked=changing || !state.valid || !workspaceVisible();
     for(const [id,action] of Object.entries(actions)){
       if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
@@ -158,9 +176,11 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
         || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
     }
     el('support-model-adopt').disabled=blocked||!!working();
+    el('support-model-load').disabled=blocked||!!working()||!state.payload?.model?.model||state.payload?.model?.keep_ready!==true||['checking','loading'].includes(state.payload?.model?.lifecycle?.state);
+    el('support-model-ready').disabled=blocked||!!working();
     for(const id of inputIds)el(id).disabled=blocked||!!working();
     el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
-    el('support-config').setAttribute('aria-busy',state.pending?'true':'false');
+    el('support-config').setAttribute('aria-busy',changing?'true':'false');
   }
   function render(v){
     const h=v.host_security;
@@ -183,11 +203,19 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     }
 
     if(v.model){
-      const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')?select.value:model.model;
+      const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')||document.activeElement===select?select.value:model.model;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});
-      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';select.replaceChildren(placeholder,...options);select.value=model.options.some(row=>row.name===chosen)?chosen:'';
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';
+      const key=JSON.stringify([placeholder.textContent,model.options.map(row=>[row.name,row.size_bytes])]);
+      if(select.dataset.optionsKey!==key){select.replaceChildren(placeholder,...options);select.dataset.optionsKey=key;}
+      const choice=model.options.some(row=>row.name===chosen)?chosen:'';if(select.value!==choice)select.value=choice;
       if(!state.dirty.has('timeout_seconds'))el('support-model-timeout').value=String(model.timeout_seconds||300);
       if(!state.dirty.has('compute_mode'))el('support-model-compute').value=model.compute_mode;
+      if(!state.dirty.has('keep_ready'))el('support-model-ready').checked=model.keep_ready===true;
+      const lifecycle=model.lifecycle;
+      el('support-model-loaded').textContent=model.loaded===true?'Loaded in memory':model.loaded===false?'Not loaded':'Loaded state unavailable';
+      el('support-model-loaded-state').dataset.state=lifecycle?.state||'disabled';
+      el('support-model-lifecycle').textContent=lifecycle?lifecycle.message+(model.keep_ready!==true?' Turn on Keep model ready to enable Load now.':'')+(lifecycle.retry_in_seconds>0?' Retrying in '+lifecycle.retry_in_seconds+' s.':''):'Automatic model loading is unavailable in this service version.';
       el('support-model-status').textContent=model.message+(model.truncated?' First 64 installed artifacts shown.':'');
       // Ollama replaced the pinned model's files: re-pin the same name to the digest Ollama now reports.
       el('support-model-adopt').hidden=model.drift!=='digest_changed'||!model.options.some(row=>row.name===model.model);
@@ -197,10 +225,12 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
       if(model.loaded===false)metrics.push('Selected model is unloaded');else if(model.loaded===true&&model.memory_bytes!==null&&model.vram_bytes!==null)metrics.push('Loaded allocation '+(model.memory_bytes/1024**3).toFixed(1)+' GiB · GPU '+(model.vram_bytes/1024**3).toFixed(1)+' GiB');
       if(model.updated_at)metrics.push('Availability checked '+time(model.updated_at));el('support-model-metrics').textContent=metrics.join(' · ');
     }
-    const selected=state.dirty.has('interface') ? el('support-config-interface').value : (v.settings.interface || (v.interfaces.find(i=>i.default&&i.up)||v.interfaces.find(i=>i.up)||{}).name || '');
+    const selected=state.dirty.has('interface')||document.activeElement===el('support-config-interface') ? el('support-config-interface').value : (v.settings.interface || (v.interfaces.find(i=>i.default&&i.up)||v.interfaces.find(i=>i.up)||{}).name || '');
     const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=v.interfaces.length?'Select an interface':'No interfaces returned';
     const options=v.interfaces.map(i=>{const option=document.createElement('option');option.value=i.name;option.textContent=`${i.name}${i.default?' · default':''}${i.up?'':' · down'}`;return option;});
-    el('support-config-interface').replaceChildren(placeholder,...options);el('support-config-interface').value=v.interfaces.some(i=>i.name===selected)?selected:'';
+    const interfaceSelect=el('support-config-interface'),interfaceKey=JSON.stringify(v.interfaces);
+    if(interfaceSelect.dataset.optionsKey!==interfaceKey){interfaceSelect.replaceChildren(placeholder,...options);interfaceSelect.dataset.optionsKey=interfaceKey;}
+    const interfaceChoice=v.interfaces.some(i=>i.name===selected)?selected:'';if(interfaceSelect.value!==interfaceChoice)interfaceSelect.value=interfaceChoice;
     if(!state.dirty.has('nmap_target'))el('support-config-nmap-target').value=v.settings.nmap_target;
     if(!state.dirty.has('scan_folder'))el('support-config-scan-folder').value=v.settings.scan_folder;
     if(!state.dirty.has('tool_directory'))el('support-config-tool-directory').value=v.tool_directories[el('support-config-tool-id').value]||'';
@@ -222,11 +252,12 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     if(!rows.length){const empty=document.createElement('li');empty.textContent='No tool checks returned yet.';rows.push(empty);}el('support-config-tools').replaceChildren(...rows);
     if(v.job.state==='running')feedback(`${actionNames[v.job.action]||'Working'}… ${v.job.message}`,'working');
     else if(v.job.state==='finished'||v.job.state==='failed')feedback(`Last action ${v.job.state==='failed'?'failed':'finished'}${v.job.finished_at?' at '+time(v.job.finished_at):''}. ${v.job.message}`,v.job.state==='failed'?'failed':'ready');
-    else feedback('Choose an interface or tool setting. Each action runs only when you select its button.');
+    else feedback('Settings connected · changes stay on this computer.');
+    if(typeof window!=='undefined'&&typeof window.dispatchEvent==='function')window.dispatchEvent(new CustomEvent('megalodon-support-state',{detail:v}));
     if(!viewVisible())feedback('Status updates paused while this view is hidden. Local actions and capture continue.','stale');
   }
   function cancel(){if(state.timer!==null)clearTimeout(state.timer);state.timer=null;}
-  function schedule(){cancel();if(!viewVisible()||!state.valid)return;const active=working()||capturing()||state.payload?.background?.enabled||persistencePending(state.payload?.persistence)||processPending(state.payload?.process_network);if(active||state.open)state.timer=setTimeout(read,active?2000:10000);}
+  function schedule(){cancel();if(!viewVisible())return;if(!state.valid){state.timer=setTimeout(()=>read(true),5000);return;}const active=working()||capturing()||state.payload?.background?.enabled||persistencePending(state.payload?.persistence)||processPending(state.payload?.process_network);if(active||state.open||setupVisible())state.timer=setTimeout(read,active?2000:10000);}
   async function body(response){
     if(Number(response.headers.get('content-length'))>65536)throw Error('Response too large');
     if(response.body&&response.body.getReader){const reader=response.body.getReader(),parts=[];let size=0;try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>65536)throw Error('Response too large');parts.push(part.value);}}catch(error){await reader.cancel();throw error;}
@@ -242,9 +273,9 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
       return checked(await body(response),!payload);
     }finally{clearTimeout(timer);}
   }
-  function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='tool_directory_set')state.dirty.delete('tool_directory');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
+  function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='tool_directory_set')state.dirty.delete('tool_directory');if(action==='model_policy')state.dirty.delete('keep_ready');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
   function fail(error){renderRecoveryReadiness(el('recovery-readiness'),null);renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);renderPersistence(el('persistence-review'),null);renderGateway(el('gateway-review'),null);renderProcessNetwork(el('process-network-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
-  async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;controls();schedule();}}
+  async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();let finished;state.readDone=new Promise(resolve=>{finished=resolve;});state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;state.readDone=null;controls();schedule();finished();}}
   function payloadFor(action){
     const value={action};
     if(interfaceActions.includes(action)){value.interface=el('support-config-interface').value;if(!state.payload.interfaces.some(i=>i.name===value.interface))throw Error('Select an available capture interface.');}
@@ -254,6 +285,7 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
       if(!match||parts.slice(0,4).some(v=>v>255)||parts[4]<24||parts[4]>32||!(parts[0]===10||parts[0]===127||(parts[0]===192&&parts[1]===168)||(parts[0]===172&&parts[1]>=16&&parts[1]<=31)))throw Error('Use a private IPv4 target with /24–/32, or one local address.');
       value.nmap_target=target;
     }
+    if(action==='model_policy')value.keep_ready=el('support-model-ready').checked;
     if(action==='model_select'){const row=state.payload.model?.options.find(row=>row.name===el('support-model-select').value);if(!row)throw Error('Refresh and choose an installed model.');Object.assign(value,{model:row.name,model_digest:row.digest,compute_mode:el('support-model-compute').value,timeout_seconds:Number(el('support-model-timeout').value)});}
     if(action==='clamav_configure'){value.scan_folder=el('support-config-scan-folder').value;if(!['Downloads','Documents'].includes(value.scan_folder))throw Error('Choose Downloads or Documents.');}
     if(action==='tool_directory_set'){
@@ -263,23 +295,27 @@ SUPPORT_CONFIG_JS = HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PE
     return value;
   }
   async function act(action){
+    if(state.readDone)await state.readDone;
     const button=Object.entries(actions).find(([,value])=>value===action);
     if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible())return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
+    const focusedControl=document.activeElement?.id;
     cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]|| (action==='model_cancel'?'Cancelling AI request':'Saving local AI settings')}…${['capture_permissions','signature_update','qwen_configure','suricata_configure'].includes(action)?' A system authorization prompt may appear.':''}`,'working');controls();
-    try{const value=await request(payload);if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
-    catch(error){fail(error);}finally{state.pending=false;controls();schedule();}
+    try{let value;try{value=await request(payload);}catch(error){if(error.status!==403)throw error;const refreshed=await request();accept(refreshed);value=await request(payload);}if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
+    catch(error){fail(error);}finally{state.pending=false;controls();schedule();if(focusedControl&&document.activeElement===document.body&&!el(focusedControl)?.disabled)el(focusedControl)?.focus({preventScroll:true});}
   }
   function open(value){state.open=value;el('support-config').hidden=setupWorkspace?false:!value;el('support-apps-configure').setAttribute('aria-expanded',value?'true':'false');
     if(setupWorkspace&&typeof navigateWorkspace==='function')navigateWorkspace(value?'setup':'live');
-    if(value){el('support-config-title').focus();read(true);}else{el('support-apps-configure').focus();schedule();}}
+    if(value){if(typeof window!=='undefined')window.megalodonSettings?.select('traffic');el('support-config-title').focus();read(true);}else{el('support-apps-configure').focus();schedule();}}
   el('support-apps-configure').addEventListener('click',()=>open(!state.open));el('support-config-close').addEventListener('click',()=>open(false));el('support-config-retry').addEventListener('click',()=>read(true));if(el('live-action-retry'))el('live-action-retry').addEventListener('click',()=>read(true));
-  for(const [id,action] of Object.entries(actions))if(el(id))el(id).addEventListener('click',()=>act(action));
+  for(const [id,action] of Object.entries(actions))if(el(id)&&id!=='support-model-ready')el(id).addEventListener('click',()=>act(action));
+  el('support-model-ready').addEventListener('change',()=>{state.dirty.add('keep_ready');act('model_policy');});
   el('support-model-adopt').addEventListener('click',()=>{
     const model=state.payload?.model;if(!model||model.drift!=='digest_changed')return;
     el('support-model-select').value=model.model;state.dirty.delete('model');controls();act('model_select');
   });
   for(const [id,key] of [['support-model-timeout','timeout_seconds'],['support-model-select','model'],['support-model-compute','compute_mode'],['support-config-interface','interface'],['support-config-nmap-target','nmap_target'],['support-config-scan-folder','scan_folder']])el(id).addEventListener('change',()=>{state.dirty.add(key);controls();});
+  el('support-model-timeout').addEventListener('input',()=>{state.dirty.add('timeout_seconds');controls();});
   el('support-config-nmap-target').addEventListener('input',()=>state.dirty.add('nmap_target'));
   el('support-config-tool-id').addEventListener('change',()=>{state.dirty.delete('tool_directory');el('support-config-tool-directory').value=state.payload?.tool_directories?.[el('support-config-tool-id').value]||'';controls();});
   for(const event of ['input','change'])el('support-config-tool-directory').addEventListener(event,()=>state.dirty.add('tool_directory'));

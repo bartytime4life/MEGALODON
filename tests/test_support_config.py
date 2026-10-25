@@ -463,7 +463,7 @@ def test_stop_cancels_a_start_still_preparing_its_settings(manager,monkeypatch):
     assert 'cancelled' in manager.snapshot()['job']['message']
 
 
-def test_background_setting_persists_but_does_not_enable_external_geography(manager,monkeypatch):
+def test_background_setting_persists_but_does_not_enable_external_geography(manager,monkeypatch,request):
     starts=[]
     monkeypatch.setattr(manager.background,'start',lambda interface:starts.append(interface))
     manager.start({'action':'background_start','interface':'eth0'})
@@ -473,6 +473,7 @@ def test_background_setting_persists_but_does_not_enable_external_geography(mana
     saved=json.loads(manager.profile.read_text())
     assert saved['background_enabled'] and not saved['geography_enabled']
     restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    request.addfinalizer(restored.close)
     monkeypatch.setattr(restored.background,'start',lambda interface:starts.append(interface))
     restored.resume()
     assert starts==['eth0','eth0']
@@ -480,7 +481,7 @@ def test_background_setting_persists_but_does_not_enable_external_geography(mana
     assert json.loads(manager.profile.read_text())['background_enabled'] is False
 
 
-def test_explicit_geography_action_persists_its_separate_online_opt_in(manager,monkeypatch):
+def test_explicit_geography_action_persists_its_separate_online_opt_in(manager,monkeypatch,request):
     calls=[]
     starts=[]
     monkeypatch.setattr(manager.background,'start',lambda interface:starts.append(interface))
@@ -497,6 +498,7 @@ def test_explicit_geography_action_persists_its_separate_online_opt_in(manager,m
     assert manager.snapshot()['geography_enabled'] is False
     assert json.loads(manager.profile.read_text())['geography_enabled'] is False
     restored=config.SupportConfiguration(manager.settings,home=manager.home)
+    request.addfinalizer(restored.close)
     monkeypatch.setattr(restored.background,'start',lambda interface:starts.append(interface))
     restored.resume()
     assert starts==['eth0','eth0']

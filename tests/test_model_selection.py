@@ -41,6 +41,58 @@ def test_other_local_model_uses_template_and_bounded_cpu_response(model_provider
     assert requests[-1][2]['options']['num_gpu']==-1
 
 
+def test_prepare_only_uses_pinned_empty_prompt_and_never_claims_a_verified_reply(model_provider):
+    settings,state,requests=model_provider
+    state['reply']=''
+    provider.prepare_model(replace(settings,keep_warm=True))
+    body=requests[-1][2]
+    assert body['prompt']=='' and body['model']==settings.model and body['keep_alive']==300
+    assert body['options']['num_gpu']==0
+    assert provider.last_observation(settings)=={}
+    state['digest']='c'*64
+    requests.clear()
+    with pytest.raises(provider.AIProviderError,match='MODEL_MISMATCH'):
+        provider.prepare_model(settings)
+    assert all(path!='/api/generate' for path,_,_ in requests)
+
+
+def test_keep_ready_policy_keeps_the_same_selected_model_after_a_reply(model_provider):
+    settings,state,requests=model_provider
+    assert provider.generate(replace(settings,keep_warm=True),'Return READY')=='READY'
+    assert requests[-1][2]['keep_alive']==300
+    assert requests[-1][2]['model']==settings.model
+
+
+def test_fresh_metadata_clears_disconnected_state_without_claiming_a_new_reply(model_provider):
+    from datetime import datetime, timezone
+    settings,state,requests=model_provider
+    telemetry=ModelTelemetry(lambda:settings)
+    telemetry.snapshot();telemetry._thread.join(2)
+    key=(settings.model,settings.model_digest,settings.compute_mode)
+    provider._observations[key]=dict(error_code='OLLAMA_UNAVAILABLE',
+        last_attempt_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'))
+    assert telemetry.snapshot()['state']=='error'
+    telemetry.invalidate();telemetry.snapshot();telemetry._thread.join(2)
+    observed=telemetry.snapshot()
+    assert observed['state']=='ready' and observed['error_code'] is None
+    assert observed['last_error_code']=='OLLAMA_UNAVAILABLE'
+    assert not observed['inference_verified'] and observed['last_response_at'] is None
+
+
+def test_keep_ready_preference_survives_reopen_and_preserves_model_identity(model_provider,tmp_path,monkeypatch):
+    settings,state,requests=model_provider
+    monkeypatch.setattr(support_config,'interfaces',lambda:[])
+    manager=support_config.SupportConfiguration(Settings(ai=settings,db_path=tmp_path/'events.db'),home=tmp_path)
+    manager.start({'action':'model_policy','keep_ready':False})
+    manager._thread.join(2)
+    assert manager._job['state']=='finished'
+    reopened=support_config.SupportConfiguration(Settings(ai=settings,db_path=tmp_path/'events.db'),home=tmp_path)
+    assert reopened._model_keep_ready is False and reopened.settings.ai.keep_warm is False
+    assert reopened.settings.ai.model_digest==settings.model_digest
+    assert reopened.settings.ai.model==settings.model
+    assert all(path!='/api/generate' for path,_,_ in requests)
+
+
 @pytest.mark.parametrize('details',[
     {'details':{'format':'gguf'},'capabilities':['embedding']},
     {'details':{'format':'gguf'},'capabilities':['completion'],'remote_host':'https://ollama.com'},

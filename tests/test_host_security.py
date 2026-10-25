@@ -36,6 +36,37 @@ def test_match_is_local_dated_context_never_a_command(manager):
     assert manager.matches(['8.8.8.8'])==[]
 
 
+def test_warm_address_classification_keeps_feed_validation_live(manager):
+    manager.execute('refresh')
+    assert manager.matches(['8.8.8.8'])
+    path = manager.root / 'feeds.json'
+    saved = path.read_bytes()
+    value = json.loads(saved)
+    # Keep the previously classified addresses, but tamper with provenance.
+    value['feeds'][0]['url'] = 'https://untrusted.invalid/feed'
+    path.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match='provenance'):
+        manager.matches(['8.8.8.8'])
+    assert manager.snapshot()['feed_state'] == 'unavailable'
+    path.write_bytes(saved)
+    assert manager.matches(['8.8.8.8'])
+    # Warming classification never caches the clock or an admission decision.
+    manager.now = lambda: NOW + timedelta(days=3)
+    assert manager.matches(['8.8.8.8']) == []
+    assert manager.snapshot()['feed_state'] == 'stale'
+
+
+def test_repeated_public_classification_avoids_reparsing(monkeypatch):
+    from megalodon import host_security as module
+    module._public_unicast.cache_clear()
+    expected = {value: module.public_unicast(value) for value in
+                ('8.8.8.8', '8.8.8.0/24', '2606:4700::/32', '192.168.1.1', '224.0.0.1', '2001:db8::1')}
+    assert list(expected.values()) == [True, True, True, False, False, False]
+    monkeypatch.setattr(module, 'ip_network', lambda *_a, **_k: pytest.fail('Repeated classification reparsed an address'))
+    for _ in range(3):
+        assert {value: module.public_unicast(value) for value in expected} == expected
+
+
 @pytest.mark.parametrize('age', [timedelta(days=3),-timedelta(hours=1)])
 def test_reject_publisher_staleness_and_future_time(age):
     for source in SOURCES:

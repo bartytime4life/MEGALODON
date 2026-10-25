@@ -48,7 +48,11 @@ and the source-checkout recovery rehearsal remain separate.
 The [collector/verifier](../tools/installed_recovery_evidence.py) uses a closed
 allowlist and emits success only after every check passes. Commands have a
 30-second deadline and a combined 16 KiB stdout/stderr limit enforced while
-draining pipes. Files are limited to 8 MiB; manifests and receipts to 16 KiB;
+draining pipes. Individual files, wheel input and synthetic databases are limited
+to 8 MiB. Aggregate installed package contents are limited to 10 MiB to accommodate
+the bundled local map and visual HUD modules; each member retains the 8 MiB limit.
+This collector budget does not change any product request, response or data limit.
+Manifests and receipts are limited to 16 KiB;
 table reads to 1,024 rows per table with a five-second SQLite query deadline.
 The independent workflow has a ten-minute limit. Failure emits one fixed reason
 with no raw exception, command output, or path; the success artifact step does

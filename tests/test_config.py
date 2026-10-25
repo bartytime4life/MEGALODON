@@ -9,6 +9,17 @@ from megalodon.validation import ValidationError
 
 
 class ConfigTests(unittest.TestCase):
+    def test_saved_tool_management_and_model_readiness_are_booleans(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'settings.toml'
+            path.write_text('[dashboard]\ntool_management = true\n[ai]\nkeep_warm = true\n')
+            settings=load_settings(path)
+            self.assertTrue(settings.dashboard.tool_management)
+            self.assertTrue(settings.ai.keep_warm)
+            for table,key in (('dashboard','tool_management'),('ai','keep_warm')):
+                path.write_text(f'[{table}]\n{key} = 1\n')
+                with self.assertRaises(ValidationError):load_settings(path)
+
     def test_omitted_path_uses_complete_safe_defaults(self):
         settings = load_settings()
         self.assertEqual(settings.capture_source, "sample")

@@ -42,6 +42,21 @@ def test_hud_launch_without_store_never_creates_files(tmp_path, monkeypatch):
     assert not path.parent.exists()
 
 
+def test_hud_discards_inherited_capabilities_before_starting_workers(tmp_path, monkeypatch):
+    from megalodon import process_privileges
+    events = []
+    monkeypatch.setattr(cli, "_load", lambda _: Settings(db_path=tmp_path / "missing.db"))
+    monkeypatch.setattr(process_privileges, "drop_inherited_capabilities", lambda: events.append("discard"))
+    monkeypatch.setattr(dashboard, "validate_tool_management_mode", lambda *a, **k: events.append("validate"))
+    monkeypatch.setattr(dashboard, "serve", lambda *a, **k: events.append("serve"))
+    assert cli._dashboard(cli.build_parser().parse_args(["hud"])) == 0
+    assert events == ["discard", "validate", "serve"]
+    events.clear()
+    monkeypatch.setattr(process_privileges, "drop_inherited_capabilities", lambda: (_ for _ in ()).throw(OSError("capability error")))
+    assert cli._dashboard(cli.build_parser().parse_args(["hud"])) == 2
+    assert events == []
+
+
 def test_hud_existing_store_uses_read_only_reader(tmp_path):
     path = tmp_path / "private" / "audit.db"
     with Store(path):

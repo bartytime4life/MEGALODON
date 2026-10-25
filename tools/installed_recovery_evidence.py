@@ -23,6 +23,9 @@ import zipfile
 
 MAX_OUTPUT = 16_384
 MAX_FILE = 8 * 1024 * 1024
+# Aggregate installed source includes the bundled local map and HUD modules.
+# Individual files, wheel input and synthetic databases retain the 8 MiB cap.
+MAX_PACKAGE_BYTES = 10 * 1024 * 1024
 COMMAND_SECONDS = 30
 TABLES = ("events", "detections", "actions", "ingestion_runs",
           "ingestion_run_events", "detection_actions", "sqlite_sequence")
@@ -138,6 +141,14 @@ def source_identity(checkout, commit, tree):
     return {"commit": commit, "tree": tree, "working_tree_dirty": False}
 
 
+def wheel_package_members(archive):
+    members = [item for item in archive.infolist()
+               if item.filename.startswith("megalodon/") and not item.is_dir()]
+    require(members and all(item.file_size <= MAX_FILE for item in members)
+            and sum(item.file_size for item in members) <= MAX_PACKAGE_BYTES, "WHEEL_LIMIT")
+    return members
+
+
 def installed_wheel(wheel, checkout):
     import megalodon
 
@@ -158,9 +169,7 @@ def installed_wheel(wheel, checkout):
     require("dir_info" not in direct, "EDITABLE_INSTALL")
     # Check the installed package bytes as well as pip's local-wheel receipt.
     with zipfile.ZipFile(wheel) as archive:
-        members = [item for item in archive.infolist()
-                   if item.filename.startswith("megalodon/") and not item.is_dir()]
-        require(members and sum(item.file_size for item in members) <= MAX_FILE, "WHEEL_LIMIT")
+        members = wheel_package_members(archive)
         for item in members:
             path = Path(dist.locate_file(item.filename)).resolve()
             require(path.is_relative_to(prefix), "INSTALLED_ORIGIN")

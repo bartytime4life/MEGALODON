@@ -25,6 +25,9 @@ from .dashboard_snapshot import TELEMETRY_CONNECTIONS_JS
 from .dashboard_globe import GLOBE_HTML, GLOBE_CSS, GLOBE_JS
 from .dashboard_reference_contract import REFERENCE_CONTRACT_JS, REFERENCE_CONTRACT_CSS
 from .dashboard_setup import SETUP_HTML, SETUP_JS
+from .dashboard_settings import compose_settings, SETTINGS_CSS, SETTINGS_JS
+from .dashboard_visual_controls import VISUAL_CONTROLS_CSS, VISUAL_CONTROLS_JS
+from .dashboard_findings import compose_findings, FINDINGS_CSS, FINDINGS_JS, CAUTION_JS
 from .dashboard_tool_assets import LIFECYCLE_JS, READINESS_JS, CONTROLS_JS, CONTROLS_CSS
 from .dashboard_action_plane import ACTION_CSS, ACTION_JS
 from .status_glossary import GLOSSARY_ANCHOR_ID
@@ -751,7 +754,7 @@ const workspaceTargets = {
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'action-plane-title': 'setup', 'app-service-start-title': 'setup', 'app-viewer-title': 'setup', 'analysis-window-title': 'analysis',
   ...Object.fromEntries(['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'].map(id=>['setup-app-'+id,'setup'])),
-  'support-host-security':'setup',
+  'support-host-security':'setup', 'support-config-clamav-title':'setup',
   ...Object.fromEntries(['zeek','suricata-setup','clamav-save','osquery','qwen-setup','nmap-save'].map(id=>['support-config-'+id,'setup'])),
   'help-language': 'help', 'status-glossary': 'help'
 };
@@ -770,6 +773,7 @@ const state = {
   timer: null,
   lastSuccessfulRefresh: null,
   lastRefreshFailed: false,
+  evidenceUnavailable: false,
   telemetryNotConfigured: false,
   configDegraded: false,
   config: {event_limit: 50, refresh_seconds: 5}
@@ -839,9 +843,11 @@ function navigateWorkspace(workspace, moveFocus = false) {
 function workspaceFromHash(value) {
   if (typeof value !== 'string' || value.length > 128 || (value && !value.startsWith('#'))) return null;
   const target = value.startsWith('#') ? value.slice(1) : '';
-  return Object.prototype.hasOwnProperty.call(workspaceTargets, target) ? workspaceTargets[target] : null;
+  if (Object.prototype.hasOwnProperty.call(workspaceTargets, target)) return workspaceTargets[target];
+  return byId(target)?.closest?.('#workspace-setup') ? 'setup' : null;
 }
 function revealTargetDisclosure(target) {
+  window.megalodonSettings?.reveal(target);
   for (let parent = target; parent; parent = parent.parentElement) {
     if (parent.tagName === 'DETAILS') parent.open = true;
   }
@@ -1680,7 +1686,7 @@ function renderEvents(events) {
 function renderInitialUnavailable() {
   const row = document.createElement('tr');
   const cell = textNode('td', state.telemetryNotConfigured
-    ? 'No audit store was available at launch. Import real data, then restart this HUD to review detections.'
+    ? 'No audit store was available at launch. Import real data into the configured location, then refresh this HUD to review detections.'
     : 'Recent detections are unavailable until a complete dashboard refresh succeeds.', 'empty');
   cell.colSpan = 5; row.append(cell); byId('events').replaceChildren(row);
   const filterStatus = state.telemetryNotConfigured
@@ -1980,7 +1986,7 @@ function setSnapshotStatus(mode) {
   const healthLimit = 'Dashboard API reachability does not measure capture or ingestion health.';
   let message;
   if (mode === 'unconfigured') {
-    message = `No audit store was available at launch. Import real data, then restart the HUD.${state.paused ? ' Automatic refresh is paused.' : ''} ${healthLimit}`;
+    message = `No audit store was available at launch. Import real data into the configured location, then refresh the HUD.${state.paused ? ' Automatic refresh is paused.' : ''} ${healthLimit}`;
     setUpdatedTime('No audit store available at launch');
   } else if (mode === 'current') {
     message = `Dashboard data fetched successfully. ${healthLimit}`;
@@ -2034,18 +2040,19 @@ async function refresh(announce = true) {
   byId('triage-panel').setAttribute('aria-busy', 'true');
   if (!state.lastSuccessfulRefresh) byId('triage-controls').disabled = true;
   const button = byId('refresh-button'); button.disabled = true; button.textContent = 'Refreshing…';
+  state.evidenceUnavailable = false;
   try {
     const [summaryResult, eventsResult, trafficResult] = await Promise.allSettled([
       requestJSON('/api/summary'), requestJSON(`/api/events?limit=${state.config.event_limit}`), requestRoomSnapshot()
     ]);
     acceptRoomResult(trafficResult);
-    const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh
-      && [summaryResult, eventsResult].every(result => result.status === 'rejected'
+    const evidenceUnavailable = [summaryResult, eventsResult].every(result => result.status === 'rejected'
         && result.reason && result.reason.status === 503
         && result.reason.payload && typeof result.reason.payload === 'object' && !Array.isArray(result.reason.payload)
         && referenceExactKeys(result.reason.payload, ['error']) && result.reason.payload.error === 'telemetry unavailable')
       && trafficResult.status === 'rejected' && trafficResult.reason && trafficResult.reason.status === 503
       && unavailableTrafficResponse(trafficResult.reason.payload);
+    const expectedMissingStore = setupState.sourceStatus === 'not_configured' && !state.lastSuccessfulRefresh && evidenceUnavailable;
     if (expectedMissingStore) {
       state.telemetryNotConfigured = true;
       state.lastRefreshFailed = false;
@@ -2053,10 +2060,11 @@ async function refresh(announce = true) {
       renderTrafficUnavailable(false);
       setSnapshotStatus('unconfigured');
       setConnection(state.paused ? 'Dashboard API · reachable, no audit store, refresh paused' : 'Dashboard API · reachable, no audit store', '');
-      if (announce) byId('refresh-announcement').textContent = 'No audit store was available at launch. Import real data, then restart this HUD.';
+      if (announce) byId('refresh-announcement').textContent = 'No audit store was available at launch. Import real data into the configured location, then refresh this HUD.';
       return;
     }
     state.telemetryNotConfigured = false;
+    state.evidenceUnavailable = evidenceUnavailable;
     if (summaryResult.status !== 'fulfilled' || eventsResult.status !== 'fulfilled' || trafficResult.status !== 'fulfilled') {
       throw new Error('dashboard refresh failed');
     }
@@ -2081,7 +2089,8 @@ async function refresh(announce = true) {
     state.lastRefreshFailed = true;
     renderTrafficUnavailable(Boolean(state.traffic));
     if (!state.lastSuccessfulRefresh) renderInitialUnavailable();
-    setConnection(state.paused ? 'Dashboard API · unavailable, refresh paused' : 'Dashboard API · unavailable', 'error');
+    const label = state.evidenceUnavailable ? 'Dashboard API · reachable, evidence unavailable' : 'Dashboard API · unavailable';
+    setConnection(label + (state.paused ? ', refresh paused' : ''), 'error');
     setSnapshotStatus('stale');
     if (announce) {
       byId('refresh-announcement').textContent = state.lastSuccessfulRefresh
@@ -2104,7 +2113,7 @@ function togglePause() {
       setConnection('Dashboard API · reachable, no audit store, refresh paused', '');
       setSnapshotStatus('unconfigured');
     } else if (state.lastRefreshFailed) {
-      setConnection('Dashboard API · unavailable, refresh paused', 'error');
+      setConnection(state.evidenceUnavailable ? 'Dashboard API · reachable, evidence unavailable, refresh paused' : 'Dashboard API · unavailable, refresh paused', 'error');
       setSnapshotStatus('stale');
     } else {
       const pausedLabel = state.lastSuccessfulRefresh
@@ -2203,7 +2212,8 @@ INDEX_HTML = compose_operations(INDEX_HTML)
 INDEX_HTML = INDEX_HTML.replace('<section class="storage-panel" id="storage-setup"', APPS_SETUP_HTML + '<section class="storage-panel" id="storage-setup"', 1)
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
 INDEX_HTML = compose_polish(compose_intelligence(INDEX_HTML))
-DASHBOARD_CSS += MAP_CSS + KNOWLEDGE_CSS + POLISH_CSS
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + "\nbootstrap();\n"
+INDEX_HTML = compose_findings(compose_settings(INDEX_HTML))
+DASHBOARD_CSS += SETTINGS_CSS + MAP_CSS + KNOWLEDGE_CSS + POLISH_CSS + FINDINGS_CSS + VISUAL_CONTROLS_CSS
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + SETTINGS_JS + VISUAL_CONTROLS_JS + CAUTION_JS + FINDINGS_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))

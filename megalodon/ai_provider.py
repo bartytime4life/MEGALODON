@@ -222,7 +222,7 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
             or type(settings.model_digest) is not str
             or re.fullmatch(r"[a-f0-9]{64}", settings.model_digest) is None
             or type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 1800
-            or settings.compute_mode not in ("cpu", "auto")
+            or settings.compute_mode not in ("cpu", "auto") or type(settings.keep_warm) is not bool
             or type(settings.max_context) is not int or not 256 <= settings.max_context <= 4096):
         raise AIProviderError("POLICY_REJECTION")
     if deadline is not None and time.monotonic() >= deadline:
@@ -319,7 +319,7 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
         raise AIProviderError('POLICY_REJECTION')
     payload = {
         "model": settings.model, "prompt": prompt, "stream": False,
-        "think": False, "raw": False, "keep_alive": 0,
+        "think": False, "raw": False, "keep_alive": 300 if settings.keep_warm else 0,
         # Short background advice runs on CPU, leaving GPU memory available to
         # interactive models and avoiding automatic GPU allocation failures.
         "options": {"temperature": 0, "num_ctx": settings.max_context, "num_batch": 64, "num_gpu": 0 if settings.compute_mode=="cpu" else -1,
@@ -368,9 +368,32 @@ def _generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respo
 
 
 
+def _prepare(settings: AISettings, deadline: float | None = None) -> str:
+    """Load only the admitted pinned model, without submitting evidence or a prompt."""
+    if type(settings.timeout_seconds) is not int or not 1 <= settings.timeout_seconds <= 1800:
+        raise AIProviderError('POLICY_REJECTION')
+    deadline = time.monotonic() + settings.timeout_seconds if deadline is None else deadline
+    _admitted(settings, deadline)
+    payload = dict(model=settings.model, prompt='', stream=False, keep_alive=300,
+                   options=dict(num_ctx=settings.max_context, num_batch=64,
+                                num_gpu=0 if settings.compute_mode == 'cpu' else -1))
+    data = _json(_request('/api/generate', 'POST', json.dumps(payload).encode('ascii'),
+                         max(0, deadline - time.monotonic()), deadline=deadline))
+    if (type(data) is not dict or data.get('model') != settings.model or data.get('done') is not True
+            or data.get('response') != '' or data.get('thinking') not in (None, '')
+            or time.monotonic() >= deadline):
+        raise AIProviderError('INVALID_RESPONSE')
+    return ''
+
+
+def prepare_model(settings: AISettings) -> None:
+    """Share generation admission, cancellation and manual-request priority for a load."""
+    generate(settings, '', priority='background', owner='hud-model-ready', load_only=True)
+
+
 def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, response_format: str = 'text',
              priority: str = 'manual', owner=None, choices: tuple[str, ...] = (),
-             deadline: float | None = None) -> str:
+             deadline: float | None = None, load_only: bool = False) -> str:
     """Generate once and retain truthful readiness observations without disk writes."""
     key=(settings.model,settings.model_digest,settings.compute_mode);start=time.monotonic()
     def record(**fields):
@@ -383,6 +406,8 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
     stamp=lambda:datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
     global _active_priority, _active_owner, _manual_waiters
     if priority not in {'manual','background'}:raise AIProviderError('POLICY_REJECTION')
+    if type(load_only) is not bool or (load_only and (priority != 'background' or owner != 'hud-model-ready')):
+        raise AIProviderError('POLICY_REJECTION')
     if deadline is not None and (type(deadline) not in (int, float) or not math.isfinite(deadline)):
         raise AIProviderError('POLICY_REJECTION')
     if deadline is not None and time.monotonic() >= deadline:
@@ -413,26 +438,30 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
             raise AIProviderError('REQUEST_TIMEOUT')
         raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
     _request_context.cancel=_active_cancel
-    record(running=True,started_at=stamp(),timeout_seconds=settings.timeout_seconds)
+    if not load_only:
+        record(running=True,started_at=stamp(),timeout_seconds=settings.timeout_seconds)
     try:
         if _active_cancel.is_set():
             raise AIProviderError('REQUEST_CANCELLED')
         if deadline is not None and time.monotonic() >= deadline:
             raise AIProviderError('REQUEST_TIMEOUT')
-        result=_generate(settings,prompt,max_tokens=max_tokens,response_format=response_format,
-                         choices=choices,deadline=deadline)
+        result=(_prepare(settings,deadline) if load_only else
+                _generate(settings,prompt,max_tokens=max_tokens,response_format=response_format,
+                          choices=choices,deadline=deadline))
     except AIProviderError as exc:
         # A competing request must not erase the result of an active invocation.
-        if exc.code!='CONCURRENCY_LIMIT_REACHED':
+        if not load_only and exc.code!='CONCURRENCY_LIMIT_REACHED':
             record(last_attempt_at=stamp(),error_code=exc.code,duration_ms=round((time.monotonic()-start)*1000))
         raise
     finally:
-        record(running=False)
+        if not load_only:
+            record(running=False)
         _request_context.cancel=None
         with _priority_lock:
             _active_priority=None;_active_owner=None
         _generation_lock.release()
-    record(last_attempt_at=stamp(),last_response_at=stamp(),error_code=None,duration_ms=round((time.monotonic()-start)*1000))
+    if not load_only:
+        record(last_attempt_at=stamp(),last_response_at=stamp(),error_code=None,duration_ms=round((time.monotonic()-start)*1000))
     return result
 
 

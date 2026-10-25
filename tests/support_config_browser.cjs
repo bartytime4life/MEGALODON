@@ -49,6 +49,24 @@ process.stdin.on('end',async()=>{
  assert.equal(requests.at(-1).opts.headers['X-Megalodon-Config-Token'],fixture.token);
  await click('support-model-refresh');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_refresh'});
  change('support-model-select','');const modelPosts=postCount();await click('support-model-save');assert.equal(postCount(),modelPosts);
+ // Automatic loading has its own saved policy and never claims a verified response.
+ const lifecycle={state:'disabled',message:'Automatic loading is off.',error_code:null,retry_in_seconds:null,updated_at:null};
+ payload={...fixture,model:{...model,keep_ready:false,lifecycle}};await poll(10000);
+ assert.equal(get('support-model-ready').checked,false);assert.equal(get('support-model-load').disabled,true);
+ assert.match(get('support-model-lifecycle').textContent,/Turn on Keep model ready/);
+ get('support-model-ready').checked=true;get('support-model-ready').id='support-model-ready';context.document.activeElement=get('support-model-ready');
+ payload={...payload,model:{...payload.model,keep_ready:true,loaded:true,lifecycle:{...lifecycle,state:'ready',message:'Loaded.'}},job:{...fixture.job,state:'finished',action:'model_policy'}};
+ get('support-model-ready').events.change();context.document.body={};context.document.activeElement=context.document.body;await settle();assert.equal(get('support-model-ready').focused,true,'completed switch action restores focus lost while disabled');context.document.activeElement=null;
+ assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_policy',keep_ready:true});
+ assert.equal(get('support-model-load').disabled,false);assert.equal(get('support-model-loaded').textContent,'Loaded in memory');
+ assert.match(get('support-model-metrics').textContent,/No accepted response recorded/,'loaded is separate from last verified response');
+ let releasePolicyRead;hold=new Promise(resolve=>releasePolicyRead=resolve);const policyReading=poll(10000);await settle();assert.equal(get('support-model-ready').disabled,false,'background status polling preserves the interactive switch');releasePolicyRead();hold=null;await policyReading;
+ await click('support-model-load');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_load'});
+ // Failed reads recover by themselves and preserve the unsaved interface.
+ payload=fixture;failure=true;await poll(10000);assert.equal(get('support-config-qwen').disabled,true);
+ failure=false;const beforeRecover=postCount();await poll(5000);assert.equal(get('support-config-qwen').disabled,false);assert.equal(postCount(),beforeRecover);
+ failure=true;const beforeUnknown=postCount();await click('support-config-qwen');assert.equal(postCount(),beforeUnknown+1,'unknown network outcome is never replayed');
+ failure=false;await poll(5000);
  payload=fixture;
  // Every fixed action sends exactly its declared fields and the separate nonce.
  const scenarios=[['support-config-permissions',{action:'capture_permissions',interface:'wlan0'}],['support-config-capture-start',{action:'capture_start',interface:'wlan0'}],['support-config-wireshark-open',{action:'wireshark_open',interface:'wlan0'}],['support-config-wireshark-stop',{action:'wireshark_stop'}],['support-config-nmap-save',{action:'nmap_configure',nmap_target:'192.168.1.0/24'}],['support-config-clamav-save',{action:'clamav_configure',scan_folder:'Documents'}],['support-config-signatures',{action:'signature_update'}],['support-config-osquery',{action:'osquery_configure'}],['support-config-qwen-setup',{action:'qwen_configure'}],['support-config-suricata-setup',{action:'suricata_configure',interface:'wlan0'}],['support-config-qwen',{action:'qwen_check'}],['support-config-zeek',{action:'zeek_check'}],['support-config-suricata',{action:'suricata_check'}]];
@@ -78,7 +96,7 @@ process.stdin.on('end',async()=>{
  payload={...payload,geography_enabled:true};await poll(2000);assert.equal(get('live-geography-disable').disabled,false);assert.match(get('live-geography-opt-in').textContent,/enabled/);
  await click('live-geography-disable');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'geography_disable'});
  payload={...payload,geography_enabled:false};await poll(2000);assert.equal(get('live-geography-disable').disabled,true);assert.match(get('live-geography-opt-in').textContent,/off/);
- responseStatus=403;await click('live-geography-refresh');assert.equal(get('live-action-retry').hidden,false);const retryPosts=postCount();await click('live-action-retry');assert.equal(postCount(),retryPosts,'retry only refreshes controls');assert.equal(get('live-action-retry').hidden,true);
+ const beforeExpiredPosts=postCount();responseStatus=403;await click('live-geography-refresh');assert.equal(get('live-action-retry').hidden,true);assert.equal(postCount(),beforeExpiredPosts+2,'known rejection refreshes its token and retries the explicit action once');const retryPosts=postCount();await click('live-action-retry');assert.equal(postCount(),retryPosts,'manual retry only refreshes controls');
  await click('support-config-capture-stop');assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'capture_stop'});
  payload={...payload,capture:{...payload.capture,received:12,accepted:9,skipped:3},tools:[{id:'tshark',name:'<b>TShark</b>',state:'ready',message:'<img src=x>',checked_at:'2026-09-30T20:11:00Z'},{id:'wireshark',name:'Wireshark / capture access',state:'ready',message:'Live Wireshark launch requested for eth0.',checked_at:'2026-09-30T20:09:50Z'}]};await poll(2000);
  assert.match(get('support-wireshark-result').textContent,/Last Wireshark action result · 2026-09-30 20:09:50 UTC/);assert.match(get('support-wireshark-result').textContent,/launch requested/);assert.match(get('support-wireshark-result').textContent,/Current window state is not monitored/);assert.equal(get('support-capture-accepted').textContent,'9');assert.doesNotMatch(get('support-capture-message').textContent,/Awaiting usable/);assert.equal(get('support-config-tools').children[0].children[0].textContent,'<b>TShark</b>');assert.equal(get('support-config-tools').children[0].children[2].children[0].textContent,'Checked 2026-09-30 20:11:00 UTC');
@@ -87,11 +105,21 @@ process.stdin.on('end',async()=>{
  document.hidden=false;listeners.visibilitychange();await settle();assert.equal(get('support-config-capture-stop').disabled,false);
  payload={...fixture,job:{state:'finished',action:'qwen_check',message:'Local service checked.',started_at:'2026-09-30T20:10:00Z',finished_at:'2026-09-30T20:11:00Z'}};await poll(2000);assert.match(status(),/Last action finished at 2026-09-30 20:11:00 UTC/);assert.equal([...timers.values()].filter(v=>[2000,10000].includes(v.ms)).length,0,'collapsed idle panel stops polling');
  await click('support-apps-configure');await settle();responseStatus=409;before=postCount();await click('support-config-qwen');assert.equal(postCount(),before+1);assert.equal(requests.at(-1).opts.method,'GET');assert.match(status(),/already running/);
- responseStatus=403;await click('support-config-qwen');assert.match(status(),/permission or session check/);assert.equal(get('support-config-retry').hidden,false);assert.equal(get('support-config-qwen').disabled,true);assert.equal(get('support-capture-state').textContent,'Status unavailable');
+ const beforeExpiredModel=postCount();responseStatus=403;await click('support-config-qwen');assert.equal(postCount(),beforeExpiredModel+2);assert.equal(get('support-config-retry').hidden,true);assert.equal(get('support-config-qwen').disabled,false);
  await click('support-config-retry');assert.equal(get('support-config-qwen').disabled,false);responseStatus=400;await click('support-config-qwen');assert.match(status(),/settings were rejected/);await click('support-config-retry');
  failure=true;await poll(10000);assert.match(status(),/Unable to confirm/);failure=false;oversized=true;await click('support-config-retry');assert.equal(get('support-config-qwen').disabled,true);oversized=false;
  payload={...fixture,interfaces:Array.from({length:33},()=>fixture.interfaces[0])};await click('support-config-retry');assert.equal(get('support-config-qwen').disabled,true);
  payload={...fixture,token:'wrong'};await click('support-config-retry');assert.equal(get('support-config-qwen').disabled,true);
+ payload=fixture;await click('support-config-retry');
+ // A routine GET leaves the controls and the existing native options alone.
+ const option=get('support-config-interface').children[1],postsBeforeRead=postCount();
+ hold=new Promise(resolve=>release=resolve);const reading=poll(10000);await settle();
+ assert.equal(get('support-config-interface').disabled,false);assert.equal(get('support-config-qwen').disabled,false);assert.equal(get('support-config').attributes['aria-busy'],'false');
+ change('support-config-nmap-target','192.168.44.0/24');const queued=click('support-config-qwen');await settle();assert.equal(postCount(),postsBeforeRead,'an action waits for the in-flight status check');
+ release();hold=null;await reading;await queued;
+ assert.equal(postCount(),postsBeforeRead+1,'the deliberate action runs once after successful validation');assert.equal(get('support-config-interface').children[1],option,'unchanged options retain their native nodes');assert.equal(get('support-config-nmap-target').value,'192.168.44.0/24');
+ // An invalid refresh must revoke the queued action instead of using stale authority.
+ await click('support-config-retry');hold=new Promise(resolve=>release=resolve);const badReading=poll(10000);await settle();const refused=click('support-config-qwen');const beforeRefusal=postCount();payload={...fixture,token:'wrong'};release();hold=null;await badReading;await refused;assert.equal(postCount(),beforeRefusal);
  payload=fixture;await click('support-config-retry');hold=new Promise(resolve=>release=resolve);const pending=click('support-config-qwen');document.hidden=true;listeners.visibilitychange();release();hold=null;await pending;assert.match(status(),/paused/);assert.equal([...timers.values()].filter(v=>[2000,10000].includes(v.ms)).length,0);
  console.log('support configuration UI behavior passed');
 }).on('error',error=>{console.error(error);process.exitCode=1;});

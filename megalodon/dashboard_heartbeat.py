@@ -27,7 +27,7 @@ HEARTBEAT_CSS = r"""
 """
 
 HEARTBEAT_JS = r"""
-const heartbeatState = {report: null, byId: new Map(), catalog: null, supportApps: null, supportAppsFailed: false, launchingApps: new Set(), job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false, managementEnabled: false, catalogFailed: false};
+const heartbeatState = {report: null, byId: new Map(), catalog: null, supportApps: null, supportAppsFailed: false, launchingApps: new Set(), job: null, timer: 0, lastAt: 0, failed: false, failures: 0, polling: false, managementEnabled: false, catalogFailed: false, sessionToken: '', sessionFailed: false, sessionDismissed: false, submitting: false};
 const heartbeatLabels = {green: 'Presence observed', amber: 'Setup incomplete', red: 'Not found', grey: 'Status unknown'};
 function heartbeatStale() {
   return heartbeatState.failed || Boolean(heartbeatState.report &&
@@ -100,10 +100,11 @@ function installDisabledReason(mine, running) {
   // A button disabled because it is itself the running job already says so
   // in its own text ("Installing…"/"Starting…"); no separate reason needed.
   if (mine && running) return null;
+  if (heartbeatState.submitting) return 'Submitting your request…';
   if (running) return 'Another install or service start is already running on this computer; wait for it to finish.';
   if (heartbeatStale()) return 'Tool observations are stale; wait for the next check.';
-  if (!heartbeatState.managementEnabled) return 'Authorize local installation before using this button.';
-  if (!toolManagementToken()) return 'Enter the operator token above to use Install, Start and Open.';
+  if (!heartbeatState.managementEnabled) return 'Installation is disabled for this HUD session. Open Installation session and terminal options below.';
+  if (!toolManagementToken()) return heartbeatState.sessionFailed?'Local installation session could not be refreshed. Check again to reconnect.':'Connecting to the local installation session…';
   return null;
 }
 function installControl(id, name) {
@@ -113,18 +114,27 @@ function installControl(id, name) {
   return wrap;
 }
 function toolManagementToken() {
+  if (heartbeatState.sessionToken) return heartbeatState.sessionToken;
   const input = byId('tool-management-token');
   return input && typeof input.value === 'string' && /^[A-Za-z0-9_-]{32}$/.test(input.value) ? input.value : '';
 }
+async function refreshInstallSession(force = false) {
+  if (!heartbeatState.managementEnabled || heartbeatState.sessionDismissed) return '';
+  if (!force && heartbeatState.sessionToken) return heartbeatState.sessionToken;
+  const value = await heartbeatFetch('/api/install/token');
+  if (!value || value.schema !== 'megalodon-tool-session-v1' || typeof value.enabled !== 'boolean'
+      || !(value.token === null || /^[A-Za-z0-9_-]{32}$/.test(value.token))) throw Error('Invalid local installation session');
+  heartbeatState.sessionToken = value.enabled ? value.token || '' : '';
+  heartbeatState.sessionFailed = !heartbeatState.sessionToken;
+  return heartbeatState.sessionToken;
+}
 function paintToolManagement() {
   const input = byId('tool-management-token'), status = byId('tool-management-status');
-  if (input) {
-    input.disabled = !heartbeatState.managementEnabled;
-    if (!heartbeatState.managementEnabled) input.value = '';
-  }
-  if (status) status.textContent = heartbeatState.catalogFailed ? 'Install status unavailable. Tool observations are checked separately; management is disabled until status recovers.' : heartbeatState.managementEnabled
-    ? 'Tool management is enabled for this launch. Paste its token from the HUD terminal to use Install, Start and Open. Each action still needs your confirmation.'
-    : 'Observation mode. To use Install, Start and Open, restart the HUD with --enable-tool-management as your ordinary Linux user. Guides and terminal commands remain available.';
+  if (input) { input.disabled = !heartbeatState.managementEnabled; if (!heartbeatState.managementEnabled) input.value = ''; }
+  if (status) status.textContent = heartbeatState.catalogFailed ? 'Install status unavailable. Check again to reconnect.'
+    : heartbeatState.managementEnabled && toolManagementToken() ? 'Local installation is ready. Each install or service start asks for your confirmation. System passwords stay in the operating-system prompt.'
+    : heartbeatState.managementEnabled ? 'Connecting to the local installation session. Check tool presence to retry; terminal options remain available.'
+    : 'Installation is disabled in this launch. Use the restart command below, or run the reviewed terminal recipe.';
 }
 function appendRemovalPlan(wrap, entry, tool, name) {
   if (!entry.uninstall_terminal || !tool || tool.installed !== 'yes' || heartbeatStale()
@@ -145,6 +155,9 @@ function paintInstallControl(wrap) {
   const entry = heartbeatState.catalog && heartbeatState.catalog.find(item => item.id === toolId);
   const tool = heartbeatState.byId.get(toolId);
   const job = heartbeatState.job;
+  const renderKey = JSON.stringify([entry,tool && [tool.installed,tool.service,tool.model,tool.expects_service,tool.selected_model?.model],job,heartbeatState.managementEnabled,Boolean(toolManagementToken()),heartbeatState.sessionFailed,heartbeatState.submitting,heartbeatStale()]);
+  if(wrap.heartbeatRenderKey===renderKey)return;wrap.heartbeatRenderKey=renderKey;
+  const focused=typeof wrap.contains==='function'&&wrap.contains(document.activeElement),focusIndex=focused?[...wrap.querySelectorAll('button,a,summary')].indexOf(document.activeElement):-1;
   if (typeof wrap.replaceChildren === 'function') wrap.replaceChildren();
   if (!entry || toolId === 'core') return;
   const mine = job && job.tool === toolId;
@@ -167,7 +180,7 @@ function paintInstallControl(wrap) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
     const running = job && job.state === 'running';
     button.textContent = mine && running ? 'Installing…' : model ? 'Download Qwen model' : `Install ${name}`;
-    button.disabled = Boolean(running || heartbeatStale() || !heartbeatState.managementEnabled || !toolManagementToken());
+    button.disabled = Boolean(heartbeatState.submitting || running || heartbeatStale() || !heartbeatState.managementEnabled || !toolManagementToken());
     const reason = installDisabledReason(mine, running);
     button.title = reason || entry.summary;
     button.addEventListener('click', () => startInstall(toolId, name, entry));
@@ -180,7 +193,7 @@ function paintInstallControl(wrap) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
       const running = job && job.state === 'running';
       button.textContent = mine && running ? 'Starting…' : 'Start service';
-      button.disabled = Boolean(running || heartbeatStale() || !heartbeatState.managementEnabled || !toolManagementToken());
+      button.disabled = Boolean(heartbeatState.submitting || running || heartbeatStale() || !heartbeatState.managementEnabled || !toolManagementToken());
       const reason = installDisabledReason(mine, running);
       button.title = reason || `Starts the ${name} system service. A process observation does not establish health or integration.`;
       button.addEventListener('click', () => startInstall(toolId, name, entry, 'start'));
@@ -205,6 +218,7 @@ function paintInstallControl(wrap) {
   if (mine && job.state === 'failed') wrap.append(textNode('p', `${starting ? 'Service start' : 'Install'} failed.${alternative ? ` Terminal alternative: ${alternative}` : ''}`, 'hb-detail'));
   if (mine && job.state === 'succeeded') wrap.append(textNode('p', `${starting ? 'Service-start command' : 'Installation command'} finished. Status is checked separately.`, 'hb-detail'));
   appendRemovalPlan(wrap, entry, tool, name);
+  if(focused){const nodes=wrap.querySelectorAll('button,a,summary');nodes[Math.max(0,focusIndex)]?.focus({preventScroll:true});}
 }
 function repaintHeartbeat() {
   paintToolManagement();
@@ -321,15 +335,18 @@ async function pollHeartbeat(force = false) {
     heartbeatState.supportApps = null;
     heartbeatState.supportAppsFailed = true;
   }
+  if(heartbeatState.managementEnabled&&!heartbeatState.sessionToken&&!heartbeatState.sessionDismissed){try{await refreshInstallSession();}catch(_){heartbeatState.sessionFailed=true;}}
+  if(!heartbeatState.managementEnabled)heartbeatState.sessionToken='';
   heartbeatState.polling = false;
   repaintHeartbeat();
   if (typeof renderTelemetryConnections === 'function') renderTelemetryConnections();
   const installing = heartbeatState.job && heartbeatState.job.state === 'running';
-  const delay = heartbeatState.catalogFailed && !heartbeatState.failed ? 5000 : heartbeatState.failed ? Math.min(60000, 5000 * 2 ** (heartbeatState.failures - 1)) : installing ? 2000 : 60000;
+  const delay = installing ? 2000 : (heartbeatState.catalogFailed || heartbeatState.sessionFailed) && !heartbeatState.failed ? 5000 : heartbeatState.failed ? Math.min(60000, 5000 * 2 ** (heartbeatState.failures - 1)) : installing ? 2000 : 60000;
   if (document.visibilityState !== 'hidden') heartbeatState.timer = window.setTimeout(pollHeartbeat, delay);
 }
 async function startInstall(toolId, name, entry, action = 'install') {
-  const token = toolManagementToken();
+  let token = toolManagementToken();
+  if(heartbeatState.submitting)return;
   if (!heartbeatState.managementEnabled || !token || heartbeatStale()) {
     toolManagementFeedback('Tool management needs an enabled launch, its operator token, and current tool observations.');
     return;
@@ -338,17 +355,18 @@ async function startInstall(toolId, name, entry, action = 'install') {
   const question = starting ? `Start the ${name} service?\n\nIt keeps running until you stop it or restart the computer, and may start automatically at boot if its package enabled that.`
     : `Install ${name}?\n\n${entry.summary}`;
   if (!window.confirm(`${question}\n\nYour computer may ask for your password. MEGALODON never sees it.`)) return;
+  heartbeatState.submitting=true;repaintHeartbeat();
   try {
-    const job = await heartbeatFetch('/api/install', {method: 'POST', body: JSON.stringify({tool: toolId, action}),
-      headers: {'Content-Type': 'application/json', 'X-Megalodon-Install': '1', 'X-Megalodon-Install-Token': token}});
+    const submit=()=>heartbeatFetch('/api/install', {method:'POST',body:JSON.stringify({tool:toolId,action}),headers:{'Content-Type':'application/json','X-Megalodon-Install':'1','X-Megalodon-Install-Token':token}});
+    let job;try{job=await submit();}catch(error){if(error.status!==403)throw error;heartbeatState.sessionToken='';byId('tool-management-token').value='';try{token=await refreshInstallSession(true);}catch(_){heartbeatState.sessionFailed=true;throw error;}if(!token)throw error;job=await submit();}
     heartbeatState.job = job;
     heartbeatState.jobSeq = (heartbeatState.jobSeq || 0) + 1;
     if (!showInstallCompletion(job)) toolManagementFeedback(`${starting ? 'Starting' : 'Installing'} ${name}… Approve the password prompt if one appears.`);
   } catch (error) {
-    if (error.status === 403) byId('tool-management-token').value = '';
+    if (error.status === 403) {heartbeatState.sessionToken='';byId('tool-management-token').value='';}
     toolManagementFeedback(`${name} could not be ${starting ? 'started' : 'installed'}: ${error.message}.`);
   }
-  repaintHeartbeat(); pollHeartbeat();
+  heartbeatState.submitting=false;repaintHeartbeat(); pollHeartbeat();
 }
 const managementInput = byId('tool-management-token'), managementForget = byId('tool-management-forget');
 const toolCheckNow = byId('tool-check-now');
@@ -365,6 +383,7 @@ if (toolCheckNow) toolCheckNow.addEventListener('click', async () => {
 });
 if (managementInput) managementInput.addEventListener('input', repaintHeartbeat);
 if (managementForget) managementForget.addEventListener('click', () => {
+  heartbeatState.sessionToken='';heartbeatState.sessionDismissed=true;
   if (managementInput) managementInput.value = '';
   repaintHeartbeat();
 });

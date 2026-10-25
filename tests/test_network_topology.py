@@ -49,6 +49,46 @@ def test_passive_inventory_has_no_implied_packets_or_duplicate_routes():
     assert all(r['active'] is False and r['kind']=='route' for r in value['edges'])
 
 
+def test_passive_broadcast_entries_are_not_devices_or_gateways():
+    refused = ['192.168.0.0', '192.168.15.255', '255.255.255.255']
+    neighbors = NEIGHBORS + [dict(dev='eth0', dst=ip, state=['PERMANENT']) for ip in refused]
+    routes = ROUTES + [dict(dev='eth0', gateway=ip) for ip in refused]
+    value = parse_inventory(ADDRESSES, routes, neighbors, STAMP)
+    assert not set(refused) & {row['ip'] for row in value['nodes'].values()}
+    assert len(value['edges']) == 2
+
+
+def test_broadcast_refusal_uses_the_observed_interface(topology):
+    # .255 is a device on eth0's /20, even with a /24 on another interface.
+    addresses = ADDRESSES + [dict(ifname='eth1', addr_info=[dict(local='192.168.1.5', prefixlen=24)])]
+    neighbors = [dict(dev=name, dst='192.168.1.255', state=['PERMANENT']) for name in ('eth0', 'eth1')]
+    topology._inventory = parse_inventory(addresses, ROUTES, neighbors, STAMP)
+    passive = [(row['ip'], row['interface']) for row in topology._inventory['nodes'].values()]
+    assert ('192.168.1.255', 'eth0') in passive
+    assert ('192.168.1.255', 'eth1') not in passive
+    current = live()
+    current['connections'][0]['b']['ip'] = '192.168.1.255'
+    topology.configuration.live_snapshot = lambda: current
+    value = topology.snapshot(view='all', limit=200)
+    assert any(row['kind'] == 'observed' for row in value['edges'])
+    assert next(row for row in value['nodes'] if row['ip'] == '192.168.1.255')['observed']
+    current['capture']['interface'] = 'eth1'
+    value = topology.snapshot(view='all', limit=200)
+    assert not any(row['kind'] == 'observed' for row in value['edges'])
+    assert not any(row['observed'] for row in value['nodes'])
+    current['capture']['interface'] = ''
+    assert not any(row['observed'] for row in topology.snapshot(view='all', limit=200)['nodes'])
+
+
+def test_discovery_broadcast_never_becomes_a_displayed_device(topology):
+    topology._discovered = parse_discovery(
+        b'<nmaprun><host><status state="up"/><address addr="192.168.15.255" addrtype="ipv4"/></host></nmaprun>',
+        '192.168.15.0/24', 'eth0', STAMP)
+    for row in topology._discovered.values():
+        row['last_seen'] = row['last_discovered_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    assert '192.168.15.255' not in {row['ip'] for row in topology.snapshot()['nodes']}
+
+
 @pytest.mark.parametrize('scopes',[
  [],['8.8.8.0/24'],['192.168.8.0/21','192.168.8.0/24'],['192.168.32.0/24'],['172.17.0.0/16'],['fd00::/64'],['fd00::99/128'],['192.168.2.1/24'],['192.168.2.0/24;id'],['127.0.0.1/32'],['192.168.0.0/19'],['192.168.0.0/20','172.17.0.0/24'],['fd00::20'],[None]
 ])
@@ -309,7 +349,7 @@ def test_broadcast_and_non_unicast_flows_never_become_devices_or_count(topology)
     current=live()
     def flow(identifier,a,b,sent=240):
         return dict(id=identifier,protocol='UDP',a=dict(ip=a,port=138,local=a=='192.168.2.10'),b=dict(ip=b,port=138,local=False),first_seen=STAMP,last_seen=STAMP,active=True,a_to_b=dict(bytes=sent,packets=1),b_to_a=dict(bytes=0,packets=0))
-    refused=['192.168.15.255','192.168.0.0','255.255.255.255','172.17.255.255','172.17.0.0']
+    refused=['192.168.15.255','192.168.0.0','255.255.255.255']
     current['connections']+=[flow(f'b{n}','192.168.2.10',ip) for n,ip in enumerate(refused)]
     # Side b is refused after side a would already have been counted.
     current['connections']+=[flow('m1','192.168.2.20','224.0.0.251'),flow('b9','192.168.2.20','192.168.15.255')]
@@ -324,6 +364,13 @@ def test_broadcast_and_non_unicast_flows_never_become_devices_or_count(topology)
     peer=next(n for n in value['nodes'] if n['ip']=='192.168.2.20')
     assert peer['sent_bytes']==200 and peer['received_bytes']==100 and peer['packets']==3 and peer['active_connections']==1
     assert {e['id'] for e in value['edges'] if e['kind']=='observed'}=={'flow-f1','flow-host'}
+
+    current['capture']['interface'] = 'docker0'
+    current['connections'] = [flow('container-broadcast', '172.17.0.1', '172.17.255.255'),
+                              flow('container-network', '172.17.0.1', '172.17.0.0')]
+    value = topology.snapshot(view='all', limit=200)
+    assert not any(row['observed'] for row in value['nodes'])
+    assert not any(row['ip'] in {'172.17.255.255', '172.17.0.0'} for row in value['nodes'])
 
 
 def test_public_subnet_broadcast_is_refused_like_a_private_one(topology):

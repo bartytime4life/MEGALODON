@@ -41,6 +41,7 @@ from .hud_password import PasswordVerifier, _password_bytes
 
 MANIFEST_SCHEMA = "megalodon-local-install-v1"
 MAX_MANIFEST_BYTES = 64 * 1024
+MAX_RETAINED_RELEASES = 40
 MAX_SETTINGS_BYTES = 64 * 1024
 RELEASE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -263,7 +264,7 @@ def _load_manifest(paths: InstallPaths) -> dict[str, object] | None:
         ):
             raise InstallError("installation manifest has invalid artifact metadata")
     releases = value["releases"]
-    if not isinstance(releases, list) or not 1 <= len(releases) <= 32:
+    if not isinstance(releases, list) or not 1 <= len(releases) <= MAX_RETAINED_RELEASES:
         raise InstallError("installation manifest has an invalid release list")
     release_ids: set[str] = set()
     for item in releases:
@@ -450,6 +451,7 @@ def _default_settings(paths: InstallPaths) -> bytes:
         "[dashboard]\n"
         'host = "127.0.0.1"\n'
         "port = 8797\n"
+        "tool_management = true\n"
     ).encode("utf-8")
 
 
@@ -679,10 +681,10 @@ def install(source: Path, paths: InstallPaths | None = None) -> dict[str, object
 def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths) -> dict[str, object]:
     from .install_lifecycle import service_running, service_action, verify_running, retire_releases
     existing = _load_manifest(selected)
-    if existing is not None and len(existing["releases"]) >= 32:
+    if existing is not None and len(existing["releases"]) >= MAX_RETAINED_RELEASES:
         existing = retire_releases(selected, existing)
-        if len(existing['releases']) >= 32:
-            raise InstallError("Previous releases are still in use; close older MEGALODON sessions before upgrading")
+        if len(existing['releases']) >= MAX_RETAINED_RELEASES:
+            raise InstallError("Retained-release limit reached; old releases are in use or process access is uncertain. Review release retention before upgrading")
     previous_bytes: dict[str, bytes | None] = {}
     modes = _artifact_modes()
     for name, path in _artifact_paths(selected).items():

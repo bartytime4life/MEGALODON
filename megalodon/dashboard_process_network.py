@@ -62,7 +62,7 @@ function renderProcessNetwork(panel, payload) {
   const children=[node('p',`${payload.programs_total} programs hold network sockets · ${payload.flagged_total} need review · ${payload.processes_reviewed} of this account's processes reviewed · checked ${time(payload.reviewed_at)}`)];
   if(!payload.programs.length)children.push(node('p','No program of this account holds a non-loopback network socket.'));
   for(const r of payload.programs){
-    const item=document.createElement('details');if(r.flags.length)item.dataset.review='true';
+    const item=document.createElement('details');item.dataset.refreshKey=JSON.stringify([r.program,r.executable,r.parent]);if(r.flags.length)item.dataset.review='true';
     item.append(node('summary',(r.flags.length?'Review · ':'')+`${r.program} · ${r.executable}`));
     const facts=document.createElement('dl');
     const remotes=r.remotes.length?r.remotes.join(', ')+(r.remotes_total>r.remotes.length?` and ${r.remotes_total-r.remotes.length} more`:''):'none';
@@ -74,7 +74,7 @@ function renderProcessNetwork(panel, payload) {
   }
   if(payload.programs_total>payload.programs.length)children.push(node('p',`Showing the first ${payload.programs.length} of ${payload.programs_total} programs, those needing review first. python -m megalodon.process_network lists the same first ${__PROGRAMS__}.`));
   if(payload.gaps.length){
-    const item=document.createElement('details');item.append(node('summary',`Coverage gaps (${payload.gaps.length})`));
+    const item=document.createElement('details');item.dataset.refreshKey='gaps';item.append(node('summary',`Coverage gaps (${payload.gaps.length})`));
     const list=document.createElement('ul');for(const gap of payload.gaps)list.append(node('li',gap));
     item.append(list);children.push(item);
   }

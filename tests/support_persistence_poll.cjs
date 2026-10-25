@@ -9,8 +9,8 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  const settle=()=>new Promise(r=>setImmediate(r));vm.runInNewContext(code,context);
  callbacks.get('workspace-setup')();await settle();
  assert.equal(requests.length,1);
- if(malformed){ // a rejected placeholder is shown as unreadable and never polled
-   assert.match(get('persistence-review').children[0].textContent,/unavailable|could not be read/);assert.equal(timers.size,0);
+ if(malformed){ // a rejected summary stays unreadable and uses normal Setup polling
+   assert.match(get('persistence-review').children[0].textContent,/unavailable|could not be read/);assert.equal(timers.size,1);assert.equal([...timers.values()][0].ms,10000);
    console.log('malformed pending summary is not polled');return;
  }
  assert.match(get('persistence-review').children[0].textContent,/Reviewing persistence locations/);
@@ -19,7 +19,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm');let input='';pr
  timers.clear();polls[0].fn();await settle();
  assert.equal(requests.length,2);assert.match(get('persistence-review').children[0].textContent,/startup items reviewed · no baseline recorded/);
  assert.equal(get('persistence-baseline').disabled,false,'the initial baseline becomes available without navigation');
- assert.equal(timers.size,0,'a completed summary needs no fast polling');
+ assert.equal(timers.size,1,'Setup keeps one status refresh scheduled');assert.equal([...timers.values()][0].ms,10000,'a completed summary leaves the fast pending cadence');
  assert.ok(requests.every(r=>r.opts.method==='GET'),'polling never records a baseline');
  console.log('pending persistence summary is polled');
 }).on('error',e=>{console.error(e);process.exitCode=1;});process.on('unhandledRejection',e=>{console.error(e);process.exitCode=1;});

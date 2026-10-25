@@ -162,6 +162,7 @@ production service.
 | `/api/address-investigation` | Required canonical numeric `ip`; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Explicit read over an address in the retained endpoint window; at most 16 KiB. Records observations and non-authoritative relay port clues, never an original address or person identity. No external lookup. |
 | `/api/address-map` | Same explicit-read and canonical retained-address checks | At most 8 KiB of local `megalodon-address-location-v1` context. Includes an approximate region, nullable accuracy radius and source dates, or explicit unmapped state. No external lookup or acquisition. |
 | `/api/defense` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed workflow state, private audit summary, active/uncertain containment and separate POST nonce; [defense contract](visual-operations-defense.md) |
+| `/api/findings` | Optional single-valued `start,end,source,severity,limit,cursor,selected`; explicit local check and non-root operator required | Bounded retained detector/sensor/pattern page with source coverage, selected facts and evidence-bound review state; at most 256 KiB. [Findings review](findings-review.md) defines the separate fixed POST actions and nonce. |
 | `/api/live-connections` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Up to 128 recent captured conversations, observed directions, approximate location context and background state; see [live connection globe](live-connection-globe.md). GET starts no action. |
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
@@ -226,6 +227,9 @@ pairs; it omits process IDs, command lines, paths, users and host identity.
 Standalone tools report `not_applicable`. Query arguments and POST are refused.
 Repeated GETs and browser refresh never repeat either startup observation. The
 client validates both receipts; no report import is needed locally.
+The source status describes the startup selection, not present readability or
+capture health. Setup directs the operator to **Check this computer** for current
+access; traffic and capture retain their separate status checks.
 
 **Check this computer** uses a separate `/api/local-checks` endpoint. It is
 enabled only for `serve(..., inspect_tools=True)` (the `hud` command), accepts no
@@ -650,9 +654,12 @@ Nodes add `on_link`, `protocols`, and source/time-qualified `services`; optional
 `last_discovered_at` distinguishes actual discovery replies from refreshed local
 cache observations. Per-direction edge activity expires independently.
 Observed flows to the limited broadcast address, or to the network or broadcast
-address of any local IPv4 interface subnet of /30 or wider (public subnets
-included), are not devices; such a flow adds
-no node, edge or counter to either endpoint.
+address on the capture interface's IPv4 subnet of /30 or wider (public subnets
+included), are not devices; such a flow adds no node, edge or counter to either
+endpoint. Without a known capture interface, all local subnets are excluded
+conservatively. Broadcast refusal also applies to passive routes, neighbor rows
+and displayed discovery results, using each observation's interface. An address
+on another interface's /24 boundary can remain an ordinary host on a /20.
 `persistence` reports history-write state independently of live inventory health.
 
 `GET /api/network/history?ip=<IP>&interface=<interface>&limit=20&cursor=<cursor>`

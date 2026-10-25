@@ -191,8 +191,8 @@ async function loadSetup() {
     setupState.sourceStatus = value.source_status;
     setupState.loadFailed = false;
     byId('setup-source').textContent = value.source_status === 'connected'
-      ? 'The local data file is open. Traffic and alert counts come from this file.'
-      : 'No local data file is available yet. Tool checks still work. After the first successful import, reopen the HUD before the new store appears.';
+      ? 'A local data source was selected at startup. Use Check this computer to verify current access; capture status and traffic counts are checked separately.'
+      : 'No local data file was available at startup. Tool checks still work. After importing into the configured location, refresh the HUD to check again. A different data source needs a new session.';
     byId('setup-readiness').textContent = report
       ? `Startup observations from ${formatRefreshTime(new Date(report.checked_at))}. Use Check this computer to update them.`
       : 'Choose Check this computer to read current local observations.';
@@ -366,7 +366,7 @@ function renderLocalCheckResults() {
   }
   const source = {
     available: ['Readable', 'The selected store passed a bounded read. Review Traffic for qualified evidence.'],
-    not_configured: ['No data file yet', 'You can use setup without data. After the first successful import, reopen the HUD before the new store appears. Open Help for import guidance.'],
+    not_configured: ['No data file yet', 'You can use setup without data. After importing into the configured location, refresh the HUD to check again. Open Help for import guidance; a different data source needs a new session.'],
     unavailable: ['Needs attention', 'The selected store could not be read. Review your launch settings and the local PC setup guide.']
   }[report.source.status];
   const optional = optionalToolSummary(report.readiness);

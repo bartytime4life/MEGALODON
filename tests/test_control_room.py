@@ -80,7 +80,7 @@ def test_startup_controls_belong_to_home_outside_audit_history():
     for element_id, parents in parser.owners.items():
         if not element_id.startswith('setup-'):
             continue
-        workspaces = [attrs['id'] for _, attrs in parents if attrs.get('role') == 'tabpanel']
+        workspaces = [attrs['id'] for _, attrs in parents if attrs.get('role') == 'tabpanel' and attrs.get('id', '').startswith('workspace-')]
         assert workspaces == ['workspace-setup']
         assert not any('room-audit-history' in attrs.get('class', '').split() for _, attrs in parents)
     assert not any(tag == 'details' for tag, _ in parser.owners['setup-title'])
@@ -199,7 +199,7 @@ def test_workspace_navigation_preserves_context_and_uses_closed_fragments():
     navigation = DASHBOARD_JS[DASHBOARD_JS.index('function byId('):DASHBOARD_JS.index('function textNode(')]
     harness = r'''
 const assert = require('node:assert/strict');
-const nodes = new Map(), listeners = {}, history = [];
+const nodes = new Map(), listeners = {}, documentListeners = {}, history = [];
 let viewportWidth = 1440, viewportHeight = 1000;
 const document = {scrollingElement:{scrollTop:0}, getElementById(id) {
   if (!nodes.has(id)) nodes.set(id, {scrollTop:0, hidden:false, attrs:{}, listeners:{},
@@ -207,7 +207,7 @@ const document = {scrollingElement:{scrollTop:0}, getElementById(id) {
     focus(options){this.focusOptions=options; document.activeElement=this;},
     scrollIntoView(){this.scrolled=true;}});
   return nodes.get(id);
-}, addEventListener(){}};
+}, addEventListener(k,v){documentListeners[k]=v;}};
 const window = {location:{hash:''}, addEventListener(k,v){listeners[k]=v;},
   matchMedia(query){assert.equal(query, '(max-width: 560px), (max-height: 500px)');
     return {matches:viewportWidth <= 560 || viewportHeight <= 500};},
@@ -268,6 +268,20 @@ navigateWorkspace('live');
 assert.equal(scroll.scrollTop, 210, 'Desktop keeps its own saved workspace position');
 navigateWorkspace('setup');
 assert.equal(scroll.scrollTop, 95);
+// GUI shortcuts expose collapsed controls, including repeat visits to the same fragment.
+for(const id of ['support-capture-title','support-model-title','support-config-clamav-title','network-setup-title','storage-history-title','support-host-security']){
+  const target=byId(id), disclosure={tagName:'DETAILS',open:false,parentElement:null};
+  target.parentElement=disclosure;target.tagName='H5';target.value='unsaved choice';
+  const link={target:'',hasAttribute(){return false;},getAttribute(){return '#'+id;}};
+  const event={button:0,target:{closest(){return link;}}};
+  for(let repeat=0;repeat<2;repeat++){
+    navigateWorkspace('live');disclosure.open=false;documentListeners.click(event);
+    assert.equal(byId('workspace-setup').hidden,false);
+    assert.equal(disclosure.open,true);
+    assert.equal(document.activeElement,target);
+    assert.equal(target.value,'unsaved choice');
+  }
+}
 '''
     result = subprocess.run([shutil.which('node'), '-e', harness + constants + navigation + checks],
                             capture_output=True, text=True, timeout=10)

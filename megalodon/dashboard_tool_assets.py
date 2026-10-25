@@ -398,9 +398,9 @@ const MegalodonControls = (() => {
     });
     removeButton.addEventListener('click', () => { save(id, ''); repaint(); feedback.textContent = 'Console link removed.'; input.focus(); if (typeof options.changed === 'function') options.changed(id); });
     editor.append(label, saveButton, removeButton, node('p', 'Saved only in this browser and origin. Do not paste credentials. Opens the actual companion app in a new tab; it is not a data connection.', 'companion-help'));
-    root.append(open);
+    if(!options.compact)root.append(open);
     if (suggestedURL) root.append(suggested);
-    root.append(destination, editor);
+    if(!options.compact)root.append(destination, editor);
     const acquisition = toolAcquisition[id];
     const publisher = toolPublisherDownloads[id];
     const guide = node('a', `${publisher ? publisher.label : acquisition.linkLabel} ↗`, 'companion-download');
@@ -410,7 +410,7 @@ const MegalodonControls = (() => {
       const recipe = node('a', 'MEGALODON setup guidance ↗'); recipe.href = acquisition.url; recipe.target = '_blank'; recipe.rel = 'noopener noreferrer'; root.append(recipe);
     }
     root.append(node('p', 'Opens the publisher or project page in a new tab. In the local HUD, use Install where a one-click package exists.', 'companion-help'));
-    if (typeof runLocalChecks === 'function') {
+    if (!options.compact && typeof runLocalChecks === 'function') {
       const check = node('button', 'Check availability', 'companion-button'); check.type = 'button';
       check.addEventListener('click', async () => { check.disabled=true; feedback.textContent='Checking this computer…'; try { const result=await runLocalChecks(id); feedback.textContent=result?.message || 'Availability could not be checked. Retry from Setup → Data and tools.'; } catch (_) { feedback.textContent='Availability could not be checked. Retry from Setup → Data and tools.'; } finally { check.disabled=false; } }); root.append(check);
     }
@@ -431,7 +431,7 @@ const MegalodonControls = (() => {
     root.append(unified);
 
     const setup = companionSetupGuides[id];
-    if (setup) {
+    if (setup && !options.compact) {
       const easy = node('details', '', 'companion-setup');
       easy.append(node('summary', 'Easy setup and verification'));
       easy.append(node('p', setup.note, 'companion-help'));

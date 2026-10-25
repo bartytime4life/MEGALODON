@@ -10,6 +10,27 @@ from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_JS, DASHBOARD_CSS
 from megalodon.dashboard_operations import OPERATIONS_JS, OPERATIONS_CSS
 
 
+def test_common_setup_shortcuts_use_existing_gui_controls():
+    from megalodon.dashboard_operations import SETUP_SHORTCUTS_HTML
+    class Parse(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.ids = {}; self.targets = []
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if attrs.get('id'): self.ids[attrs['id']] = attrs
+            if tag == 'a' and 'href' in attrs: self.targets.append(attrs['href'])
+    page, shortcuts = Parse(), Parse()
+    page.feed(INDEX_HTML); shortcuts.feed(SETUP_SHORTCUTS_HTML)
+    assert len(shortcuts.targets) == 6
+    assert 'id="setup-category-traffic"' in INDEX_HTML
+    assert 'id="setup-category-ai"' in INDEX_HTML
+    assert 'id="setup-category-apps"' in INDEX_HTML, 'Setup categories replace the old duplicated shortcuts'
+    for target in shortcuts.targets:
+        assert target.startswith('#') and target[1:] in page.ids
+    assert page.ids['support-model-title']['tabindex'] == '-1'
+    assert page.ids['support-config-clamav-title']['tabindex'] == '-1'
+
+
 def operations_fixture():
     stamp='2026-09-30T23:00:00Z'
     anchor=dict(latitude=38.5,longitude=-97.5,label='Synthetic internet exit',source='Synthetic offline fixture',country='US',approximate=True,accuracy_radius_km=None)
@@ -112,8 +133,10 @@ def test_operations_layout_ownership_and_closed_history():
         assert [a['id'] for _, a in p.owners[key] if a.get('role') == 'tabpanel'] == ['workspace-live']
     for key in ('operations-title','ops-pulse-title','live-globe','ops-endpoints-title','ops-defense-title','support-apps-start'):
         assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-live']
-    for key in ('support-config','setup-title','live-geography-refresh','action-plane-title','app-viewer-title'):
+    for key in ('support-config','setup-title'):
         assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-setup']
+    for key, category in [('live-geography-refresh','traffic'),('action-plane-title','advanced'),('app-viewer-title','advanced')]:
+        assert [a['id'] for _,a in p.owners[key] if a.get('role')=='tabpanel']==['workspace-setup','setup-category-'+category]
     for key in ('room-traffic-grid','room-findings-visual','room-activity-table','inventory-title','clamav-title'):
         assert any(a.get('id')=='operations-history' and 'open' not in a for _,a in p.owners[key])
     assert 'id="workspace-tab-traffic"' not in INDEX_HTML

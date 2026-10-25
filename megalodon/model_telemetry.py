@@ -122,7 +122,17 @@ class ModelTelemetry:
         observation=ai_provider.last_observation(settings)
         state=value.get('state','checking');accepted=observation.get('last_response_at')
         error=observation.get('error_code')
-        if state=='model_available' and error:state=ERROR_STATES.get(error,'invalid_response')
+        # A new successful metadata admission can establish reconnection after
+        # a failed request. Keep that request's history, without freezing the
+        # current provider state or claiming a new accepted inference response.
+        recovered = False
+        if state=='model_available' and error in {'OLLAMA_UNAVAILABLE','REQUEST_TIMEOUT','PROVIDER_ERROR','MODEL_MISSING'}:
+            try:
+                recovered = (datetime.fromisoformat(value['checked_at'].replace('Z','+00:00')) >
+                             datetime.fromisoformat(observation['last_attempt_at'].replace('Z','+00:00')))
+            except (KeyError, TypeError, ValueError):
+                pass
+        if state=='model_available' and error and not recovered:state=ERROR_STATES.get(error,'invalid_response')
         if stale:state='stale'
         if observation.get('running'):state='generating'
         verified=state=='model_available' and _recent_response(accepted) and not error
@@ -143,6 +153,7 @@ class ModelTelemetry:
         workflow='connected' if verified else 'ready' if state=='model_available' else 'collecting' if state in ('checking','model_loading','generating') else 'needs_setup' if state=='disabled' else 'error'
         return dict(timeout_seconds=settings.timeout_seconds,running=bool(observation.get('running')),started_at=observation.get('started_at'),options=value.get('options',[]),truncated=value.get('truncated',False),compute_mode=settings.compute_mode,selected_digest=settings.model_digest,state=workflow,model=settings.model,model_state=state,model_present=value.get('state')=='model_available',
             message=(settings.model+' · '+('CPU' if settings.compute_mode=='cpu' else 'Ollama automatic compute')+' advice. '+message)[:512],updated_at=value.get('checked_at'),
-            last_response_at=accepted,last_attempt_at=observation.get('last_attempt_at'),error_code=error,
+            last_response_at=accepted,last_attempt_at=observation.get('last_attempt_at'),error_code=None if recovered else error,
+            last_error_code=error,
             drift=drift,installed_digest=installed_digest,
             response_ms=observation.get('duration_ms'),inference_verified=verified,**{k:value.get(k) for k in ('loaded','memory_bytes','vram_bytes')})

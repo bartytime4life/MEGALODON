@@ -8,6 +8,10 @@ source, Site scope, templates, fixture notes, and visual provenance.
 October 23 addition: the [Suricata installation/configuration guide](installing-suricata.md)
 is listed below separately from the historical inventory count above.
 
+October 25 additions: [Setup controls and model readiness](setup-console.md) and
+[Visual Findings review](findings-review.md) are listed separately from that
+historical count. Their existence is not an installed-host or release receipt.
+
 Every document was read programmatically for inventory and local-link checks.
 That is not a manual audit of every technical claim. Maintained entry pages
 were reconciled against named source paths; dated records retain their pins,
@@ -63,6 +67,8 @@ capability is accepted. Schema and code files are linked by their owning guides.
 | [Local control room contract](control-room-contract.md) | `docs/control-room-contract.md` |
 | [Dashboard HTTP and presentation contract](dashboard-http-contract.md) | `docs/dashboard-http-contract.md` |
 | [Local command center: operator and acceptance runbook](dashboard-operations.md) | `docs/dashboard-operations.md` |
+| [Setup controls and model readiness](setup-console.md) | `docs/setup-console.md` |
+| [Visual Findings review](findings-review.md) | `docs/findings-review.md` |
 | [Bounded dashboard SQLite reads](dashboard-query-budget.md) | `docs/dashboard-query-budget.md` |
 | [CI dependency and action policy](dependency-policy.md) | `docs/dependency-policy.md` |
 | [Efficient recording and automatic visual reports](efficient-recording-reports.md) | `docs/efficient-recording-reports.md` |

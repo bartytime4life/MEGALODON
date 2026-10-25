@@ -544,6 +544,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     reports = None
     knowledge = None
     intelligence = None
+    findings_review = None
+    findings_read_lock = Lock()
     automation_preview_lock = Lock()
     maintenance_lock = Lock()
     context_read_lock = Lock()
@@ -606,6 +608,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if route.path == '/api/reports' or route.path.startswith('/api/reports/'):
             self._reports_read(route)
+            return
+        if route.path == '/api/findings':
+            self._findings_read(route)
             return
         if route.path in {'/api/knowledge','/api/knowledge/search','/api/intelligence','/api/intelligence/context'}:
             from .intelligence_http import read
@@ -697,6 +702,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "live connections require a local Linux HUD"}, status=403)
             else:
                 self._send_json(self.support_config.live_snapshot())
+            return
+        if route.path == "/api/install/token":
+            if (route.query or self.headers.get_all('X-Megalodon-Check', []) != ['1']
+                    or self.headers.get_all('Origin', []) not in ([], [f"http://{self.headers.get('Host')}"])
+                    or self.support_config is None or not _tool_management_user()):
+                self._send_json({'error':'explicit local tool-session check required'},status=403)
+            else:
+                enabled = self.tool_management_enabled is True and self.install_operator_token is not None
+                self._send_json(dict(schema='megalodon-tool-session-v1',enabled=enabled,
+                                     token=self.install_operator_token if enabled else None))
             return
         if route.path == "/api/support-config":
             if route.query:
@@ -1152,6 +1167,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             from .intelligence_http import action
             action(self)
             return
+        if self.path == '/api/findings':
+            self._findings_action()
+            return
         if self.path == "/api/ai/ask":
             self._ai_ask()
             return
@@ -1304,6 +1322,69 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(value)
         except (ValueError,OSError,sqlite3.Error,RecursionError):
             self._send_json({'error':'settings could not be applied; refresh the preview and review storage status'},status=422)
+
+    def _findings_read(self, route) -> None:
+        provider = self.findings_review
+        if (provider is None or not _tool_management_user()
+                or self.headers.get_all('X-Megalodon-Check', []) != ['1']):
+            self._send_json({'error': 'Explicit local findings check required'}, status=403)
+            return
+        if not self.findings_read_lock.acquire(blocking=False):
+            self._send_json({'error': 'A retained findings read is already running'}, status=409)
+            return
+        try:
+            if len(route.query) > 4096:
+                raise ValueError('Query exceeds bounds')
+            query = parse_qs(route.query, keep_blank_values=True, strict_parsing=True) if route.query else {}
+            if any(len(v) != 1 for v in query.values()):
+                raise ValueError('Duplicate findings query')
+            value = provider.snapshot(**{k: v[0] for k, v in query.items()})
+            payload = json.dumps(value, separators=(',', ':'), allow_nan=False).encode()
+            if len(payload) > 262144:
+                raise ValueError('Findings response exceeds its bound')
+            self._send(200, 'application/json; charset=utf-8', payload)
+        except (ValueError, OSError, sqlite3.Error, KeyError, TypeError):
+            self._send_json({'error': 'Retained findings scope changed or is unavailable. Restart the time range.'}, status=422)
+        finally:
+            self.findings_read_lock.release()
+
+    def _findings_action(self) -> None:
+        from .findings_review import validate_action, FindingsBusy
+        provider = self.findings_review
+        tokens = self.headers.get_all('X-Megalodon-Findings-Token', [])
+        if (provider is None or not _tool_management_user() or len(tokens) != 1
+                or len(tokens[0]) != 32 or not tokens[0].isascii()
+                or not hmac.compare_digest(tokens[0], provider.token)
+                or self.headers.get_all('Origin', []) != [f'http://{self.headers.get("Host")}']
+                or self.headers.get_all('Content-Type', []) != ['application/json']
+                or self.headers.get_all('Transfer-Encoding', []) or self.headers.get_all('Content-Encoding', [])):
+            self._send_json({'error': 'Same-origin local findings action required'}, status=403)
+            return
+        lengths = self.headers.get_all('Content-Length', [])
+        if len(lengths) != 1 or not re.fullmatch(r'[0-9]{1,4}', lengths[0]) or not 2 <= int(lengths[0]) <= 2048:
+            self._send_json({'error': 'Invalid findings request length'}, status=400)
+            return
+        try:
+            from .ai_provider import _strict_pairs
+            self.connection.settimeout(2)
+            raw = self.rfile.read(int(lengths[0]))
+            if len(raw) != int(lengths[0]):
+                raise ValueError('Incomplete request')
+            body = json.loads(raw.decode(), object_pairs_hook=_strict_pairs,
+                              parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Non-finite value')))
+            validate_action(body)
+        except (ValueError, OSError, UnicodeError, TypeError):
+            self._send_json({'error': 'Unsupported findings action'}, status=400)
+            return
+        try:
+            value = provider.action(body)
+        except FindingsBusy:
+            self._send_json({'error': 'A selected-finding review is already running'}, status=409)
+            return
+        except (ValueError, OSError, sqlite3.Error, KeyError, TypeError):
+            self._send_json({'error': 'Selected context or impact preview changed. Refresh before acting.'}, status=422)
+            return
+        self._send_json(value, status=202)
 
     def _defense_action(self) -> None:
         from .defense import validate_request, DefenseBusy
@@ -1562,8 +1643,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_json(status, status=202)
 
     def _install(self) -> None:
-        # Origin/custom headers prevent cross-site browser requests, but only
-        # the terminal-delivered launch token authenticates a local operator.
+        # Same-origin custom headers and the enabled launch's session nonce
+        # protect explicit local actions. Root package changes still use pkexec.
         expected_origin = f"http://{self.headers.get('Host')}"
         tokens = self.headers.get_all("X-Megalodon-Install-Token", [])
         if (self.installer is None
@@ -2143,6 +2224,9 @@ def serve(
             handler.intelligence=IntelligenceService(handler.evidence,handler.knowledge,handler.support_config)
             handler.support_config.knowledge=handler.knowledge
             handler.support_config.intelligence=handler.intelligence
+            from .findings_review import FindingsReview
+            handler.findings_review = FindingsReview(handler.evidence, handler.intelligence,
+                handler.knowledge, handler.support_config, handler.defense)
             handler.evidence.reference_library=handler.knowledge
             handler.reports.intelligence=handler.intelligence
             handler.store=ManagedDashboardReader(handler.evidence)
@@ -2156,7 +2240,7 @@ def serve(
                 support_startup.configuration = handler.support_config
         server = ThreadingHTTPServer((host, port), handler)
     except BaseException:
-        for component,method in [(handler.intelligence,'close'),(handler.knowledge,'close'),(handler.support_config,'close'),(handler.defense,'close'),
+        for component,method in [(handler.findings_review,'close'),(handler.intelligence,'close'),(handler.knowledge,'close'),(handler.support_config,'close'),(handler.defense,'close'),
                 (handler.network_topology,'close'),(handler.flow_ingestor,'close'),(handler.reports,'close'),(handler.evidence,'close')]:
             if component is not None:
                 try:getattr(component,method)()
@@ -2208,6 +2292,7 @@ def serve(
     finally:
         if previous_sigterm is not None:
             signal.signal(signal.SIGTERM, previous_sigterm)
+        if handler.findings_review is not None:handler.findings_review.close()
         if handler.reports is not None:handler.reports.close()
         if handler.intelligence is not None:handler.intelligence.close()
         if handler.knowledge is not None:handler.knowledge.close()

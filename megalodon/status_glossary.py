@@ -55,12 +55,12 @@ _GROUPS: tuple[tuple[str, str, frozenset[str] | None, tuple[tuple[str | None, st
         "Status light", "Apps", _HEARTBEAT_LIGHTS,
         (
             ("green", "Green",
-             "Presence observed: the expected process is running, or a standalone tool is present."),
+             "The expected process or executable was observed. For the selected local model, a recent accepted response was recorded. Read the tool's detail; green is not a safety score."),
             ("amber", "Amber",
-             "Installed, but its expected service is not running (for Qwen, the example model may not be downloaded)."),
+             "Setup or response verification needs attention. A service may be stopped, a model may be unavailable, or an installed selected model may need its response verified."),
             ("red", "Red", "Not installed."),
             ("grey", "Grey",
-             "Could not be determined on this platform, or the first background check has not completed yet."),
+             "A check is pending, a local-model request is working, or status could not be determined. Grey does not establish readiness."),
         ),
     ),
     (
@@ -119,9 +119,10 @@ _CALLOUT = (
 )
 
 _AI_NOTE = (
-    "The Local AI control panel uses its own fixed set of states (disabled, unavailable, missing, ready, timed out, "
-    "and so on), spelled out in full next to its Check button. They describe the local Ollama/Qwen check only, "
-    "never a network or host finding."
+    "Local AI status describes the selected installed Ollama model on this PC. Model availability means its "
+    "local identity checks passed; a recent accepted response is a separate observation. Pending checks, "
+    "timeouts and setup failures have their own messages. Read the result and check time together. "
+    "These observations never establish a network or host security finding."
 )
 
 

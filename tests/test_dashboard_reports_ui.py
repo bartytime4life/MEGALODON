@@ -34,7 +34,7 @@ def test_reports_and_configuration_are_in_their_own_workspaces():
     assert 'hud-export-title' not in p.ids
     assert 'downloadHudExport' not in DASHBOARD_JS
     for id in ['apps-connections-title','apps-setup-cards','storage-disk-title']:
-        assert [a['id'] for _,a in p.parents[id] if a.get('role')=='tabpanel']==['workspace-setup']
+        assert [a['id'] for _,a in p.parents[id] if a.get('role')=='tabpanel']==['workspace-setup','setup-category-storage' if id=='storage-disk-title' else 'setup-category-apps']
     assert 'sandbox="allow-same-origin allow-modals"' in INDEX_HTML
     assert 'id="room-report-preview"' not in INDEX_HTML
     assert 'id="report-scope"' not in INDEX_HTML
@@ -55,10 +55,10 @@ def test_setup_single_renderer_search_and_direct_configuration_anchor():
     script=r'''
 const vm=require('node:vm'),assert=require('node:assert/strict'),fs=require('node:fs');
 const code=fs.readFileSync(0,'utf8'),nodes=new Map(),listeners={},mounts=[];
-class E{constructor(tag,text=''){this.tag=tag;this.textContent=text;this.children=[];this.hidden=false;this.value='';this.events={};this.open=false;}append(...children){this.children.push(...children);}addEventListener(k,v){this.events[k]=v;}querySelector(tag){return this.children.find(n=>n.tag===tag);}focus(){this.focused=true;}scrollIntoView(){this.scrolled=true;}}
+class E{constructor(tag,text=''){this.tag=tag;this.textContent=text;this.children=[];this.hidden=false;this.value='';this.events={};this.open=false;this.attrs={};}setAttribute(k,v){this.attrs[k]=String(v);}querySelectorAll(){return [];}append(...children){this.children.push(...children);}addEventListener(k,v){this.events[k]=v;}querySelector(tag){return this.children.find(n=>n.tag===tag);}focus(){this.focused=true;}scrollIntoView(){this.scrolled=true;}}
 const get=id=>{if(!nodes.has(id))nodes.set(id,new E('div'));return nodes.get(id);};
-const context={byId:get,textNode:(tag,text)=>new E(tag,text),installControl:(id)=>new E('button',id),heartbeatLight:()=>new E('i'),heartbeatDetail:()=>new E('span'),MegalodonControls:{ids:['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap'],mount:(parent,id)=>mounts.push(id)},window:{location:{hash:''},addEventListener:(name,fn)=>listeners[name]=fn}};
-vm.runInNewContext(code,context);assert.equal(mounts.length,10);assert.equal(new Set(mounts).size,10);get('apps-setup-query').value='qwen';get('apps-setup-query').events.input();assert.equal(get('apps-setup-cards').children.filter(n=>!n.hidden).length,1);context.window.location.hash='#setup-app-nmap';listeners.hashchange();const nmap=get('apps-setup-cards').children.find(n=>n.id==='setup-app-nmap');assert.equal(nmap.hidden,false);assert.equal(nmap.open,true);assert.equal(nmap.children[0].focused,true);assert.equal(nmap.scrolled,true,'a card revealed by clearing a filter is scrolled into view');assert.equal(mounts.length,10,'navigation reuses the same saved-link controls');
+const context={byId:get,textNode:(tag,text)=>new E(tag,text),installControl:(id)=>new E('button',id),heartbeatLight:()=>new E('i'),heartbeatDetail:()=>new E('span'),MegalodonControls:{ids:['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'],mount:(parent,id)=>mounts.push(id)},window:{location:{hash:''},addEventListener:(name,fn)=>listeners[name]=fn}};
+vm.runInNewContext(code,context);assert.equal(mounts.length,12);assert.equal(new Set(mounts).size,12);get('apps-setup-query').value='qwen';get('apps-setup-query').events.input();assert.equal(get('apps-setup-cards').children.filter(n=>!n.hidden).length,1);context.window.location.hash='#setup-app-nmap';listeners.hashchange();const nmap=get('apps-setup-cards').children.find(n=>n.id==='setup-app-nmap');assert.equal(nmap.hidden,false);assert.equal(nmap.open,true);assert.equal(nmap.children[0].focused,true);assert.equal(nmap.scrolled,true,'a card revealed by clearing a filter is scrolled into view');assert.equal(mounts.length,12,'navigation reuses the same saved-link controls');
 '''
     result=subprocess.run([shutil.which('node'),'-e',script],input=APPS_SETUP_JS,text=True,capture_output=True,timeout=10)
     assert result.returncode==0,result.stderr

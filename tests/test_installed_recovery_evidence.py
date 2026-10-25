@@ -21,6 +21,25 @@ spec.loader.exec_module(tool)
 COMMIT, TREE = "a" * 40, "b" * 40
 
 
+@pytest.mark.parametrize('sizes,accepted', [
+    ((4 * 1024**2, 4 * 1024**2 + 256 * 1024), True),
+    ((5 * 1024**2, 5 * 1024**2), True),
+    ((5 * 1024**2, 5 * 1024**2 + 1), False),
+    ((8 * 1024**2 + 1,), False),
+])
+def test_installed_package_budget_keeps_individual_and_aggregate_limits(sizes, accepted):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        for index, size in enumerate(sizes):
+            archive.writestr(f'megalodon/part{index}.py', b'x' * size)
+    with zipfile.ZipFile(buffer) as archive:
+        if accepted:
+            assert sum(item.file_size for item in tool.wheel_package_members(archive)) == sum(sizes)
+        else:
+            with pytest.raises(tool.EvidenceError, match='WHEEL_LIMIT'):
+                tool.wheel_package_members(archive)
+
+
 @pytest.fixture
 def receipt():
     phases = [

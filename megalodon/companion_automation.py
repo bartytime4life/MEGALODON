@@ -333,9 +333,14 @@ class CompanionAutomation:
             prompt = ("Explain these completed security inventory counts in at most two sentences. "
                       "State that counts are not proof of safety or a threat. Do not propose commands, "
                       "targets or actions. Data: " + json.dumps({"kind": kind, "counts": value}, sort_keys=True))
-            explanation = generate(model_settings, prompt, max_tokens=120)
+            explanation = generate(model_settings, prompt, max_tokens=120, priority='background')
         except (AIProviderError, ValueError) as exc:
-            explanation = f"Local AI unavailable ({getattr(exc, 'code', 'INVALID_RESPONSE')})."
+            code = getattr(exc, 'code', 'INVALID_RESPONSE')
+            explanation = ('Local AI advice interrupted; completed collector results remain available.'
+                           if code == 'REQUEST_CANCELLED' else
+                           'Local AI is busy; completed collector results remain available.'
+                           if code == 'CONCURRENCY_LIMIT_REACHED' else
+                           f"Local AI unavailable ({code}).")
         if self.evidence is not None and self.evidence.enabled:
             try:
                 self.evidence.append_records('companions',[dict(observed_at=datetime.now(timezone.utc).isoformat(),

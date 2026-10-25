@@ -137,9 +137,10 @@ def test_watched_report_is_aggregated_without_identifiers_and_qwen_gets_counts(t
     config = _config(tmp_path, f'[watch]\nosquery_json="{watched}"\n[qwen]\nadvisory=true\n')
     prompts = []
 
-    def generate(_settings, prompt, *, max_tokens):
+    def generate(_settings, prompt, *, max_tokens, priority):
         prompts.append(prompt)
         assert max_tokens == 120
+        assert priority == 'background'
         return "Advisory: package count is not proof of safety."
 
     monkeypatch.setattr("megalodon.ai_provider.generate", generate)
@@ -365,6 +366,32 @@ def test_advice_survives_a_history_write_failure(tmp_path,monkeypatch):
         assert thread.is_alive()
     finally:
         worker._stop.set();worker.stop()
+
+
+def test_manual_request_can_interrupt_actual_companion_advice(tmp_path, monkeypatch):
+    from threading import Event, Thread
+    from megalodon import ai_provider as provider
+    entered = Event()
+    config = _config(tmp_path, '[qwen]\nadvisory=true\n')
+    worker = CompanionAutomation(config, AISettings(enabled=True))
+    def generate(settings, prompt, **kwargs):
+        if prompt.startswith('Explain these completed security inventory counts'):
+            entered.set()
+            assert provider._request_context.cancel.wait(3)
+            raise provider.AIProviderError('REQUEST_CANCELLED')
+        return 'READY'
+    monkeypatch.setattr(provider, '_generate', generate)
+    advice = Thread(target=worker._explain, args=('osquery', {'package_rows': 137}))
+    advice.start()
+    try:
+        assert entered.wait(2)
+        assert provider.generate(worker.ai, 'Manual verification') == 'READY'
+        advice.join(2)
+        assert not advice.is_alive()
+        assert worker.snapshot()['advisory']['osquery'] == 'Local AI advice interrupted; completed collector results remain available.'
+    finally:
+        provider.cancel_current()
+        advice.join(3)
 
 
 def test_slow_advice_does_not_block_collection_and_queue_coalesces(tmp_path,monkeypatch):
