@@ -1,4 +1,8 @@
-"""Native browser inspector journey; synthetic GETs and all host actions refused."""
+"""Historical pre-workbench inspector journey, retained for compatibility reference.
+
+The active native acceptance path is browser_findings_workbench.py. This retired
+journey is not called by the current browser acceptance driver.
+"""
 import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
