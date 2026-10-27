@@ -5,16 +5,25 @@ from .support_sensors import metric
 
 def snapshot(configuration, companions):
     tools=[]
-    def add(identifier,name,state,message,updated_at=None,metrics=None):
-        tools.append(dict(id=identifier,name=name,state=state,message=message,updated_at=updated_at,metrics=metrics or []))
+    def add(identifier,name,state,message,updated_at=None,metrics=None,review_required=False):
+        tools.append(dict(id=identifier,name=name,state=state,message=message,updated_at=updated_at,metrics=metrics or [],review_required=review_required))
     add('core','Python and SQLite','connected','The local HUD is responding. Storage and source health are reported separately.',now())
     capture=configuration.capture.snapshot()
     add('tshark','Wireshark / TShark','connected' if capture['accepted'] and capture['state']=='running' else
         'collecting' if capture['state'] in ('starting','running') else 'error' if capture['state']=='failed' else 'stopped',
         capture['message'],capture['started_at'],[metric('Accepted this session',capture['accepted']),metric('Skipped',capture['skipped'])])
     sensors=configuration.sensors.snapshot()
+    ingestor=getattr(configuration,'flow_ingestor',None)
+    intake=ingestor.snapshot().get('suricata_intake') if ingestor is not None else None
     for key,name in (('zeek','Zeek'),('suricata','Suricata')):
-        add(key,name,**sensors[key])
+        row=dict(sensors[key])
+        if key=='suricata' and intake is not None:
+            row['message']=(row['message']+' '+intake['message']+
+                            (' Intake checked '+intake['checked_at']+'.' if intake['checked_at'] else ''))[:512]
+            row['metrics']=[*row.get('metrics',[])[:4],metric('Findings admitted this session',intake['imported_findings']),
+                            metric('Intake records skipped this session',intake['rejected'])]
+            if intake['state']!='checked':row['state']='needs_review'
+        add(key,name,**row)
     add('scapy','Scapy','standby','Alternative capture engine. TShark already supplies live packets, so a second Python capture is unnecessary.')
     add('nftables','nftables','standby','Local containment is available from the IP inspector after preview and OS authorization. Startup and model output do not change firewall rules.')
     data=companions.snapshot() if companions else dict(results={},status={},advisory={})
@@ -34,10 +43,11 @@ def snapshot(configuration, companions):
         # A prior result after a rejected or failed run is stale, not available.
         completed=message.endswith(' · completed; saved aggregate')
         state='collecting' if collecting else 'connected' if result and completed else 'error' if result else 'needs_setup'
-        if key=='clamav' and result and completed and not collecting and result['infected_files']>0:
-            state='needs_review'
+        review_required=bool(key=='clamav' and result and result['infected_files']>0)
+        if review_required:
+            if completed and not collecting:state='needs_review'
             message='Saved scan flagged files. Review the scan summary and original scan evidence before taking action. '+message
-        add(key,name,state,message[:512],stamp,metrics)
+        add(key,name,state,message[:512],stamp,metrics,review_required=review_required)
     if hasattr(configuration,'model_telemetry'):
         observed=configuration.model_telemetry.snapshot()
         qwen={k:observed[k] for k in ('state','message','updated_at')};qwen['metrics']=[]

@@ -13,6 +13,7 @@ async def exercise_workflow_overview(browser, port, password, passed):
         service_workers="block")
     unavailable = False
     flagged_scan = False
+    collecting_scan = False
     requests, errors, violations = [], [], []
 
     async def fixture(route):
@@ -32,7 +33,8 @@ async def exercise_workflow_overview(browser, port, password, passed):
                 if row["id"] in {"clamav", "osquery", "nmap"}:
                     row["state"] = "connected"
                 if row["id"] == "clamav" and flagged_scan:
-                    row.update(state="needs_review", message="Synthetic saved scan flagged files; review original evidence.",
+                    row.update(state="collecting" if collecting_scan else "needs_review", review_required=True,
+                               message="Synthetic saved scan flagged files; review original evidence.",
                                metrics=[dict(label="Flagged files", value=2, unit="")])
             await route.fulfill(status=200, content_type="application/json", body=json.dumps(value))
         else:
@@ -84,8 +86,25 @@ async def exercise_workflow_overview(browser, port, password, passed):
         await scan.locator('a[href="#clamav-title"]').click()
         await expect(page.locator("#clamav-title")).to_be_visible()
         passed("native positive file-scan review reaches the saved scan evidence without starting work")
+        collecting_scan = True
+        await page.locator("#workspace-tab-interfaces").click()
+        await page.locator("#workflows-refresh").click()
+        await expect(page.locator("#workflows-count-attention")).to_have_text("3")
+        await expect(page.locator("#workflows-count-collecting")).to_have_text("2")
+        await expect(scan).to_contain_text("Collecting · review required")
+        await page.locator("#workflows-show-collecting").click()
+        await expect(scan).to_contain_text("Flagged files 2")
+        passed("native collecting scan retains its prior positive in both activity and review filters")
+        await page.locator('#integrations-clear').click()
+        await page.locator('#integrations-query').fill('Suricata')
+        sensor = page.locator('#integrations-cards .workflow-card').filter(has_text='Suricata')
+        await sensor.locator(':scope > summary').click()
+        await sensor.get_by_role('link', name='Review saved findings').click()
+        await expect(page.locator('#workspace-tab-findings')).to_have_attribute('aria-selected', 'true')
+        passed('native managed sensor review opens Findings rather than the optional external store')
         unavailable = True
         await page.locator("#workspace-tab-interfaces").click()
+        await page.locator('#integrations-clear').click()
         await page.locator("#workflows-refresh").click()
         for key in ("ALL", "attention", "collecting", "saved_result"):
             await expect(page.locator("#workflows-count-" + key)).to_have_text("—")
