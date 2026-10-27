@@ -10,7 +10,7 @@ The cues address common errors in metadata interpretation:
 
 | Review topic | Reviewed source | Limit conveyed to the model |
 | --- | --- | --- |
-| TCP port scans | [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293.html) | The detector counts distinct destination ports per source across TCP packets, regardless of SYN flags. It does not group by destination host. Repeated packets to one port do not increase the count; intent and completed connections remain unproven. |
+| TCP port scans | [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293.html) | The detector counts distinct destination ports per source across TCP candidates without ACK or RST. It does not group by destination host. Repeated probes to one port do not increase the count; intent and completed connections remain unproven. ACK-only scans require stateful analysis. |
 | SYN bursts | [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293.html) | SYN retransmission means packet counts need not equal unique attempts, completed connections or resource exhaustion. |
 | NAT and endpoint identity | [RFC 4787](https://www.rfc-editor.org/rfc/rfc4787.html) | An observed translated tuple does not by itself identify one internal device. General observation does not establish that translation occurred. |
 | Long DNS queries | [RFC 7766](https://www.rfc-editor.org/rfc/rfc7766.html), [RFC 7858](https://www.rfc-editor.org/rfc/rfc7858.html), [RFC 8484](https://www.rfc-editor.org/rfc/rfc8484.html) | The detector requires `dns_query_length` on a DNS or UDP event, without a destination-port condition. Length alone does not prove tunneling, reveal query content or cover all resolver activity. |

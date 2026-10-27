@@ -365,7 +365,7 @@ def test_port_counter_journal_restores_failed_service_bundle_then_retries(
             "dst_ip": "198.51.100.2",
             "protocol": "TCP",
             "dst_port": port,
-            "tcp_flags": ["ACK"],
+            "tcp_flags": ["SYN"],
         }
     )
 
@@ -595,7 +595,7 @@ def test_interleaved_service_calls_serialize_prepare_through_resolution(tmp_path
             "dst_ip": "198.51.100.2",
             "protocol": "TCP",
             "dst_port": 21,
-            "tcp_flags": ["ACK"],
+            "tcp_flags": ["SYN"],
         }
     )
     second = replace(

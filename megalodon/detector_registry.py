@@ -32,9 +32,9 @@ DETECTORS = (
          "authorized-lookalikes-v1"),
     ),
     DetectorDefinition(
-        "PORT_SCAN", "1.0.0", "MEDIUM",
-        ("src_ip", "observed_at", "protocol", "dst_port"),
-        "protocol is TCP and dst_port is present; any TCP flags",
+        "PORT_SCAN", "1.1.0", "MEDIUM",
+        ("src_ip", "observed_at", "protocol", "dst_port", "tcp_flags"),
+        "protocol is TCP, dst_port is present, and ACK and RST are absent",
         "distinct destination ports per source across destination addresses",
         "port_scan_distinct_ports", "port_scan_window_seconds",
         ("port-distinct-ipv6-v1", "port-repeated-ipv6-v1", "threshold-matrix-v1",
@@ -77,7 +77,7 @@ def registry_document() -> dict[str, object]:
         rules.append(rule)
     return {
         "schema": "detector-registry-v1",
-        "registry_version": "1.0.1",
+        "registry_version": "1.1.0",
         "rules": rules,
         "default_settings": asdict(DetectionSettings()),
         "state": {

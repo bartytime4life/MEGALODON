@@ -228,7 +228,7 @@ class DetectorTests(unittest.TestCase):
                     observed_at=BASE + timedelta(milliseconds=index * 50),
                     src_ip=source,
                     dst_port=20 + (index * 7) % 11,
-                    tcp_flags=["ACK"],
+                    tcp_flags=["FIN"],
                 )
             )
             assert_invariant()
@@ -240,7 +240,7 @@ class DetectorTests(unittest.TestCase):
                 observed_at=BASE + timedelta(seconds=2),
                 src_ip=source,
                 dst_port=53,
-                tcp_flags=["ACK"],
+                tcp_flags=["FIN"],
             )
         )
         assert_invariant()
@@ -253,7 +253,7 @@ class DetectorTests(unittest.TestCase):
                     observed_at=BASE + timedelta(seconds=2, milliseconds=offset),
                     src_ip=f"192.0.2.{suffix}",
                     dst_port=53 + offset,
-                    tcp_flags=["ACK"],
+                    tcp_flags=["FIN"],
                 )
             )
             assert_invariant()
@@ -269,7 +269,7 @@ class DetectorTests(unittest.TestCase):
                     + timedelta(seconds=3, milliseconds=index * 10),
                     src_ip=f"192.0.2.{11 + index % 3}",
                     dst_port=20 + (index * 7) % 11,
-                    tcp_flags=["ACK"],
+                    tcp_flags=["FIN"],
                 )
             )
             assert_invariant()
@@ -368,15 +368,15 @@ class DetectorTests(unittest.TestCase):
             DetectionSettings(port_scan_distinct_ports=1),
             clock=lambda: BASE + timedelta(days=1),
         )
-        first = detector.prepare(event(0, tcp_flags=["ACK"], dst_port=21))
+        first = detector.prepare(event(0, tcp_flags=["FIN"], dst_port=21))
 
         with self.assertRaisesRegex(RuntimeError, "preparation already pending"):
-            detector.prepare(event(1, tcp_flags=["ACK"], dst_port=22))
+            detector.prepare(event(1, tcp_flags=["FIN"], dst_port=22))
 
         first.rollback()
         self.assertNotIn("8.8.8.8", detector.port_windows)
         self.assertNotIn("8.8.8.8", detector.port_counts)
-        second = detector.prepare(event(1, tcp_flags=["ACK"], dst_port=22))
+        second = detector.prepare(event(1, tcp_flags=["FIN"], dst_port=22))
         second.commit()
         self.assertEqual(
             detector.port_counts["8.8.8.8"], Counter({22: 1})
@@ -537,7 +537,7 @@ class DetectorTests(unittest.TestCase):
                             1,
                             observed_at=observed,
                             dst_port=22,
-                            tcp_flags=["ACK"],
+                            tcp_flags=["FIN"],
                         )
                     )
 
@@ -590,7 +590,7 @@ class DetectorTests(unittest.TestCase):
                         1,
                         observed_at=BASE + timedelta(seconds=2),
                         dst_port=22,
-                        tcp_flags=["ACK"],
+                        tcp_flags=["FIN"],
                     )
                 )
         finally:
@@ -664,7 +664,7 @@ class DetectorTests(unittest.TestCase):
                             1,
                             observed_at=observed,
                             dst_port=22,
-                            tcp_flags=["ACK"],
+                            tcp_flags=["FIN"],
                         )
                     )
 
@@ -684,18 +684,18 @@ class DetectorTests(unittest.TestCase):
             clock=lambda: BASE + timedelta(days=1),
         )
         source_a, source_b, source_c = "8.8.8.1", "8.8.8.2", "8.8.8.3"
-        detector.analyze(event(0, src_ip=source_a, dst_port=21, tcp_flags=["ACK"]))
-        detector.analyze(event(1, src_ip=source_b, dst_port=22, tcp_flags=["ACK"]))
+        detector.analyze(event(0, src_ip=source_a, dst_port=21, tcp_flags=["FIN"]))
+        detector.analyze(event(1, src_ip=source_b, dst_port=22, tcp_flags=["FIN"]))
         self.assertEqual(tuple(detector.source_order), (source_a, source_b))
 
         existing = detector.prepare(
-            event(2, src_ip=source_a, dst_port=23, tcp_flags=["ACK"])
+            event(2, src_ip=source_a, dst_port=23, tcp_flags=["FIN"])
         )
         existing.rollback()
         self.assertEqual(tuple(detector.source_order), (source_a, source_b))
 
         new_source = detector.prepare(
-            event(3, src_ip=source_c, dst_port=24, tcp_flags=["ACK"])
+            event(3, src_ip=source_c, dst_port=24, tcp_flags=["FIN"])
         )
         new_source.rollback()
         self.assertEqual(tuple(detector.source_order), (source_a, source_b))
@@ -703,7 +703,7 @@ class DetectorTests(unittest.TestCase):
         self.assertNotIn(source_c, detector.port_counts)
 
         committed = detector.prepare(
-            event(3, src_ip=source_c, dst_port=24, tcp_flags=["ACK"])
+            event(3, src_ip=source_c, dst_port=24, tcp_flags=["FIN"])
         )
         committed.commit()
         self.assertEqual(tuple(detector.source_order), (source_b, source_c))

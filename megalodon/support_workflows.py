@@ -34,6 +34,9 @@ def snapshot(configuration, companions):
         # A prior result after a rejected or failed run is stale, not available.
         completed=message.endswith(' · completed; saved aggregate')
         state='collecting' if collecting else 'connected' if result and completed else 'error' if result else 'needs_setup'
+        if key=='clamav' and result and completed and not collecting and result['infected_files']>0:
+            state='needs_review'
+            message='Saved scan flagged files. Review the scan summary and original scan evidence before taking action. '+message
         add(key,name,state,message[:512],stamp,metrics)
     if hasattr(configuration,'model_telemetry'):
         observed=configuration.model_telemetry.snapshot()

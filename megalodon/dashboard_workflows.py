@@ -41,7 +41,7 @@ def compose_workflows(html: str) -> str:
     overview = '''
     <div class="workflow-overview" role="group" aria-label="Filter background tool activity" aria-describedby="workflows-overview-note">
       <button id="workflows-show-ALL" class="workflow-overview-item" type="button" aria-pressed="true"><span>All tools</span><strong id="workflows-count-ALL">—</strong><small>Observed in this HUD</small></button>
-      <button id="workflows-show-attention" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Needs review</span><strong id="workflows-count-attention">—</strong><small>Errors, stopped or setup gaps</small></button>
+      <button id="workflows-show-attention" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Needs review</span><strong id="workflows-count-attention">—</strong><small>Flagged results, errors or setup gaps</small></button>
       <button id="workflows-show-collecting" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Collecting</span><strong id="workflows-count-collecting">—</strong><small>Work reported in progress</small></button>
       <button id="workflows-show-saved_result" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Saved results</span><strong id="workflows-count-saved_result">—</strong><small>Completed checks to inspect</small></button>
     </div>
@@ -86,7 +86,7 @@ WORKFLOWS_CSS = r'''
 .workflow-state { justify-self:end; border:1px solid #607b89; border-radius:3px; padding:.3rem .55rem; color:#c9d9e2; font-size:.85rem; }
 .workflow-card[data-state="connected"] .workflow-state { color:#a2efda; border-color:#559b85; }
 .workflow-card[data-state="collecting"] .workflow-state { color:#a5def1; border-color:#52879d; }
-.workflow-card[data-state="needs_setup"] .workflow-state,.workflow-card[data-state="error"] .workflow-state { color:#f0cc8c; border-color:#a38750; }
+.workflow-card[data-state="needs_setup"] .workflow-state,.workflow-card[data-state="needs_review"] .workflow-state,.workflow-card[data-state="error"] .workflow-state { color:#f0cc8c; border-color:#a38750; }
 .workflow-metrics { display:flex; flex-wrap:wrap; gap:.4rem 1.4rem; grid-column:1 / -1; margin:.2rem 0 0; font-size:.875rem; color:#b5cbd7; }
 .workflow-metrics strong { color:#e1f1f6; font-weight:600; font-variant-numeric:tabular-nums; }
 .workflow-message { margin:0 0 .5rem; color:#cee0e8; line-height:1.6; font-size:.925rem; }
@@ -110,8 +110,8 @@ WORKFLOWS_JS = r'''
   const roles={core:'Local evidence and storage',tshark:'Accepted packet metadata',zeek:'Sampled connection context',suricata:'Recent sensor context',scapy:'Alternative capture engine',nftables:'Operator-reviewed containment',clamav:'Completed file-scan summary',osquery:'Installed package inventory',qwen:'Local explanations · advisory',nmap:'Completed network inventory',lynis:'Host configuration review',aide:'File integrity comparison'};
   const destinations={core:['storage-evidence-title','Inspect evidence store'],tshark:['room-traffic-title','Inspect packet observations'],zeek:['setup-app-zeek','Review Zeek setup'],suricata:['suricata-title','Inspect separate admitted alert store'],scapy:['setup-app-scapy','Review capture alternative'],nftables:['setup-app-nftables','Review containment setup'],clamav:['clamav-title','Inspect saved scan summary'],osquery:['osquery-title','Inspect saved package inventory'],qwen:['support-model-title','Review local model'],nmap:['inventory-title','Inspect saved network inventory'],lynis:['support-host-security','Inspect host findings'],aide:['support-host-security','Inspect host findings']};
   const overviewFilters=['ALL','attention','collecting','saved_result'];
-  const attention=new Set(['error','needs_setup','unavailable','stopped']);
-  const labels={connected:'Data connected',saved_result:'Saved result available',collecting:'Collecting',ready:'Ready',stopped:'Configured · stopped',standby:'Standby alternative',needs_setup:'Needs setup',unavailable:'Unavailable',error:'Error'};
+  const attention=new Set(['error','needs_review','needs_setup','unavailable','stopped']);
+  const labels={connected:'Data connected',saved_result:'Saved result available',collecting:'Collecting',ready:'Ready',stopped:'Configured · stopped',standby:'Standby alternative',needs_setup:'Needs setup',needs_review:'Review required',unavailable:'Unavailable',error:'Error'};
   const view={payload:null,failed:false,pending:false,visible:false,timer:null,lastAt:0,open:new Set(),reference:new Set()};
   const workspace=byId('workspace-interfaces');
   const visible=()=>!document.hidden&&!(workspace&&workspace.hidden)&&(typeof IntersectionObserver==='undefined'||view.visible);

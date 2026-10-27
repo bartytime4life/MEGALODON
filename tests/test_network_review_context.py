@@ -14,7 +14,7 @@ from megalodon.security_patterns import CONTEXT, candidate
 START = datetime(2026, 10, 3, tzinfo=timezone.utc).timestamp()
 CUES = (
     ('OBSERVED_ACTIVITY', ('If NAT', 'does not establish that NAT')),
-    ('PORT_SCAN', ('distinct destination ports per source', 'Repeated packets to one port')),
+    ('PORT_SCAN', ('distinct destination ports per source', 'Repeated probes to one port')),
     ('SYN_FLOOD', ('retransmit SYN', 'resource exhaustion')),
     ('DNS_TUNNELING', ('dns_query_length', 'no destination-port condition', 'length alone')),
     ('PORT_53_BURST', ('Port 53 observations', 'not a count of parsed DNS questions')),
@@ -94,18 +94,24 @@ def _event(**changes):
     return PacketEvent.from_mapping(value | changes)
 
 
-def test_port_scan_cue_matches_ack_packets_and_distinct_ports_on_one_host():
+def test_port_scan_cue_matches_probe_ports_and_excludes_replies():
     detector = Detector(DetectionSettings(port_scan_distinct_ports=3))
-    assert detector.analyze(_event(dst_port=80)) == []
+    assert detector.analyze(_event(dst_port=50000)) == []
+    assert detector.analyze(_event(dst_port=50001)) == []
+    assert detector.analyze(_event(dst_port=50002)) == []
+    def probe(**changes):
+        return _event(tcp_flags=['SYN'], **changes)
+    assert detector.analyze(probe(dst_port=80)) == []
     # Many hosts on one port still supply only one distinct destination port.
     for index in range(2, 6):
-        assert detector.analyze(_event(dst_ip=f'198.51.100.{index}')) == []
-    assert detector.analyze(_event(dst_port=81)) == []
-    finding, = detector.analyze(_event(dst_port=82))
+        assert detector.analyze(probe(dst_ip=f'198.51.100.{index}')) == []
+    assert detector.analyze(probe(dst_port=81)) == []
+    finding, = detector.analyze(probe(dst_port=82))
     assert finding.rule_id == 'PORT_SCAN' and finding.evidence['distinct_ports'] == 3
     cue = network_review_context.for_pattern(finding.rule_id)
     assert 'distinct destination ports per source' in cue
-    assert 'not distinct destination hosts or SYN attempts' in cue
+    assert 'without ACK or RST' in cue
+    assert 'not distinct destination hosts or packet count' in cue
 
 
 def test_dns_cue_matches_query_length_without_port_53():

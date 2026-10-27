@@ -27,6 +27,11 @@ process.stdin.on('end',async()=>{
  payload={...fixture,tools:fixture.tools.map(row=>row.id==='qwen'?{...row,state:'ready',message:'Past response; reverify for current readiness.'}:row)};await event('workflows-refresh');
  assert.match(full(rows()[8]),/Model available/);assert.match(full(rows()[8]),/Past response; reverify/);
  payload=fixture;await event('workflows-refresh');
+ // Positive saved scans enter Needs review, retain their count and source time.
+ payload={...fixture,tools:fixture.tools.map(row=>row.id==='clamav'?{...row,state:'needs_review',message:'Saved scan flagged files. Review original evidence.',metrics:[{label:'Flagged files',value:2,unit:''}]}:row)};await event('workflows-refresh');
+ assert.equal(get('workflows-count-attention').textContent,'4');await event('workflows-show-attention');
+ const flagged=rows().find(row=>full(row).includes('ClamAV'));assert.ok(flagged);assert.match(full(flagged),/Review required/);assert.match(full(flagged),/Flagged files  2/);assert.match(full(flagged),/Result saved 2026-09-30/);
+ await event('integrations-clear');payload=fixture;await event('workflows-refresh');
  // Runtime status remains in the same list when static capability reference arrives.
  vm.runInContext("integrationState.snapshot={selected_platform:'linux',workflows:integrationIds.map((id,index)=>({id,software:workflowToolIds[index],selected_status:'optional',input_contract:'Synthetic input',output_contract:'Synthetic output',next_gate:'Synthetic reference',entry_point:null}))}; renderIntegrationMap();",context);
  assert.match(full(rows()[2]),/Capability reference · Optional/);rows()[2].open=true;for(const fn of rows()[2].events.toggle)fn();await event('workflows-refresh');assert.equal(rows()[2].open,true,'expanded tool survives status refresh');

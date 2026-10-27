@@ -39,6 +39,40 @@ def request(tool, arguments=None, reason="Operator asked for local context"):
     return {"tool": tool, "arguments": {} if arguments is None else arguments, "reason": reason}
 
 
+@pytest.mark.parametrize("question,tool", (("integrations", "megalodon.integrations.status"),
+    ("model", "megalodon.model.status"), ("plan", "megalodon.alerts.query"),
+    ("report", "megalodon.report.generate")))
+@pytest.mark.parametrize("outage", (False, True))
+def test_fixed_questions_observe_before_one_explanation(broker, monkeypatch, question, tool, outage):
+    import megalodon.ai_interface as interface
+    import megalodon.ai_provider as provider
+    monkeypatch.setattr(provider, "status", lambda *_, **__: {"state": "synthetic_readiness"})
+    calls=[]
+    def explain(settings, prompt, **kwargs):
+        calls.append(kwargs)
+        assert "response_format" not in kwargs
+        if outage:
+            raise AIProviderError("REQUEST_TIMEOUT")
+        return "Synthetic bounded explanation."
+    monkeypatch.setattr(interface, "generate", explain)
+    answer=ask(question, broker)
+    assert answer["tool"] == tool and answer["execution_state"] == ("applied" if question=="report" else "observed")
+    assert answer["observed"] is not None and len(calls) == 1
+    receipt=broker.receipts.latest(answer["receipt_id"])
+    assert receipt["authorization_source"] == "operator_request"
+    assert answer["inferred"] == (None if outage else "Synthetic bounded explanation.")
+    if outage:
+        assert answer["error_code"] == "REQUEST_TIMEOUT"
+
+
+def test_disabled_fixed_question_does_not_dispatch(broker, monkeypatch):
+    from dataclasses import replace
+    broker.ai=replace(broker.ai, enabled=False)
+    monkeypatch.setattr(broker, "dispatch", lambda *_, **__: pytest.fail("disabled AI dispatched"))
+    with pytest.raises(AIProviderError, match="DISABLED"):
+        ask("report", broker)
+
+
 def test_pattern_read_audit_keeps_references_not_expiring_measurements(broker):
     from types import SimpleNamespace
     broker.intelligence=SimpleNamespace(snapshot=lambda:dict(reviews=[dict(id='a'*24,

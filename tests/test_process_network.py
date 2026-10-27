@@ -334,6 +334,9 @@ def test_every_coverage_gap_at_once_stays_within_the_bound(host, monkeypatch):
     binary = host/'bin-store'/'tool'  # a real, temporary-folder executable that sorts first and is deferred
     binary.parent.mkdir()
     binary.write_bytes(b'\x7fELF tool')
+    # A private --basetemp can live outside /tmp. Keep this synthetic executable
+    # in the test's temporary classification without changing production paths.
+    monkeypatch.setattr(process_network, 'TEMPORARY', process_network.TEMPORARY + (str(binary.parent)+'/',))
     tcp = (host/'proc/net/tcp').read_text() + ''.join(row(('192.168.1.5', 60000 + i), ('203.0.113.50', 443), '01', 960 + i) for i in range(4))
     (host/'proc/net/tcp').write_text(tcp)
     proc(host, 210, str(binary), [960, 961, 962, 963], comm='tool')
@@ -344,6 +347,7 @@ def test_every_coverage_gap_at_once_stays_within_the_bound(host, monkeypatch):
     for name, value in (('MAX_NAMESPACES', 1), ('MAX_PROGRAMS', 1), ('MAX_HASH_REVIEW', 0), ('MAX_PROC_ENTRIES', entries - 1)):
         monkeypatch.setattr(process_network, name, value)
     result = review(host, uid=UID, now=lambda: NOW)
+    assert result['programs'][0]['executable'] == str(binary)
     assert result['programs'][0]['hash_status'] == 'deferred'
     assert len(result['gaps']) == 7 <= process_network.MAX_GAPS, result['gaps']
 

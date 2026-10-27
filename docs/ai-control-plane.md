@@ -34,7 +34,11 @@ The request timeout defaults to 300 seconds and is bounded at 1,800 seconds, con
 output at most 256 tokens. Readiness, ordinary advice and defense requests all
 set the processing batch to 64 tokens to reduce temporary GPU memory demand.
 Fixed AI questions share a separate ten minute limit across tool selection and
-the follow-up explanation. The HUD waits for the answer until that limit and
+the follow-up explanation. Integrations, model health, remediation-plan context
+and report questions have exactly one permitted tool, so they dispatch that
+fixed tool directly with `operator_request` provenance and need only the
+explanation call. Observed results survive an explanation timeout or outage.
+Other questions retain the constrained model-selection step. The HUD waits for the answer until that limit and
 then shows a timeout error; the explicit model check waits for the configured
 request timeout reported by `/api/ai/status`.
 This is an [Ollama runner option](https://github.com/ollama/ollama/blob/main/api/types.go),
