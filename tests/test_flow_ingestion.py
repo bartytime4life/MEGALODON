@@ -57,6 +57,63 @@ def all_history(evidence):
         if cursor is None:return rows
 
 
+def test_managed_alert_intake_distinguishes_unchecked_admitted_failed_and_stale(evidence,tmp_path,monkeypatch):
+    path=tmp_path/'eve.json'
+    worker=reader(evidence,path)
+    assert worker.snapshot()['suricata_intake']['state']=='not_checked'
+    alert=eve();alert.update(event_type='alert',alert=dict(signature='Synthetic intake witness',signature_id=7001,severity=2))
+    write(path,[alert])
+    assert worker.poll('suricata',include_flows=False)==1
+    first=worker.snapshot()['suricata_intake']
+    assert first['state']=='checked' and first['imported_findings']==1
+    assert first['rejected']==0 and first['checked_at'] is not None
+    assert worker.poll('suricata',include_flows=False)==0
+    assert worker.snapshot()['suricata_intake']['imported_findings']==1
+    path.unlink()
+    with pytest.raises(OSError):worker.poll('suricata',include_flows=False)
+    failed=worker.snapshot()['suricata_intake']
+    assert failed['state']=='unavailable' and failed['imported_findings']==1
+    assert evidence.history(category='findings')['total']==1
+    write(path,[alert])
+    worker.poll('suricata',include_flows=False)
+    monkeypatch.setattr(evidence,'clock',lambda:time.time()+121)
+    stale=worker.snapshot()['suricata_intake']
+    assert stale['state']=='stale' and 'unknown' in stale['message']
+
+
+def test_optional_alert_intake_failure_is_visible_without_failing_primary_flow_source(evidence,tmp_path):
+    worker=reader(evidence,tmp_path/'missing-eve.json')
+    worker.paths['zeek']=tmp_path/'missing-conn.log'
+    worker._cycle()
+    status=worker.snapshot()
+    assert status['source']=='zeek' and status['state']=='waiting'
+    assert status['suricata_intake']['state']=='unavailable'
+
+
+def test_rejected_intake_records_remain_visible_after_a_quiet_poll(evidence,tmp_path):
+    path=tmp_path/'eve.json';path.write_text('{bad json}\n')
+    alert=eve();alert.update(event_type='alert',alert=dict(signature='Valid after malformed row',signature_id=7002,severity=3))
+    write(path,[alert],mode='a')
+    worker=reader(evidence,path)
+    assert worker.poll('suricata',include_flows=False)==1
+    assert worker.snapshot()['suricata_intake']['rejected']==1
+    assert worker.poll('suricata',include_flows=False)==0
+    assert worker.snapshot()['suricata_intake']['state']=='partial'
+
+
+def test_alert_storage_failure_is_visible_and_does_not_leak_diagnostics(evidence,tmp_path,monkeypatch):
+    path=tmp_path/'eve.json'
+    alert=eve();alert.update(event_type='alert',alert=dict(signature='Storage witness',signature_id=7004,severity=2))
+    write(path,[alert]);worker=reader(evidence,path)
+    def fail(*args,**kwargs):raise OSError('PRIVATE_STORAGE_DIAGNOSTIC')
+    monkeypatch.setattr(evidence,'append_records',fail)
+    with pytest.raises(OSError):worker.poll('suricata',include_flows=False)
+    intake=worker.snapshot()['suricata_intake']
+    assert intake['state']=='unavailable' and intake['imported_findings']==0
+    assert 'PRIVATE_STORAGE' not in json.dumps(intake)
+    assert evidence.history(category='findings')['total']==0
+
+
 def test_sensor_normalizers_preserve_provenance_directions_and_completed_state():
     category,record=normalize_suricata(eve(state='closed'))
     assert category=='flows' and record['source']=='suricata-eve'

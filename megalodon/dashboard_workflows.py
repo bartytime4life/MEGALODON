@@ -45,7 +45,7 @@ def compose_workflows(html: str) -> str:
       <button id="workflows-show-collecting" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Collecting</span><strong id="workflows-count-collecting">—</strong><small>Work reported in progress</small></button>
       <button id="workflows-show-saved_result" class="workflow-overview-item" type="button" aria-pressed="false" disabled><span>Saved results</span><strong id="workflows-count-saved_result">—</strong><small>Completed checks to inspect</small></button>
     </div>
-    <p id="workflows-overview-note" class="workflow-explainer">Waiting for local observations. Tool counts are not threat counts or a safety score.</p>
+    <p id="workflows-overview-note" class="workflow-explainer">Waiting for local observations. Tool counts are not threat counts or a safety score. A tool can need review while collecting.</p>
     '''
     local = before + overview + '''
     <nav class="workflow-actions" aria-label="Background tool controls"><a class="companion-button" href="#support-apps-title">Start background tools</a><a href="#support-config-title" id="workflows-configure">Configure apps</a><a href="#live-globe-title">Monitoring start / stop</a><button type="button" id="workflows-refresh">Refresh status</button></nav>
@@ -86,7 +86,7 @@ WORKFLOWS_CSS = r'''
 .workflow-state { justify-self:end; border:1px solid #607b89; border-radius:3px; padding:.3rem .55rem; color:#c9d9e2; font-size:.85rem; }
 .workflow-card[data-state="connected"] .workflow-state { color:#a2efda; border-color:#559b85; }
 .workflow-card[data-state="collecting"] .workflow-state { color:#a5def1; border-color:#52879d; }
-.workflow-card[data-state="needs_setup"] .workflow-state,.workflow-card[data-state="needs_review"] .workflow-state,.workflow-card[data-state="error"] .workflow-state { color:#f0cc8c; border-color:#a38750; }
+.workflow-card[data-state="needs_setup"] .workflow-state,.workflow-card[data-state="needs_review"] .workflow-state,.workflow-card[data-review-required="true"] .workflow-state,.workflow-card[data-state="error"] .workflow-state { color:#f0cc8c; border-color:#a38750; }
 .workflow-metrics { display:flex; flex-wrap:wrap; gap:.4rem 1.4rem; grid-column:1 / -1; margin:.2rem 0 0; font-size:.875rem; color:#b5cbd7; }
 .workflow-metrics strong { color:#e1f1f6; font-weight:600; font-variant-numeric:tabular-nums; }
 .workflow-message { margin:0 0 .5rem; color:#cee0e8; line-height:1.6; font-size:.925rem; }
@@ -121,23 +121,23 @@ WORKFLOWS_JS = r'''
   const time=value=>new Date(value).toISOString().replace('T',' ').replace('.000Z',' UTC');
   function checked(value){
     if(!value||value.schema!=='megalodon-support-workflows-v1'||value.mode!=='background'||!stamp(value.observed_at)||Date.parse(value.observed_at)>Date.now()+5000||!Array.isArray(value.tools)||value.tools.length>12)throw Error('Invalid workflow status');
-    const seen=new Set();for(const row of value.tools){if(!row||!ids.includes(row.id)||seen.has(row.id)||!text(row.name,80)||!row.name.length||(!Object.hasOwn(labels,row.state)||row.state==='saved_result')||!text(row.message,512)||(row.updated_at!==null&&(!stamp(row.updated_at)||Date.parse(row.updated_at)>Date.parse(value.observed_at)+5000))||!Array.isArray(row.metrics)||row.metrics.length>6||!row.metrics.every(metric=>metric&&text(metric.label,64)&&metric.label.length>0&&Number.isFinite(metric.value)&&text(metric.unit,32)))throw Error('Invalid workflow row');seen.add(row.id);}
+    const seen=new Set();for(const row of value.tools){if(!row||!ids.includes(row.id)||seen.has(row.id)||!text(row.name,80)||!row.name.length||(!Object.hasOwn(labels,row.state)||row.state==='saved_result')||(row.review_required!==undefined&&typeof row.review_required!=='boolean')||!text(row.message,512)||(row.updated_at!==null&&(!stamp(row.updated_at)||Date.parse(row.updated_at)>Date.parse(value.observed_at)+5000))||!Array.isArray(row.metrics)||row.metrics.length>6||!row.metrics.every(metric=>metric&&text(metric.label,64)&&metric.label.length>0&&Number.isFinite(metric.value)&&text(metric.unit,32)))throw Error('Invalid workflow row');seen.add(row.id);}
     return value;
   }
   const periodic=new Set(['clamav','osquery','nmap','lynis','aide']);
   const displayState=row=>!fresh()?'unavailable':periodic.has(row.id)&&row.state==='connected'?'saved_result':row.state;
-  const matches=(row,filter)=>filter==='ALL'||(filter==='attention'?attention.has(displayState(row)):displayState(row)===filter);
+  const matches=(row,filter)=>filter==='ALL'||(filter==='attention'?(attention.has(displayState(row))||(fresh()&&row.review_required===true)):displayState(row)===filter);
   const aiLabels={connected:'Recent AI response',ready:'Model available',collecting:'Checking or working',needs_setup:'AI setup needed',error:'AI unavailable'};
-  const displayLabel=row=>fresh()?(row.id==='qwen'&&Object.hasOwn(aiLabels,displayState(row))?aiLabels[displayState(row)]:labels[displayState(row)]):'Status unavailable';
+  const displayLabel=row=>fresh()?(row.id==='qwen'&&Object.hasOwn(aiLabels,displayState(row))?aiLabels[displayState(row)]:labels[displayState(row)])+(row.review_required===true&&displayState(row)!=='needs_review'?' · review required':''):'Status unavailable';
   const timeLabel=row=>row.id==='tshark'?'Capture started':row.id==='clamav'?'Result saved':periodic.has(row.id)?'Result completed':row.id==='qwen'?'Model checked':'Source updated';
   function age(value){const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(value))/1000));return seconds<60?seconds+'s ago':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':Math.floor(seconds/86400)+'d ago';}
   function overview(filter){
     for(const key of overviewFilters){const button=byId('workflows-show-'+key);button.setAttribute('aria-pressed',String(filter===key));button.disabled=key!=='ALL'&&!fresh();byId('workflows-count-'+key).textContent=fresh()?String(view.payload.tools.filter(row=>matches(row,key)).length):'—';}
-    byId('workflows-overview-note').textContent=fresh()?'Select a count to focus the list. Counts cover all tools; search narrows the matches. Saved results can be old; inspect their source times. Tool counts are not threat counts or a safety score.':'Current activity counts are unavailable. Refresh status to check again; retained observations do not prove tools are running.';
+    byId('workflows-overview-note').textContent=fresh()?'Select a count to focus the list. Counts cover all tools; search narrows the matches. Saved results can be old; inspect their source times. Tool counts are not threat counts or a safety score. A tool can need review while collecting.':'Current activity counts are unavailable. Refresh status to check again; retained observations do not prove tools are running.';
   }
   const originalCard=integrationCard;
   function card(row){
-    const item=document.createElement('details');item.className='integration-card workflow-card';item.dataset.state=displayState(row);item.open=view.open.has(row.id);
+    const item=document.createElement('details');item.className='integration-card workflow-card';item.dataset.state=displayState(row);item.dataset.reviewRequired=String(fresh()&&row.review_required===true);item.open=view.open.has(row.id);
     item.addEventListener('toggle',()=>{if(item.open)view.open.add(row.id);else view.open.delete(row.id);});
     const summary=document.createElement('summary'),identity=textNode('span','','integration-identity');
     identity.append(textNode('span',names[row.id],'integration-title'),textNode('span',roles[row.id],'workflow-role'),textNode('span',row.updated_at?timeLabel(row)+' '+time(row.updated_at)+' · '+age(row.updated_at):timeLabel(row)+' · time unavailable','integration-zone'));

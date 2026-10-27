@@ -62,7 +62,7 @@ vendor account. Their license terms remain those of their publishers.
 | Built-in Linux counters | Live resources, interface rates, sockets | Automatic with the local HUD |
 | [Wireshark / TShark](https://www.wireshark.org/download.html) | Packet metadata and protocol dissection | Existing completed-capture adapter |
 | [Zeek](https://zeek.org/get-zeek/) | Connection summaries | Existing completed conn.log adapter |
-| [Suricata](https://suricata.io/our-story/suricata/) | Network detector alerts | Existing committed external-alert store |
+| [Suricata](https://suricata.io/our-story/suricata/) | Network detector alerts | Managed EVE intake during enabled monitoring; optional external-alert store remains separate |
 | [Nmap](https://nmap.org/download.html) | Host and port-state inventory | Automatic bounded loopback scan and completed-report watcher |
 | [ClamAV](https://www.clamav.net/) | Scanned files and signature matches | Automatic Downloads scan and completed-report watcher |
 | [osquery](https://osquery.io/downloads) | Package inventory | Automatic bounded package count and result watcher |
@@ -75,6 +75,18 @@ The live PC graphs remain useful independently. Qwen is not required for counter
 collection and cannot select commands, execute scripts or invent missing data.
 
 ## Implementation contract
+
+The Suricata card in **Sensors** distinguishes the recent bounded EVE log tail
+from managed intake into Findings and Reports. It shows the intake check time,
+findings admitted this session, and intake records skipped this session. A
+missing, failed, stale or partial intake needs review even when recent log
+activity is visible. Skipped-record counts persist for the running session;
+they do not vanish after an empty read. An intake check with no new findings
+does not prove that the sensor is healthy or the host is safe.
+
+The optional external-alert database is a separate path. Its unconfigured
+status does not establish that managed EVE intake is missing. No status read
+starts monitoring, opens a new input, changes permissions or requests AI.
 
 `GET /api/host-telemetry` returns `megalodon-host-telemetry-v1` only in local HUD
 mode, using the existing loopback Host and optional sign-in boundaries plus

@@ -160,13 +160,19 @@ class FlowIngestor:
         self._lock=Lock();self._work_lock=RLock();self._stop=Event();self._thread=None
         self._state=dict(state='stopped',source=None,source_detail=None,accepted=0,rejected=0,imported_flows=0,imported_findings=0,
                          backlog_bytes=0,rotations=0,gaps=0,sampling_gaps=0,samples=0,updated_at=None,message='Flow collection is stopped.')
+        self._alert_intake=dict(state='not_checked',checked_at=None,rejected=0,
+                               message='Managed EVE intake has not been checked this session.')
         self._positions={};self._backlog={};self._primary=None;self._select_at=0
 
     def snapshot(self):
         with self._lock:
             result=dict(self._state)
+            intake=dict(self._alert_intake,imported_findings=self._state['imported_findings'])
         if result['state']=='connected' and result['updated_at'] and self.evidence.clock()-epoch(result['updated_at'])>120:
             result.update(state='stale',message='No recent sensor summary update; current source coverage is unknown.')
+        if intake['state'] in {'checked','partial'} and intake['checked_at'] and self.evidence.clock()-epoch(intake['checked_at'])>120:
+            intake.update(state='stale',message='Managed EVE intake check is old; current admission is unknown.')
+        result['suricata_intake']=intake
         return result
 
     def start(self):
@@ -243,7 +249,13 @@ class FlowIngestor:
             self._positions[source]=position
 
     def poll(self,source,*,include_flows=True):
-        with self._work_lock:return self._poll(source,include_flows=include_flows)
+        with self._work_lock:
+            try:return self._poll(source,include_flows=include_flows)
+            except (OSError,ValueError,KeyError,TypeError,OverflowError,sqlite3.Error):
+                if source=='suricata':
+                    with self._lock:self._alert_intake.update(state='unavailable',checked_at=utc(),
+                        message='Managed EVE intake could not read or retain records. Review retained evidence, Sensors and Storage.')
+                raise
 
     def _poll(self,source,*,include_flows=True):
         if source not in self.paths:raise ValueError('Unknown fixed sensor source.')
@@ -316,6 +328,12 @@ class FlowIngestor:
                 self._state.update(source=source,source_detail='file' if include_flows else 'alerts')
                 if not has_flows:self._state.update(state='waiting',message='Waiting for connection summaries. Sensor findings are retained separately when available.')
             self._state['rejected']+=rejected
+            if source=='suricata':
+                self._alert_intake['rejected']+=rejected
+                skipped=self._alert_intake['rejected']
+                self._alert_intake.update(state='partial' if skipped else 'checked',checked_at=utc(),
+                    message=(f'Managed EVE intake skipped {skipped} invalid or out-of-range records this session.' if skipped else
+                             'Managed EVE intake read and checkpoint completed; zero new findings does not establish a healthy sensor or a safe host.'))
         return accepted
 
     def _set_backlog(self,source,value):

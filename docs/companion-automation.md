@@ -10,6 +10,13 @@ memory, with source and available time provenance shown in the panels. Unavailab
 programs and rejected results have their own status; they never create sample
 data. The `dashboard` CLI mode does not start default collection.
 
+In **Sensors**, a saved ClamAV positive keeps its **Needs review** flag while
+a replacement scan is collecting or fails. The same tool can therefore count
+under both **Collecting** and **Needs review**. Its counts and source time still
+describe the saved scan, not the unfinished replacement. A new completed
+aggregate replaces this current-result indicator; this is not an incident
+resolution record or proof that a previously flagged file was removed.
+
 The local HUD's prominent **Start background tools** button (or
 `./scripts/start-support-apps.sh`) also wakes this existing worker. It refreshes
 configured, installed collectors immediately without creating another worker
