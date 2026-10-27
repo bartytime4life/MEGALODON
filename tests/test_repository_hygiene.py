@@ -179,7 +179,7 @@ def test_ci_constraints_are_exact_and_the_drift_lane_stays_separate():
         "pyyaml==6.0.3",
         "referencing==0.37.0",
         "rpds-py==2026.9.1",
-        "setuptools==84.0.0",
+        "setuptools==84.2.1",
         "typing-extensions==4.16.0",
     }
     assert entries == expected
