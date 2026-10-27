@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "kind": "historical-synthetic-screenshot-composition",
+  "capture_candidate": "424d957472ad121becec635171bc281bec2de995",
+  "capture_run": 39180659477,
+  "source_sha256": {
+    "finding-inspector-desktop.png": "da6bd1a7ad79e5b3adee6852df0aaf925265aef12419690c32d9594caef665ce",
+    "finding-inspector-mobile.png": "ae9cf8dae1a57c6fcdd94cf84cb59e3755de789f960278cfa07044b1eb960572"
+  },
+  "motion": "One 4.8-second play; no loop extension; final still retained.",
+  "limits": [
+    "Editorial motion around stills, not a live interaction",
+    "Original captures resized proportionally without cropping",
+    "No current-head UI or installed-host acceptance"
+  ],
+  "assets": {
+    "workspace-reel.gif": {
+      "bytes": 1003281,
+      "sha256": "2e9d294f331b362bf1e54520f76f9f71981f0ee00c7323b01c65d8ccc2f3a34b"
+    },
+    "workspace-reel.png": {
+      "bytes": 328449,
+      "sha256": "43532755455e73a23e2e26c414805ac2f5ccdd252efe29449a289179c2a0feeb"
+    }
+  }
+}
