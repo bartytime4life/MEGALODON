@@ -95,8 +95,16 @@ async def exercise_workflow_overview(browser, port, password, passed):
         await page.locator("#workflows-show-collecting").click()
         await expect(scan).to_contain_text("Flagged files 2")
         passed("native collecting scan retains its prior positive in both activity and review filters")
+        await page.locator('#integrations-clear').click()
+        await page.locator('#integrations-query').fill('Suricata')
+        sensor = page.locator('#integrations-cards .workflow-card').filter(has_text='Suricata')
+        await sensor.locator(':scope > summary').click()
+        await sensor.get_by_role('link', name='Review saved findings').click()
+        await expect(page.locator('#workspace-tab-findings')).to_have_attribute('aria-selected', 'true')
+        passed('native managed sensor review opens Findings rather than the optional external store')
         unavailable = True
         await page.locator("#workspace-tab-interfaces").click()
+        await page.locator('#integrations-clear').click()
         await page.locator("#workflows-refresh").click()
         for key in ("ALL", "attention", "collecting", "saved_result"):
             await expect(page.locator("#workflows-count-" + key)).to_have_text("—")
