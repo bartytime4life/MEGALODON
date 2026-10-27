@@ -338,7 +338,7 @@ def _threshold_matrix() -> list[dict[str, object]]:
         dst = "2001:db8:2::20" if ":" in src else "203.0.113.20"
         for index in range(amount):
             rows.append(_event(100 + case * 20 + index / 1000, src, dst, "TCP",
-                               src_port=43000, dst_port=1000 + index, flags=("ACK",)))
+                               src_port=43000, dst_port=1000 + index, flags=("SYN",)))
     dns_cases = (("192.0.2.50", 49), ("192.0.2.51", 50), ("2001:db8::52", 51))
     for case, (src, length) in enumerate(dns_cases):
         dst = "2001:db8:3::53" if ":" in src else "198.51.100.53"
@@ -356,7 +356,7 @@ def _cooldown() -> list[dict[str, object]]:
     for burst in (100, 130):
         for index in range(20):
             rows.append(_event(burst + index / 100, "192.0.2.61", "203.0.113.61", "TCP",
-                               src_port=45000, dst_port=2000 + index, flags=("ACK",)))
+                               src_port=45000, dst_port=2000 + index, flags=("SYN",)))
     for seconds in (200, 229.999999, 230):
         rows.append(_event(seconds, "2001:db8::62", "2001:db8:4::53", "DNS",
                            src_port=55000, dst_port=53, dns_length=60, byte_count=200))
@@ -379,7 +379,7 @@ def _mixed() -> list[dict[str, object]]:
         dst = "2001:db8:6::83" if ":" in src else "203.0.113.81"
         for index in range(20):
             rows.append(_event(6000 + case * 1000 + index / 100, src, dst, "TCP",
-                               src_port=48000, dst_port=3000 + index, flags=("ACK",)))
+                               src_port=48000, dst_port=3000 + index, flags=("SYN",)))
     for case, src in enumerate(("192.0.2.84", "192.0.2.85", "2001:db8::86", "2001:db8::87")):
         dst = "2001:db8:7::53" if ":" in src else "198.51.100.53"
         rows.append(_event(9000 + case * 40, src, dst, "DNS", src_port=56000 + case,
@@ -394,7 +394,7 @@ def _lookalikes() -> list[dict[str, object]]:
                            src_port=49000 + index, dst_port=8443, flags=("SYN",)))
     for index in range(20):
         rows.append(_event(100 + index / 100, "192.0.2.91", "203.0.113.91", "TCP",
-                           src_port=50000, dst_port=4000 + index, flags=("ACK",)))
+                           src_port=50000, dst_port=4000 + index, flags=("SYN",)))
     rows.append(_event(200, "192.0.2.92", "198.51.100.53", "DNS",
                        src_port=57000, dst_port=53, dns_length=72, byte_count=240))
     return rows
@@ -407,7 +407,7 @@ def _ipv6() -> list[dict[str, object]]:
                            src_port=51000 + index, dst_port=443, flags=("SYN",)))
     for index in range(20):
         rows.append(_event(100 + index / 100, "2001:db8::101", "2001:db8:8::101", "TCP",
-                           src_port=52000, dst_port=5000 + index, flags=("ACK",)))
+                           src_port=52000, dst_port=5000 + index, flags=("SYN",)))
     rows.append(_event(200, "2001:db8::102", "2001:db8:8::53", "UDP",
                        src_port=58000, dst_port=53, dns_length=64, byte_count=260))
     return rows
@@ -429,7 +429,7 @@ def _port_distinctness(*, repeated: bool) -> list[dict[str, object]]:
     return [
         _event(index / 4, "2001:db8:a::1", "2001:db8:a::2", "TCP",
                src_port=60000 + index, dst_port=10000 if repeated else 10000 + index,
-               flags=("ACK",))
+               flags=("SYN",))
         for index in range(20)
     ]
 
@@ -862,7 +862,7 @@ def build_corpus(output_root: Path) -> None:
             "syn_flood_threshold": 100,
             "syn_flood_window_seconds": 10,
         },
-        "generated_by": "detector-independent-scenario-generator-v1",
+        "generated_by": "detector-independent-scenario-generator-v2",
         "limits": {
             "max_line_bytes": 2048,
             "max_scenario_bytes": 2_097_152,

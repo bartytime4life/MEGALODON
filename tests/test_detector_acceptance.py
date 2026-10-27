@@ -64,6 +64,27 @@ def _rules(detector, events):
     return [result.rule_id for event in events for result in detector.analyze(event)]
 
 
+@pytest.mark.parametrize("flags", (("ACK",), ("PSH", "ACK"), ("SYN", "ACK"),
+                                  ("RST",), ("RST", "ACK"), ("FIN", "ACK")))
+def test_server_replies_do_not_fill_port_probe_window(flags):
+    detector = Detector(_settings(port_scan_distinct_ports=3))
+    replies = [_event("PORT_SCAN", index, seconds=index / 100,
+                      src_port=443, dst_port=50000 + index, tcp_flags=flags)
+               for index in range(30)]
+    assert _rules(detector, replies) == []
+    # Replies must not even partially complete a later probe window.
+    assert detector.analyze(_event("PORT_SCAN", 100, seconds=1, tcp_flags=["SYN"])) == []
+    assert detector.analyze(_event("PORT_SCAN", 101, seconds=1.1, tcp_flags=["SYN"])) == []
+    assert _rules(detector, [_event("PORT_SCAN", 102, seconds=1.2, tcp_flags=["SYN"])]) == ["PORT_SCAN"]
+
+
+@pytest.mark.parametrize("flags", (("SYN",), ("FIN",), ("FIN", "PSH", "URG"), ()))
+def test_candidate_probe_styles_still_trigger_port_rule(flags):
+    detector = Detector(_settings(port_scan_distinct_ports=3))
+    assert _rules(detector, [_event("PORT_SCAN", index, seconds=index / 100,
+                                   tcp_flags=flags) for index in range(3)]) == ["PORT_SCAN"]
+
+
 @pytest.mark.parametrize("case_id,rule,quantity,expected", BOUNDARIES,
                          ids=[case[0] for case in BOUNDARIES])
 def test_default_threshold_receipt(case_id, rule, quantity, expected):

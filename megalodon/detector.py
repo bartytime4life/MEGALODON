@@ -260,7 +260,12 @@ class Detector:
                         )
                     )
 
-            if event.protocol == "TCP" and event.dst_port is not None:
+            # ACK-bearing replies target changing client ports, not necessarily
+            # listening services. Reset replies carry no probe intent either.
+            # Keep SYN, FIN, Xmas and flagless candidates; ACK-only probing needs
+            # a separate stateful sensor to distinguish it from normal traffic.
+            if (event.protocol == "TCP" and event.dst_port is not None
+                    and not event.tcp_flags.intersection({"ACK", "RST"})):
                 _, port_counts = self._stage_port_window(
                     source,
                     (now, event.dst_port),

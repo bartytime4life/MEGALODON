@@ -40,10 +40,10 @@ def test_unregistered_detection_cannot_disappear_from_passing_evaluation(monkeyp
 def test_registry_round_trip_is_closed_detached_and_bound_to_existing_fixtures():
     document = registry_document()
     assert json.loads(json.dumps(document)) == document
-    assert document["registry_version"] == "1.0.1"
+    assert document["registry_version"] == "1.1.0"
     assert [(rule["rule_id"], rule["version"], rule["severity"]) for rule in document["rules"]] == [
         ("DNS_TUNNELING", "1.0.0", "CRITICAL"),
-        ("PORT_SCAN", "1.0.0", "MEDIUM"),
+        ("PORT_SCAN", "1.1.0", "MEDIUM"),
         ("SYN_FLOOD", "1.0.0", "HIGH"),
     ]
     assert document["default_settings"] == asdict(DetectionSettings())

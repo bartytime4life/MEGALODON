@@ -326,8 +326,14 @@ authoritative provenance, schema, update, and interpretation contract is
 | ID | Trigger | Severity | Evidence | Default response |
 | --- | --- | --- | --- | --- |
 | `SYN_FLOOD` | At least 100 TCP SYN-without-ACK events from one source in 10 seconds | HIGH | count and window | alert only |
-| `PORT_SCAN` | At least 20 distinct TCP destination ports from one source in 5 seconds | MEDIUM | distinct-port count and window | alert only |
+| `PORT_SCAN` | At least 20 distinct TCP candidate-probe destination ports from one source in 5 seconds; ACK and RST excluded | MEDIUM | distinct-port count and window | alert only |
 | `DNS_TUNNELING` | DNS/UDP query metadata length at least 50 | CRITICAL | observed length and threshold | alert only |
+
+The port rule excludes ACK-bearing replies and resets, including SYN/ACK and
+HTTPS replies to changing client ports. SYN, FIN, Xmas and flagless candidates
+remain eligible. Empty flags can also mean unavailable capture metadata; this
+rule cannot prove a NULL scan. ACK-only scanning needs a stateful sensor and
+is not covered by this rule. Historical findings retain their original status.
 
 Rules use bounded in-memory deques and emit at most one alert per source/rule
 within the configured cooldown. Port-scan distinctness uses an incremental,

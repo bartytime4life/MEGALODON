@@ -62,7 +62,7 @@ def _answer_prompt(question: str, observed: object) -> str:
 
 
 def ask(question_id: str, broker: Broker) -> dict[str, Any]:
-    """Two bounded calls: model requests one tool, then explains its result.
+    """Dispatch fixed questions directly; otherwise select one bounded tool.
 
     HUD questions are fixed. The model has no direct store, network, process,
     filesystem, approval or firewall handle. A refused selection is audited.
@@ -93,17 +93,24 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
         "Select one listed tool. No commands, paths, URLs, permission changes or additional fields. "
         + json.dumps({"question": question, "tools": catalog}, separators=(",", ":"))
     )
-    selection = generate(question_settings(), selection_prompt, max_tokens=128,
-                         response_format="selection", choices=tuple(sorted(permitted)),
-                         deadline=deadline)
-    try:
-        request = _selection(selection)
-    except (ValueError, TypeError, RecursionError):
-        request = {"tool": "invalid", "arguments": {}, "reason": "malformed model selection"}
+    authorization_source = "operator_request"
+    if len(permitted) == 1:
+        tool = next(iter(permitted))
+        arguments = {"report_type": "security_summary"} if tool == "megalodon.report.generate" else {}
+        request = {"tool": tool, "arguments": arguments, "reason": "Operator selected fixed HUD question"}
+    else:
+        authorization_source = "model_request"
+        selection = generate(question_settings(), selection_prompt, max_tokens=128,
+                             response_format="selection", choices=tuple(sorted(permitted)),
+                             deadline=deadline)
+        try:
+            request = _selection(selection)
+        except (ValueError, TypeError, RecursionError):
+            request = {"tool": "invalid", "arguments": {}, "reason": "malformed model selection"}
     if type(request) is dict and (type(request.get("tool")) is not str
                                   or request["tool"] not in permitted):
         request = {"tool": "invalid", "arguments": {}, "reason": "model selected disallowed tool"}
-    receipt = broker.dispatch(request, authorization_source="model_request")
+    receipt = broker.dispatch(request, authorization_source=authorization_source)
     result: dict[str, Any] = {
         "schema": "megalodon-ai-answer-v1", "question": question, "question_id": question_id,
         "tool": receipt["tool"], "authority_level": receipt["authority_level"],

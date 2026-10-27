@@ -12,6 +12,7 @@ async def exercise_workflow_overview(browser, port, password, passed):
         viewport={"width": 320, "height": 812}, reduced_motion="reduce",
         service_workers="block")
     unavailable = False
+    flagged_scan = False
     requests, errors, violations = [], [], []
 
     async def fixture(route):
@@ -30,6 +31,9 @@ async def exercise_workflow_overview(browser, port, password, passed):
                 row["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 90))
                 if row["id"] in {"clamav", "osquery", "nmap"}:
                     row["state"] = "connected"
+                if row["id"] == "clamav" and flagged_scan:
+                    row.update(state="needs_review", message="Synthetic saved scan flagged files; review original evidence.",
+                               metrics=[dict(label="Flagged files", value=2, unit="")])
             await route.fulfill(status=200, content_type="application/json", body=json.dumps(value))
         else:
             await route.continue_()
@@ -68,6 +72,18 @@ async def exercise_workflow_overview(browser, port, password, passed):
         await expect(page.locator("#workspace-live")).to_be_visible()
         await expect(page.locator("#inventory-title")).to_be_visible()
         passed("native Sensors result link reveals the existing saved inventory view")
+        flagged_scan = True
+        await page.locator("#workspace-tab-interfaces").click()
+        await page.locator("#workflows-refresh").click()
+        await expect(page.locator("#workflows-count-attention")).to_have_text("3")
+        await page.locator("#workflows-show-attention").click()
+        scan = page.locator("#integrations-cards .workflow-card").filter(has_text="ClamAV")
+        await expect(scan).to_contain_text("Review required")
+        await expect(scan).to_contain_text("Flagged files 2")
+        await scan.locator(":scope > summary").click()
+        await scan.locator('a[href="#clamav-title"]').click()
+        await expect(page.locator("#clamav-title")).to_be_visible()
+        passed("native positive file-scan review reaches the saved scan evidence without starting work")
         unavailable = True
         await page.locator("#workspace-tab-interfaces").click()
         await page.locator("#workflows-refresh").click()

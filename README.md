@@ -110,7 +110,7 @@ Current Linux HUD setup and action routes have separate protections.
 | Rule | Default trigger | Interpretation |
 | --- | --- | --- |
 | `SYN_FLOOD` | 100 TCP SYN-without-ACK events from one source / 10 seconds | Burst pattern; not proof of a denial-of-service attack |
-| `PORT_SCAN` | 20 distinct TCP destination ports from one source / 5 seconds | Port-access pattern; authorized inventory can look similar |
+| `PORT_SCAN` | 20 distinct TCP candidate-probe destination ports from one source / 5 seconds; ACK and RST excluded | Port-access pattern; authorized inventory can look similar |
 | `DNS_TUNNELING` | DNS/UDP query-length metadata ≥ 50 | Length heuristic; no query content or tunneling proof |
 
 These are the default specification thresholds, not calibrated production accuracy.
@@ -1373,7 +1373,7 @@ to observe.
 | Rule | Default trigger | Severity | Response |
 | --- | --- | --- | --- |
 | `SYN_FLOOD` | At least 100 TCP SYN-without-ACK events from one source in 10 seconds | HIGH | Alert only |
-| `PORT_SCAN` | At least 20 distinct TCP destination ports from one source in 5 seconds | MEDIUM | Alert only |
+| `PORT_SCAN` | At least 20 distinct TCP candidate-probe destination ports from one source in 5 seconds; ACK and RST excluded | MEDIUM | Alert only |
 | `DNS_TUNNELING` | DNS/UDP query metadata length of at least 50 | CRITICAL | Alert only |
 
 [`config/rules.toml`](config/rules.toml) documents these fixed rules. It is a

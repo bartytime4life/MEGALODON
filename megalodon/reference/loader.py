@@ -21,7 +21,7 @@ from ..validation import safe_text, ValidationError
 
 
 IANA_MANIFEST_SHA256 = "cb3254221886266c2fc6efe7f458c12cd35b97a1e5fc6cb284bf7b4c9972e6ff"
-CORPUS_MANIFEST_SHA256 = "04870e2d602ed4dd8bc4ef36adc61b62f3ed904ba92afea1267620b07c6438be"
+CORPUS_MANIFEST_SHA256 = "889a087d4caf324fce20bd606f98b465f324d126af020cc70716195cfacdddbd"
 IANA_LIMITS = {
     "max_artifacts": 128,
     "max_line_bytes": 4096,
@@ -763,7 +763,7 @@ def _corpus_manifest(data: bytes) -> dict[str, Any]:
     if (
         value["schema"] != "synthetic-scenario-corpus-manifest-v1"
         or value["corpus_id"] != "synthetic-scenario-corpus-v1"
-        or value["generated_by"] != "detector-independent-scenario-generator-v1"
+        or value["generated_by"] != "detector-independent-scenario-generator-v2"
         or value["quality_label"] != "synthetic-only"
         or value["calibration"] != "uncalibrated"
         or value["runtime_network_access"] is not False

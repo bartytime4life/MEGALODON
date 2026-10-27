@@ -138,7 +138,13 @@ Registry version `1.0.1` corrects the fixture traceability for
 `source-cap-pressure-v1`: its 4,096-source eviction and cooldown-reset exercise
 belongs to `SYN_FLOOD`, whose expected count is two, rather than to
 `DNS_TUNNELING`, whose expected count is zero. Detector behavior and the three
-rule versions remain unchanged.
+rule versions remain unchanged in that revision.
+
+Registry `1.1.0` records `PORT_SCAN` rule `1.1.0`: ACK-bearing traffic and
+resets no longer enter the distinct-port window. The synthetic scenario
+generator is now `detector-independent-scenario-generator-v2`; positive port
+fixtures use SYN probes, while routine ACK traffic remains a negative control.
+Thresholds, expected scenario counts and historical receipts are unchanged.
 
 `corpus-report` emits `detector-evidence-report-v1` and accepts optional
 `--scenario`. Both exact, lowercase 40-character Git IDs are mandatory. The
@@ -219,7 +225,7 @@ threat indicator; the free-form metadata object is empty. Scenario files use
 the same deterministic, manifest-pinned shard discipline as the IANA bundle.
 The corpus occupies 30 shards and 1,670,793 event-data bytes; its manifest
 SHA-256 is
-`04870e2d602ed4dd8bc4ef36adc61b62f3ed904ba92afea1267620b07c6438be`.
+`889a087d4caf324fce20bd606f98b465f324d126af020cc70716195cfacdddbd`.
 
 | Scenario | Records | Exact expected findings (DNS / port / SYN) | Intended coverage |
 | --- | ---: | ---: | --- |
