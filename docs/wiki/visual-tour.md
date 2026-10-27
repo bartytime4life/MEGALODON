@@ -1,5 +1,22 @@
 # Visual Tour
 
+## A workspace you can inspect
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/workspace-reel.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/workspace-reel.gif" alt="Original historical synthetic desktop and mobile Findings views, with a finite editorial trace under finding, linked event, ingestion receipt and distinct-clock labels." width="1200">
+</picture>
+
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/workspace-reel.png). One 4.8-second play, then a static view.
+The screenshots are original PR #654 synthetic captures. Motion is editorial;
+it does not depict a running current-head application or a new interaction.
+
+**Choose a question:** [trace a finding](investigation-journeys.md#1-what-does-this-finding-actually-show),
+[understand a connection](investigation-journeys.md#2-where-does-the-connection-picture-come-from),
+or [review host changes](investigation-journeys.md#3-did-a-host-change-make-recovery-necessary-or-possible).
+The [current source reading](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md)
+separates this pass from the historical evidence below.
+
 ## Understand the signal. Inspect the evidence.
 
 Deep blue surfaces, cyan highlights and restrained amber accents connect the
@@ -115,3 +132,23 @@ has a no-motion alternative. [Asset record](https://github.com/bartytime4life/ME
 [Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/recovery-evidence.png). Brief motion repeats twice and stops; all labels remain visible.
 
 [Technical contracts](technical-deep-dive.md) · [Practical applications](practical-applications.md)
+
+
+## The signal path in motion
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/signal-path.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/signal-path.gif" alt="Explanatory direction of metadata through admission, fixed heuristics, private evidence and review; invalid input is refused and source authenticity remains separate." width="1200">
+</picture>
+
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/signal-path.png). Motion plays once for 4.8 seconds.
+This is a technical schematic, not a traffic replay or throughput measurement.
+Typed metadata enters bounded analysis, then retained evidence supports local
+inspection. The default triggers shown are 100 SYN events in 10 seconds,
+20 distinct candidate-probe ports in 5 seconds and DNS/UDP query-length metadata
+at least 50. They are review heuristics, not calibrated attack probabilities.
+
+The [asset record](https://github.com/bartytime4life/MEGALODON/blob/main/assets/docs/README.md)
+provides source hashes, reproduction commands and original screenshot provenance.
+The [October 27 validation record](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-refresh-2026-10-27.md)
+keeps local tests, hosted results and visual review separate.

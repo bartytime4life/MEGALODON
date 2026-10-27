@@ -1,5 +1,22 @@
 # MEGALODON Documentation Wiki
 
+## A workspace you can inspect
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/workspace-reel.png">
+  <img src="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/workspace-reel.gif" alt="Original historical synthetic desktop and mobile Findings views, with a finite editorial trace under finding, linked event, ingestion receipt and distinct-clock labels." width="1200">
+</picture>
+
+[Still image](https://raw.githubusercontent.com/bartytime4life/MEGALODON/b66b1d1458a1e1a564b4452f3ca46d4acc77374c/assets/docs/workspace-reel.png). One 4.8-second play, then a static view.
+The screenshots are original PR #654 synthetic captures. Motion is editorial;
+it does not depict a running current-head application or a new interaction.
+
+**Choose a question:** [trace a finding](investigation-journeys.md#1-what-does-this-finding-actually-show),
+[understand a connection](investigation-journeys.md#2-where-does-the-connection-picture-come-from),
+or [review host changes](investigation-journeys.md#3-did-a-host-change-make-recovery-necessary-or-possible).
+The [current source reading](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md)
+separates this pass from the historical evidence below.
+
 ![MEGALODON field guide: understand the signal, inspect the evidence, keep authority explicit.](https://raw.githubusercontent.com/bartytime4life/MEGALODON/395f5f311799743bdf443a69bbb0f0b16e573654/assets/docs/field-guide-cover.png)
 
 ## Local defense. Inspectable evidence. Human decisions.
