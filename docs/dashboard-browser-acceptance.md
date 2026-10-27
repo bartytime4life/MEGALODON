@@ -33,7 +33,7 @@ It complements the installed check and does not resolve print pagination.
 ## Prepared environment and execution
 
 From an installed repository checkout on non-root Linux, with Chrome stable,
-Xvfb/Openbox, and the test-only Playwright 1.64.0 package already installed,
+Xvfb/Openbox, and the test-only Playwright 1.64.1 package already installed,
 use an X display already managed by Openbox:
 
 ```bash
@@ -72,7 +72,7 @@ branch protection and does not supply an independent approval.
 ## Native-focus driver profile (issue #97)
 
 The test must remove automation's forced-visible behavior before measuring
-native visibility. The reviewed Playwright 1.64.0 driver core bundle sets
+native visibility. The reviewed Playwright 1.64.1 driver core bundle sets
 `Emulation.setFocusEmulationEnabled` to `true` on its own CDP session.
 [Chrome documents](https://developer.chrome.com/docs/devtools/rendering/apply-effects#emulate_a_focused_page)
 that focus emulation keeps visibility at `visible` and suppresses visibility
@@ -105,6 +105,21 @@ not MEGALODON acceptance; only the real-application lane establishes the latter.
 The profile still has to observe native hidden and visible states and demonstrate
 suspension/recovery through unchanged application logic. It never synthesizes
 visibility to make an assertion pass.
+
+## Playwright 1.64.1 dependency repair — October 27, 2026
+
+[PR #694](https://github.com/bartytime4life/MEGALODON/pull/694) updates the
+Linux wheel, closed browser-input assertions and version-pinned native-focus
+profile together. The exact PyPI Linux wheel digest, independently checked
+against the downloaded bytes, is
+`577b8d88778c245cfbd145ae17cf53044f084b1b46c55c69081d4069d56057e2`.
+The stock `driver/package/lib/coreBundle.js` is byte-identical to 1.64.0:
+its stock and transformed digests in the table below remain unchanged, with
+exactly one protected focus-initialization call. The profile is now
+`playwright-1.64.1-native-focus-v1`; unknown versions and driver bytes still
+fail closed. The lock admits only that Linux wheel and the source inventory
+is regenerated. The dated observations below retain their original pins;
+wheel inspection alone does not establish browser acceptance.
 
 ## Playwright 1.64.0 qualification — October 21, 2026
 

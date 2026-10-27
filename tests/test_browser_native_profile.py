@@ -109,7 +109,7 @@ def test_profile_and_closed_browser_lock_admit_the_same_version():
     assert profile.PROFILE == f"playwright-{profile.PLAYWRIGHT_VERSION}-native-focus-v1"
 
 
-@pytest.mark.parametrize("installed_version", ["1.63.0", "1.64.1", "1.65.0"])
+@pytest.mark.parametrize("installed_version", ["1.63.0", "1.64.0", "1.65.0"])
 def test_other_versions_stop_before_copy_or_child(monkeypatch, installed_version):
     monkeypatch.setattr(profile.sys, "platform", "linux")
     monkeypatch.setattr(profile.os, "geteuid", lambda: 1000, raising=False)

@@ -19,7 +19,7 @@ INCLUDE = "-r test-linux-cp311.txt"
 ENTRY = re.compile(r"([a-z][a-z0-9-]*)==([0-9.]+) --hash=sha256:([0-9a-f]{64})")
 BROWSER_PINS = {
     "greenlet": ("3.5.6", "1c20ea32a73d17b9b60e3371240e17b0068120c98a5ec01a224a7dd8c89733ba"),
-    "playwright": ("1.64.0", "5a59af1b230b234008524a5d42b613b233d4256f73bc1dd25bf3f11db0c81b75"),
+    "playwright": ("1.64.1", "577b8d88778c245cfbd145ae17cf53044f084b1b46c55c69081d4069d56057e2"),
     "pyee": ("13.0.1", "af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228"),
 }
 
@@ -93,7 +93,7 @@ def test_browser_workflow_verifies_inputs_before_acceptance():
     (INCLUDE, "-r test-linux-cp312.txt"),
     (INCLUDE, "-r https://invalid.example/inputs.txt"),
     (INCLUDE, ""),
-    ("playwright==1.64.0", "playwright>=1.64.0"),
+    ("playwright==1.64.1", "playwright>=1.64.1"),
     (" --hash=sha256:" + BROWSER_PINS["pyee"][1], ""),
     (BROWSER_PINS["greenlet"][1], "0" * 64),
     (BROWSER_PINS["playwright"][1], BROWSER_PINS["playwright"][1]

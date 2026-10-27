@@ -1,6 +1,6 @@
 """Run the fixed browser suite with an isolated, pinned native-focus driver copy.
 
-Stock Playwright 1.64.0 forces pages active on its own CDP session. A second
+Stock Playwright 1.64.1 forces pages active on its own CDP session. A second
 session cannot release that session's Chromium capturer. Change only that
 initialization call, in a temporary copy; never edit the installed driver.
 """
@@ -17,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 
-PLAYWRIGHT_VERSION = "1.64.0"
+PLAYWRIGHT_VERSION = "1.64.1"
 PROFILE = f"playwright-{PLAYWRIGHT_VERSION}-native-focus-v1"
 DRIVER_MODULE = Path("driver/package/lib/coreBundle.js")
 MAX_DRIVER_BYTES = 4 * 1024 * 1024

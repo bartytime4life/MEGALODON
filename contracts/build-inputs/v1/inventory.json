@@ -219,9 +219,9 @@
           "version": "3.5.6"
         },
         {
-          "declared_sha256": "sha256:5a59af1b230b234008524a5d42b613b233d4256f73bc1dd25bf3f11db0c81b75",
+          "declared_sha256": "sha256:577b8d88778c245cfbd145ae17cf53044f084b1b46c55c69081d4069d56057e2",
           "name": "playwright",
-          "version": "1.64.0"
+          "version": "1.64.1"
         },
         {
           "declared_sha256": "sha256:af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228",
@@ -237,7 +237,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "browser acceptance additions",
-      "source_sha256": "ee8ecc6bc6ec4ac21c8a3b56098f8ed42ec8d306697d78c57797833bf6f7c0b3"
+      "source_sha256": "2de095551e4020d24ee625c557914bcda9df63eff5542ad2441c6096c122ae7d"
     }
   ],
   "project": {
