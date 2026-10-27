@@ -30,11 +30,13 @@ have their own dependencies, licenses and operational requirements.
 ## Understand what happened
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/finding-walkthrough.png">
-  <img src="assets/docs/finding-walkthrough.gif" alt="Annotated historical synthetic Findings inspector: recorded finding, linked event, ingestion receipt and separate observation, detection and projection times." width="1200">
+  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/workspace-reel.png">
+  <img src="assets/docs/workspace-reel.gif" alt="Historical synthetic desktop and mobile Findings views show the finding, linked event, ingestion receipt and distinct clocks. A moving editorial trace connects the labels; the interface itself is a still." width="1200">
 </picture>
 
-[Still image](assets/docs/finding-walkthrough.png). Brief motion repeats twice and stops; all labels remain visible.
+[Still image](assets/docs/workspace-reel.png). One 4.8-second play, then a static view.
+All labels remain visible. These are historical synthetic captures with editorial
+motion, not a live application recording.
 
 This is an **annotated still capture**, with moving emphasis—not a live demo.
 The underlying rendered interface comes from PR #654, candidate
@@ -50,7 +52,7 @@ It contains documentation-only addresses.
 
 ## What works today
 
-**Source basis: [`main@2cb7060`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c), October 22, 2026.**
+**Source basis: [`main@7c91232`](https://github.com/bartytime4life/MEGALODON/commit/7c912322b12fe40fbe92de79b32fdc678054a3da), October 27, 2026.**
 Code presence and hosted checks do not establish the configuration, accuracy
 or recovery capability of a particular installed PC.
 
@@ -62,10 +64,16 @@ or recovery capability of a particular installed PC.
 | Optional sources | TShark, closed Zeek logs, strict Suricata admission and separate background observations | Importer, installed tool and qualified producer are distinct |
 | Host review | Lynis, AIDE, hardening posture, persistence, passive gateway review and own-account program/socket review | Scoped observations; root-only and unobserved activity can be missed |
 | Local AI | Installed-model selection, bounded explanations and closed proposals | Listener posture checked before inventory; model output grants no authority |
-| Recovery readiness | AIDE evidence gaps plus separately pinned external backup/isolated-test receipts | **No host-file restore; `restore_eligible` remains false** |
+| Recovery readiness | AIDE evidence gaps; backup/test receipt hashes checked against separate operator trust | **No host-file restore; `restore_eligible` remains false** |
 | Explicit Linux workflows | Protected configuration, bounded scans and separate temporary containment workflow | Operator/OS authorization and documented scope; no automatic blocking |
 | Desktop lifecycle | Private per-user install, update/rollback and managed HUD service | Login startup is opt-in; saved monitoring has its own scope |
 | Hosted reference | Separate address-free snapshot viewer, held in tab memory | No live connection to the PC or host control |
+
+Choose a task: [trace a finding](docs/wiki/investigation-journeys.md#1-what-does-this-finding-actually-show),
+[understand a connection](docs/wiki/investigation-journeys.md#2-where-does-the-connection-picture-come-from),
+or [review host changes](docs/wiki/investigation-journeys.md#3-did-a-host-change-make-recovery-necessary-or-possible).
+The current [Findings guide](docs/findings-review.md) and [Setup guide](docs/setup-console.md)
+explain the newer controls.
 
 Read [the source-linked capability map](docs/current-state.md) for exact paths,
 check identities and open producer/model/platform gates.
@@ -95,11 +103,13 @@ login autostart and optional supporting tools remain separate choices.
 ## How evidence moves
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/evidence-flow.png">
-  <img src="assets/docs/evidence-flow.gif" alt="Explanatory metadata path: bounded input, three fixed rules, private SQLite evidence, linked local inspection. Observation, detection and projection times remain separate." width="1200">
+  <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/signal-path.png">
+  <img src="assets/docs/signal-path.gif" alt="Animated schematic of typed metadata admission, three fixed heuristics, private SQLite evidence and local inspection. Invalid input is refused; a valid record does not authenticate its source." width="1200">
 </picture>
 
-[Still image](assets/docs/evidence-flow.png). Brief motion repeats twice and stops; all labels remain visible.
+[Still image](assets/docs/signal-path.png). Synthetic direction-of-evidence motion
+plays once for 4.8 seconds and stops. This schematic is not measured traffic,
+throughput or an application recording.
 
 `PacketEvent` validates timestamps, addresses, ports, flags, lengths and reviewed
 provenance before persistence. Fixed rules record reviewable patterns; event,
@@ -152,15 +162,17 @@ containment and evaluation gates.
 
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/docs/recovery-evidence.png">
-  <img src="assets/docs/recovery-evidence.gif" alt="Explanatory recovery boundary: AIDE change observations, independently pinned backup and isolated restore-test receipts, and host restoration held with restore eligibility false." width="1200">
+  <img src="assets/docs/recovery-evidence.gif" alt="Explanatory recovery boundary: AIDE change observations, backup and isolated-test receipts checked against operator trust, and host restoration held with restore eligibility false." width="1200">
 </picture>
 
 [Still image](assets/docs/recovery-evidence.png). Brief motion repeats twice and stops; all labels remain visible.
 
 The read-only Setup view distinguishes baseline/comparison observations from
-backup evidence. The external validator admits three private, separately pinned
-records only when identities, raw-byte hashes, chronology and expiry agree. It
-opens no backup and runs no restore test. Host recovery stays unavailable;
+backup evidence. A separate operator-controlled trust record pins the raw-byte
+hashes of two private receipts: backup and isolated restore test. That trust
+record is not itself independently hash-pinned. An owner who can rewrite all
+three files can forge the evidence. Identity, chronology and expiry checks do
+not remove that trust limit. The validator opens no backup and runs no restore test. Host recovery stays unavailable;
 causality and conflicts remain unresolved. The separate
 [audit-database recovery](docs/sqlite-recovery-contract.md) and
 [reference-library rollback](docs/reference-library-recovery.md) have their own scopes.
@@ -174,8 +186,9 @@ causality and conflicts remain unresolved. The separate
 | [Reporting](docs/efficient-recording-reports.md) · [Background tools](docs/background-tools.md) | [Technical deep dive](docs/wiki/technical-deep-dive.md) · [HTTP contract](docs/dashboard-http-contract.md) |
 | [Roadmap and limits](docs/wiki/roadmap-and-limits.md) | [Engineering case studies](docs/wiki/engineering-case-studies.md) · [Contribute](CONTRIBUTING.md) |
 
-Core CI, Linux browser acceptance and CodeQL succeeded at the source basis;
-[exact run IDs and limits](docs/current-state.md#exact-source-head-checks-observed)
+CI, CodeQL and the Qwen zero-effect workflow succeeded at this source basis.
+Its Linux browser run was **cancelled**, so it supplies no browser-pass claim.
+[Exact run IDs and limits](docs/current-state.md#october-27-source-head-checks)
 remain separate from checks on this documentation candidate or an installed PC.
 Native platform parity, operational detection accuracy and independent model
 acceptance remain open evidence gates. The name expresses the defensive mission;
@@ -184,7 +197,8 @@ it is not a promise of comprehensive malware elimination.
 Visuals contain public source constants and a historical synthetic capture.
 [Still images and provenance](assets/docs/README.md) are available for every animation.
 No private coordination content or workstation observations are used as public
-examples. [Documentation scope and validation](docs/documentation-polish-2026-10-22.md).
+examples. [This pass: scope and validation](docs/documentation-refresh-2026-10-27.md).
+The [October 22 record](docs/documentation-polish-2026-10-22.md) retains its dated meaning.
 
 <details>
 <summary><strong>Detailed operator and CLI reference</strong> — installation, safety defaults, recipes, contracts and platform notes</summary>

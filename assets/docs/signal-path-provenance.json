@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "kind": "explanatory-metadata-schematic",
+  "source_basis": "7c912322b12fe40fbe92de79b32fdc678054a3da",
+  "motion": "One 4.8-second play; no loop extension; final still retained.",
+  "limits": [
+    "Not an application recording",
+    "Not network routes or measured throughput",
+    "No host, model, sensor or private data read"
+  ],
+  "assets": {
+    "signal-path.gif": {
+      "bytes": 332603,
+      "sha256": "c54584b6ddee1a35c51a96cd262c665f918d1671ebd730b037a4104f2343994f"
+    },
+    "signal-path.png": {
+      "bytes": 64815,
+      "sha256": "a0b0317f4a425f45fccc59ab79e7f9d16320d15c36d3e898d1dfb5a583910b40"
+    }
+  }
+}

@@ -1,5 +1,16 @@
 # Evidence Index
 
+
+## Latest documentation reading — October 27
+
+[Current source and exact workflow results](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#october-27-reading)
+use source `7c912322b12fe40fbe92de79b32fdc678054a3da`.
+[Validation and limits for this pass](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-refresh-2026-10-27.md)
+are separate from the historical records below. The current-source browser run
+was cancelled; a successful CI or CodeQL run does not supply the missing browser
+result. The new moving visuals are labeled editorial compositions or diagrams,
+with no new live-host claim.
+
 > **Current documentation orientation — 2026-10-22:** source `main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`. The original October 11 case-study baseline below remains historical. Current guides add Lynis/AIDE, dated threat context and the qualified-finding inspector. The separate Site is now a PC Snapshot Console, superseding the historical retirement claim. [Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) records the distinction.
 
 ## Verify the claim at its actual scope

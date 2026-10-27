@@ -1,32 +1,30 @@
 # Complete documentation catalog
 
-**164 Markdown documents accounted for.** Basis: `main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`
-(October 22, 2026, America/Chicago), plus the documentation additions in this candidate. This
-catalog includes root documents, all `docs/` and versioned-contract guides, Wiki
-source, Site scope, templates, fixture notes, and visual provenance.
+**174 Markdown documents accounted for.** Basis: source
+`main@7c912322b12fe40fbe92de79b32fdc678054a3da` (October 27, 2026,
+America/Chicago), plus this documentation candidate. The inventory includes
+root documents, `docs/`, contract guides, Wiki source, Site scope, templates,
+fixture notes and visual provenance; generated caches are excluded.
 
-October 23 addition: the [Suricata installation/configuration guide](installing-suricata.md)
-is listed below separately from the historical inventory count above.
+The October 22 count and checks remain in their dated records. This catalog
+is an inventory, not a manual audit or operational acceptance of every claim.
+Use [current state](current-state.md) for the latest reading and
+[validation scope](documentation-refresh-2026-10-27.md) for this pass.
 
-October 25 additions: [Setup controls and model readiness](setup-console.md) and
-[Visual Findings review](findings-review.md) are listed separately from that
-historical count. Their existence is not an installed-host or release receipt.
+[Field guide](README.md) · [Visual Wiki](wiki/README.md) ·
+[Three investigation journeys](wiki/investigation-journeys.md)
 
-Every document was read programmatically for inventory and local-link checks.
-That is not a manual audit of every technical claim. Maintained entry pages
-were reconciled against named source paths; dated records retain their pins,
-results and authority. Categories describe how to read a file, not whether a
-capability is accepted. Schema and code files are linked by their owning guides.
+## Newly reconciled entries
 
-[Field guide](README.md) · [Current state and limits](current-state.md) · [Visual Wiki](wiki/README.md)
-
-| Kind | Read it as |
+| Document | Repository path |
 | --- | --- |
-| Start / task guide | Navigation and documented behavior; verify installed-host state separately |
-| Planning / acceptance | A design, decision record, proposed gate or evidence contract; read the document’s own status |
-| Historical record | Dated evidence, research or lifecycle history; never silently refresh its original claims |
-| Versioned contract | The named schema/API boundary; existence does not prove producer or platform acceptance |
-| Wiki | Generated public explanation; edit the repository source before publication |
+| [Suricata engine-regression research packet](../contracts/suricata-eve/v1/qualification/README.md) | `contracts/suricata-eve/v1/qualification/README.md` |
+| [Suricata synthetic fixture-and-oracle packet](../contracts/suricata-eve/v1/qualification/experiment/README.md) | `contracts/suricata-eve/v1/qualification/experiment/README.md` |
+| [Offline Suricata laboratory candidate](../contracts/suricata-eve/v1/qualification/experiment/harness/README.md) | `contracts/suricata-eve/v1/qualification/experiment/harness/README.md` |
+| [Connection lens acceptance — October 24, 2026](../design-qa.md) | `design-qa.md` |
+| [Local map context for an observed address](address-location-map.md) | `docs/address-location-map.md` |
+| [Documentation refresh — October 27, 2026](documentation-refresh-2026-10-27.md) | `docs/documentation-refresh-2026-10-27.md` |
+| [Three investigation journeys](wiki/investigation-journeys.md) | `docs/wiki/investigation-journeys.md` |
 
 ## Start and governing contracts
 

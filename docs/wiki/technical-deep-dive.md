@@ -97,7 +97,9 @@ input. Every result retains `restore_eligible=False`, `backup_state=not_integrat
 
 The separate `megalodon-backup-evidence-v1` reader admits exactly three fixed
 private JSON files: operator trust, producer receipt and independent isolated
-restore-test receipt. Each is capped at 16 KiB. Closed keys/types, raw-byte
+restore-test receipt. Only the two receipts are raw-byte hash-pinned by the
+separate operator-controlled trust record; the trust record is not itself
+independently hash-pinned. Each file is capped at 16 KiB. Closed keys/types, raw-byte
 SHA-256 pins, source/artifact/snapshot identity and chronological ordering must
 agree. Producer and verifier IDs must differ; meaningful independence is an
 operator trust decision, not proof supplied by different strings. Each validity

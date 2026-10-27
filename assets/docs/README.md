@@ -60,3 +60,29 @@ Wiki motion URLs pin immutable asset commit `b24c1d38e1d30b108a021a9ef1d78ef5afd
 relative paths so branch previews load their matching bytes. The native Wiki
 publishes through its existing post-merge workflow, after those assets exist on
 reviewed main. Reverting documentation does not change application state.
+
+
+## October 27: moving paths, original screens
+
+| Asset pair | Origin and interpretation |
+| --- | --- |
+| `workspace-reel.gif` / `.png` | The two original historical PR #654 captures resized proportionally, uncropped, on one editorial canvas. The moving trace is outside the screenshots. No UI interaction is fabricated. |
+| `signal-path.gif` / `.png` | Original technical schematic of metadata admission, fixed rules, retained evidence and review at source `7c912322b12fe40fbe92de79b32fdc678054a3da`. Motion represents record direction, not measured routes or throughput. |
+
+Both GIFs play once for **4.8 seconds** and retain a final still; no GIF loop
+extension is present. Labels remain static. Reduced-motion picture sources and
+explicit PNG links accompany their use. Each is below 1 MiB; the original
+screenshots and their provenance remain unchanged.
+
+Reproduce using a Pillow-compatible Python interpreter with local DejaVu fonts:
+
+```bash
+python tools/render_workspace_reel.py
+python tools/render_signal_path.py
+```
+
+`workspace-reel-provenance.json` and `signal-path-provenance.json` record exact
+asset hashes and source limits. Wiki images pin asset commit `b66b1d1458a1e1a564b4452f3ca46d4acc77374c`;
+README image links follow the checked-out branch. These files add no runtime
+dependency, external data request or service. Original captures are historical,
+not evidence of installed-PC behavior or current-application acceptance.

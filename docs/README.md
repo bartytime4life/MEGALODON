@@ -13,7 +13,7 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 | Manage background startup | [Installed service and login startup](local-pc-setup.md#optional-start-the-installed-hud-at-login) | [Collector scope and saved preferences](background-tools.md) |
 | Open MEGALODON on Linux | [Visual quick start](gui-quick-start.md) | [Install, update, troubleshoot](local-pc-setup.md) |
 | Prepare Suricata offline configuration | [Installing Suricata and configuration script](installing-suricata.md) | [Pinned alert-only producer boundary](../contracts/suricata-eve/v1/producer/README.md) |
-| Understand the interface | [Visual tour](wiki/visual-tour.md) | [Operator guide](wiki/operator-guide.md) |
+| Understand the interface | [Visual tour](wiki/visual-tour.md) | [Three investigation journeys](wiki/investigation-journeys.md) |
 | Trace a finding to its evidence | [Findings and inspector](control-room-contract.md#qualified-finding-evidence-inspector) | [Control room contract](control-room-contract.md) |
 | Assess host recovery preparation | [Recovery readiness and external receipts](host-backup-evidence.md) | [Host-security limits](host-security.md#recovery-readiness-in-setup) |
 | Explore useful applications | [Practical walkthroughs](wiki/practical-applications.md) | [Technical deep dive](wiki/technical-deep-dive.md) |
@@ -45,8 +45,8 @@ compromise. See [security boundaries](wiki/security-boundaries.md).
 
 ## Know which document governs
 
-[Current state and limits](current-state.md) pins the October 22 source and
-GitHub checks. The [reconciliation record](documentation-refresh-2026-10-22.md)
+[Current state and limits](current-state.md) leads with the October 27 source
+and GitHub checks, preserving the October 22 orientation as history. The [reconciliation record](documentation-refresh-2026-10-22.md)
 explains how the supplied September architecture/research plans relate to it. [The complete documentation catalog](documentation-map.md)
 accounts for every tracked Markdown document, including versioned contracts,
 proposals, templates, and preserved history. Catalog inclusion is not technical

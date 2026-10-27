@@ -1,5 +1,40 @@
 # Current state and evidence boundaries
 
+## October 27 reading
+
+**Source basis:** [`main@7c912322b12fe40fbe92de79b32fdc678054a3da`](https://github.com/bartytime4life/MEGALODON/commit/7c912322b12fe40fbe92de79b32fdc678054a3da);
+tree `f56752b3cd5d4aa9e70d058f6474ae6c5a37f862`. Source files were reconstructed
+in an isolated snapshot and all **1,033 Git blob identities** matched this tree
+before editing. The primary checkout's unfinished application work was preserved.
+
+| Read now | Observed source behavior | Limit |
+| --- | --- | --- |
+| [Findings](findings-review.md) | Refine a bounded returned page, inspect a finding, request optional local advice and save an assessment | Empty results, severity and model text do not establish safety or malicious intent |
+| [Setup](setup-console.md) | Source/tool configuration and selected-model readiness controls | Presence, operation, admitted data and model qualification stay separate |
+| [Atlas](live-connection-globe.md) | Recorded send/receive directions at approximate IP locations | Arcs are endpoint illustrations, not physical packet routes |
+| [Recovery evidence](host-backup-evidence.md) | Two receipt hashes pinned by a separate operator-controlled trust record | Trust is not independently hash-pinned; rewriting all three files can forge evidence; no host-file restore |
+| [Qwen record](https://github.com/bartytime4life/MEGALODON/blob/7c912322b12fe40fbe92de79b32fdc678054a3da/config/model-bindings/qwen.unbound.json) | Canonical owner binding remains UNBOUND / NOT_RECORDED | A working runtime model or zero-effect test does not complete canonical acceptance |
+
+The [three investigation journeys](wiki/investigation-journeys.md) connect these
+surfaces. [This documentation pass](documentation-refresh-2026-10-27.md) records
+its tests, visual provenance and omissions. The October 22 implementation
+inventory below remains historical at its own pin; it is not a fresh hosting,
+queue, platform or installed-PC observation.
+
+### October 27 source-head checks
+
+These are observed GitHub results for the exact source SHA, separate from this
+documentation candidate's checks:
+
+| Workflow | Result | Meaning |
+| --- | --- | --- |
+| [CI 40552674917](https://github.com/bartytime4life/MEGALODON/actions/runs/40552674917) | success | Hosted repository checks; not installed-host acceptance |
+| [CodeQL 40552674698](https://github.com/bartytime4life/MEGALODON/actions/runs/40552674698) | success | Static-analysis result; not independent security clearance |
+| [Qwen zero-effect 40552674943](https://github.com/bartytime4life/MEGALODON/actions/runs/40552674943) | success | Named zero-effect workflow; not real-provider containment or canonical model acceptance |
+| [Linux browser 40552674797](https://github.com/bartytime4life/MEGALODON/actions/runs/40552674797) | cancelled | No successful exact-source-head browser result claimed |
+
+## Historical October 22 source orientation
+
 **Documentation basis — October 22, 2026 (America/Chicago).**
 Source: [`main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c);
 tree `3c4773603fa90e13d627d0fb107b45f8e986b079`.
