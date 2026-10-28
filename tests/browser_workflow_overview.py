@@ -14,6 +14,7 @@ async def exercise_workflow_overview(browser, port, password, passed):
     unavailable = False
     flagged_scan = False
     collecting_scan = False
+    suricata_activity = None
     requests, errors, violations = [], [], []
 
     async def fixture(route):
@@ -36,6 +37,9 @@ async def exercise_workflow_overview(browser, port, password, passed):
                     row.update(state="collecting" if collecting_scan else "needs_review", review_required=True,
                                message="Synthetic saved scan flagged files; review original evidence.",
                                metrics=[dict(label="Flagged files", value=2, unit="")])
+                if row['id'] == 'suricata' and suricata_activity is not None:
+                    row.update(state=suricata_activity, review_required=True,
+                               message='Synthetic managed intake warning; source activity remains separate.')
             await route.fulfill(status=200, content_type="application/json", body=json.dumps(value))
         else:
             await route.continue_()
@@ -102,6 +106,19 @@ async def exercise_workflow_overview(browser, port, password, passed):
         await sensor.get_by_role('link', name='Review saved findings').click()
         await expect(page.locator('#workspace-tab-findings')).to_have_attribute('aria-selected', 'true')
         passed('native managed sensor review opens Findings rather than the optional external store')
+        for activity, label in [('collecting', 'Collecting'), ('connected', 'Data connected'),
+                                ('stopped', 'Configured · stopped')]:
+            suricata_activity = activity
+            await page.locator('#workspace-tab-interfaces').click()
+            await page.locator('#integrations-clear').click()
+            await page.locator('#workflows-refresh').click()
+            await expect(sensor).to_contain_text(label+' · review required')
+            await page.locator('#workflows-show-attention').click()
+            await expect(sensor).to_be_visible()
+            if activity == 'collecting':
+                await page.locator('#workflows-show-collecting').click()
+                await expect(sensor).to_be_visible()
+        passed('native managed intake warnings preserve sensor activity and both review/activity filters')
         unavailable = True
         await page.locator("#workspace-tab-interfaces").click()
         await page.locator('#integrations-clear').click()

@@ -33,11 +33,11 @@ def test_saved_scan_positive_is_distinct_from_current_activity(flagged, message,
         assert row["message"] == message
 
 
-@pytest.mark.parametrize('state,expected', [('checked','connected'),('not_checked','needs_review'),
-    ('partial','needs_review'),('unavailable','needs_review'),('stale','needs_review')])
-def test_log_activity_does_not_hide_managed_intake_failure(state,expected):
+@pytest.mark.parametrize('state', ['checked','not_checked','partial','unavailable','stale','unknown'])
+@pytest.mark.parametrize('activity', ['connected','collecting','stopped','needs_setup','error','unavailable'])
+def test_log_activity_and_managed_intake_review_remain_independent(state,activity):
     stamp='2026-10-27T12:00:00Z'
-    sensor=dict(state='connected',message='Recent bounded EVE tail.',updated_at=stamp,
+    sensor=dict(state=activity,message='Recent bounded EVE tail.',updated_at=stamp,
                 metrics=[dict(label='Tail '+str(n),value=n,unit='') for n in range(6)])
     intake=dict(state=state,message='Synthetic managed intake '+state,checked_at=stamp,
                 imported_findings=2,rejected=1 if state=='partial' else 0)
@@ -46,8 +46,10 @@ def test_log_activity_does_not_hide_managed_intake_failure(state,expected):
         sensors=SimpleNamespace(snapshot=lambda:dict(zeek=sensor,suricata=sensor)),
         flow_ingestor=SimpleNamespace(snapshot=lambda:dict(suricata_intake=intake)),qwen_status=sensor)
     row=next(item for item in snapshot(configuration,None)['tools'] if item['id']=='suricata')
-    assert row['state']==expected
+    assert row['state']==activity
+    assert row['review_required'] is (state!='checked')
     assert row['updated_at']==stamp and len(row['metrics'])==6
     assert row['metrics'][-2]['value']==2 and row['metrics'][-1]['value']==intake['rejected']
     assert intake['message'] in row['message'] and 'Intake checked '+stamp in row['message']
     assert sensor['message']=='Recent bounded EVE tail.' and len(sensor['metrics'])==6
+    assert 'review_required' not in sensor
