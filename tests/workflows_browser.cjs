@@ -38,6 +38,16 @@ process.stdin.on('end',async()=>{
  assert.equal(get('workflows-count-attention').textContent,'4');assert.equal(get('workflows-count-collecting').textContent,'2');await event('workflows-show-attention');
  const collectingPositive=rows().find(row=>full(row).includes('ClamAV'));assert.ok(collectingPositive);assert.match(full(collectingPositive),/Collecting · review required/);assert.equal(collectingPositive.dataset.reviewRequired,'true');
  await event('workflows-show-collecting');assert.equal(rows().length,2);await event('integrations-clear');payload=fixture;await event('workflows-refresh');
+ // Alert-intake review never erases the separate sensor activity state.
+ for(const [activity,label] of [['connected','Data connected'],['collecting','Collecting'],['stopped','Configured · stopped'],['needs_setup','Needs setup'],['error','Error'],['unavailable','Unavailable']]){
+  payload={...fixture,tools:fixture.tools.map(row=>row.id==='suricata'?{...row,state:activity,review_required:true,message:'Managed intake requires review; source activity is separate.'}:row)};await event('workflows-refresh');
+  const sensor=rows().find(row=>full(row).includes('Suricata'));assert.ok(sensor);assert.match(full(sensor),new RegExp(label+' · review required'));
+  assert.equal(sensor.dataset.state,activity);assert.equal(sensor.dataset.reviewRequired,'true');
+  await event('workflows-show-attention');assert.ok(rows().some(row=>full(row).includes('Suricata')),'intake warnings stay in Needs review');
+  if(activity==='collecting'){await event('workflows-show-collecting');assert.ok(rows().some(row=>full(row).includes('Suricata')),'collecting sensor is also visible in activity filter');}
+  await event('integrations-clear');
+ }
+ payload=fixture;await event('workflows-refresh');assert.doesNotMatch(full(rows()[3]),/review required/,'a checked snapshot clears the prior intake flag');
  // Runtime status remains in the same list when static capability reference arrives.
  vm.runInContext("integrationState.snapshot={selected_platform:'linux',workflows:integrationIds.map((id,index)=>({id,software:workflowToolIds[index],selected_status:'optional',input_contract:'Synthetic input',output_contract:'Synthetic output',next_gate:'Synthetic reference',entry_point:null}))}; renderIntegrationMap();",context);
  assert.match(full(rows()[2]),/Capability reference · Optional/);rows()[2].open=true;for(const fn of rows()[2].events.toggle)fn();await event('workflows-refresh');assert.equal(rows()[2].open,true,'expanded tool survives status refresh');

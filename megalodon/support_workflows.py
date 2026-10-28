@@ -22,7 +22,10 @@ def snapshot(configuration, companions):
                             (' Intake checked '+intake['checked_at']+'.' if intake['checked_at'] else ''))[:512]
             row['metrics']=[*row.get('metrics',[])[:4],metric('Findings admitted this session',intake['imported_findings']),
                             metric('Intake records skipped this session',intake['rejected'])]
-            if intake['state']!='checked':row['state']='needs_review'
+            # Source activity and managed alert admission are separate claims.
+            # Keep stopped/setup/collection failures visible alongside the
+            # intake warning, including in both overview filters.
+            row['review_required']=bool(row.get('review_required') or intake['state']!='checked')
         add(key,name,**row)
     add('scapy','Scapy','standby','Alternative capture engine. TShark already supplies live packets, so a second Python capture is unnecessary.')
     add('nftables','nftables','standby','Local containment is available from the IP inspector after preview and OS authorization. Startup and model output do not change firewall rules.')

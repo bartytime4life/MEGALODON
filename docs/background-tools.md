@@ -18,6 +18,13 @@ list; search text is preserved and these controls never start a tool. Counts
 cover the returned tools, not threats or a safety score. If the status refresh
 fails or expires, current activity counts become unavailable rather than zero.
 
+Suricata's source activity and managed alert intake are separate observations.
+An unchecked, partial, stale or unavailable intake adds **review required**
+without replacing **Collecting**, **Configured · stopped**, a setup gap or an
+error. A collecting source with an intake warning appears in both **Collecting**
+and **Needs review**. **Data connected** describes the bounded source summary;
+it does not prove that its alerts were admitted or that coverage is complete.
+
 Each tool shows its contribution, source timestamp and age, and the latest
 bounded status message before expansion. A saved result can be old even when
 the status view was just refreshed. Expand a tool to navigate to its existing
