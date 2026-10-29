@@ -153,6 +153,26 @@ def test_managed_baselines_restart_feedback_and_expiry(service):
     restarted.close()
 
 
+def test_host_fanout_is_retained_and_restored_for_the_review_workbench(service):
+    values=rows(count=16)
+    for index,row in enumerate(values):
+        row['observed_at']=utc(START+index)
+        row['data'].update(dst_ip=f'198.51.100.{index+1}',first_seen=utc(START+index))
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in values])
+    service.process_hour(START)
+    item=next(v for v in service.snapshot()['reviews'] if v['rule']=='HOST_FANOUT')
+    assert len(set(item['evidence_refs']))==16
+    assert item['facts']['distinct_destinations']==16
+    assert item['action_status']=='not_attempted' and item['workflow']=='device_changes'
+    restarted=IntelligenceService(service.evidence,service.knowledge,service.configuration)
+    try:
+        restored=next(v for v in restarted.snapshot()['reviews'] if v['rule']=='HOST_FANOUT')
+        assert restored['evidence_refs']==item['evidence_refs']
+        assert restored['facts']==item['facts']
+    finally:
+        restarted.close()
+
+
 def test_hour_checkpoint_written_after_candidate_save(service):
     service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in rows()])
     original=service.evidence.append_records

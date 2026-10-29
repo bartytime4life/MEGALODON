@@ -11,7 +11,7 @@ import stat
 from typing import Any
 
 from .capabilities import runtime_platform
-from .offline.analysis import MAX_CANDIDATES
+from .offline.analysis import MAX_CANDIDATES, FANOUT_DESTINATIONS, FANOUT_WINDOW_US
 from .offline.baseline import validate_baseline
 from .offline.common import Limits, OfflineError, open_directory, uint, version
 from .offline.reports import REPORT_NAMES, case_id
@@ -73,6 +73,7 @@ _CANDIDATE_RULES = (
     "NEW_DESTINATION_PORT",
     "REGULAR_INTERVAL",
     "PORT_53_BURST",
+    "HOST_FANOUT",
 )
 
 
@@ -418,6 +419,29 @@ def _candidate(value: dict[str, Any], run: dict[str, Any]) -> str:
             spread = uint(evidence.get("interval_spread_us"), 3_600_000_000)
             if median < 1_000_000 or spread > median // 20:
                 _fail("INVALID_OFFLINE_CANDIDATE")
+        elif rule == "HOST_FANOUT":
+            if (set(evidence) != {"src", "protocol", "port", "distinct_destinations",
+                                  "window_seconds", "first_offset_us", "last_offset_us",
+                                  "record_numbers"}
+                    or run["record_kind"] != "flow"
+                    or not isinstance(evidence.get("src"), str)
+                    or not re.fullmatch(r"host-[0-9]{5}", evidence["src"])
+                    or not isinstance(evidence.get("protocol"), str)
+                    or evidence["protocol"] not in {"TCP", "UDP"}):
+                _fail("INVALID_OFFLINE_CANDIDATE")
+            uint(evidence.get("port"), 65535)
+            count = uint(evidence.get("distinct_destinations"), accepted)
+            window = uint(evidence.get("window_seconds"), FANOUT_WINDOW_US // 1_000_000)
+            first = uint(evidence.get("first_offset_us"), 4_102_444_800_000_000)
+            last = uint(evidence.get("last_offset_us"), 4_102_444_800_000_000)
+            numbers = evidence.get("record_numbers")
+            if (count != FANOUT_DESTINATIONS or window != FANOUT_WINDOW_US // 1_000_000
+                    or not first <= last <= first + FANOUT_WINDOW_US
+                    or not isinstance(numbers, list) or len(numbers) != count):
+                _fail("INVALID_OFFLINE_CANDIDATE")
+            numbers = [uint(number, accepted) for number in numbers]
+            if not all(numbers) or len(set(numbers)) != count:
+                _fail("INVALID_OFFLINE_CANDIDATE")
         else:
             if set(evidence) != {"src", "relative_minute", "records"}:
                 _fail("INVALID_OFFLINE_CANDIDATE")
@@ -449,6 +473,8 @@ class _CandidateSupport:
         self.regular: Counter = Counter()
         self.bursts: Counter = Counter()
         self.burst_total = 0
+        self.fanouts: Counter = Counter()
+        self.fanout_records: set[int] = set()
         self.port_53_total = sum(count for (_, port), count in self.ports.items() if port == 53)
 
     def admit(self, candidate: dict[str, Any]) -> None:
@@ -469,6 +495,19 @@ class _CandidateSupport:
             self.regular[port] += uint(evidence['unique_observations'], 10000)
             if self.regular[port] > self.ports.get(port, 0):
                 _fail('INVALID_OFFLINE_CANDIDATE')
+        elif rule == 'HOST_FANOUT':
+            port = (evidence['protocol'], uint(evidence['port'], 65535))
+            identity = (rule, evidence['src'], *port)
+            count = uint(evidence['distinct_destinations'], 10000)
+            self.fanouts[port] += count
+            numbers = {uint(number, 10000) for number in evidence['record_numbers']}
+            first = uint(evidence['first_offset_us'], 4_102_444_800_000_000) // FANOUT_WINDOW_US
+            last = uint(evidence['last_offset_us'], 4_102_444_800_000_000) // FANOUT_WINDOW_US
+            if (self.fanouts[port] > self.ports.get(port, 0)
+                    or sum(self.minutes.get(minute, 0) for minute in range(first, last + 1)) < count
+                    or self.fanout_records.intersection(numbers)):
+                _fail('INVALID_OFFLINE_CANDIDATE')
+            self.fanout_records.update(numbers)
         else:
             minute = uint(evidence['relative_minute'], 68_374_080)
             count = uint(evidence['records'], 10000)
