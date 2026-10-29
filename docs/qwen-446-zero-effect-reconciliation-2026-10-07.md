@@ -1,5 +1,10 @@
 # Issue #446 zero-effect reconciliation — 2026-10-07
 
+**Historical basis:** the original matrix below describes its pinned October 7
+source. The final follow-up sections record later changes; see
+[the disabled provider entry-point correction](#follow-up-disabled-provider-entry-point-correction)
+for the October 28 candidate and the gates that remain open.
+
 ## Basis and conclusion
 
 Readback basis: [current main `579e4de218ea5effb2750984b04288b52b01c51f`](https://github.com/bartytime4life/MEGALODON/commit/579e4de218ea5effb2750984b04288b52b01c51f),
@@ -141,3 +146,83 @@ change is not retroactively canceled, the explicit Setup inventory action is
 a visible provider read, enabled provider paths do not consult the canonical
 UNBOUND binding, and the documented doctor/broker/CLI receipt effects remain.
 No model or provider was run for this correction.
+
+## Follow-up: disabled provider entry-point correction
+
+Date: 2026-10-28 (America/Chicago). Base:
+`main@df2f67021da002b897414ba9f6f83ce56b70b077`, tree
+`021eeba621f6a3b318d84bc4b107fd2af712ee73`.
+
+Direct reproduction found two additional disabled-state holes in
+`megalodon/ai_provider.py`: `loaded_model` could request `/api/ps` without
+checking enablement, and `generate` entered the generation queue, could cancel
+active background work, and recorded activity before `_admitted` rejected a
+disabled setting. `status` also read host posture before reporting disabled.
+
+The correction requires the exact boolean `True` at the provider boundary:
+
+- `_admitted` and `inventory` refuse truthy non-boolean enablement values.
+- `generate` rejects before queue ownership, cancellation, observation updates
+  or the load-only branch used by `prepare_model`.
+- `loaded_model` rejects before provider HTTP.
+- Disabled `status`, with either probe setting, returns `DISABLED` with unknown
+  listener/availability fields and no posture read or inference attempt.
+
+The existing explicit Setup inventory action (`model_catalog`) remains a
+separate, visible provider read. Enabled calls retain their existing admission
+and transport checks. Rejecting a disabled request leaves any already-active
+invocation alone; this is not provider shutdown or cancellation of earlier work.
+
+### Validation scope
+
+The expanded `tests/test_qwen_zero_effect.py` covers eight entry paths against
+eight disabled/malformed enablement values, plus two active-work preservation
+cases. Of these 66 added cases, 54 failed on the unchanged base; all 66 pass
+after the correction. The entire zero-effect module has 93 passing cases.
+The original UNBOUND tests still prove only the pure readiness assessor;
+the enabled-runtime missing-binding-gate regression remains explicit.
+
+The focused zero-effect/workflow, binding, readiness, evaluation-manifest and
+disabled-doctor suites pass **204 tests** on local Python 3.12. Compilation,
+repository hygiene, build-input inventory and both UNBOUND CLI projections pass.
+No model/provider request was executed. Effect sentinels cover the exercised
+Python entry paths, excluding imports, fixture setup and test-runner output;
+they are not a native containment or transitive provider-egress attestation.
+
+A broader five-module run in this restricted runner has **167 passed, 13 failed,
+40 errors**. The unchanged base has **101 passed and the exact same 53 failing
+or errored test IDs**. Socket creation is denied and the runner presents system
+directory ancestry with unsupported ownership; persistence-dependent assertions
+also fail on that base. These are inherited runner failures, not passing native
+acceptance. The dedicated exact-head GitHub workflow and full CI remain the
+native execution gates; their run IDs and outcomes belong in the companion PR.
+
+From the reviewed repository root, with the repository test dependencies:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_ADDOPTS='' python -m pytest \
+  -p no:cacheprovider -o addopts='' -q \
+  tests/test_qwen_zero_effect.py tests/test_qwen_zero_effect_workflow.py \
+  tests/test_local_model_binding.py tests/test_local_model_readiness.py \
+  tests/test_model_evaluation_manifest.py tests/test_ai_doctor_consent.py
+python -m compileall -q megalodon tests
+python tools/local_model_binding.py validate config/model-bindings/qwen.unbound.json
+python tools/local_model_readiness.py --binding config/model-bindings/qwen.unbound.json
+```
+
+### Remaining acceptance disposition
+
+Issue #446 remains **HOLD**. The canonical binding remains
+`UNBOUND / OWNER_MODEL_BINDING_NOT_RECORDED`, with every authority flag false.
+Enabled runtime paths still do not enforce the canonical binding. Doctor,
+broker and CLI receipt effects remain outside the pure denial claim. A
+consistent candidate packet is not an accepted model or permission to run it.
+
+The real candidate-bound seven-category corpus, detached signature and external
+signature verification remain missing. Synthetic fixtures and a locally created
+key cannot supply owner/evaluator authenticity. Evidence origin and bytes loaded
+by a runtime remain unproved; the explicit disposition is to retain those HOLDs,
+not infer them from API digests. Independent exact-head security review and
+separate owner acceptance remain required. This correction performs no model
+selection, pull, startup, query, backgrounding, service/firewall operation,
+deployment or acceptance transition.

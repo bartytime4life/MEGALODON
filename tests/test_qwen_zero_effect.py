@@ -48,8 +48,8 @@ def no_effects(monkeypatch):
     """Fail on attempts, including attempts a caller catches and suppresses.
 
     Scoped to the invocation, excluding imports, fixture reads and pytest's
-    own output/cache. File opens are forbidden even in read mode; the status
-    test supplies only synthetic procfs reads through its module namespace.
+    own output/cache. File opens are forbidden even in read mode; disabled
+    status must now skip the posture reader too.
     Process/service/firewall effects cannot escape the process-start guards.
     """
     attempts = []
@@ -109,6 +109,72 @@ def test_disabled_provider_denies_without_any_io(monkeypatch, entry):
     assert ai_provider.last_observation(settings).get("running") is not True
 
 
+@pytest.mark.parametrize("enabled", [False, None, 0, 1, "false", "true", [], [True]])
+@pytest.mark.parametrize("entry", [
+    "admitted", "inventory", "loaded", "manual", "background", "prepare",
+    "status", "probe",
+])
+def test_provider_requires_exact_enablement_before_any_effect(monkeypatch, enabled, entry):
+    settings = replace(AISettings(), enabled=enabled)
+
+    def forbidden_posture(**_kwargs):
+        pytest.fail("disabled call read host posture")
+
+    monkeypatch.setattr(ai_provider, "qwen_provider_posture", forbidden_posture)
+    with no_effects(monkeypatch):
+        for _ in range(2):
+            if entry == "inventory":
+                assert ai_provider.inventory(settings)["error_code"] == "DISABLED"
+            elif entry in {"status", "probe"}:
+                result = ai_provider.status(settings, probe=entry == "probe")
+                assert result["state"] == "disabled"
+                assert result["error_code"] == "DISABLED"
+                assert result["inference_verified"] is False
+                assert result["loopback_only"] is None
+                assert result["ollama_available"] is None
+            else:
+                with pytest.raises(ai_provider.AIProviderError, match="^DISABLED$"):
+                    if entry == "admitted":
+                        ai_provider._admitted(settings)
+                    elif entry == "loaded":
+                        ai_provider.loaded_model(settings)
+                    elif entry == "prepare":
+                        ai_provider.prepare_model(settings)
+                    else:
+                        ai_provider.generate(settings, "Synthetic request", priority=entry)
+    assert ai_provider.last_observation(settings) == {}
+
+
+@pytest.mark.parametrize("priority", ["manual", "background"])
+def test_disabled_generation_cannot_preempt_or_relabel_active_work(monkeypatch, priority):
+    settings = AISettings()
+    key = (settings.model, settings.model_digest, settings.compute_mode)
+    observation = {"running": True, "started_at": "2026-01-01T00:00:00Z"}
+    ai_provider._observations[key] = dict(observation)
+    cancel = threading.Event()
+    monkeypatch.setattr(ai_provider, "_active_cancel", cancel)
+    monkeypatch.setattr(ai_provider, "_active_priority", "background")
+    monkeypatch.setattr(ai_provider, "_active_owner", "synthetic-active-owner")
+    monkeypatch.setattr(ai_provider, "_manual_waiters", 0)
+    locks = []
+
+    def forbidden_acquire(*_args, **_kwargs):
+        locks.append("acquire")
+        raise AssertionError("disabled call entered the generation queue")
+
+    monkeypatch.setattr(ai_provider, "_generation_lock",
+                        SimpleNamespace(acquire=forbidden_acquire))
+    with no_effects(monkeypatch):
+        with pytest.raises(ai_provider.AIProviderError, match="^DISABLED$"):
+            ai_provider.generate(settings, "Synthetic request", priority=priority)
+    assert locks == []
+    assert not cancel.is_set()
+    assert ai_provider._active_priority == "background"
+    assert ai_provider._active_owner == "synthetic-active-owner"
+    assert ai_provider._manual_waiters == 0
+    assert ai_provider.last_observation(settings) == observation
+
+
 @pytest.mark.parametrize("case", ["disabled", "bad_pin", "bad_digest", "bad_request"])
 def test_advisory_denial_precedes_every_effect(monkeypatch, case):
     request, registry = deepcopy(REQUEST), deepcopy(REGISTRY)
@@ -158,7 +224,7 @@ def test_canonical_unbound_assessor_is_pure_and_cannot_promote(monkeypatch, evid
 
 
 @pytest.mark.parametrize("probe", [False, True])
-def test_disabled_status_reads_synthetic_posture_but_has_no_effects(monkeypatch, probe):
+def test_disabled_status_skips_even_read_only_posture(monkeypatch, probe):
     reads = []
 
     def proc_read(path, mode="r", **_kwargs):
@@ -166,13 +232,13 @@ def test_disabled_status_reads_synthetic_posture_but_has_no_effects(monkeypatch,
         reads.append(path)
         return io.StringIO("synthetic header\n")
 
-    # Exercise the real posture parser against in-memory tables, not the host.
+    # A disabled status must not enter even the read-only posture parser.
     monkeypatch.setattr(provider_containment, "require_unprivileged_linux", lambda: None)
     monkeypatch.setattr(provider_containment, "open", proc_read, raising=False)
     with no_effects(monkeypatch):
         first = ai_provider.status(AISettings(), probe=probe)
         assert first == ai_provider.status(AISettings(), probe=probe)
-    assert reads == ["/proc/net/tcp", "/proc/net/tcp6"] * 2
+    assert reads == []
     assert first["state"] == "disabled" and first["error_code"] == "DISABLED"
     assert first["inference_verified"] is False and first["ollama_available"] is None
 
@@ -221,7 +287,7 @@ def test_disabled_dashboard_question_has_no_body_model_or_audit_io(monkeypatch, 
     assert sent == [({"error": "AI operator authorization required"}, {"status": 403})]
 
 
-def test_disabled_dashboard_status_inherits_read_only_posture_boundary(monkeypatch):
+def test_disabled_dashboard_status_inherits_zero_effect_boundary(monkeypatch):
     handler = object.__new__(DashboardHandler)
     handler.path = "/api/ai/status"
     handler._has_expected_host = lambda: True
@@ -238,7 +304,7 @@ def test_disabled_dashboard_status_inherits_read_only_posture_boundary(monkeypat
     monkeypatch.setattr(provider_containment, "open", proc_read, raising=False)
     with no_effects(monkeypatch):
         handler.do_GET()
-    assert reads == ["/proc/net/tcp", "/proc/net/tcp6"]
+    assert reads == []
     assert len(sent) == 1 and sent[0][1] == {}
     assert sent[0][0]["state"] == "disabled"
     assert sent[0][0]["inference_verified"] is False
