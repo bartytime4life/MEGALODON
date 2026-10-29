@@ -123,14 +123,14 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
     """Return compact baselines and bounded candidates, never host actions."""
     groups={}; findings=[]; all_gaps=list(gaps)
     # Periodic updates of a flow retain one identity and one connection start.
-    unique={};other=[];conflicts=set()
+    unique={};other=[];conflicts=set();invalid_identity=False
     for row in rows[:MAX_RECORDS]:
         data=row['data']
         if row['category']=='flows' and data.get('source_id') is not None and data.get('first_seen'):
             try:
                 key,signature,order = _connection_identity(row)
             except (KeyError,TypeError,ValueError,OverflowError,OSError):
-                all_gaps.append(FLOW_IDENTITY_INVALID_GAP)
+                invalid_identity=True
                 continue
             previous_row = unique.get(key)
             if previous_row is not None and previous_row[1] != signature:
@@ -138,8 +138,12 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             elif previous_row is None or order > previous_row[2]:
                 unique[key] = (row,signature,order)
         else:other.append(row)
+    # Preserve the integrity reason even when the incoming warning list fills
+    # the display budget; accumulate each diagnostic once, outside the loop.
+    if invalid_identity:
+        all_gaps.insert(0,FLOW_IDENTITY_INVALID_GAP)
     if conflicts:
-        all_gaps.append(FLOW_IDENTITY_CONFLICT_GAP)
+        all_gaps.insert(0,FLOW_IDENTITY_CONFLICT_GAP)
     for row in other+[value[0] for key,value in unique.items() if key not in conflicts]:
         data=row['data'];category=row['category'];source=row['source']
         if category not in {'packets','flows','packet_rollups','findings','network','audit'}:continue

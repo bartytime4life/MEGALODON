@@ -385,6 +385,8 @@ Conflicting identities have **all** versions excluded from hourly pattern
 analysis, rather than selecting one version or counting its different tuples
 as separate connections. Invalid identities or tuples are also excluded.
 A fixed coverage warning makes the hour ineligible for baseline learning.
+Identity-integrity warnings take priority within the existing sixteen-message
+coverage budget, so a full incoming warning list cannot hide the reason.
 Independently supported review candidates and separately recorded detector
 findings remain available with the coverage gap; stored source rows are not
 edited. Growing counters, completion changes and service refinement remain

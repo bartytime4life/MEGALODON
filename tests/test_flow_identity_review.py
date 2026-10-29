@@ -175,3 +175,14 @@ def test_same_time_consistent_updates_choose_the_same_reference_in_both_orders()
     # Full fanout references exercise deterministic representative selection.
     rest=rows()[1:]
     assert fanout([original,update]+rest)==fanout([update,original]+rest)
+
+
+@pytest.mark.parametrize('conflict',[True,False])
+def test_identity_warning_survives_a_full_incoming_warning_budget(conflict):
+    values=colliding() if conflict else rows()
+    if not conflict:values[0]['data']['source_id']='x'*65
+    baselines,_,gaps=analyze_hour(values,START,START+3600,[],
+        gaps=[f'Existing source gap {i}' for i in range(16)])
+    expected='Conflicting connection identities' if conflict else 'Invalid connection identities'
+    assert gaps[0].startswith(expected) and len(gaps)<=16
+    assert all(not base['eligible'] for base in baselines)
