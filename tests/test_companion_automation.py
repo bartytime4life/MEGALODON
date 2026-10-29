@@ -368,7 +368,7 @@ def test_advice_survives_a_history_write_failure(tmp_path,monkeypatch):
         worker._stop.set();worker.stop()
 
 
-def test_manual_request_can_interrupt_actual_companion_advice(tmp_path, monkeypatch):
+def test_manual_request_can_interrupt_actual_companion_advice(tmp_path, monkeypatch, synthetic_runtime_binding):
     from threading import Event, Thread
     from megalodon import ai_provider as provider
     entered = Event()
