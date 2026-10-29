@@ -36,6 +36,9 @@ def main():
     # sweep. The review must flag both without inventing intent or taking action.
     scenarios += [('ordinary configured inventory sweep','ordinary',sweep,[]),
                   ('suspicious same-port host sweep','suspicious',sweep,[])]
+    conflicting=[dict(row,data=dict(row['data'],source_id='one-colliding-connection',
+                                    first_seen=utc(current))) for row in sweep]
+    scenarios.append(('conflicting identity cannot establish a sweep','invalid identity',conflicting,[]))
     # These fixtures verify transport of existing detector findings, not the
     # accuracy of the packet detector that originally produced those findings.
     for rule in ('PORT_SCAN','SYN_FLOOD','DNS_TUNNELING'):
