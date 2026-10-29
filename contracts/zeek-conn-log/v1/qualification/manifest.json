@@ -136,5 +136,12 @@
     }
   ],
   "native_fixture_generation": "NOT_RUN",
-  "installed_producer_parity": "NOT_RUN"
+  "installed_producer_parity": "NOT_RUN",
+  "declared_profile": "zeek-8.0.10-conn-json-tsv-v1",
+  "declared_configuration_digest": "sha256:be7b117ee3a229884e6a6289fc3140ae32373df26a7b58b1616e87ce4092b0ed",
+  "admission_fixtures": {
+    "path": "producer/fixtures/admissions.json",
+    "size_bytes": 1237,
+    "sha256": "587ce813f880bcfc42d8bed3ceffb0496cecbd9a20939d9e99bcff5e8ba41ed1"
+  }
 }

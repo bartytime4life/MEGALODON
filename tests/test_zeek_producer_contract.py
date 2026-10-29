@@ -1,15 +1,9 @@
-"""Schema-drift scaffold for a PLACEHOLDER Zeek conn.log producer profile.
+"""Synthetic schema and parser checks for the declared Zeek 8.0.10 profile.
 
-Issue #327 requires the owner to record an exact Zeek producer version,
-build/package configuration, and field set before any profile here can be
-called "supported." No such selection exists yet, so every fixture in
-contracts/zeek-conn-log/v1/producer/ is a named stand-in
-(``zeek-PLACEHOLDER-UNSELECTED-conn-json-v1``), not the qualified profile
-that closes #327. These tests only prove that the placeholder fixtures are
-internally consistent with the schema and with the already-implemented
-`megalodon.offline.zeek` parser; they do not qualify an installed Zeek
-producer, prove field-drift coverage against a real conn.log, or authorize
-closing #327.
+The owner selected this private-build candidate in PR #519. Admission pins its
+recorded identities and declared configuration; fixtures do not authenticate a
+native producer, loaded settings, capture completeness or owner acceptance.
+The former placeholder remains in Git history.
 """
 
 from __future__ import annotations
@@ -45,13 +39,39 @@ def _parse(value: dict) -> zeek.FlowRecord:
     return zeek.parse_flow(zeek.json_object(text))
 
 
-def test_schema_names_an_explicit_placeholder_profile() -> None:
-    admission = SCHEMA["$defs"]["admission"]
-    assert admission["properties"]["producer_profile"]["const"].startswith(
-        "zeek-PLACEHOLDER-UNSELECTED-"
-    )
-    assert "$comment" in SCHEMA
-    assert "PLACEHOLDER" in SCHEMA["title"]
+def test_schema_names_the_exact_selected_candidate_without_native_qualification() -> None:
+    admission = SCHEMA["$defs"]["admission"]["properties"]
+    assert admission["producer_profile"]["const"] == "zeek-8.0.10-conn-json-tsv-v1"
+    assert admission["declared_version"]["const"] == "8.0.10"
+    assert "NOT QUALIFIED" in SCHEMA["title"]
+    assert "does not attest" in SCHEMA["$comment"]
+
+
+_ADMISSIONS = json.loads((CONTRACT_ROOT / "fixtures" / "admissions.json").read_text())
+
+
+@pytest.mark.parametrize("case", _ADMISSIONS, ids=lambda item: item["format"])
+def test_profile_admission_fixtures_validate(case) -> None:
+    assert not list(_validator("admission").iter_errors(case))
+
+
+def test_profile_json_positive_packet_matches_the_declared_record_shape() -> None:
+    path = CONTRACT_ROOT.parent / "qualification" / "fixtures" / "accepted.jsonl"
+    for raw in path.read_text().splitlines():
+        assert not list(_validator("profileConnJsonRecord").iter_errors(json.loads(raw)))
+
+
+@pytest.mark.parametrize("changes", [
+    {"producer_profile": "unknown"}, {"declared_version": "9.0.0"},
+    {"format": "csv"}, {"expected_digest": "sha256:" + "A" * 64},
+    {"expected_digest": "sha256:" + "a" * 64 + "\n"},
+    {"expected_records": 0}, {"source_id": "../escape"},
+    {"source_id": "Synthetic\n"},
+    {"binary_digest": "sha256:" + "0" * 64},
+    {"configuration_digest": "sha256:" + "0" * 64}, {"extra": "field"},
+])
+def test_profile_admission_schema_refuses_drift(changes) -> None:
+    assert list(_validator("admission").iter_errors({**_ADMISSIONS[0], **changes}))
 
 
 @pytest.mark.parametrize("case", ACCEPTED, ids=lambda item: item["id"])

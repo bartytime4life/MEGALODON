@@ -1,0 +1,26 @@
+[
+  {
+    "producer_profile": "zeek-8.0.10-conn-json-tsv-v1",
+    "declared_version": "8.0.10",
+    "format": "json",
+    "source_archive_digest": "sha256:dbb1cb6c1eac27a8883ee4bd229a378b2f1253fa18e16cdeaaef8a00f124ddf1",
+    "binary_digest": "sha256:9a373fa2f32469432273af0c793455af59a34195a88beb9963c8d2e0e648f161",
+    "configuration_digest": "sha256:be7b117ee3a229884e6a6289fc3140ae32373df26a7b58b1616e87ce4092b0ed",
+    "expected_digest": "sha256:9fd0462e3c69017d78a04b5b148d099e42447cf4434b2032b2d3ef9998d19a22",
+    "expected_records": 4,
+    "source_id": "SyntheticSource",
+    "run_id": "SyntheticRunjson"
+  },
+  {
+    "producer_profile": "zeek-8.0.10-conn-json-tsv-v1",
+    "declared_version": "8.0.10",
+    "format": "tsv",
+    "source_archive_digest": "sha256:dbb1cb6c1eac27a8883ee4bd229a378b2f1253fa18e16cdeaaef8a00f124ddf1",
+    "binary_digest": "sha256:9a373fa2f32469432273af0c793455af59a34195a88beb9963c8d2e0e648f161",
+    "configuration_digest": "sha256:be7b117ee3a229884e6a6289fc3140ae32373df26a7b58b1616e87ce4092b0ed",
+    "expected_digest": "sha256:b4e587a23404f42f67b8c820217509eddde20bbcbab895c367834b9967423cdb",
+    "expected_records": 4,
+    "source_id": "SyntheticSource",
+    "run_id": "SyntheticRuntsv"
+  }
+]
