@@ -1,0 +1,140 @@
+{
+  "schema": "megalodon-zeek-candidate-fixture-packet-v1",
+  "candidate_version": "8.0.10",
+  "evidence_basis": "synthetic_metadata_only",
+  "qualification_status": "NOT_QUALIFIED",
+  "source_to_binary_chain": "UNKNOWN",
+  "loaded_scripts_and_writer_settings": "UNKNOWN",
+  "selection_record": "https://github.com/bartytime4life/MEGALODON/pull/519",
+  "source_archive_sha256_historical": "dbb1cb6c1eac27a8883ee4bd229a378b2f1253fa18e16cdeaaef8a00f124ddf1",
+  "field_order": [
+    "ts",
+    "uid",
+    "id.orig_h",
+    "id.orig_p",
+    "id.resp_h",
+    "id.resp_p",
+    "proto",
+    "service",
+    "duration",
+    "orig_bytes",
+    "resp_bytes",
+    "conn_state",
+    "local_orig",
+    "local_resp",
+    "missed_bytes",
+    "history",
+    "orig_pkts",
+    "orig_ip_bytes",
+    "resp_pkts",
+    "resp_ip_bytes",
+    "tunnel_parents",
+    "ip_proto"
+  ],
+  "field_types": [
+    "time",
+    "string",
+    "addr",
+    "port",
+    "addr",
+    "port",
+    "enum",
+    "string",
+    "interval",
+    "count",
+    "count",
+    "string",
+    "bool",
+    "bool",
+    "count",
+    "string",
+    "count",
+    "count",
+    "count",
+    "count",
+    "set[string]",
+    "count"
+  ],
+  "units": {
+    "ts": "Unix epoch seconds",
+    "duration": "seconds",
+    "normalized_time": "integer microseconds; truncate sub-microseconds",
+    "packet_counters": "packets",
+    "byte_count": "orig_ip_bytes + resp_ip_bytes; IP-level bytes",
+    "icmp_ports": "message type and code; octets"
+  },
+  "expected_records": [
+    {
+      "observed_at": "2023-11-14T22:13:20.123456+00:00",
+      "src_ip": "192.0.2.10",
+      "dst_ip": "198.51.100.20",
+      "protocol": "TCP",
+      "src_port": 40000,
+      "dst_port": 443,
+      "duration_us": 1,
+      "orig_packets": 3,
+      "resp_packets": 2,
+      "byte_count": 300,
+      "conn_state": "SF"
+    },
+    {
+      "observed_at": "2023-11-14T22:13:21.000001+00:00",
+      "src_ip": "2001:db8::10",
+      "dst_ip": "2001:db8::20",
+      "protocol": "UDP",
+      "src_port": 53000,
+      "dst_port": 53,
+      "duration_us": 2500000,
+      "orig_packets": 1,
+      "resp_packets": 1,
+      "byte_count": 164,
+      "conn_state": "SF"
+    },
+    {
+      "observed_at": "2023-11-14T22:13:22+00:00",
+      "src_ip": "192.0.2.10",
+      "dst_ip": "198.51.100.20",
+      "protocol": "ICMP",
+      "src_port": 8,
+      "dst_port": 0,
+      "duration_us": null,
+      "orig_packets": 1,
+      "resp_packets": 0,
+      "byte_count": 84,
+      "conn_state": "OTH"
+    },
+    {
+      "observed_at": "2023-11-14T22:13:23.999999+00:00",
+      "src_ip": "2001:db8::30",
+      "dst_ip": "2001:db8::40",
+      "protocol": "ICMP",
+      "src_port": 128,
+      "dst_port": 0,
+      "duration_us": 0,
+      "orig_packets": 1,
+      "resp_packets": 1,
+      "byte_count": 208,
+      "conn_state": "OTH"
+    }
+  ],
+  "negative_case_count": 37,
+  "files": [
+    {
+      "path": "fixtures/accepted.jsonl",
+      "size_bytes": 1510,
+      "sha256": "9fd0462e3c69017d78a04b5b148d099e42447cf4434b2032b2d3ef9998d19a22"
+    },
+    {
+      "path": "fixtures/accepted.tsv",
+      "size_bytes": 990,
+      "sha256": "b4e587a23404f42f67b8c820217509eddde20bbcbab895c367834b9967423cdb"
+    },
+    {
+      "path": "fixtures/rejected.json",
+      "size_bytes": 66484,
+      "sha256": "0373adc7fb6480bb0733e17867461fe9c30fc0f04706a35208edd0a561c7cd53"
+    }
+  ],
+  "native_fixture_generation": "NOT_RUN",
+  "installed_producer_parity": "NOT_RUN"
+}
