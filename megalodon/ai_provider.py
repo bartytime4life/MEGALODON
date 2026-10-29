@@ -94,6 +94,12 @@ class AIProviderError(RuntimeError):
         self.code = code
 
 
+def _require_enabled(settings: AISettings) -> None:
+    """Deny before provider I/O, queue ownership, cancellation or observations."""
+    if settings.enabled is not True:
+        raise AIProviderError("DISABLED")
+
+
 class _ModelMetadataResponse(transport._BoundedHTTPResponse):
     """Model metadata includes tensor names and licenses; generated text does not."""
 
@@ -214,8 +220,7 @@ def _listener_admitted(deadline: float | None = None) -> None:
 
 
 def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, Any]:
-    if not settings.enabled:
-        raise AIProviderError("DISABLED")
+    _require_enabled(settings)
     if (settings.provider != "ollama" or settings.endpoint != "http://127.0.0.1:11434"
             or type(settings.model) is not str
             or not valid_model_name(settings.model)
@@ -276,8 +281,7 @@ def model_catalog() -> list[dict]:
 def inventory(settings: AISettings) -> dict[str, object]:
     """Read the fixed tag list only when enabled and listener-admitted; never infer."""
     try:
-        if not settings.enabled:
-            raise AIProviderError("DISABLED")
+        _require_enabled(settings)
         _listener_admitted()
         tags = _json(_request("/api/tags", "GET", None, settings.timeout_seconds))
         if type(tags) is not dict or type(tags.get("models")) is not list or len(tags["models"]) > 256:
@@ -395,6 +399,7 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
              priority: str = 'manual', owner=None, choices: tuple[str, ...] = (),
              deadline: float | None = None, load_only: bool = False) -> str:
     """Generate once and retain truthful readiness observations without disk writes."""
+    _require_enabled(settings)
     key=(settings.model,settings.model_digest,settings.compute_mode);start=time.monotonic()
     def record(**fields):
         with _observation_lock:
@@ -467,6 +472,7 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
 
 def loaded_model(settings: AISettings) -> dict:
     """Read bounded runtime allocation after the caller verifies model admission."""
+    _require_enabled(settings)
     value=_json(_request('/api/ps','GET',None,3))
     if type(value) is not dict or type(value.get('models')) is not list or len(value['models'])>256:
         raise AIProviderError('INVALID_RESPONSE')
@@ -485,6 +491,8 @@ def status(settings: AISettings, *, probe: bool = True) -> dict[str, object]:
                                "model": settings.model, "state": "disabled",
                                "inference_verified": False, "ollama_available": None,
                                "loopback_only": None, "timeout_seconds": settings.timeout_seconds}
+    if settings.enabled is not True:
+        return {**base, "error_code": "DISABLED"}
     try:
         base["loopback_only"] = qwen_provider_posture()["loopback_only"]
     except (OSError, ValueError):
