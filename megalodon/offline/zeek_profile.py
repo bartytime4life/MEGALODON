@@ -37,7 +37,8 @@ _IDENTIFIER = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,63}\Z')
 
 def _admission(value: object, limits: Limits) -> dict:
     # Validate and snapshot every declaration before inspecting a source path.
-    if type(value) is not dict or set(value) != ADMISSION_KEYS:
+    if (type(value) is not dict or len(value) != len(ADMISSION_KEYS)
+            or set(value) != ADMISSION_KEYS):
         raise OfflineError('ZEEK_PROFILE_ADMISSION')
     if any(type(value[k]) is not str for k in ADMISSION_KEYS - {'expected_records'}):
         raise OfflineError('ZEEK_PROFILE_ADMISSION')
