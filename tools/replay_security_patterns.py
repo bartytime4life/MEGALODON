@@ -28,6 +28,14 @@ def main():
         ('ordinary scheduled health check','ordinary',observations(current),[]),
         ('suspicious recurring connections','suspicious',observations(current),[]),
         ('suspicious new destination port','suspicious',observations(current,port=4444,regular=False),history)]
+    sweep=observations(current,port=445,count=16)
+    for index,row in enumerate(sweep):
+        row['observed_at']=utc(current+index)
+        row['data'].update(dst_ip=f'198.51.100.{index+1}',first_seen=utc(current+index))
+    # Identical metadata can describe an authorized inventory or a suspicious
+    # sweep. The review must flag both without inventing intent or taking action.
+    scenarios += [('ordinary configured inventory sweep','ordinary',sweep,[]),
+                  ('suspicious same-port host sweep','suspicious',sweep,[])]
     # These fixtures verify transport of existing detector findings, not the
     # accuracy of the packet detector that originally produced those findings.
     for rule in ('PORT_SCAN','SYN_FLOOD','DNS_TUNNELING'):

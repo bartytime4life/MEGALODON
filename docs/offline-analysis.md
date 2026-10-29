@@ -362,6 +362,40 @@ Candidates are review items with no severity escalation or policy authority:
 | `NEW_DESTINATION_PORT` | A destination protocol/port absent from an explicitly supplied compatible baseline with at least five records | Novel is not malicious; a small or poisoned baseline is unreliable |
 | `REGULAR_INTERVAL` | At least five unique observations for one endpoint/protocol/port group; median interval 1 second to 1 hour, interval spread <=5% of median | Scheduled benign traffic is expected to match |
 | `PORT_53_BURST` | At least twenty port-53 records from a source in one relative minute bin | Port 53 does not prove DNS; flows and packets have different meanings |
+| `HOST_FANOUT` | Connection summaries from one source to at least sixteen distinct unicast destination addresses on one TCP or UDP port in a sliding sixty-second window | Inventory, discovery and distributed services can match; this does not establish scanning, lateral movement or successful access |
+
+Host fanout uses connection start times, accepts out-of-order input, and emits
+only the first qualifying window per source/protocol/port. The sixty-second
+boundary is inclusive. Repeated destinations do not increase the distinct
+count; IPv4-mapped destination spellings count as their IPv4 address.
+Multicast, unspecified and loopback destinations are excluded. Packet records
+and compacted packet rollups cannot supply this connection-only review.
+Each offline candidate carries at most sixteen representative record numbers,
+relative first/last times, protocol and port. Candidate output uses the existing
+per-run host labels and does not copy raw destination addresses.
+
+The retained-evidence review reuses this check within each existing
+device/interface/sensor/measurement group. It deduplicates periodic flow
+updates before checking connection starts and links the sixteen qualifying
+evidence records, including late-hour records beyond the group's first page.
+The retained review shows absolute first/last connection times and considers
+only starts within the analyzed hour. Polling an older flow cannot replay an
+old sweep as current activity; windows spanning hourly partitions are not joined.
+Existing read, grouping, dependency and candidate limits still apply; missing
+connection identity or truncated group coverage prevents timing checks.
+No finding clears a reported coverage gap. Results use the existing device
+review workflow with `action_status: not_attempted`. This is a review heuristic,
+separate from the three fixed packet detections, with no new collector, scan,
+firewall action, model request or remote endpoint. Synthetic tests establish
+boundary behavior only; operational accuracy and installed-sensor qualification
+remain unproved.
+
+For a finite, in-memory demonstration, run
+`python tools/replay_security_patterns.py` from the checkout. Both the ordinary
+configured-inventory and suspicious-sweep examples intentionally contain the
+same metadata and produce `HOST_FANOUT`; their labels are fixture descriptions,
+not outcomes inferred by MEGALODON. This starts no scan or sensor and writes no
+audit database.
 
 No machine learning, DNS-content heuristic, TLS fingerprint, attribution, fixed
 MVP rule change, automatic block, or permanent response is added. Synthetic

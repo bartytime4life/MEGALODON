@@ -2,13 +2,66 @@
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
+from datetime import datetime
+import ipaddress
 from statistics import median_low
 
 from .common import Batch, FlowRecord, OfflineError
 from .baseline import BASELINE_SCHEMA, validate_baseline
 
 MAX_CANDIDATES = 256
+FANOUT_DESTINATIONS = 16
+FANOUT_WINDOW_US = 60_000_000
+MAX_FANOUT_RECORDS = 20_000
+
+
+def _fanout_windows(batch: Batch, interval: tuple[datetime, datetime] | None):
+    """First qualifying connection-start window per source/transport/port.
+
+    Count destinations, not packets, retries, bytes or successful sessions.
+    Return at most sixteen representative record numbers per candidate so the
+    retained-evidence adapter can cite the actual qualifying observations.
+    """
+    if batch.kind != 'flow':
+        return
+    if len(batch.records) > MAX_FANOUT_RECORDS:
+        raise OfflineError('FANOUT_RECORD_LIMIT')
+    groups = defaultdict(list)
+    relative = offsets(batch)
+    for index, (record, offset) in enumerate(zip(batch.records, relative)):
+        if interval is not None and not interval[0] <= record.observed_at < interval[1]:
+            continue
+        if record.protocol not in {'TCP', 'UDP'} or record.dst_port is None:
+            continue
+        address = ipaddress.ip_address(record.dst_ip)
+        address = getattr(address, 'ipv4_mapped', None) or address
+        if address.is_multicast or address.is_unspecified or address.is_loopback:
+            continue
+        groups[(record.src_ip, record.protocol, record.dst_port)].append(
+            (offset, index, str(address)))
+    for key, observations in sorted(groups.items()):
+        window, counts, latest = deque(), Counter(), {}
+        for offset, index, destination in sorted(observations):
+            while window and window[0][0] < offset - FANOUT_WINDOW_US:
+                _, _, expired = window.popleft()
+                counts[expired] -= 1
+                if not counts[expired]:
+                    del counts[expired]
+                    del latest[expired]
+            window.append((offset, index, destination))
+            counts[destination] += 1
+            latest[destination] = index
+            if len(counts) >= FANOUT_DESTINATIONS:
+                representatives = sorted(latest.values())
+                yield key, {
+                    'distinct_destinations': len(counts),
+                    'window_seconds': FANOUT_WINDOW_US // 1_000_000,
+                    'first_offset_us': min(relative[i] for i in representatives),
+                    'last_offset_us': offset,
+                    'record_numbers': [i + 1 for i in representatives],
+                }
+                break
 
 
 def offsets(batch: Batch) -> list[int]:
@@ -52,7 +105,8 @@ def validate_reference(value: dict, batch: Batch) -> set[tuple[str, int]]:
     return {(protocol, port) for protocol, port, _ in summary.destination_ports}
 
 
-def candidates(batch: Batch, reference: dict | None = None) -> list[dict]:
+def candidates(batch: Batch, reference: dict | None = None, *,
+               fanout_interval: tuple[datetime, datetime] | None = None) -> list[dict]:
     """No severity escalation, fixed-rule changes, or response authorization."""
     result = []
     labels = host_labels(batch)
@@ -91,6 +145,8 @@ def candidates(batch: Batch, reference: dict | None = None) -> list[dict]:
     for (src, minute), count in sorted(bursts.items()):
         if count >= 20:
             add('PORT_53_BURST', {'src': labels[src], 'relative_minute': minute, 'records': count})
+    for (src, protocol, port), evidence in _fanout_windows(batch, fanout_interval):
+        add('HOST_FANOUT', {'src': labels[src], 'protocol': protocol, 'port': port, **evidence})
     return result
 
 

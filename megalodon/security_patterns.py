@@ -4,7 +4,7 @@ No observations imply complete visibility or AI attribution. Thresholds and
 workflow permissions are code, never values supplied by a reference update.
 """
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import ipaddress
 import json
@@ -21,6 +21,7 @@ MIN_SAMPLES = 24
 MAX_DEPENDENCIES = 256
 REFERENCE_LINKS = {
     'PORT_SCAN': [('attack','T1046')],
+    'HOST_FANOUT': [('attack','T1046')],
     'SYN_FLOOD': [('attack','T1498')],
     'DNS_TUNNELING': [('attack','T1071.004')],
     'NEW_DESTINATION_PORT': [('d3fend','NetworkTrafficAnalysis'),('attack','T1046')],
@@ -50,6 +51,7 @@ for _key, _row in WORKFLOWS.items():
 CONTEXT = {
     'OBSERVED_ACTIVITY': ('This address appeared in committed observations.', 'These are sensor-visible exchanges; observation alone does not establish malicious activity.', 'network traffic analysis', 'evidence_summary'),
     'PORT_SCAN': ('Several ports were probed.', 'Inventory tools and health checks can also probe ports.', 'network service discovery scan', 'device_changes'),
+    'HOST_FANOUT': ('One source contacted many destination addresses on the same port within a minute.', 'Inventory scans, service discovery and distributed services can do this. Fanout alone does not establish a scan, lateral movement or successful access.', 'network service discovery', 'device_changes'),
     'SYN_FLOOD': ('The existing detector reported a SYN traffic burst.', 'A burst may overload a listener; retransmissions and load tests are alternatives.', 'network denial service flood', 'evidence_summary'),
     'DNS_TUNNELING': ('The existing detector reported unusual DNS query length.', 'Long names can also belong to legitimate services. Payload and resolver context matter.', 'DNS tunneling exfiltration', 'evidence_summary'),
     'NEW_DESTINATION_PORT': ('A destination port was absent from the learned comparison hours.', 'New software, updates or a changed service can explain this. A port does not identify an application.', 'network service discovery', 'device_changes'),
@@ -79,6 +81,7 @@ def candidate(rule, key, start, end, facts, references, segments, *, gaps=(), so
         workflow=workflow,knowledge_query=query,facts=facts,evidence_refs=references[:24],source_segments=sorted(set(segments)),
         missing_information=list(dict.fromkeys(gaps))[:16]+['This sensor cannot establish all traffic between other devices.', 'Traffic patterns do not establish AI involvement.'],
         required_measurements={'PORT_53_BURST':'Per-observation timestamps and destination ports',
+            'HOST_FANOUT':'At least 16 distinct unicast destinations on one TCP or UDP port within 60 seconds, using connection start times',
             'REGULAR_INTERVAL':'At least five distinct connection start times',
             'NEW_DESTINATION_PORT':'At least 24 compatible, finding-free hourly samples',
             'PROTOCOL_SHIFT':'At least 24 compatible, finding-free hourly samples',
@@ -121,7 +124,7 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
         if key not in groups:
             if len(groups)>=MAX_GROUPS:
                 all_gaps.append('Device grouping limit reached.');continue
-            groups[key]=dict(records=[],refs=[],segments=set(),ports=Counter(),protocols=Counter(),services=Counter(),finding=False,times=[])
+            groups[key]=dict(records=[],record_refs=[],refs=[],segments=set(),ports=Counter(),protocols=Counter(),services=Counter(),finding=False,times=[])
         group=groups[key]
         if row['id'].split(':')[0] not in group['segments'] and len(group['segments'])>=MAX_DEPENDENCIES:
             all_gaps.append('Source dependency limit reached.');continue
@@ -160,6 +163,7 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             try:
                 group['records'].append(PacketEvent(datetime.fromtimestamp(epoch(data['first_seen'] if kind=='flow' else row['observed_at']),timezone.utc),device,peer,protocol,
                     dst_port=port,src_port=data.get('src_port'),byte_count=0))
+                group['record_refs'].append(row['id'])
             except (KeyError,TypeError,ValueError):all_gaps.append('Incomplete port or protocol fields were excluded.')
         else:group['timing_limited']=True
     if len(rows)>MAX_RECORDS:all_gaps.append('Hourly read limit reached.')
@@ -189,7 +193,8 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             all_gaps.append('An oversized distribution was omitted from learning.')
         baselines.append(baseline)
         batch=Batch('retained-'+key[3],key[3],tuple(group['records']),count,0,0,'v1','committed evidence')
-        try:checks=[] if group.get('timing_limited') else offline_candidates(batch)
+        try:checks=[] if group.get('timing_limited') else offline_candidates(batch,
+            fanout_interval=(datetime.fromtimestamp(start,timezone.utc),datetime.fromtimestamp(end,timezone.utc)))
         except OfflineError:
             checks=[];all_gaps.append('Heuristic candidate limit reached; existing findings remain available.')
             baseline['eligible']=False;baseline['exclusion']='Heuristic work limit'
@@ -198,7 +203,17 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             # starts. Require connection summaries for beacon-like cadence.
             if check['rule']=='REGULAR_INTERVAL' and key[3]!='flow':continue
             if len(results)>=64:break
-            results.append(candidate(check['rule'],key,start,end,check['evidence'],group['refs'],group['segments'],gaps=all_gaps))
+            facts = check['evidence']
+            references = group['refs']
+            if check['rule']=='HOST_FANOUT':
+                # Numbers refer to this exact bounded batch, not the first
+                # page of the device's evidence. Keep late-hour proofs linked.
+                facts = dict(facts)
+                references = [group['record_refs'][n-1] for n in facts.pop('record_numbers')]
+                origin = min(record.observed_at for record in batch.records)
+                for offset, stamp in [('first_offset_us','first_seen'),('last_offset_us','last_seen')]:
+                    facts[stamp] = (origin + timedelta(microseconds=facts.pop(offset))).isoformat()
+            results.append(candidate(check['rule'],key,start,end,facts,references,group['segments'],gaps=all_gaps))
         if samples<MIN_SAMPLES or not baseline['eligible']:continue
         known={port for sample in compatible for port in sample['ports']}
         source_start=min(p['start'] for p in compatible)

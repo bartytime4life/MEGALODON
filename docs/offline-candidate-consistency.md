@@ -16,10 +16,16 @@ only to presentation; support checks use every accepted destination port.
 | NEW_DESTINATION_PORT | Its protocol/port exists and its record count equals the baseline's complete count for that pair. |
 | REGULAR_INTERVAL | The sum of unique observations across distinct source/destination groups for a protocol/port cannot exceed its baseline count. |
 | PORT_53_BURST | The sum across source groups in each relative minute cannot exceed that minute's count; the total across all bursts cannot exceed TCP/UDP destination-port-53 records. |
+| HOST_FANOUT | Flow-only; exactly sixteen distinct destinations, sixteen unique in-range representative record numbers, a span at most sixty seconds, sufficient records in the intersecting relative minute bins, and aggregate protocol/port support across fanout groups. Representative record numbers cannot be reused between fanout groups. |
 
 Candidate identities are unique within a rule: protocol/port for new ports,
 source/destination/protocol/port for regular intervals, and source/minute for
 port-53 bursts. Equivalent numeric representations do not bypass uniqueness.
+Host-fanout identities use source/protocol/port; only the first qualifying
+window for that group is emitted. Candidate details remain excluded from the
+dashboard summary, which shows only rule/status/count. These checks do not
+reopen record contents or prove destination cardinality, source membership or
+actual connection timing. Consistent fabricated reports can still pass.
 Host rank labels must be between one and twice the admitted record count.
 Counts are accounted within each rule; the same observation may legitimately
 support a new port, regular interval and burst at the same time.
