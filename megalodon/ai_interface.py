@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from .ai_broker import Broker, BrokerError, TOOLS
-from .ai_provider import AIProviderError, MAX_PROMPT_BYTES, generate, _strict_pairs
+from .ai_provider import AIProviderError, MAX_PROMPT_BYTES, generate, _strict_pairs, _require_enabled
 
 
 QUESTIONS: dict[str, tuple[str, frozenset[str]]] = {
@@ -70,8 +70,7 @@ def ask(question_id: str, broker: Broker) -> dict[str, Any]:
     if question_id not in QUESTIONS:
         raise BrokerError("UNKNOWN_QUESTION")
     question, permitted = QUESTIONS[question_id]
-    if not broker.ai.enabled:
-        raise AIProviderError("DISABLED")
+    _require_enabled(broker.ai)
     if type(broker.ai.timeout_seconds) is not int or not 1 <= broker.ai.timeout_seconds <= 1800:
         raise AIProviderError("POLICY_REJECTION")
     deadline = time.monotonic() + QUESTION_TIMEOUT_SECONDS

@@ -21,6 +21,7 @@ from typing import Any
 
 from .config import AISettings, valid_model_name
 from .provider_containment import qwen_provider_posture
+from . import local_model_runtime
 from . import qwen_advisory as transport
 
 
@@ -98,6 +99,13 @@ def _require_enabled(settings: AISettings) -> None:
     """Deny before provider I/O, queue ownership, cancellation or observations."""
     if settings.enabled is not True:
         raise AIProviderError("DISABLED")
+    _require_binding()
+
+
+def _require_binding() -> None:
+    failure = local_model_runtime.binding_failure()
+    if failure is not None:
+        raise AIProviderError(failure)
 
 
 class _ModelMetadataResponse(transport._BoundedHTTPResponse):
@@ -118,6 +126,7 @@ def _strict_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
 def _request(path: str, method: str, body: bytes | None, timeout: float,
              *, deadline: float | None = None) -> bytes:
     """Exactly one request on the compiled literal-loopback transport."""
+    _require_binding()
     if (path,method) not in {("/api/tags","GET"),("/api/ps","GET"),("/api/show","POST"),("/api/generate","POST")}:
         raise AIProviderError("POLICY_REJECTION")
     if body is not None and len(body) > transport.MAX_PROVIDER_REQUEST_BYTES:
@@ -260,7 +269,8 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
 
 
 def model_catalog() -> list[dict]:
-    """Read installed artifacts only; full local completion checks run on selection."""
+    """Read installed artifacts only after release binding admission."""
+    _require_binding()
     _listener_admitted()
     value=_json(_request('/api/tags','GET',None,3))
     if type(value) is not dict or type(value.get('models')) is not list or len(value['models'])>256:
@@ -493,6 +503,10 @@ def status(settings: AISettings, *, probe: bool = True) -> dict[str, object]:
                                "loopback_only": None, "timeout_seconds": settings.timeout_seconds}
     if settings.enabled is not True:
         return {**base, "error_code": "DISABLED"}
+    failure = local_model_runtime.binding_failure()
+    if failure is not None:
+        return {**base, "state": "unbound", "binding_status": "UNBOUND",
+                "error_code": failure, "message": local_model_runtime.MESSAGE}
     try:
         base["loopback_only"] = qwen_provider_posture()["loopback_only"]
     except (OSError, ValueError):

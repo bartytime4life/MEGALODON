@@ -2,8 +2,8 @@
 
 **Historical basis:** the original matrix below describes its pinned October 7
 source. The final follow-up sections record later changes; see
-[the disabled provider entry-point correction](#follow-up-disabled-provider-entry-point-correction)
-for the October 28 candidate and the gates that remain open.
+[the runtime UNBOUND fence](#follow-up-runtime-unbound-fence) for the latest
+candidate and the gates that remain open.
 
 ## Basis and conclusion
 
@@ -226,3 +226,14 @@ not infer them from API digests. Independent exact-head security review and
 separate owner acceptance remain required. This correction performs no model
 selection, pull, startup, query, backgrounding, service/firewall operation,
 deployment or acceptance transition.
+
+
+## Follow-up: runtime UNBOUND fence
+
+The candidate based on main `898b1c8b2d50ba42954a6a3dab1eb26b9765fb30`
+replaces the historical missing-runtime-gate tripwire with a release fence.
+The canonical binding remains unchanged and `UNBOUND`; no accepted model or
+activation mechanism is introduced. See [the current runtime contract](qwen-runtime-unbound.md)
+for affected entry points, precise effect scope, test seams and remaining HOLDs.
+The companion PR records exact candidate and native validation evidence.
+Historical findings above remain evidence about their original pinned sources.

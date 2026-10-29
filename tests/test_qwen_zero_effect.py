@@ -310,35 +310,6 @@ def test_disabled_dashboard_status_inherits_zero_effect_boundary(monkeypatch):
     assert sent[0][0]["inference_verified"] is False
 
 
-@pytest.mark.parametrize("entry", ["admitted", "inventory"])
-def test_canonical_unbound_is_not_a_universal_runtime_gate(monkeypatch, entry):
-    """Reach a tripwire, never HTTP, to retain the missing-gate evidence."""
-    assert UNBOUND["status"] == "UNBOUND"
-    assert UNBOUND["operator_decision"]["status"] == "NOT_RECORDED"
-    settings = replace(AISettings(), enabled=True)
-    calls = []
-
-    class RequestReached(BaseException):
-        pass
-
-    def tripwire(path, method, body, timeout, **_kwargs):
-        calls.append((path, method, body))
-        raise RequestReached
-
-    monkeypatch.setattr(ai_provider, "qwen_provider_posture",
-                        lambda **_: {"listening": "yes", "loopback_only": True})
-    with no_effects(monkeypatch):
-        # Intentional observation seam; lower socket/process/file guards remain.
-        with monkeypatch.context() as seam:
-            seam.setattr(ai_provider, "_request", tripwire)
-            with pytest.raises(RequestReached):
-                if entry == "admitted":
-                    ai_provider._admitted(settings)
-                else:
-                    ai_provider.inventory(settings)
-    assert calls == [("/api/tags", "GET", None)]
-
-
 def test_disabled_telemetry_snapshot_and_direct_refresh_have_no_effects(monkeypatch):
     monitor = model_telemetry.ModelTelemetry(AISettings)
     with no_effects(monkeypatch):
@@ -352,7 +323,7 @@ def test_disabled_telemetry_snapshot_and_direct_refresh_have_no_effects(monkeypa
     assert monitor._thread is None
 
 
-def test_disabling_before_queued_telemetry_refresh_skips_catalog(monkeypatch):
+def test_disabling_before_queued_telemetry_refresh_skips_catalog(monkeypatch, synthetic_runtime_binding):
     current = [replace(AISettings(), enabled=True)]
     queued = []
 
@@ -387,7 +358,7 @@ def test_telemetry_settings_failure_clears_pending_without_catalog(monkeypatch):
     assert monitor._value["state"] == "disabled"
 
 
-def test_disabled_inventory_requires_explicit_refresh_and_stays_cached(monkeypatch):
+def test_disabled_inventory_requires_explicit_refresh_and_stays_cached(monkeypatch, synthetic_runtime_binding):
     calls = []
     row = {"name": "local:1", "digest": "a" * 64, "size_bytes": 1}
 

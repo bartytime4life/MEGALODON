@@ -225,3 +225,7 @@ def test_admitted_inventory_reads_only_one_tag_catalog(monkeypatch):
         "model_present": True, "digest_matches": True, "observed_digest": settings.model_digest,
     }
     assert calls == ["posture", ("/api/tags", "GET", None, settings.timeout_seconds)]
+
+
+# These tests exercise dormant behavior below the release UNBOUND fence.
+pytestmark = pytest.mark.usefixtures("synthetic_runtime_binding")

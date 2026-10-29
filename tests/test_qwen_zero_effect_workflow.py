@@ -22,6 +22,8 @@ def test_qwen_zero_effect_workflow_is_bounded_and_exact_head():
     assert "constraints/test-linux-cp311.txt" in raw
     assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD: \"1\"" in raw
     assert "tests/test_qwen_zero_effect.py" in raw
+    assert "tests/test_qwen_runtime_gate.py" in raw
+    assert "tests/test_model_lifecycle.py" in raw
     assert "tests/test_model_evaluation_manifest.py" in raw
     assert "tests/test_model_evaluation.py" in raw
     assert "tests/test_qwen_evaluation_input.py" in raw

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from threading import Event, Lock, Thread
 from time import monotonic
 
-from . import ai_provider
+from . import ai_provider, local_model_runtime
 
 
 def _key(settings):
@@ -45,12 +45,21 @@ class ModelLifecycle:
             self.on_change()
 
     def snapshot(self):
+        failure = local_model_runtime.binding_failure()
+        if failure is not None:
+            enabled = self.settings().enabled
+            return dict(state='unbound' if enabled else 'disabled',
+                        message=local_model_runtime.MESSAGE if enabled else 'Local AI is disabled.',
+                        error_code=failure if enabled else 'DISABLED',
+                        updated_at=None, retry_in_seconds=0)
         with self._lock:
             value = dict(self._value)
             value['retry_in_seconds'] = max(0, round(self._next_attempt - self.clock()))
         return value
 
     def start(self):
+        if local_model_runtime.binding_failure() is not None:
+            return
         with self._lock:
             if self._thread is not None:
                 return
@@ -58,6 +67,8 @@ class ModelLifecycle:
             self._thread.start()
 
     def request(self):
+        if local_model_runtime.binding_failure() is not None:
+            return
         # Cancellation is restricted to this worker, never an operator request.
         ai_provider.cancel_current(owner='hud-model-ready')
         if not self._stop.is_set():
@@ -73,6 +84,8 @@ class ModelLifecycle:
             self._thread.join(3)
 
     def _step(self, *, force=False):
+        if local_model_runtime.binding_failure() is not None:
+            return
         settings = self.settings()
         identity = _key(settings)
         if identity != self._identity or force:

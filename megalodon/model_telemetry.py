@@ -3,10 +3,11 @@ from datetime import datetime, timezone
 from threading import Lock, Thread
 from time import monotonic
 
-from . import ai_provider
+from . import ai_provider, local_model_runtime
 
 
 MESSAGES = {
+    'unbound': local_model_runtime.MESSAGE,
     'cancelled': 'The local AI request was cancelled. You can retry when ready.',
     'generating': 'Local AI is working. Traffic collection continues in the background.',
     'model_not_local': 'This model is remote or does not support local text completion. Select another installed model.',
@@ -20,7 +21,7 @@ MESSAGES = {
     'model_loading': 'Another local model check is in progress.',
     'concurrency_unavailable': 'The local request lock is unavailable. Review the local service.',
 }
-ERROR_STATES = {'REQUEST_CANCELLED':'cancelled','PROVIDER_ERROR':'provider_error','REQUEST_TIMEOUT':'request_timeout',
+ERROR_STATES = {'OWNER_MODEL_BINDING_NOT_RECORDED':'unbound','REQUEST_CANCELLED':'cancelled','PROVIDER_ERROR':'provider_error','REQUEST_TIMEOUT':'request_timeout',
                 'INVALID_RESPONSE':'invalid_response','OLLAMA_UNAVAILABLE':'ollama_unavailable',
                 'MODEL_MISSING':'model_missing','MODEL_MISMATCH':'policy_rejection','POLICY_REJECTION':'policy_rejection','MODEL_NOT_LOCAL':'model_not_local',
                 'CONCURRENCY_LIMIT_REACHED':'model_loading','CONCURRENCY_CONTROL_UNAVAILABLE':'concurrency_unavailable'}
@@ -70,6 +71,8 @@ class ModelTelemetry:
             current_key=self._key
         if not settings.enabled or not current_enabled or current_key!=key:
             result={'state':'disabled','options':[],'truncated':False}
+        elif local_model_runtime.binding_failure() is not None:
+            result={'state':'unbound','options':[],'truncated':False}
         else:
             try:
                 options=self.catalog()
@@ -96,6 +99,7 @@ class ModelTelemetry:
 
     def refresh_installed_models(self):
         """Read installed models only for the operator's explicit Setup action."""
+        ai_provider._require_binding()
         settings=self.settings()
         if settings.enabled:
             self.invalidate()
@@ -110,6 +114,16 @@ class ModelTelemetry:
 
     def snapshot(self):
         settings=self.settings();key=(settings.enabled,settings.model,settings.model_digest,settings.compute_mode)
+        failure=local_model_runtime.binding_failure()
+        if settings.enabled and failure is not None:
+            # No thread, provider read or historical observation can imply readiness.
+            return dict(timeout_seconds=settings.timeout_seconds,running=False,started_at=None,
+                options=[],truncated=False,compute_mode=settings.compute_mode,
+                selected_digest=settings.model_digest,state='needs_setup',model=settings.model,
+                model_state='unbound',model_present=False,message=local_model_runtime.MESSAGE,
+                updated_at=None,last_response_at=None,last_attempt_at=None,error_code=failure,
+                last_error_code=None,drift=None,installed_digest=None,response_ms=None,
+                inference_verified=False,loaded=None,memory_bytes=None,vram_bytes=None)
         with self._lock:
             if key!=self._key:self._key=key;self._value=None;self._at=0
             refresh_after=2 if (self._value or {}).get('state')=='model_loading' else 30

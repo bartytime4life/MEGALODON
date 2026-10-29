@@ -1138,7 +1138,7 @@ def _ai(args: argparse.Namespace) -> int:
     from uuid import uuid4
     from .ai_broker import Broker, BrokerError, ReceiptStore
     from .ai_interface import ask
-    from .ai_provider import AIProviderError, inventory, status
+    from .ai_provider import AIProviderError, inventory, status, _require_enabled
     from .provider_containment import qwen_provider_posture
     import shutil
     import subprocess
@@ -1199,6 +1199,8 @@ def _ai(args: argparse.Namespace) -> int:
                               "operator_action": "Review the operator setup gates in docs/ai-control-plane.md; no host change was applied" if (posture["loopback_only"] is not True or not egress_restricted) else None},
                              sort_keys=True))
             return 0 if all(checks.values()) else 1
+        if args.operation != "tool":
+            _require_enabled(settings.ai)
         with ReceiptStore(receipt_path) as receipts, _dashboard_reader(settings.db_path, allow_missing=True) as reader:
             broker = Broker(reader, receipts, settings.ai, settings.blocking)
             if args.operation == "tool":

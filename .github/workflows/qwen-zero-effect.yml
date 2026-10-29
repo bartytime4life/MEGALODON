@@ -53,6 +53,8 @@ jobs:
           set -euo pipefail
           python -m pytest -p no:cacheprovider -q \
             tests/test_qwen_zero_effect.py \
+            tests/test_qwen_runtime_gate.py \
+            tests/test_model_lifecycle.py \
             tests/test_ai_doctor_consent.py \
             tests/test_ai_control.py \
             tests/test_dashboard_ai_control.py \

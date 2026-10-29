@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
@@ -189,3 +191,7 @@ def test_ai_token_is_served_only_to_the_local_setup_hud(monkeypatch):
     finally:
         for server, thread in servers:
             server.shutdown(); server.server_close(); thread.join(timeout=2)
+
+
+# These tests exercise dormant behavior below the release UNBOUND fence.
+pytestmark = pytest.mark.usefixtures("synthetic_runtime_binding")
