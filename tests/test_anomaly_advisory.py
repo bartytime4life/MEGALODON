@@ -324,3 +324,7 @@ def test_concurrency_is_shared_with_v1_and_cancellation_prevents_send(provider):
     cancel.set()
     assert invoke(cancel_event=cancel).reason_code == 'CANCELLED_BEFORE_REQUEST'
     assert provider.instances == []
+
+
+# These tests exercise dormant behavior below the release UNBOUND fence.
+pytestmark = pytest.mark.usefixtures("synthetic_runtime_binding")

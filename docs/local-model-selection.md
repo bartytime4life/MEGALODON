@@ -1,5 +1,12 @@
 # Choose a local AI model
 
+> **Current release hold (#446):** local model runtime is `UNBOUND`. Enabling
+> AI or selecting a model cannot authorize provider access. Generation, model
+> preparation, inventory/refresh and AI questions refuse before their model
+> work; telemetry and keep-ready workers cannot start provider activity.
+> The operational flows below describe dormant lower layers, not permission
+> to activate them. See [the runtime fence and its limits](qwen-runtime-unbound.md).
+
 Open **Setup → Local AI · Ollama**. Choose an installed model, choose CPU or
 Ollama automatic compute, set the response limit, then press **Use selected model**. MEGALODON saves the
 exact installed digest and verifies one short response. **Verify selected model**

@@ -20,6 +20,7 @@ try:
 except ImportError:  # pragma: no cover - exercised by non-Linux packaging checks.
     fcntl = None
 
+from . import local_model_runtime
 from .advisory import (
     AirlockDecision,
     FIXED_LIMITS,
@@ -764,6 +765,13 @@ def _invoke_admitted(
             code="POLICY_DENIED",
             reason_code="EXPLICIT_ENABLEMENT_REQUIRED",
             summary="An explicit one-invocation Qwen enablement was not supplied.",
+        )
+    failure = local_model_runtime.binding_failure()
+    if failure is not None:
+        return replace(
+            _result(admitted, outcome="DENY", code="POLICY_DENIED",
+                    reason_code=failure, summary=local_model_runtime.MESSAGE),
+            limitations=("No provider request was performed. Supplied model identity is unaccepted preflight data.",),
         )
     if cancel_event is not None and type(cancel_event) is not threading.Event:
         return _result(

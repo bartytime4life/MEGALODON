@@ -462,3 +462,7 @@ def test_model_select_provider_refusal_reads_as_its_state_not_a_crash(tmp_path, 
     assert job['state'] == 'failed' and expected in job['message']
     assert 'stopped unexpectedly' not in job['message']
     assert not (tmp_path / '.config/megalodon/qwen-profile.json').exists()  # nothing was selected
+
+
+# These tests exercise dormant behavior below the release UNBOUND fence.
+pytestmark = pytest.mark.usefixtures("synthetic_runtime_binding")

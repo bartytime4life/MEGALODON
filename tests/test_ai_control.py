@@ -792,3 +792,7 @@ def test_alert_reader_accepts_only_bounded_recorded_measurements(broker):
     payload['findings'][0]['measurement'] = None
     result = broker.dispatch(request('megalodon.alerts.query', {'window_minutes': 60}))
     assert result['result']['qualified_findings'][0]['measurement'] is None
+
+
+# These tests exercise dormant behavior below the release UNBOUND fence.
+pytestmark = pytest.mark.usefixtures("synthetic_runtime_binding")

@@ -1066,3 +1066,7 @@ def test_cleanup_exception_returns_fixed_error_and_releases_slot() -> None:
     assert FakeConnection.instances[0].closed is True
     assert qwen._INVOCATION_LOCK.acquire(blocking=False)
     qwen._INVOCATION_LOCK.release()
+
+
+# These tests exercise dormant behavior below the release UNBOUND fence.
+pytestmark = pytest.mark.usefixtures("synthetic_runtime_binding")

@@ -121,3 +121,7 @@ def test_busy_or_manually_preempted_load_defers_without_false_readiness(code):
     state['now']+=worker.poll_seconds;state['fail']=None
     worker._step()
     assert worker.snapshot()['state']=='ready' and len(state['prepares'])==2
+
+
+# These tests exercise dormant behavior below the release UNBOUND fence.
+pytestmark = pytest.mark.usefixtures("synthetic_runtime_binding")

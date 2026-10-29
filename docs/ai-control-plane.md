@@ -1,5 +1,12 @@
 # Local AI control plane (draft, opt-in)
 
+> **Current release hold (#446):** local model runtime is `UNBOUND`. Enabling
+> AI or selecting a model cannot authorize provider access. Generation, model
+> preparation, inventory/refresh and AI questions refuse before their model
+> work; telemetry and keep-ready workers cannot start provider activity.
+> The operational flows below describe dormant lower layers, not permission
+> to activate them. See [the runtime fence and its limits](qwen-runtime-unbound.md).
+
 The installed HUD also provides [security knowledge and pattern reviews](security-knowledge.md).
 Its read-only broker tools are `megalodon.knowledge.search` (one bounded query)
 and `megalodon.patterns.status` (baseline coverage and four review summaries).
@@ -67,7 +74,7 @@ reports `CONCURRENCY_LIMIT_REACHED`; a deadline that expires mid-body is
 the same listener check as admission, so a stopped Ollama reads as
 `ollama_unavailable` in the HUD and in Setup's refresh. A successful TCP connection or tag lookup is never
 reported as `model_ready`; one bounded validated inference must complete.
-The status states are `disabled`, `ollama_unavailable`, `model_missing`,
+The status states are `disabled`, `unbound`, `ollama_unavailable`, `model_missing`,
 `model_available`, `model_loading`, `concurrency_unavailable`, `model_ready`,
 `request_timeout`, `invalid_response`, `provider_error`, `model_not_local`, and `policy_rejection`.
 `model_loading` means another request already holds the one inference slot;

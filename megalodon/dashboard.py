@@ -1534,6 +1534,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 or not self._ai_operator_envelope()):
             self._send_json({"error": "AI operator authorization required"}, status=403)
             return
+        from . import local_model_runtime
+        failure = local_model_runtime.binding_failure()
+        if failure is not None:
+            self._send_json({"schema": "megalodon-ai-answer-v1", "state": "unbound",
+                             "error_code": failure, "message": local_model_runtime.MESSAGE}, status=503)
+            return
         lengths = self.headers.get_all("Content-Length", [])
         if (len(lengths) != 1 or len(lengths[0]) > 3 or not lengths[0].isascii()
                 or not lengths[0].isdigit() or not 1 <= int(lengths[0]) <= 256):
