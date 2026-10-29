@@ -38,7 +38,7 @@ def test_model_cannot_apply_even_when_it_proposes_containment(manager):
     assert defense.path.exists()
 
 
-def test_analysis_uses_real_provider_contract_without_model_authority(manager,monkeypatch):
+def test_analysis_uses_real_provider_contract_without_model_authority(manager,monkeypatch,synthetic_runtime_binding):
     from megalodon import ai_provider
     defense,calls,_=manager
     monkeypatch.setattr(ai_provider,'qwen_provider_posture',lambda **_:{'listening':'yes','loopback_only':True})
@@ -62,7 +62,7 @@ def test_analysis_uses_real_provider_contract_without_model_authority(manager,mo
 
 
 @pytest.mark.parametrize('escape',['\\u202e','\\u009b','\\u2066','\\u0000','\\u2028'])
-def test_escaped_display_controls_in_explanation_fail_analysis(manager,monkeypatch,escape):
+def test_escaped_display_controls_in_explanation_fail_analysis(manager,monkeypatch,escape,synthetic_runtime_binding):
     from megalodon import ai_provider
     defense,calls,_=manager
     monkeypatch.setattr(ai_provider,'qwen_provider_posture',lambda **_:{'listening':'yes','loopback_only':True})
