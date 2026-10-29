@@ -22,6 +22,7 @@ from megalodon.model_evaluation import (
     validate_corpus_manifest,
     validate_evaluation_receipt,
 )
+from megalodon.evaluation_input import read_manifest_file, read_receipt_file
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -44,16 +45,10 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        try:
-            raw = args.receipt.read_bytes()
-        except OSError as exc:
-            raise ModelEvaluationError("RECEIPT_READ") from exc
+        raw = read_receipt_file(args.receipt)
         validated = validate_evaluation_receipt(parse_receipt_bytes(raw))
         if args.manifest is not None:
-            try:
-                manifest_raw = args.manifest.read_bytes()
-            except OSError as exc:
-                raise ModelEvaluationError("MANIFEST_READ") from exc
+            manifest_raw = read_manifest_file(args.manifest)
             check_receipt_against_manifest(
                 validated,
                 validate_corpus_manifest(parse_manifest_bytes(manifest_raw)),

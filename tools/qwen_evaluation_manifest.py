@@ -19,6 +19,7 @@ from megalodon.model_evaluation import (
     parse_manifest_bytes,
     validate_corpus_manifest,
 )
+from megalodon.evaluation_input import read_manifest_file
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -36,10 +37,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        try:
-            raw = args.manifest.read_bytes()
-        except OSError as exc:
-            raise ModelEvaluationError("MANIFEST_READ") from exc
+        raw = read_manifest_file(args.manifest)
         result = manifest_projection(
             validate_corpus_manifest(parse_manifest_bytes(raw))
         )
