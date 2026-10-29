@@ -61,7 +61,9 @@ jobs:
             tests/test_local_model_binding.py \
             tests/test_local_model_readiness.py \
             tests/test_model_selection.py \
-            tests/test_model_evaluation_manifest.py
+            tests/test_model_evaluation_manifest.py \
+            tests/test_model_evaluation.py \
+            tests/test_qwen_evaluation_input.py
       - name: Retain exact-head UNBOUND projections
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}

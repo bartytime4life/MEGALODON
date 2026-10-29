@@ -23,6 +23,8 @@ def test_qwen_zero_effect_workflow_is_bounded_and_exact_head():
     assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD: \"1\"" in raw
     assert "tests/test_qwen_zero_effect.py" in raw
     assert "tests/test_model_evaluation_manifest.py" in raw
+    assert "tests/test_model_evaluation.py" in raw
+    assert "tests/test_qwen_evaluation_input.py" in raw
     assert "qwen.unbound.json" in raw
     assert "OWNER_MODEL_BINDING_NOT_RECORDED" in raw
     assert "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9" in raw

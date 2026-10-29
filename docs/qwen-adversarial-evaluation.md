@@ -30,6 +30,21 @@ manifest, and a complete receipt's outcome counts match the manifest's
 expected outcomes up to what each category's failed cases explain; any
 mismatch refuses with a fixed `RECEIPT_MANIFEST_*` code.
 
+Both tools admit only regular input files and enforce the byte budget while
+reading: 128 KiB for a receipt and 4 MiB for a manifest. A file whose declared
+size exceeds its limit is rejected before its content is read. The reader uses
+at most the limit plus one overflow byte if the file grows, and rejects changed
+size or modification/change timestamps instead of validating a partial read.
+On POSIX, the final path component cannot be a symlink and files are opened
+nonblocking so a pipe without a writer is refused immediately. Use a regular
+file, not stdin, a pipe, or a device, for these evidence inputs.
+
+Empty or oversized files return the existing `RECEIPT_SIZE` / `MANIFEST_SIZE`
+codes. Unreadable, non-regular, or unstable inputs return `RECEIPT_READ` /
+`MANIFEST_READ`, with no private path or operating-system details in output.
+These read-only checks do not authenticate origin or signatures and impose no
+wall-clock guarantee on storage supplied by a remote filesystem or device.
+
 ## Corpus manifest
 
 The manifest is the privacy-minimized list to freeze and sign before any run,
