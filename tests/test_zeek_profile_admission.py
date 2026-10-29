@@ -182,6 +182,19 @@ class ZeekProfileAdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(OfflineError, '^ZEEK_PROFILE_FIELDS$'):
             self.read(b''.join(lines), admission)
 
+    def test_tsv_unset_mandatory_fields_refuse_after_a_valid_prefix(self):
+        admission = ADMISSIONS[1]
+        lines = self.data(admission).splitlines(keepends=True)
+        first_row = next(line for line in lines if not line.startswith(b'#'))
+        for field in ('uid', 'missed_bytes'):
+            cells = first_row.rstrip(b'\n').split(b'\t')
+            cells[list(profile.zeek.TYPES).index(field)] = b'-'
+            data = b''.join(lines[:-1]) + b'\t'.join(cells) + b'\n' + lines[-1]
+            declared = {**admission, 'expected_records': 5,
+                        'expected_digest': 'sha256:' + hashlib.sha256(data).hexdigest()}
+            with self.subTest(field=field), self.assertRaisesRegex(OfflineError, '^ZEEK_PROFILE_FIELDS$'):
+                self.read(data, declared)
+
     def test_private_modes_symlinks_and_hardlinks_refuse(self):
         admission = ADMISSIONS[0]
         self.source.write_bytes(self.data(admission))

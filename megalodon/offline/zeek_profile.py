@@ -137,6 +137,12 @@ def read_completed_conn(root: str, relative: str, *, admission: dict,
                         fields = text.split('\t')[1:]
                     if text.startswith('#open\t'):
                         opened = True
+                    if not text.startswith('#') and fields == list(zeek.TYPES):
+                        values = text.split('\t')
+                        if (len(values) == len(fields)
+                                and any(values[fields.index(key)] == '-'
+                                        for key in ('uid', 'missed_bytes'))):
+                            raise OfflineError('ZEEK_PROFILE_FIELDS')
                     yield text
 
             records = zeek._tsv_records(observed_headers(), limits)
