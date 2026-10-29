@@ -19,7 +19,7 @@ SEGMENT='a'*32
 def rows(start=START,port=443,source='zeek-conn',category='flows',ip='192.168.1.4',count=60):
     return [dict(id=f'{SEGMENT}:{i+1}',observed_at=utc(start+i*59),source=source,category=category,
                  data=dict(src_ip=ip,dst_ip='2001:4860:4860::8888' if ':' in ip else '8.8.8.8',
-                           src_port=50000,dst_port=port,protocol='TCP',interface='eth0',app_proto='tls',source_id=str(i+1),first_seen=utc(start+i*59))) for i in range(count)]
+                           src_port=50000,dst_port=port,protocol='TCP',interface='eth0',app_proto='tls',source_id=f'{ip}-{i+1}',first_seen=utc(start+i*59))) for i in range(count)]
 
 
 def test_baseline_minimum_24_distinct_hours_and_new_ports():
@@ -171,6 +171,23 @@ def test_host_fanout_is_retained_and_restored_for_the_review_workbench(service):
         assert restored['facts']==item['facts']
     finally:
         restarted.close()
+
+
+def test_conflicting_flow_identity_records_coverage_without_a_fabricated_review(service):
+    values=rows(count=16)
+    for index,row in enumerate(values):
+        row['observed_at']=utc(START+index)
+        row['data'].update(source_id='one-colliding-connection',first_seen=utc(START),
+                           dst_ip=f'198.51.100.{index+1}')
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in values])
+    service.process_hour(START)
+    assert not service.reviews and not service.baselines
+    assert any('Conflicting connection identities' in gap for gap in service.gaps)
+    coverage=next(row['data'] for row in service.evidence.history(category='baselines')['records']
+                  if row['source']=='pattern-hour-coverage-v1')
+    assert coverage['gaps']==service.gaps
+    assert service.evidence.checkpoint('patterns_hour')['end']==START+3600
+    assert service.evidence.history(category='flows')['total']==16
 
 
 def test_hour_checkpoint_written_after_candidate_save(service):

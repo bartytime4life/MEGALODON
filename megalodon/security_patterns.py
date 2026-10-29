@@ -13,12 +13,15 @@ from .evidence_storage import epoch, utc
 from .models import PacketEvent
 from .offline.analysis import candidates as offline_candidates
 from .offline.common import Batch, OfflineError
+from .validation import safe_text
 
 MAX_GROUPS = 128
 MAX_RECORDS = 20000
 MAX_GROUP_RECORDS = 2048
 MIN_SAMPLES = 24
 MAX_DEPENDENCIES = 256
+FLOW_IDENTITY_INVALID_GAP = 'Invalid connection identities or tuples were excluded; this hour cannot train baselines.'
+FLOW_IDENTITY_CONFLICT_GAP = 'Conflicting connection identities were excluded; this hour cannot train baselines.'
 REFERENCE_LINKS = {
     'PORT_SCAN': [('attack','T1046')],
     'HOST_FANOUT': [('attack','T1046')],
@@ -89,18 +92,59 @@ def candidate(rule, key, start, end, facts, references, segments, *, gaps=(), so
         state='unreviewed',action_status='not_attempted')
 
 
+def _connection_identity(row):
+    """Separate the declared identity from the tuple it must consistently own.
+
+    Counters, service refinement and completion can change on a periodic update;
+    endpoint addresses, ports and transport cannot silently change with them.
+    This validates metadata, not the producer's authenticity.
+    """
+    data = row['data']
+    identity = data['source_id']
+    if type(identity) is int and 0 <= identity < 2**64:
+        identity = str(identity)
+    if type(identity) is not str:
+        raise ValueError('Invalid connection identity.')
+    identity = safe_text(identity, 'connection identity', 64)
+    if not identity or identity != identity.strip():
+        raise ValueError('Invalid connection identity.')
+    event = PacketEvent(datetime.fromtimestamp(epoch(data['first_seen']), timezone.utc),
+        data['src_ip'], data['dst_ip'], data.get('protocol','unknown'),
+        src_port=data.get('src_port'), dst_port=data.get('dst_port'),
+        interface=data.get('interface'))
+    source = safe_text(row['source'], 'connection source', 128)
+    reference = safe_text(row['id'], 'connection reference', 128)
+    key = (source, event.interface or 'unreported', identity, event.observed_at)
+    signature = (event.src_ip, event.dst_ip, event.src_port, event.dst_port, event.protocol)
+    return key, signature, (epoch(row['observed_at']), reference)
+
+
 def analyze_hour(rows, start, end, previous, *, gaps=()):
     """Return compact baselines and bounded candidates, never host actions."""
     groups={}; findings=[]; all_gaps=list(gaps)
     # Periodic updates of a flow retain one identity and one connection start.
-    unique={};other=[]
+    unique={};other=[];conflicts=set();invalid_identity=False
     for row in rows[:MAX_RECORDS]:
         data=row['data']
         if row['category']=='flows' and data.get('source_id') is not None and data.get('first_seen'):
-            key=(row['source'],data.get('interface'),str(data['source_id']),data['first_seen'],data.get('src_ip'),data.get('dst_ip'))
-            if key not in unique or row['observed_at']>unique[key]['observed_at']:unique[key]=row
+            try:
+                key,signature,order = _connection_identity(row)
+            except (KeyError,TypeError,ValueError,OverflowError,OSError):
+                invalid_identity=True
+                continue
+            previous_row = unique.get(key)
+            if previous_row is not None and previous_row[1] != signature:
+                conflicts.add(key)
+            elif previous_row is None or order > previous_row[2]:
+                unique[key] = (row,signature,order)
         else:other.append(row)
-    for row in other+list(unique.values()):
+    # Preserve the integrity reason even when the incoming warning list fills
+    # the display budget; accumulate each diagnostic once, outside the loop.
+    if invalid_identity:
+        all_gaps.insert(0,FLOW_IDENTITY_INVALID_GAP)
+    if conflicts:
+        all_gaps.insert(0,FLOW_IDENTITY_CONFLICT_GAP)
+    for row in other+[value[0] for key,value in unique.items() if key not in conflicts]:
         data=row['data'];category=row['category'];source=row['source']
         if category not in {'packets','flows','packet_rollups','findings','network','audit'}:continue
         compacted=category=='packet_rollups' and data.get('kind')=='conversation_v1'

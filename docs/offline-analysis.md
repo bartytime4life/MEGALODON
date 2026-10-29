@@ -378,6 +378,25 @@ The retained-evidence review reuses this check within each existing
 device/interface/sensor/measurement group. It deduplicates periodic flow
 updates before checking connection starts and links the sixteen qualifying
 evidence records, including late-hour records beyond the group's first page.
+For retained flow reviews, declared identity is scoped to the sensor, interface,
+bounded connection ID and normalized connection start. Every update of that
+identity must agree on source/destination addresses, ports and transport.
+Conflicting identities have **all** versions excluded from hourly pattern
+analysis, rather than selecting one version or counting its different tuples
+as separate connections. Invalid identities or tuples are also excluded.
+A fixed coverage warning makes the hour ineligible for baseline learning.
+Identity-integrity warnings take priority within the existing sixteen-message
+coverage budget, so a full incoming warning list cannot hide the reason.
+Independently supported review candidates and separately recorded detector
+findings remain available with the coverage gap; stored source rows are not
+edited. Growing counters, completion changes and service refinement remain
+valid updates. Equivalent timestamp/address spellings normalize before identity
+comparison; this does not authenticate the producer or detect identity reuse
+with a different declared start time. The standalone offline file analyzer has
+no retained connection-ID field and does not gain this check.
+Previously stored reviews and baselines are not rewritten or retroactively
+certified. New hourly coverage receipts retain the warning; this change is
+not a historical reclassification or source-authentication mechanism.
 The retained review shows absolute first/last connection times and considers
 only starts within the analyzed hour. Polling an older flow cannot replay an
 old sweep as current activity; windows spanning hourly partitions are not joined.
