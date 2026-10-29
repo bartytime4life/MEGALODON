@@ -3,6 +3,9 @@
 Status: **Scaffold only.** This directory is a stand-in structure for the
 producer-profile and schema-drift evidence described in
 [issue #327](https://github.com/bartytime4life/MEGALODON/issues/327).
+The separate [candidate fixture packet](../qualification/README.md) adds
+digest-bound synthetic JSON/TSV parity and whole-file refusal checks under
+#445. It does not promote this placeholder admission contract.
 The issue closed on 2026-09-22, but this scaffold does not select a supported
 Zeek producer and must not be cited as evidence that one has been qualified. Every
 identifier in [`schema.json`](schema.json) that looks like a version or

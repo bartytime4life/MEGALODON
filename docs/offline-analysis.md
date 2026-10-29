@@ -89,6 +89,16 @@ python -m megalodon.offline \
 `8.2.2` is an example, not a supported-version certification: supply the actual
 producer's three-part version. It is recorded as **operator-declared,
 unverified**. Use `--source zeek-tsv` for classic tab-separated `conn.log`.
+Successful Zeek CLI summaries and manifests additionally include
+`source_quality: {"status": "unverified", "producer_profile": "not_qualified", "completeness": "not_attested"}`.
+The complete run status describes local parsing/report publication; it does
+not certify the producer or the completeness of the supplied source. In
+particular, JSONL truncation exactly between records remains syntactically valid.
+See the [digest-bound candidate fixture packet](../contracts/zeek-conn-log/v1/qualification/README.md)
+and the remaining [#445](https://github.com/bartytime4life/MEGALODON/issues/445) gates.
+The read-only dashboard reader accepts the exact new quality declaration and
+legacy manifests, rejects changed/extra quality claims, and retains its existing
+bounded projection shape. TShark manifests do not accept the Zeek-only field.
 One run selects one source; no joining, packet reconstruction, or cross-source
 deduplication is performed. Never add packet and flow record counts together.
 

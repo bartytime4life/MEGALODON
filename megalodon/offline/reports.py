@@ -119,6 +119,14 @@ def finish(directory: int, receipt: dict, limits: Limits, *, batch: Batch | None
                        byte_count_basis='frame_length' if batch.kind == 'packet' else 'orig_plus_resp_ip_bytes',
                        candidate_count=len(findings), reference_baseline_used=reference is not None,
                        reports=list(REPORT_NAMES))
+        if batch.kind == 'flow':
+            # A complete parse is not a qualified producer or proof that the
+            # operator supplied the complete source. In particular, JSONL has
+            # no close marker to detect truncation between complete records.
+            receipt['source_quality'] = {
+                'status': 'unverified', 'producer_profile': 'not_qualified',
+                'completeness': 'not_attested',
+            }
     else:
         receipt.update(status='failed', failure_code=failure or 'NO_BATCH', reports=[],
                        accepted_records=0, rejected_records=None, candidate_count=0)

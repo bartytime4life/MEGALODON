@@ -92,4 +92,13 @@ The following paths and cases are the reviewable implementation inventory, **not
 
 ## Outstanding decision and proof
 
-The owner selected the documented 8.0.10 build. The installed binary and a pre-existing TSV capture were inventoried read-only, but their producer relationship is unauthenticated. No native JSON capture was found in the case directory or the bounded Analysis/Projects/Documents filename search; files in test temporary directories are synthetic and do not supply producer evidence. The positive/negative JSON and TSV fixture packet is therefore `NOT_RUN`, as is installed-producer parity: no Zeek executable was launched, no package was installed, and no selected-build output was generated. The current synthetic contract tests prove importer consistency only. Independent exact-head review must examine timestamps, emitted optional fields, package additions, privacy, deterministic failure, and source custody before #445 can be accepted. Installation, background sensor operation, network access, release, deployment, and host authority require separate decisions.
+Current follow-up: the [candidate fixture packet](../contracts/zeek-conn-log/v1/qualification/README.md)
+binds synthetic JSON/TSV parity and 37 raw refusal cases. Successful Zeek
+summaries/manifests now visibly label producer qualification and source
+completeness as unverified. JSONL truncation between complete records cannot be
+detected without independent source custody/size/count evidence. This follow-up
+does not replace the native packet, promote the placeholder or close #445;
+the source/output and review gates below remain held. Its README separately
+records a discovery-only version probe, outside the issue's no-launch scope.
+
+**Historical 2026-10-07 inventory:** The owner selected the documented 8.0.10 build. The installed binary and a pre-existing TSV capture were inventoried read-only, but their producer relationship is unauthenticated. No native JSON capture was found in the case directory or the bounded Analysis/Projects/Documents filename search; files in test temporary directories are synthetic and do not supply producer evidence. The positive/negative JSON and TSV fixture packet is therefore `NOT_RUN`, as is installed-producer parity: no Zeek executable was launched, no package was installed, and no selected-build output was generated. The current synthetic contract tests prove importer consistency only. Independent exact-head review must examine timestamps, emitted optional fields, package additions, privacy, deterministic failure, and source custody before #445 can be accepted. Installation, background sensor operation, network access, release, deployment, and host authority require separate decisions.

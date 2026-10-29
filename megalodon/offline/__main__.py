@@ -60,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
                'action_status': 'not_attempted'}
     if failure:
         summary['failure_code'] = failure
+    elif saved and 'source_quality' in receipt:
+        summary['source_quality'] = receipt['source_quality']
     print(json.dumps(summary, sort_keys=True))
     return 1 if failure else 0
 

@@ -250,7 +250,16 @@ def _utc_timestamp(value: object) -> datetime:
 
 
 def _manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Limits]:
-    if set(value) != _COMPLETE_MANIFEST_FIELDS:
+    fields = set(value)
+    if 'source_quality' in value:
+        if (value.get('source') not in ('zeek-json', 'zeek-tsv')
+                or value['source_quality'] != {
+                    'status': 'unverified', 'producer_profile': 'not_qualified',
+                    'completeness': 'not_attested',
+                }):
+            _fail("INVALID_OFFLINE_MANIFEST")
+        fields.remove('source_quality')
+    if fields != _COMPLETE_MANIFEST_FIELDS:
         _fail("INVALID_OFFLINE_MANIFEST")
     source = value.get("source")
     if not isinstance(source, str):

@@ -1,0 +1,13 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	conn
+#open	2023-11-14-22-13-20
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	ip_proto
+#types	time	string	addr	port	addr	port	enum	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	set[string]	count
+1700000000.123456	SyntheticTCP	192.0.2.10	40000	198.51.100.20	443	tcp	ssl	0.000001	0	0	SF	T	F	0	ShAF	3	180	2	120	(empty)	6
+1700000001.000001	SyntheticUDP	2001:db8::10	53000	2001:db8::20	53	udp	-	2.500000	0	0	SF	-	-	0	Dd	1	68	1	96	SyntheticParent	17
+1700000002.000000	SyntheticICMP4	192.0.2.10	8	198.51.100.20	0	icmp	-	-	0	0	OTH	T	F	0	-	1	84	0	0	(empty)	1
+1700000003.999999	SyntheticICMP6	2001:db8::30	128	2001:db8::40	0	icmp	(empty)	0.000000	0	0	OTH	T	F	0	(empty)	1	104	1	104	(empty)	58
+#close	2023-11-14-22-13-24
