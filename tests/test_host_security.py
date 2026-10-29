@@ -76,11 +76,77 @@ def test_reject_publisher_staleness_and_future_time(age):
 def test_failed_refresh_preserves_valid_cache_and_consumes_daily_slot(manager):
     manager.execute('refresh'); old=(manager.root/'feeds.json').read_bytes()
     manager.now=lambda:NOW+timedelta(hours=25)
-    manager.downloader=lambda source:source_body(source,manager.now()) if source!='ipsum' else b'invalid'
+    manager.downloader=lambda source:b'invalid'
     with pytest.raises(ValueError):manager.execute('refresh')
     assert (manager.root/'feeds.json').read_bytes()==old
     with pytest.raises(ValueError,match='once per day'):manager.execute('refresh')
     assert manager.matches(['8.8.8.8'])
+
+
+@pytest.mark.parametrize('failure', ['stale', 'future', 'malformed', 'nonpublic', 'download'])
+@pytest.mark.parametrize('hours', [25, 72])
+def test_one_failed_source_cannot_starve_other_refreshes_or_renew_itself(manager, failure, hours):
+    manager.execute('refresh')
+    old=(manager.root/'feeds.json').read_bytes()
+    original=json.loads(old)
+    manager.now=lambda:NOW+timedelta(hours=hours)
+    calls=[]
+    def download(source):
+        calls.append(source)
+        if source != 'drop-v6':return source_body(source, manager.now())
+        if failure == 'download':raise OSError('Publisher unavailable')
+        if failure == 'malformed':return b'invalid'
+        if failure == 'nonpublic':return source_body(source,manager.now()).replace(b'2606:4700::/32',b'ff00::/8')
+        return source_body(source, manager.now()-timedelta(days=3) if failure == 'stale' else manager.now()+timedelta(hours=1))
+    manager.downloader=download
+    result=manager.execute('refresh')
+    assert calls==list(SOURCES) and 'Retained drop-v6' in result
+    replacement=json.loads((manager.root/'feeds.json').read_bytes())
+    assert replacement['feeds'][1]==original['feeds'][1]
+    assert all(row['retrieved_at']==stamp(manager.now()) for row in replacement['feeds'] if row['source']!='drop-v6')
+    assert (manager.root/'feeds.previous.json').read_bytes()==old
+    context=manager.reference_context(['8.8.8.8','2606:4700:4700::1111'])
+    retained_fresh=hours<48
+    assert context['state']==('ready' if retained_fresh else 'partial')
+    assert {row['source'] for row in context['matches']}==({'drop-v4','drop-v6','ipsum'} if retained_fresh else {'drop-v4','ipsum'})
+    assert all(row['action_status']=='not_attempted' for row in context['matches'])
+    snapshot=manager.snapshot()
+    assert snapshot['feed_state']==context['state'] and snapshot['action_authority']=='none'
+    assert {row['source']:row['state'] for row in snapshot['feeds']}=={'drop-v4':'ready','drop-v6':'ready' if retained_fresh else 'stale','ipsum':'ready'}
+    with pytest.raises(ValueError,match='once per day'):manager.execute('refresh')
+
+
+def test_partial_refresh_requires_a_validated_fallback(manager):
+    manager.downloader=lambda source:source_body(source) if source!='drop-v6' else b'invalid'
+    with pytest.raises(ValueError,match='Initial admission requires all three'):manager.execute('refresh')
+    assert not (manager.root/'feeds.json').exists()
+    assert manager.reference_context(['8.8.8.8'])['state']=='missing'
+    with pytest.raises(ValueError,match='once per day'):manager.execute('refresh')
+
+
+def test_invalid_old_cache_cannot_supply_a_partial_refresh_fallback(manager):
+    manager.execute('refresh')
+    path=manager.root/'feeds.json'; value=json.loads(path.read_bytes())
+    value['feeds'][1]['url']='https://untrusted.invalid/feed'
+    path.write_text(json.dumps(value)); invalid=path.read_bytes()
+    manager.now=lambda:NOW+timedelta(days=3)
+    manager.downloader=lambda source:source_body(source,manager.now()) if source!='drop-v6' else b'invalid'
+    with pytest.raises(ValueError,match='Initial admission requires all three'):manager.execute('refresh')
+    assert path.read_bytes()==invalid and not (manager.root/'feeds.previous.json').exists()
+    assert manager.snapshot()['feed_state']=='unavailable'
+
+
+def test_private_candidate_file_failure_aborts_refresh_without_fallback(manager, tmp_path):
+    manager.execute('refresh'); old=(manager.root/'feeds.json').read_bytes()
+    manager.now=lambda:NOW+timedelta(days=3)
+    manager.downloader=lambda source:source_body(source,manager.now())
+    path=manager.root/'drop-v6.download'; path.unlink()
+    target=tmp_path/'untouched'; target.write_bytes(b'preserve')
+    path.symlink_to(target)
+    with pytest.raises((OSError,ValueError)):manager.execute('refresh')
+    assert (manager.root/'feeds.json').read_bytes()==old
+    assert target.read_bytes()==b'preserve'
+    assert not (manager.root/'feeds.previous.json').exists()
 
 
 def test_cache_replacement_retains_previous_and_receipts(manager):

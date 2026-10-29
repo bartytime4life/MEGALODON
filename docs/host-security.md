@@ -41,8 +41,17 @@ the normal OS authorization dialog. No MEGALODON feed-refresh timer is created.
   attached to that range.
 
 Refresh is explicit and limited to one attempt per 24 hours, including failures.
-A later failed download or validation leaves the active cache in place. The
-previous valid cache is retained on successful replacement. Source URL, terms,
+A failed source download or validation retains that source's previously validated
+row with its original publisher/retrieval dates, hash and expiry. Other sources
+can refresh independently; expired retained rows still supply no matches. Setup
+labels each source `ready` or `stale`, and aggregate coverage is `partial` when
+only some sources are fresh. A currently fresh retained source remains usable
+until its original expiry. The explicit refresh result names retained sources.
+Initial admission still requires all three valid sources; a missing or invalid
+old cache cannot supply a fallback row. If no source refreshes, or a required row
+has no validated fallback, the active cache stays unchanged. Private-file or
+ownership failures abort the whole transaction. The previous valid cache is
+retained on successful replacement. Source URL, terms,
 publisher date, retrieval date, raw-body SHA-256 and byte size accompany the
 normalized indicators. Latest downloaded bodies are bounded troubleshooting
 candidates and may differ from the active cache after a failed refresh. They
@@ -51,7 +60,7 @@ supply an independent publisher signature or establish indicator accuracy.
 
 References expire 48 hours after the **publisher's** date, rather than receiving
 new freshness merely because they were downloaded. Missing, future-dated,
-malformed, private-address and stale source data cannot activate a new cache.
+malformed, private-address and stale downloaded data cannot replace a source row.
 Matching uses the local cache only and sends no observed addresses to a service.
 Expired sources stop supplying matches. The endpoint inspector displays matches
 separately from sensor findings, with source and expiry. A match does not prove
@@ -70,10 +79,10 @@ Repeated HUD checks reuse at most 32,768 pure address classifications in memory.
 Private-file admission, feed parsing, provenance validation and expiry checks
 still run on every read; no feed result or freshness decision is cached.
 An explicit successful refresh may replace semantically invalid/obsolete cache
-content after all replacement sources validate. That invalid content is not
+content after all three replacement sources validate. That invalid content is not
 promoted to the previous-valid slot; an existing previous-valid cache is retained.
 Filesystem/ownership failures remain refusals, and a failed replacement-source
-validation still leaves the active cache untouched. This does not repair or
+validation without a valid fallback leaves the active cache untouched. This does not repair or
 rewrite an audit/evidence store.
 The closed policy needs review if IANA allocations change; no runtime lookup is
 performed. Sources: [IANA IPv4 special-purpose registry](https://www.iana.org/assignments/iana-ipv4-special-registry/),

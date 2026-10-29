@@ -15,6 +15,15 @@ process.stdin.on('end',async()=>{
  failure=true;await click('support-apps-configure');await settle();assert.match(get('live-interface-name').textContent,/unavailable/);assert.match(get('live-geography-opt-in').textContent,/unavailable/);failure=false;await click('support-config-retry');await settle();assert.equal(requests.length,2);assert.equal(requests[0].opts.method,'GET');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');assert.equal(get('support-apps-configure').attributes['aria-expanded'],'true');assert.equal(get('support-config').hidden,false);
  assert.equal(get('support-config-interface').value,'eth0');assert.equal(get('support-config-nmap-target').value,'127.0.0.1/32');assert.equal(get('support-config-capture-stop').disabled,true);assert.equal(get('support-config-capture-start').disabled,false);
  assert.ok(!JSON.stringify([...nodes.values()]).includes(fixture.token),'configuration nonce never enters DOM');
+ // Mixed reference coverage must label each source, not repeat the aggregate state.
+ const referenceFeed=(source,state)=>({source,state,indicators:1,publisher_at:'2026-10-16T12:00:00Z',expires_at:'2026-10-18T12:00:00Z'});
+ payload={...fixture,host_security:{schema:'megalodon-host-security-v1',feed_state:'partial',message:'Dated reference context only.',feeds:[referenceFeed('drop-v4','ready'),referenceFeed('drop-v6','stale'),referenceFeed('ipsum','ready')]}};
+ await poll(10000);
+ const sourceRows=get('host-security-results').children.map(row=>row.textContent);
+ assert.match(sourceRows[0],/drop-v4:.* · ready$/);assert.match(sourceRows[1],/drop-v6:.* · stale$/);assert.match(sourceRows[2],/ipsum:.* · ready$/);
+ payload={...payload,host_security:{...payload.host_security,feeds:[referenceFeed('drop-v4','unrecognized')]}};
+ await poll(10000);assert.match(get('host-security-results').children[0].textContent,/ · unavailable$/);
+ payload=fixture;
  // A diagnosed capture refusal is actionable, but never grants permissions automatically.
  const beforeDiagnosticPosts=postCount();payload={...fixture,capture:{...fixture.capture,state:'failed',failure_reason:'permission_required',message:'Capture permission required. Configure capture access.'}};await poll(10000);
  assert.equal(get('support-capture-state').textContent,'Capture permission required');assert.match(get('support-capture-message').textContent,/Configure capture access/);assert.equal(postCount(),beforeDiagnosticPosts);

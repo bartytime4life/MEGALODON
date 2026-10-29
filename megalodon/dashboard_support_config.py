@@ -198,7 +198,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       for(const [key,name] of [['audit','Lynis'],['integrity','AIDE']])if(h[key]&&typeof h[key].message==='string'){
         const row=document.createElement('li');row.textContent=name+': '+h[key].message+' · '+time(h[key].checked_at);rows.push(row);
       }
-      for(const feed of h.feeds){const row=document.createElement('li');row.textContent=feed.source+': '+feed.indicators+' indicators · publisher '+time(feed.publisher_at)+' · expires '+time(feed.expires_at)+' · '+h.feed_state;rows.push(row);}
+      for(const feed of h.feeds){const row=document.createElement('li');const freshness=feed.state==='ready'||feed.state==='stale'?feed.state:'unavailable';row.textContent=feed.source+': '+feed.indicators+' indicators · publisher '+time(feed.publisher_at)+' · expires '+time(feed.expires_at)+' · '+freshness;rows.push(row);}
       el('host-security-results').replaceChildren(...rows);
     }
 

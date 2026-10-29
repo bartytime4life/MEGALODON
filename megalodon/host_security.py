@@ -358,8 +358,11 @@ class HostSecurity:
             cache = self._cache()
             if cache:
                 for row in cache['feeds']:
-                    result['feeds'].append({k:v for k,v in row.items() if k != 'entries'} | {'indicators':len(row['entries'])})
-                result['feed_state'] = 'ready' if all(date(r['expires_at']) > self.now() for r in cache['feeds']) else 'stale'
+                    fresh = date(row['expires_at']) > self.now()
+                    result['feeds'].append({k:v for k,v in row.items() if k != 'entries'} |
+                                           {'indicators':len(row['entries']), 'state':'ready' if fresh else 'stale'})
+                active = sum(row['state'] == 'ready' for row in result['feeds'])
+                result['feed_state'] = 'ready' if active == len(SOURCES) else 'partial' if active else 'stale'
                 result['message'] = 'Dated reference context only. A match is not proof of compromise or actor identity.'
         except (OSError, ValueError, TypeError, KeyError, RecursionError, OverflowError):
             result['feed_state'] = 'unavailable'
@@ -430,15 +433,6 @@ class HostSecurity:
                 if attempt and self.now() - date(attempt['attempted_at']) < timedelta(days=1):
                     raise ValueError('Threat refresh is limited to once per day, including failed attempts; the last valid cache is retained.')
                 self._save('refresh.json', dict(attempted_at=stamp(self.now())))
-                feeds = []
-                for source in SOURCES:
-                    raw = self.downloader(source)
-                    write(self.root/(source+'.download'), raw)
-                    try:
-                        feeds.append(parse_feed(source, raw, self.now()))
-                    except (ValueError, KeyError, TypeError) as exc:
-                        raise ValueError(source+': '+str(exc)[:160]) from None
-                value = dict(schema=CACHE_SCHEMA, feeds=feeds)
                 try:
                     old = self._cache()
                 except (ValueError, TypeError, KeyError, RecursionError, OverflowError):
@@ -446,9 +440,39 @@ class HostSecurity:
                     # A completed explicit refresh can replace obsolete data;
                     # private-file/ownership admission still runs in write().
                     old = None
+                previous = {row['source']:row for row in old['feeds']} if old else {}
+                feeds, refreshed, failed = [], [], []
+                for source in SOURCES:
+                    candidate = None
+                    try:
+                        raw = self.downloader(source)
+                    except (OSError, ValueError, http.client.HTTPException):
+                        failed.append(source)
+                    else:
+                        # Private-file failures abort the transaction; they are
+                        # never downgraded to publisher availability failures.
+                        write(self.root/(source+'.download'), raw)
+                        try:
+                            candidate = parse_feed(source, raw, self.now())
+                        except (ValueError, KeyError, TypeError, OverflowError):
+                            failed.append(source)
+                    if candidate is not None:
+                        feeds.append(candidate)
+                        refreshed.append(source)
+                    elif source in previous:
+                        # Preserve identity and original expiry, including an
+                        # expired row that must continue supplying no matches.
+                        feeds.append(previous[source])
+                if not refreshed or len(feeds) != len(SOURCES):
+                    raise ValueError('Threat refresh incomplete ('+', '.join(failed)+
+                                     '); the active cache is unchanged. Initial admission requires all three sources.')
+                value = dict(schema=CACHE_SCHEMA, feeds=feeds)
                 if old:
                     self._save('feeds.previous.json', old)
                 self._save('feeds.json', value)
+                if failed:
+                    return ('Threat references refreshed for '+', '.join(refreshed)+'. Retained '+', '.join(failed)+
+                            ' with original dates; expired sources supply no matches. Matching remains local; no block was applied.')
                 return 'Threat reference cache refreshed. Matching remains local; no block was applied.'
             if action == 'baseline' and os.path.lexists(self.root/'baseline.json'):
                 raise ValueError('An AIDE baseline already exists. Checks never replace the comparison baseline.')
