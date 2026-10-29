@@ -268,6 +268,14 @@ protected analyst responsibility.
 
 ### `zeek-conn-json-v1` / `zeek-conn-tsv-v1`: flows
 
+The separate API-only [8.0.10 declared profile](../contracts/zeek-conn-log/v1/producer/README.md)
+adds exact profile/version/archive/binary/configuration declarations and an
+independently expected metadata-file digest/count. Its private completed-file
+reader returns an in-memory batch and immutable provenance receipt; it does not
+launch Zeek or add a CLI, dashboard or database route. Matching declarations
+and bytes remain operator-unverified producer identity, not native qualification
+or capture completeness. The generic commands retain their existing warnings.
+
 These adapters import logs without invoking Zeek. Each record is a distinct
 `FlowRecord`, never a `PacketEvent`. They require source/destination address and
 port, timestamp, protocol, connection state, original/response packet counts,

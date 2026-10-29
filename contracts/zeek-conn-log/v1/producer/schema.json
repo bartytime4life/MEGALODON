@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://megalodon.local/contracts/zeek-conn-log/v1/producer/schema.json",
-  "title": "MEGALODON Zeek conn.log producer profile — PLACEHOLDER, not owner-selected",
-  "$comment": "PLACEHOLDER SCAFFOLD. Every const below names a stand-in profile/version, not an owner-approved Zeek producer. Issue #327 requires the owner to record an exact producer version, build/package configuration, and field set before any of this is a supported profile. Do not cite this file as evidence that a Zeek producer version has been qualified.",
+  "title": "MEGALODON Zeek 8.0.10 declared conn.log profile; native producer NOT QUALIFIED",
+  "$comment": "One owner-selected 8.0.10 private-build candidate, recorded by PR #519. The closed admission API validates declarations and metadata-file integrity; fixture validation does not attest an installed binary, loaded configuration, native output, capture completeness or owner acceptance. The earlier 0.0.0 placeholder remains in Git history.",
   "$defs": {
     "connAddr": {
       "type": "string",
@@ -64,18 +64,89 @@
         "ip_proto": {"$ref": "#/$defs/connCount"}
       }
     },
+    "profileConnJsonRecord": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/connJsonRecord"
+        },
+        {
+          "required": [
+            "uid",
+            "missed_bytes"
+          ],
+          "properties": {
+            "ts": {
+              "exclusiveMaximum": 4102444800
+            },
+            "duration": {
+              "exclusiveMaximum": 604800
+            },
+            "orig_pkts": {
+              "maximum": 2147483647
+            },
+            "resp_pkts": {
+              "maximum": 2147483647
+            },
+            "ip_proto": {
+              "maximum": 255
+            }
+          }
+        }
+      ]
+    },
     "admission": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["producer_profile", "declared_version"],
+      "required": [
+        "producer_profile",
+        "declared_version",
+        "format",
+        "source_archive_digest",
+        "binary_digest",
+        "configuration_digest",
+        "expected_digest",
+        "expected_records",
+        "source_id",
+        "run_id"
+      ],
       "properties": {
         "producer_profile": {
-          "const": "zeek-PLACEHOLDER-UNSELECTED-conn-json-v1",
-          "$comment": "Not a real profile. Earlier planning mentioned 8.0.10 and 9.0.0 as candidates; issue #327 selects neither."
+          "const": "zeek-8.0.10-conn-json-tsv-v1"
         },
         "declared_version": {
-          "const": "0.0.0",
-          "$comment": "0.0.0 only satisfies megalodon.offline.common.version()'s X.Y.Z format check so this scaffold's fixtures stay exercisable. It is not a real Zeek release and must never be reported as one."
+          "const": "8.0.10"
+        },
+        "source_archive_digest": {
+          "const": "sha256:dbb1cb6c1eac27a8883ee4bd229a378b2f1253fa18e16cdeaaef8a00f124ddf1"
+        },
+        "binary_digest": {
+          "const": "sha256:9a373fa2f32469432273af0c793455af59a34195a88beb9963c8d2e0e648f161"
+        },
+        "configuration_digest": {
+          "const": "sha256:be7b117ee3a229884e6a6289fc3140ae32373df26a7b58b1616e87ce4092b0ed"
+        },
+        "format": {
+          "enum": [
+            "json",
+            "tsv"
+          ]
+        },
+        "expected_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$(?![\\s\\S])"
+        },
+        "expected_records": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$(?![\\s\\S])"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$(?![\\s\\S])"
         }
       }
     }

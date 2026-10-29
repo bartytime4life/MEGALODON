@@ -1,5 +1,22 @@
 # Zeek conn.log producer selection packet — 2026-10-04
 
+## Current declared-profile follow-up — 2026-10-29
+
+The [exact 8.0.10 declaration](../contracts/zeek-conn-log/v1/producer/README.md)
+now names the already-selected private candidate instead of 0.0.0. Its separate
+API refuses profile/version/archive/binary/configuration drift before I/O and
+requires independently expected metadata bytes and record counts. It preserves
+operator-unverified producer identity, returns no partial batch and writes no
+reports or database. This is declared-profile admission and synthetic fixture
+evidence, not native producer qualification or owner acceptance.
+
+The [configuration artifact](../contracts/zeek-conn-log/v1/producer/configuration.json)
+records writer/field/unit choices and non-sensitive observed build-cache options.
+Its identity does not attest loaded settings. Existing generic CLI imports stay
+visibly unverified. Native same-build JSON/TSV and authenticated provenance remain
+missing; #445 stays open. The sections below preserve the historical selection,
+placeholder state and proposed inventory at their original dates.
+
 Historical status on 2026-10-04: **candidate for owner decision; NOT_SELECTED / NOT_QUALIFIED**. The owner selected the documented 8.0.10 build on 2026-10-07; its output remains **NOT_QUALIFIED**. Issue [#445](https://github.com/bartytime4life/MEGALODON/issues/445) remains open. The original packet was based on MEGALODON `main@664ee48b2731b38641b68585fb81913ca81285b5`; the 2026-10-07 inventory was read against `main@fce8dc5ba89624c4420f8956d1a02918a667d19a`. This packet changes no importer, schema admission, fixture assertion, service, or host setting.
 
 ## Owner choice and read-only inventory — 2026-10-07

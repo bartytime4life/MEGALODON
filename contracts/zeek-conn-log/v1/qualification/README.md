@@ -1,8 +1,9 @@
 # Zeek 8.0.10 candidate fixture packet - NOT QUALIFIED
 
 This packet advances [#445](https://github.com/bartytime4life/MEGALODON/issues/445)
-with **synthetic metadata evidence**. It does not replace the placeholder
-[producer admission contract](../producer/schema.json), authenticate an installed
+with **synthetic metadata evidence**. The separate exact declared
+[producer admission contract](../producer/README.md) now pins 8.0.10 and its
+configuration, with a digest/count-bound API. Neither packet authenticates an installed
 producer, or satisfy independent review or owner disposition.
 
 Repository basis: main commit `f492d784879168c6a96037eef5f10db0e3f02550`, tree
@@ -76,7 +77,9 @@ Successful Zeek CLI summaries and offline-run-v1 manifests therefore expose:
 A complete run status describes completed local parsing/report publication only.
 It does not mean a healthy, complete, authenticated or qualified source.
 Syntactically valid unknown producer versions remain operator-declared and
-unverified with the same visible quality. There is no profile-admission API.
+unverified with the same visible quality. The generic CLI does not opt into the
+separate [profile-admission API](../producer/README.md), which requires explicit
+source digests, counts and pinned provenance declarations.
 Malformed input still fails with existing codes. TShark output is unchanged.
 Community ID remains a separate non-authoritative grouping hint; adding its
 field to this closed importer still refuses.
@@ -102,10 +105,11 @@ mutation or firewall action was performed. Test reports use disposable files.
 Reading installed scripts does not authenticate them against the historical
 archive or establish which scripts wrote an existing log.
 
-The local environment disconnected before publication. All three fixture files
+Historical PR #701 validation: the local environment disconnected before publication. All three fixture files
 were recovered with their exact previously tested SHA-256 identities. The final
-projection compatibility change and reconstructed test module require exact-head
-hosted CI; earlier local passes do not establish final-head compatibility.
+projection compatibility change and reconstructed test module subsequently passed
+hosted CI at ccd70f05958bfbb947d196e9f9b3bbffe1bf01e9 (6,605 tests, four skips,
+318 subtests). These are historical results, not validation of later admission changes.
 
 Keep #445 open. The next evidence gate is a same-build native JSON/TSV packet
 with authenticated archive/build/executable/script provenance, actual writer

@@ -92,15 +92,14 @@ python -m pytest tests/test_community_id.py tests/test_offline.py
 
 The original #258 grouping delivery is closed. [#445](https://github.com/bartytime4life/MEGALODON/issues/445)
 tracks exact producer qualification; the [selection packet](zeek-producer-selection-packet-2026-10-04.md)
-records the owner's Zeek 8.0.10 choice. Selection does not replace the placeholder
-profile or complete native evidence.
+records the owner's Zeek 8.0.10 choice. The separate
+[declared-profile admission API](../contracts/zeek-conn-log/v1/producer/README.md)
+now pins that candidate and source expectations. It does not complete native
+evidence or give Community ID any authority.
 
-- Pin one or more owner-approved Zeek `conn.log` producer profiles (for
-  example a qualified 8.0.10 build) as a closed, versioned schema-drift
-  fixture packet; this change does not adopt or reference a specific
-  producer version.
-- Add the unknown-field, package-schema-drift, timestamp, unit, and
-  truncation fixture cases the issue calls for.
+- The declared 8.0.10 profile and digest-bound synthetic drift cases now exist;
+  authenticated same-build output and separate owner acceptance remain open.
+  The historical #258 grouping change itself selected no producer.
 - Decide whether and how `correlate()` output is surfaced through the
   existing offline CLI/report contract (`megalodon/offline/__main__.py`,
   `megalodon/offline/reports.py`); this change intentionally leaves that

@@ -158,7 +158,8 @@ class ZeekCandidatePacketTests(unittest.TestCase):
         self.assertEqual(self.manifest['loaded_scripts_and_writer_settings'], 'UNKNOWN')
         producer = json.loads((PACKET.parent / 'producer' / 'schema.json').read_bytes())
         admission = producer['$defs']['admission']['properties']
-        self.assertTrue(admission['producer_profile']['const'].startswith('zeek-PLACEHOLDER-'))
+        self.assertEqual(admission['producer_profile']['const'], 'zeek-8.0.10-conn-json-tsv-v1')
+        self.assertEqual(admission['declared_version']['const'], '8.0.10')
         self.assertEqual(self.manifest['field_order'], list(zeek.TYPES))
         self.assertEqual(self.manifest['field_types'], list(zeek.TYPES.values()))
         self.assertEqual(self.manifest['negative_case_count'], len(self.rejected))
