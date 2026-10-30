@@ -196,6 +196,35 @@ def test_layered_review_uses_managed_sqlite_and_survives_restart(service):
         restarted.close()
 
 
+@pytest.mark.parametrize('rule,port,count,step', [('REGULAR_INTERVAL',443,5,10),('PORT_53_BURST',53,20,1)])
+def test_timing_review_persists_exact_late_support_and_absolute_times(service,rule,port,count,step):
+    noise=rows(count=30,port=80)
+    support=rows(count=count,port=port)
+    for i,row in enumerate(noise):
+        row['observed_at']=utc(START+i*i)
+        row['data'].update(first_seen=row['observed_at'],source_id=f'noise-{i}')
+    for i,row in enumerate(support):
+        row['observed_at']=utc(START+1800+i*step)
+        row['data'].update(first_seen=row['observed_at'],source_id=f'support-{i}')
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in noise+support])
+    service.process_hour(START)
+    item=next(v for v in service.snapshot()['reviews'] if v['rule']==rule)
+    source_rows,_=service._read(START,START+3600,{'flows'},100)
+    stored={r['id']:r for r in source_rows}
+    assert len(item['evidence_refs'])==count
+    assert all(stored[ref]['data']['source_id'].startswith('support-') for ref in item['evidence_refs'])
+    assert item['facts']['first_seen']==utc(START+1800)
+    assert item['facts']['last_seen']==utc(START+1800+(count-1)*step)
+    assert item['facts']['references_omitted']==0
+    restarted=IntelligenceService(service.evidence,service.knowledge,service.configuration)
+    try:
+        restored=next(v for v in restarted.snapshot()['reviews'] if v['rule']==rule)
+        assert restored['facts']==item['facts'] and restored['evidence_refs']==item['evidence_refs']
+        assert restored['action_status']=='not_attempted'
+    finally:
+        restarted.close()
+
+
 def test_conflicting_flow_identity_records_coverage_without_a_fabricated_review(service):
     values=rows(count=16)
     for index,row in enumerate(values):

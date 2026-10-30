@@ -19,6 +19,10 @@ valid evidence references, and retained segment dependencies. Missing interfaces
 different address spellings, different hours and malformed provenance cannot
 complete a pair. Source labels are retained as declared, not authenticated.
 
+[Timing-review evidence](pattern-evidence-provenance.md) describes how cadence
+and port-53 burst components retain their actual supporting references and
+exclude old connection starts from a newly processed hour.
+
 | Family | Existing signals |
 | --- | --- |
 | Discovery | `PORT_SCAN`, `HOST_FANOUT` |

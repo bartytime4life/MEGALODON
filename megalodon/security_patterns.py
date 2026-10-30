@@ -238,9 +238,15 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             baseline.update(eligible=False,ports={},protocols={},services={},exclusion='Baseline size limit')
             all_gaps.append('An oversized distribution was omitted from learning.')
         baselines.append(baseline)
-        batch=Batch('retained-'+key[3],key[3],tuple(group['records']),count,0,0,'v1','committed evidence')
+        # Poll/update time is not connection-start time. All hourly timing
+        # checks use only observations in this completed, half-open hour.
+        # Keep the reference mapping aligned with the filtered batch.
+        scoped=[(record,ref) for record,ref in zip(group['records'],group['record_refs'])
+                if start<=record.observed_at.timestamp()<end]
+        batch=Batch('retained-'+key[3],key[3],tuple(record for record,_ in scoped),count,0,0,'v1','committed evidence')
+        record_refs=[ref for _,ref in scoped]
         try:checks=[] if group.get('timing_limited') else offline_candidates(batch,
-            fanout_interval=(datetime.fromtimestamp(start,timezone.utc),datetime.fromtimestamp(end,timezone.utc)))
+            timing_provenance=True)
         except OfflineError:
             checks=[];all_gaps.append('Heuristic candidate limit reached; existing findings remain available.')
             baseline['eligible']=False;baseline['exclusion']='Heuristic work limit'
@@ -251,15 +257,33 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             if len(results)>=64:break
             facts = check['evidence']
             references = group['refs']
+            segments = group['segments']
+            check_gaps = all_gaps
             if check['rule']=='HOST_FANOUT':
                 # Numbers refer to this exact bounded batch, not the first
                 # page of the device's evidence. Keep late-hour proofs linked.
                 facts = dict(facts)
-                references = [group['record_refs'][n-1] for n in facts.pop('record_numbers')]
+                references = [record_refs[n-1] for n in facts.pop('record_numbers')]
                 origin = min(record.observed_at for record in batch.records)
                 for offset, stamp in [('first_offset_us','first_seen'),('last_offset_us','last_seen')]:
                     facts[stamp] = (origin + timedelta(microseconds=facts.pop(offset))).isoformat()
-            results.append(candidate(check['rule'],key,start,end,facts,references,group['segments'],gaps=all_gaps))
+            elif check['rule'] in {'REGULAR_INTERVAL','PORT_53_BURST'}:
+                facts = dict(facts)
+                numbers = facts.pop('record_numbers')
+                references = [record_refs[n-1] for n in numbers]
+                # Retain dependencies for the full support set even when the
+                # 24-reference display page omits part of that evidence.
+                segments = {ref.split(':')[0] for ref in references}
+                times = [batch.records[n-1].observed_at.timestamp() for n in numbers]
+                omitted = max(0,len(references)-24)
+                facts.update(first_seen=utc(min(times)),last_seen=utc(max(times)),references_omitted=omitted)
+                if omitted:
+                    check_gaps = [f'{omitted} supporting observations are outside this review\'s 24-reference page.'] + all_gaps
+                if check['rule']=='PORT_53_BURST':
+                    origin = min(record.observed_at.timestamp() for record in batch.records)
+                    window_start = origin + facts.pop('relative_minute')*60
+                    facts.update(window_start=utc(window_start),window_end=utc(window_start+60))
+            results.append(candidate(check['rule'],key,start,end,facts,references,segments,gaps=check_gaps))
         if samples<MIN_SAMPLES or not baseline['eligible']:continue
         known={port for sample in compatible for port in sample['ports']}
         source_start=min(p['start'] for p in compatible)
