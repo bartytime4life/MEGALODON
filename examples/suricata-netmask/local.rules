@@ -1,0 +1,2 @@
+alert ip 192.0.2.0/24 any -> any any (msg:"Synthetic netmask equivalence"; sid:9900101; rev:1;)
+alert ip 192.0.2.0/255.255.255.0 any -> any any (msg:"Synthetic netmask equivalence"; sid:9900102; rev:1;)
