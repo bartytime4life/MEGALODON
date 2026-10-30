@@ -68,6 +68,9 @@ def launcher(tmp_path):
     (package / "__main__.py").write_text(
         "import os, sys, json\nprint(json.dumps([os.getcwd(), sys.argv[1:]]))\n"
     )
+    (package / "local_setup.py").write_text(
+        "import os, sys, json\nprint(json.dumps(['preflight', os.getcwd(), sys.argv[1:]]))\n"
+    )
     return script
 
 
@@ -111,17 +114,19 @@ def test_launcher_explicit_invalid_python_fails_without_fallback(launcher):
     assert "MEGALODON_PYTHON" in result.stderr
 
 
-def test_launcher_rejects_check_options_instead_of_ignoring_them(launcher):
+def test_launcher_forwards_selected_check_options_without_starting_hud(launcher):
+    config="/tmp/settings with ' $(touch NEVER_EXECUTE).toml"
     result = subprocess.run(
-        ["bash", str(launcher), "--check", "--config", "/tmp/other.toml"],
+        ["bash", str(launcher), "--check", "--config", config, "--json"],
         env={**os.environ, "MEGALODON_PYTHON": sys.executable},
         text=True, capture_output=True, timeout=10,
     )
-    assert result.returncode == 2
-    assert "accepts no HUD options" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == ['preflight',str(launcher.parent.parent),['--config',config,'--json']]
+    assert not (launcher.parent.parent/'NEVER_EXECUTE').exists()
 
 
-@pytest.mark.parametrize('args', [['--config', '/SECRET/other.toml'], ['unexpected'], ['--help']])
+@pytest.mark.parametrize('args', [['--offline-run', '/SECRET/report'], ['unexpected'], ['--help']])
 def test_module_preflight_admits_arguments_before_reading_data(tmp_path, args):
     # A malformed store proves help/refusal happens before reader admission.
     data = tmp_path / 'data'
@@ -142,6 +147,6 @@ def test_module_preflight_admits_arguments_before_reading_data(tmp_path, args):
     if args == ['--help']:
         assert 'usage:' in result.stdout
     else:
-        assert 'accepts no options or positional arguments' in result.stderr
+        assert 'accepts only --config FILE, --json and --help' in result.stderr
     assert database.read_bytes() == b'invalid database'
     assert list(data.iterdir()) == [database]

@@ -24,6 +24,12 @@ running-health, permissions, database-readiness or sensor-coverage receipt.
 `runtime_verified` remains false. Readiness and operational acceptance remain
 separate; no valid result starts capture, AI, installation or firewall work.
 
+For an explicit file check followed by read-only admission of its selected core
+audit database, use `python -m megalodon.local_setup --config /absolute/settings.toml --json`.
+That [local preflight](local-pc-setup.md#what-the-source-preflight-establishes)
+reuses this validator and has a separate receipt and exit-code contract. The
+stdin configuration-only command above still performs no database inspection.
+
 ## What it checks
 
 The input is UTF-8 TOML, at most 64 KiB. Empty input, malformed TOML and duplicate

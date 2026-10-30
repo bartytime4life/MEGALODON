@@ -7,12 +7,14 @@ cd -- "$checkout_dir"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'HELP'
-Usage: ./scripts/start-local.sh [--check | HUD options]
+Usage: ./scripts/start-local.sh [--check [--config FILE] [--json] | HUD options]
 
 Launch the local, read-only HUD in this terminal. Open the printed localhost
 address in your browser; press Ctrl+C here to stop it.
 
-  --check                 Check Python, SQLite and the default data path; no server
+  --check                 Check core configuration and its audit store; no server
+  --check --config FILE   Check a selected settings file (at most 64 KiB)
+  --check --json          Print a path-free result; combine with --config if needed
   --port 8788             Use another localhost port
   --config /path/app.toml  Select an existing configuration (HUD options)
   --no-auto-companions    Disable bounded local inventory collection
@@ -53,11 +55,7 @@ fi
 
 if [[ "${1:-}" == "--check" ]]; then
   shift
-  if (( $# )); then
-    echo '--check accepts no HUD options; it checks the default checkout data path.' >&2
-    exit 2
-  fi
-  exec "$local_python" -m megalodon.local_setup
+  exec "$local_python" -m megalodon.local_setup "$@"
 fi
 
 echo "Using Python: $local_python"

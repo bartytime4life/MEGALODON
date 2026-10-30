@@ -289,22 +289,72 @@ their separately documented manual input paths or presence-only status.
 
 ## What the source preflight establishes
 
-`--check` prints the actual Python and SQLite versions, checks Linux, and opens
-the default `data/megalodon.db` through the same read-only admission path as the
-HUD. An existing store must also pass a bounded summary read. A missing store is
-reported as not configured and is left absent. No sample events, migrations,
-tool processes or network listeners are created. The check covers only the
-default checkout data path; it rejects extra arguments to avoid implying that a
-different configuration was checked.
+`--check` validates the core configuration, checks Linux, and opens its core
+audit store through the HUD's existing read-only admission path. An existing
+store must pass a bounded summary read. A missing store is reported as
+`not_configured` and left absent. Without a configuration option, it uses
+built-in defaults and `data/megalodon.db` in this checkout.
 
-The direct entry point, `python -m megalodon.local_setup`, has the same
-default-path-only scope. It rejects options such as `--config` and positional
-arguments before opening a store. Use `python -m megalodon.local_setup --help`
-for help without inspecting data; pass HUD options to the launcher without
-`--check` when you intend to start the HUD with a selected configuration.
+From the reviewed checkout, explicitly select another configuration:
 
-Port availability, sensor health, capture permissions, installed optional-tool
-acceptance and native Windows support are outside this check.
+```bash
+./scripts/start-local.sh --check --config "$HOME/.config/megalodon/settings.toml"
+./scripts/start-local.sh --check --config "$HOME/.config/megalodon/settings.toml" --json
+```
+
+Use the actual settings path if your installation uses `XDG_CONFIG_HOME`.
+Relative configuration and database paths are relative to the checkout because
+the source launcher changes there. The direct module preserves its caller's
+working directory, matching the runtime loader. An absolute `app.db_path`
+avoids ambiguity. This launcher checks source code, not installed package identity.
+
+The direct entry point accepts the same options:
+
+```bash
+python -m megalodon.local_setup --config /absolute/private/settings.toml --json
+python -m megalodon.local_setup --help
+```
+
+Run it with the intended Python environment. After this change is explicitly
+installed, it is also available in that environment; an older installed module
+may still reject the new options. Nothing here installs or updates it.
+`Start-MEGALODON.sh --check` and `megalodon-manage status` retain their separate
+installation-artifact checks.
+
+The selected input must be one regular UTF-8 TOML file of at most 64 KiB.
+Missing files, directories, FIFOs, leaf symlinks, oversized files and changes
+detected during reading are refused. The same in-memory snapshot passes the
+existing [strict configuration validator](config-preflight.md). Unknown fields,
+invalid types, unsupported listener bindings and missing Scapy interfaces fail
+before database inspection. Explicit-file failures never fall back to defaults.
+Help and unsupported/duplicate options are handled before file access. HUD
+options such as `--port` and `--offline-run` are unavailable with `--check`.
+
+Text output includes local paths and a quoted launch command using the selected
+file. `--json` emits one `megalodon-local-preflight-v1` receipt with fixed codes,
+configuration selection (`defaults` or `explicit`) and the core store's status.
+It omits paths, database contents, configuration values and raw exception text.
+This is a local self-report, not authenticated host-health or release evidence.
+Both modes exit **0** when the scoped check passes, including an explicitly
+reported missing store; **2** means refusal or usage error. Invalid CLI syntax
+writes a fixed stderr diagnostic rather than JSON.
+
+| Result code | Meaning |
+| --- | --- |
+| `data_readable` | Core store admission and a bounded read passed |
+| `data_not_configured` | Configuration passed; no core store exists at that path |
+| `configuration_unavailable` | Selected file/path could not be admitted or changed during reading |
+| Configuration-validator code | Inspect the fixed diagnostic in the [configuration guide](config-preflight.md) |
+| `database_unavailable` | Admission or summary read failed; preserve the store and inspect ownership/schema locally |
+| `unsupported_platform` | This check supports Linux only |
+
+No sample events, migrations, tools or listeners are started. This checks the
+selected **core audit store**, not the installed HUD's managed-history catalog.
+`runtime_verified` remains false. Running package identity, port availability,
+sensor health, capture permissions, installed-tool acceptance, AI readiness and
+native Windows support remain outside its scope. Finite byte and operation
+counts do not impose a wall-clock deadline on a slow filesystem; use a normal
+local filesystem for the selected configuration and store.
 
 ## Start support apps
 
