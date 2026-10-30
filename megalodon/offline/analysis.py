@@ -14,6 +14,7 @@ MAX_CANDIDATES = 256
 FANOUT_DESTINATIONS = 16
 FANOUT_WINDOW_US = 60_000_000
 MAX_FANOUT_RECORDS = 20_000
+MAX_PROVENANCE_RECORDS = 20_000
 
 
 def _fanout_windows(batch: Batch, interval: tuple[datetime, datetime] | None):
@@ -106,8 +107,15 @@ def validate_reference(value: dict, batch: Batch) -> set[tuple[str, int]]:
 
 
 def candidates(batch: Batch, reference: dict | None = None, *,
-               fanout_interval: tuple[datetime, datetime] | None = None) -> list[dict]:
-    """No severity escalation, fixed-rule changes, or response authorization."""
+               fanout_interval: tuple[datetime, datetime] | None = None,
+               timing_provenance: bool = False) -> list[dict]:
+    """No severity escalation, fixed-rule changes, or response authorization.
+
+    The retained-hour adapter opts into bounded record numbers for timing
+    checks. Default offline reports keep their existing closed evidence shape.
+    """
+    if timing_provenance and len(batch.records) > MAX_PROVENANCE_RECORDS:
+        raise OfflineError('TIMING_PROVENANCE_RECORD_LIMIT')
     result = []
     labels = host_labels(batch)
     def add(rule: str, evidence: dict) -> None:
@@ -123,13 +131,18 @@ def candidates(batch: Batch, reference: dict | None = None, *,
         for (protocol, port), count in sorted(ports.items()):
             if (protocol, port) not in known:
                 add('NEW_DESTINATION_PORT', {'protocol': protocol, 'port': port, 'records': count})
-    groups = defaultdict(set)
+    groups = defaultdict(dict)
     bursts = Counter()
-    for record, offset in zip(batch.records, offsets(batch)):
+    burst_refs = defaultdict(list)
+    for number, (record, offset) in enumerate(zip(batch.records, offsets(batch)), 1):
         if record.protocol in {'TCP', 'UDP'} and record.dst_port is not None:
-            groups[(record.src_ip, record.dst_ip, record.protocol, record.dst_port)].add(offset)
+            # One representative per distinct time; simultaneous connection
+            # starts cannot inflate the cadence's unique-observation count.
+            groups[(record.src_ip, record.dst_ip, record.protocol, record.dst_port)].setdefault(offset, number)
             if record.dst_port == 53:
                 bursts[(record.src_ip, offset // 60_000_000)] += 1
+                if timing_provenance:
+                    burst_refs[(record.src_ip, offset // 60_000_000)].append(number)
     for (src, dst, protocol, port), times in sorted(groups.items()):
         ordered = sorted(times)
         if len(ordered) < 5:
@@ -141,10 +154,12 @@ def candidates(batch: Batch, reference: dict | None = None, *,
             add('REGULAR_INTERVAL', {'src': labels[src], 'dst': labels[dst],
                                     'protocol': protocol, 'port': port,
                                     'unique_observations': len(ordered), 'median_interval_us': mid,
-                                    'interval_spread_us': spread})
+                                    'interval_spread_us': spread,
+                                    **({'record_numbers': [times[t] for t in ordered]} if timing_provenance else {})})
     for (src, minute), count in sorted(bursts.items()):
         if count >= 20:
-            add('PORT_53_BURST', {'src': labels[src], 'relative_minute': minute, 'records': count})
+            add('PORT_53_BURST', {'src': labels[src], 'relative_minute': minute, 'records': count,
+                                **({'record_numbers': burst_refs[(src, minute)]} if timing_provenance else {})})
     for (src, protocol, port), evidence in _fanout_windows(batch, fanout_interval):
         add('HOST_FANOUT', {'src': labels[src], 'protocol': protocol, 'port': port, **evidence})
     return result
