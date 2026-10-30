@@ -77,3 +77,10 @@ entry pages and changed source contracts; keep old acceptance receipts, research
 versions and original case-study pins intact. The complete catalog distinguishes
 historical/design material from maintained operator guidance. Never copy private
 coordination, real reports, credentials or workstation details into public examples.
+
+## Layered review evaluation
+
+The [offline evaluation guide](https://github.com/bartytime4life/MEGALODON/blob/main/docs/layered-evaluation.md)
+describes the bundled 25-case corpus, separately declared labels, candidate
+workload, reference correctness, stability and cost reports. Synthetic provenance
+checks do not establish installed-PC detection usefulness or false-positive rates.

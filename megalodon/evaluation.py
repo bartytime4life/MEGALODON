@@ -110,6 +110,15 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--source-tree", required=True, action=_Once)
     report.add_argument("--scenario", action=_Once)
 
+    layered = groups.add_parser(
+        "layered-report", allow_abbrev=False,
+        help="Bundled synthetic layered-review evaluation; no live data or actions.",
+    )
+    layered.add_argument("--source-commit", required=True, action=_Once)
+    layered.add_argument("--source-tree", required=True, action=_Once)
+    layered.add_argument("--repeats", type=lambda value: _bounded_decimal(value, 2, 10), action=_Once)
+    layered.add_argument("--benchmark", action="store_true")
+
     workload = groups.add_parser(
         "base-rate",
         allow_abbrev=False,
@@ -137,6 +146,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.group == "detectors":
             result = registry_document()
+        elif args.group == "layered-report":
+            from .layered_evaluation import evaluate_layered
+            result = evaluate_layered(source_commit=args.source_commit, source_tree=args.source_tree,
+                                      repeats=args.repeats if args.repeats is not None else 3,
+                                      benchmark=args.benchmark)
         elif args.group == "corpus-report":
             result = corpus_evidence_report(
                 source_commit=args.source_commit, source_tree=args.source_tree,

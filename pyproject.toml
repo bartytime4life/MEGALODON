@@ -42,4 +42,5 @@ version = {attr = "megalodon.__version__"}
   "corpus-v1/*.jsonl",
   "security-v1/*.json",
   "security-v1/*.sha256",
+  "layered-v1/*.json",
 ]
