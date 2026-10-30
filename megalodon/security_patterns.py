@@ -52,6 +52,7 @@ for _key, _row in WORKFLOWS.items():
     _row.update(id=_key,version=1,prerequisites=('Retained evidence' if _row['permission']=='read' else 'Configured scope, local operator approval and existing OS authorization'))
 
 CONTEXT = {
+    'LAYERED_ACTIVITY': ('Two different signal families occurred for this recorded address and interface in the same hour.', 'Review the signals together. Authorized discovery, scheduled jobs or software changes can explain them; co-occurrence does not prove compromise or independent corroboration.', 'network traffic analysis', 'evidence_summary'),
     'OBSERVED_ACTIVITY': ('This address appeared in committed observations.', 'These are sensor-visible exchanges; observation alone does not establish malicious activity.', 'network traffic analysis', 'evidence_summary'),
     'PORT_SCAN': ('Several ports were probed.', 'Inventory tools and health checks can also probe ports.', 'network service discovery scan', 'device_changes'),
     'HOST_FANOUT': ('One source contacted many destination addresses on the same port within a minute.', 'Inventory scans, service discovery and distributed services can do this. Fanout alone does not establish a scan, lateral movement or successful access.', 'network service discovery', 'device_changes'),
@@ -84,6 +85,7 @@ def candidate(rule, key, start, end, facts, references, segments, *, gaps=(), so
         workflow=workflow,knowledge_query=query,facts=facts,evidence_refs=references[:24],source_segments=sorted(set(segments)),
         missing_information=list(dict.fromkeys(gaps))[:16]+['This sensor cannot establish all traffic between other devices.', 'Traffic patterns do not establish AI involvement.'],
         required_measurements={'PORT_53_BURST':'Per-observation timestamps and destination ports',
+            'LAYERED_ACTIVITY':'Two fixed signal families with source-qualified references in the same completed hour',
             'HOST_FANOUT':'At least 16 distinct unicast destinations on one TCP or UDP port within 60 seconds, using connection start times',
             'REGULAR_INTERVAL':'At least five distinct connection start times',
             'NEW_DESTINATION_PORT':'At least 24 compatible, finding-free hourly samples',

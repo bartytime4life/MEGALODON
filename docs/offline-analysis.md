@@ -1,5 +1,9 @@
 # Offline metadata analysis v1
 
+For completed-hour co-occurrence in the installed HUD, see
+[Layered activity review](layered-activity-review.md). That retained-evidence
+path is separate from the isolated offline command described here.
+
 Status: ● implemented optional Linux analysis path with synthetic regression
 coverage. Closed [issue #25](https://github.com/bartytime4life/MEGALODON/issues/25)
 records one pinned header-only installed-TShark probe. Other versions, arbitrary

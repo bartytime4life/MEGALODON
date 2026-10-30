@@ -170,6 +170,28 @@ def test_compaction_preserves_finding_identity_without_duplicates(service):
     assert 'compaction' in feed['items'][0]['source_role']
 
 
+def test_layered_signals_reach_selected_facts_and_ai_without_response_authority(service):
+    from megalodon.layered_review import layered_reviews
+    from megalodon.security_patterns import candidate
+    packet(service)
+    dependency = next(e['id'] for e in service.evidence._catalog['entries'] if e['category'] == 'packets')
+    end = int(service.clock() // 3600) * 3600
+    start = end - 3600
+    signals = [candidate(rule, ('192.0.2.1', 'fixture0', source, kind), start, end,
+        {}, [dependency + ':1'], [dependency]) for rule, source, kind in [
+            ('HOST_FANOUT', 'synthetic-flow', 'flow'), ('SYN_FLOOD', 'synthetic-packets', 'packet')]]
+    item = layered_reviews(signals, start, end)[0][0]
+    service.intelligence.reviews[item['id']] = item
+    detail = selected(service, 'pattern:' + item['id'])
+    assert detail['finding']['severity'] == 'unknown'
+    assert detail['facts']['recorded_evidence']['signals'] == item['facts']['signals']
+    assert 'not a verified host identity' in detail['facts']['coverage'][0]
+    answer = review(service, detail)
+    assert answer['analysis']['state'] == 'ready'
+    assert answer['analysis']['workflow'] == 'evidence_summary'
+    assert service.defense.calls == []
+
+
 def test_review_uses_exact_selected_facts_and_manual_priority_and_persists(service):
     packet(service)
     detail = selected(service)
