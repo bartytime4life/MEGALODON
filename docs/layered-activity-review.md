@@ -96,6 +96,13 @@ cases that deliberately produce the same review. It opens no sensors, invokes
 no model and applies no host action. Passing it establishes the bounded grouping
 contract; it does not measure operational detection or false-positive rates.
 
+## Evaluation
+
+The [offline evaluation](layered-evaluation.md) adds separately labeled synthetic
+case-hours, candidate workload counts, evidence checks, permutation stability and
+processing-cost reports. Its passing gate is provenance and reproducibility, not
+recognition accuracy.
+
 ## Research basis and remaining acceptance
 
 [NIST SP 800-94](https://www.nist.gov/publications/guide-intrusion-detection-and-prevention-systems-idps)

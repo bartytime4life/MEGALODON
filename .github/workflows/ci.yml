@@ -140,6 +140,23 @@ jobs:
         run: python -m compileall -q megalodon tests
       - name: Run tests
         run: python -m pytest -ra
+      - name: Offline layered evaluation and existing replay contracts
+        run: |
+          set -euo pipefail
+          python tools/replay_security_patterns.py
+          python tools/replay_layered_review.py
+          python tools/replay_pattern_provenance.py
+          python -m megalodon.evaluation layered-report \
+            --source-commit "$(git rev-parse HEAD)" --source-tree "$(git rev-parse 'HEAD^{tree}')" \
+            --repeats 5 --benchmark > "$RUNNER_TEMP/layered-evaluation.json"
+      - name: Retain synthetic layered evaluation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: layered-evaluation-source
+          path: ${{ runner.temp }}/layered-evaluation.json
+          if-no-files-found: error
+          retention-days: 14
       - name: CLI smoke checks
         run: |
           set -euo pipefail
@@ -396,6 +413,8 @@ jobs:
       - name: Run installed default outside checkout
         run: |
           set -euo pipefail
+          EVALUATION_COMMIT="$(git rev-parse HEAD)"
+          EVALUATION_TREE="$(git rev-parse 'HEAD^{tree}')"
           unset PYTHONPATH PYTHONHOME
           export PYTHONNOUSERSITE=1
           mkdir "$RUNNER_TEMP/wheel-run"
@@ -421,3 +440,18 @@ jobs:
           "$RUNNER_TEMP/sdist-venv/bin/megalodon-evaluate" reference verify
           "$RUNNER_TEMP/sdist-venv/bin/megalodon-evaluate" corpus --scenario dns-protocol-gates-v1
           "$RUNNER_TEMP/sdist-venv/bin/megalodon" --version
+          "$RUNNER_TEMP/wheel-venv/bin/megalodon-evaluate" layered-report \
+            --source-commit "$EVALUATION_COMMIT" --source-tree "$EVALUATION_TREE" \
+            > "$RUNNER_TEMP/layered-evaluation-wheel.json"
+          "$RUNNER_TEMP/sdist-venv/bin/megalodon-evaluate" layered-report \
+            --source-commit "$EVALUATION_COMMIT" --source-tree "$EVALUATION_TREE" \
+            > "$RUNNER_TEMP/layered-evaluation-sdist.json"
+          cmp "$RUNNER_TEMP/layered-evaluation-wheel.json" "$RUNNER_TEMP/layered-evaluation-sdist.json"
+      - name: Retain installed synthetic layered evaluations
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: layered-evaluation-installed
+          path: ${{ runner.temp }}/layered-evaluation-*.json
+          if-no-files-found: error
+          retention-days: 14

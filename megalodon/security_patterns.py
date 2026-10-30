@@ -243,6 +243,11 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
         # Keep the reference mapping aligned with the filtered batch.
         scoped=[(record,ref) for record,ref in zip(group['records'],group['record_refs'])
                 if start<=record.observed_at.timestamp()<end]
+        # Arrival order must not choose the supporting page or the representative
+        # of simultaneous starts. This sort is inside the existing group cap;
+        # input truncation/coverage semantics are unchanged.
+        scoped.sort(key=lambda pair: (pair[0].observed_at, pair[1].split(':')[0],
+                                      len(pair[1]), pair[1]))
         batch=Batch('retained-'+key[3],key[3],tuple(record for record,_ in scoped),count,0,0,'v1','committed evidence')
         record_refs=[ref for _,ref in scoped]
         try:checks=[] if group.get('timing_limited') else offline_candidates(batch,
@@ -264,6 +269,9 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
                 # page of the device's evidence. Keep late-hour proofs linked.
                 facts = dict(facts)
                 references = [record_refs[n-1] for n in facts.pop('record_numbers')]
+                # Only the sixteen qualifying destination representatives are
+                # needed to retain this proof, not unrelated group segments.
+                segments = {ref.split(':')[0] for ref in references}
                 origin = min(record.observed_at for record in batch.records)
                 for offset, stamp in [('first_offset_us','first_seen'),('last_offset_us','last_seen')]:
                     facts[stamp] = (origin + timedelta(microseconds=facts.pop(offset))).isoformat()

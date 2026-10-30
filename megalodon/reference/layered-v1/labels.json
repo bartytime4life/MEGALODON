@@ -1,0 +1,107 @@
+{
+  "schema": "megalodon-layered-labels-v1",
+  "basis": "Scenario intent specified separately from detector output; assistant-authored synthetic labels, not independent human adjudication.",
+  "unit": "one synthetic case-hour",
+  "labels": {
+    "authorized_discovery": {
+      "label": "ordinary",
+      "rationale": "Owner-approved asset inventory with no unexplained activity."
+    },
+    "scheduled_health_checks": {
+      "label": "ordinary",
+      "rationale": "Known scheduled monitoring connections."
+    },
+    "authorized_discovery_and_schedule": {
+      "label": "ordinary",
+      "rationale": "Inventory and a scheduled job overlap in the same hour."
+    },
+    "irregular_resolver_burst": {
+      "label": "ordinary",
+      "rationale": "Expected resolver retry burst; no payload evidence of abuse."
+    },
+    "scheduled_dns_connections": {
+      "label": "ordinary",
+      "rationale": "Legitimate periodic resolver work produces two metadata families."
+    },
+    "ordinary_background": {
+      "label": "ordinary",
+      "rationale": "Irregular ordinary HTTPS exchanges."
+    },
+    "suspicious_sweep_and_callback": {
+      "label": "useful",
+      "rationale": "Scenario author stipulates an unauthorized sweep followed by repeated callbacks; intent is withheld from detector."
+    },
+    "suspicious_dns_and_callback": {
+      "label": "useful",
+      "rationale": "Stipulated unauthorized resolver activity with recurring connections; synthetic metadata only."
+    },
+    "suspicious_discovery_and_dns": {
+      "label": "useful",
+      "rationale": "Stipulated unauthorized discovery plus unusual port-53 traffic."
+    },
+    "suspicious_cadence_only": {
+      "label": "useful",
+      "rationale": "A known synthetic callback sequence deserves investigation even without a second signal family."
+    },
+    "jittered_callback_and_sweep": {
+      "label": "useful",
+      "rationale": "Stipulated callbacks with timing jitter exceed the current fixed cadence tolerance."
+    },
+    "dns_bin_boundary_miss": {
+      "label": "useful",
+      "rationale": "Twenty unusual port-53 observations span an arbitrary minute bin; an unrelated early record shifts the bins."
+    },
+    "dns_bin_boundary_control": {
+      "label": "useful",
+      "rationale": "Same unusual port-53 observations and callbacks without the unrelated bin anchor."
+    },
+    "address_reuse_same_hour": {
+      "label": "ordinary",
+      "rationale": "Two authorized machines successively held the same address; lease ownership is withheld."
+    },
+    "address_reuse_other_interface": {
+      "label": "ordinary",
+      "rationale": "Authorized activity occurs on two separate interfaces."
+    },
+    "overlapping_sensor_observations": {
+      "label": "ordinary",
+      "rationale": "Two declared sensors observe the same scheduled DNS traffic; independence is not established."
+    },
+    "incomplete_interface": {
+      "label": "indeterminate",
+      "rationale": "Missing interface prevents a qualified join; not a clean negative."
+    },
+    "incomplete_start": {
+      "label": "indeterminate",
+      "rationale": "Missing flow start prevents timing analysis; investigator truth is unavailable."
+    },
+    "conflicting_connection_identity": {
+      "label": "indeterminate",
+      "rationale": "One producer identity names incompatible endpoints; exclude it without inferring ordinary activity."
+    },
+    "stale_connections_updated_now": {
+      "label": "ordinary",
+      "rationale": "Periodic updates of old scheduled connections are not new activity."
+    },
+    "overlapping_cadence_starts": {
+      "label": "useful",
+      "rationale": "Synthetic sweep and callbacks include two distinct flows at each start time; reference choice must be stable."
+    },
+    "late_fanout_with_noise": {
+      "label": "useful",
+      "rationale": "Late synthetic discovery and callbacks have unrelated earlier evidence in a separate segment."
+    },
+    "reference_page_omissions": {
+      "label": "useful",
+      "rationale": "Thirty recurring synthetic port-53 observations span multiple evidence pages."
+    },
+    "incomplete_hour": {
+      "label": "indeterminate",
+      "rationale": "Declared source loss prevents a defensible binary label despite visible signals."
+    },
+    "empty_hour": {
+      "label": "indeterminate",
+      "rationale": "No observations are not proof of ordinary activity."
+    }
+  }
+}

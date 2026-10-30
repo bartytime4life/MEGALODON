@@ -23,6 +23,10 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 | Evaluate the engineering | [Case studies](wiki/engineering-case-studies.md) | [Evidence index](wiki/evidence-index.md) |
 | Contribute a bounded change | [Contribution guide](../CONTRIBUTING.md) | [Development and validation](wiki/development-and-validation.md) |
 
+For synthetic review workload and provenance measurements, use the
+[offline layered evaluation](layered-evaluation.md). Operational detection accuracy
+remains unmeasured.
+
 ## Read the architecture
 
 ```mermaid

@@ -14,6 +14,12 @@ Use [current state](current-state.md) for the latest reading and
 [Field guide](README.md) · [Visual Wiki](wiki/README.md) ·
 [Three investigation journeys](wiki/investigation-journeys.md)
 
+## October 30 addition
+
+[Offline layered-review evaluation](layered-evaluation.md) adds the bundled
+synthetic corpus, measured limits and an authorized operational acceptance plan.
+The dated catalog count below is retained as its original inventory checkpoint.
+
 ## Newly reconciled entries
 
 | Document | Repository path |

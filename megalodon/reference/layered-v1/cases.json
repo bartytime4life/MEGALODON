@@ -1,0 +1,1037 @@
+{
+  "schema": "megalodon-layered-cases-v1",
+  "start": 1790812800,
+  "cases": [
+    {
+      "id": "authorized_discovery",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "scheduled_health_checks",
+      "blocks": [
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "authorized_discovery_and_schedule",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "irregular_resolver_burst",
+      "blocks": [
+        {
+          "offsets": [
+            600.0,
+            600.05,
+            600.2,
+            600.45,
+            600.8,
+            601.25,
+            601.8,
+            602.45,
+            603.2,
+            604.05,
+            605.0,
+            606.05,
+            607.2,
+            608.45,
+            609.8,
+            611.25,
+            612.8,
+            614.45,
+            616.2,
+            618.05
+          ],
+          "port": 53,
+          "supports": [
+            "PORT_53_BURST"
+          ],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "scheduled_dns_connections",
+      "blocks": [
+        {
+          "offsets": [
+            600,
+            601,
+            602,
+            603,
+            604,
+            605,
+            606,
+            607,
+            608,
+            609,
+            610,
+            611,
+            612,
+            613,
+            614,
+            615,
+            616,
+            617,
+            618,
+            619
+          ],
+          "port": 53,
+          "supports": [
+            "REGULAR_INTERVAL",
+            "PORT_53_BURST"
+          ],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "ordinary_background",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            3,
+            17,
+            41
+          ],
+          "port": 443,
+          "supports": [],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "suspicious_sweep_and_callback",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "suspicious_dns_and_callback",
+      "blocks": [
+        {
+          "offsets": [
+            600,
+            601,
+            602,
+            603,
+            604,
+            605,
+            606,
+            607,
+            608,
+            609,
+            610,
+            611,
+            612,
+            613,
+            614,
+            615,
+            616,
+            617,
+            618,
+            619
+          ],
+          "port": 53,
+          "supports": [
+            "REGULAR_INTERVAL",
+            "PORT_53_BURST"
+          ],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "suspicious_discovery_and_dns",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            600.0,
+            600.05,
+            600.2,
+            600.45,
+            600.8,
+            601.25,
+            601.8,
+            602.45,
+            603.2,
+            604.05,
+            605.0,
+            606.05,
+            607.2,
+            608.45,
+            609.8,
+            611.25,
+            612.8,
+            614.45,
+            616.2,
+            618.05
+          ],
+          "port": 53,
+          "supports": [
+            "PORT_53_BURST"
+          ],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "suspicious_cadence_only",
+      "blocks": [
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "jittered_callback_and_sweep",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            321,
+            330,
+            343
+          ],
+          "port": 443,
+          "supports": [],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "dns_bin_boundary_miss",
+      "blocks": [
+        {
+          "offsets": [
+            0
+          ],
+          "port": 80,
+          "supports": [],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            55.0,
+            55.05,
+            55.2,
+            55.45,
+            55.8,
+            56.25,
+            56.8,
+            57.45,
+            58.2,
+            59.05,
+            60.0,
+            61.05,
+            62.2,
+            63.45,
+            64.8,
+            66.25,
+            67.8,
+            69.45,
+            71.2,
+            73.05
+          ],
+          "port": 53,
+          "supports": [],
+          "segment": 2
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 3
+        }
+      ]
+    },
+    {
+      "id": "dns_bin_boundary_control",
+      "blocks": [
+        {
+          "offsets": [
+            55.0,
+            55.05,
+            55.2,
+            55.45,
+            55.8,
+            56.25,
+            56.8,
+            57.45,
+            58.2,
+            59.05,
+            60.0,
+            61.05,
+            62.2,
+            63.45,
+            64.8,
+            66.25,
+            67.8,
+            69.45,
+            71.2,
+            73.05
+          ],
+          "port": 53,
+          "supports": [
+            "PORT_53_BURST"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "address_reuse_same_hour",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            3000,
+            3010,
+            3020,
+            3030,
+            3040
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "address_reuse_other_interface",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "interface": "fixture1",
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "overlapping_sensor_observations",
+      "blocks": [
+        {
+          "offsets": [
+            600,
+            601,
+            602,
+            603,
+            604,
+            605,
+            606,
+            607,
+            608,
+            609,
+            610,
+            611,
+            612,
+            613,
+            614,
+            615,
+            616,
+            617,
+            618,
+            619
+          ],
+          "port": 53,
+          "supports": [
+            "REGULAR_INTERVAL",
+            "PORT_53_BURST"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            600,
+            601,
+            602,
+            603,
+            604,
+            605,
+            606,
+            607,
+            608,
+            609,
+            610,
+            611,
+            612,
+            613,
+            614,
+            615,
+            616,
+            617,
+            618,
+            619
+          ],
+          "port": 53,
+          "supports": [
+            "REGULAR_INTERVAL",
+            "PORT_53_BURST"
+          ],
+          "sensor": "synthetic-second",
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "incomplete_interface",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "interface": "",
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "incomplete_start",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [],
+          "missing_start": true,
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "conflicting_connection_identity",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [],
+          "identity": "collision",
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "stale_connections_updated_now",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            -100,
+            -90,
+            -80,
+            -70,
+            -60
+          ],
+          "port": 443,
+          "supports": [],
+          "observed_offset": 500,
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "overlapping_cadence_starts",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 3
+        }
+      ]
+    },
+    {
+      "id": "late_fanout_with_noise",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            3,
+            17,
+            41
+          ],
+          "port": 80,
+          "supports": [],
+          "segment": 9
+        },
+        {
+          "offsets": [
+            1800,
+            1801,
+            1802,
+            1803,
+            1804,
+            1805,
+            1806,
+            1807,
+            1808,
+            1809,
+            1810,
+            1811,
+            1812,
+            1813,
+            1814,
+            1815
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            2000,
+            2010,
+            2020,
+            2030,
+            2040
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        }
+      ]
+    },
+    {
+      "id": "reference_page_omissions",
+      "blocks": [
+        {
+          "offsets": [
+            600,
+            601,
+            602,
+            603,
+            604,
+            605,
+            606,
+            607,
+            608,
+            609,
+            610,
+            611,
+            612,
+            613,
+            614,
+            615,
+            616,
+            617,
+            618,
+            619,
+            620,
+            621,
+            622,
+            623,
+            624,
+            625,
+            626,
+            627,
+            628,
+            629
+          ],
+          "port": 53,
+          "supports": [
+            "REGULAR_INTERVAL",
+            "PORT_53_BURST"
+          ],
+          "segment": 1
+        }
+      ]
+    },
+    {
+      "id": "incomplete_hour",
+      "blocks": [
+        {
+          "offsets": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "port": 445,
+          "fanout": true,
+          "supports": [
+            "HOST_FANOUT"
+          ],
+          "segment": 1
+        },
+        {
+          "offsets": [
+            300,
+            310,
+            320,
+            330,
+            340
+          ],
+          "port": 443,
+          "supports": [
+            "REGULAR_INTERVAL"
+          ],
+          "segment": 2
+        }
+      ],
+      "gaps": [
+        "Synthetic source loss: incomplete observation interval."
+      ]
+    },
+    {
+      "id": "empty_hour",
+      "blocks": []
+    }
+  ]
+}
