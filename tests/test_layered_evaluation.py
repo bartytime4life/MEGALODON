@@ -102,6 +102,40 @@ def test_reference_omissions_preserve_full_support_dependencies():
         assert len(candidate['evidence_refs']) == 24
 
 
+@pytest.mark.parametrize('name,rule', [('authorized_discovery', 'HOST_FANOUT'),
+                                    ('scheduled_health_checks', 'REGULAR_INTERVAL'),
+                                    ('reference_page_omissions', 'PORT_53_BURST')])
+def test_repeated_valid_reference_cannot_replace_distinct_support(name, rule):
+    start, _, rows, oracle = scenario(name)
+    result = evaluation._run(rows, start, [])
+    candidate = next(c for c in result['individual'] if c['rule'] == rule)
+    candidate['evidence_refs'] = [candidate['evidence_refs'][0]] * len(candidate['evidence_refs'])
+    errors = evaluation.evidence_errors(result, oracle, start)['errors']
+    assert errors['duplicate_reference'] == 1
+    assert errors['incorrect_distinct_support'] == 1
+
+
+def test_distinct_same_time_flows_cannot_replace_distinct_cadence_times():
+    start, _, rows, oracle = scenario('overlapping_cadence_starts')
+    result = evaluation._run(rows, start, [])
+    candidate = next(c for c in result['individual'] if c['rule'] == 'REGULAR_INTERVAL')
+    # All five references resolve and support cadence, but the first two now
+    # represent the same start time, leaving the last distinct time unproved.
+    candidate['evidence_refs'][-1] = next(ref for ref, entry in oracle.items()
+        if entry['row']['data']['first_seen'] == rows[16]['data']['first_seen']
+        and ref not in candidate['evidence_refs'])
+    errors = evaluation.evidence_errors(result, oracle, start)['errors']
+    assert errors['incorrect_distinct_support'] == 1
+
+
+def test_layered_reference_union_rejects_duplicate_entries():
+    start, _, rows, oracle = scenario('suspicious_sweep_and_callback')
+    result = evaluation._run(rows, start, [])
+    review = result['layered'][0]
+    review['evidence_refs'].append(review['evidence_refs'][0])
+    assert evaluation.evidence_errors(result, oracle, start)['errors']['duplicate_layered_reference'] == 1
+
+
 def test_group_capacity_abstention_and_no_extra_authority_remain():
     start, _, rows, _ = scenario('scheduled_dns_connections')
     values = []

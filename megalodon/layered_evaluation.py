@@ -120,6 +120,8 @@ def evidence_errors(result, oracle, start):
     for candidate in result['individual']:
         rule = candidate['rule']
         refs = candidate['evidence_refs']
+        if len(set(refs)) != len(refs):
+            errors.append('duplicate_reference')
         support = []
         for ref in refs:
             checked += 1
@@ -141,10 +143,10 @@ def evidence_errors(result, oracle, start):
         if rule == 'REGULAR_INTERVAL':
             expected = {ref for ref in expected
                         if oracle[ref]['row']['data']['dst_port'] == candidate['facts']['port']}
-            # One representative per distinct time. Same-time duplicates may
-            # use either reference, but repeated/permuted runs must agree.
+            # Canonical representative per distinct time: segment then numeric
+            # record order. Length ordering avoids parsing untrusted numbers.
             by_time = {}
-            for ref in sorted(expected):
+            for ref in sorted(expected, key=lambda ref: (ref.split(':')[0], len(ref), ref)):
                 by_time.setdefault(oracle[ref]['row']['data']['first_seen'], ref)
             expected = set(by_time.values())
         if rule in RULES:
@@ -155,9 +157,16 @@ def evidence_errors(result, oracle, start):
                 errors.append('incorrect_dependency_set')
             if len(refs) != min(24, len(expected)):
                 errors.append('incorrect_reference_count')
+            # Length alone accepts repeated copies of one qualifying record.
+            # Require a distinct subset of the independently declared proof;
+            # equality follows for untruncated proofs. Omitted pages stay legal.
+            if not set(refs) <= expected or len(set(refs)) != min(24, len(expected)):
+                errors.append('incorrect_distinct_support')
         if candidate['action_status'] != 'not_attempted':
             errors.append('action_authority_changed')
     for review in result['layered']:
+        if len(set(review['evidence_refs'])) != len(review['evidence_refs']):
+            errors.append('duplicate_layered_reference')
         components = []
         for signal in review['facts']['signals']:
             matches = [c for c in result['individual'] if c['device'] == review['device']
