@@ -173,6 +173,29 @@ def test_host_fanout_is_retained_and_restored_for_the_review_workbench(service):
         restarted.close()
 
 
+def test_layered_review_uses_managed_sqlite_and_survives_restart(service):
+    flow_rows = rows()
+    finding_rows = rows(category='findings', source='synthetic-sensor', count=1)
+    finding_rows[0]['data'].update(rule_id='PORT_SCAN', severity='HIGH')
+    for category, values in [('flows', flow_rows), ('findings', finding_rows)]:
+        service.evidence.append_records(category, [{k: r[k] for k in ('observed_at', 'source', 'data')} for r in values])
+    service.process_hour(START)
+    review = next(r for r in service.snapshot()['reviews'] if r['rule'] == 'LAYERED_ACTIVITY')
+    assert {s['rule'] for s in review['facts']['signals']} == {'PORT_SCAN', 'REGULAR_INTERVAL'}
+    assert review['action_status'] == 'not_attempted'
+    assert review['workflow'] == 'evidence_summary'
+    assert len(review['source_segments']) == 2
+    restarted = IntelligenceService(service.evidence, service.knowledge, service.configuration)
+    try:
+        restored = next(r for r in restarted.snapshot()['reviews'] if r['rule'] == 'LAYERED_ACTIVITY')
+        assert restored['evidence_refs'] == review['evidence_refs']
+        assert restored['facts'] == review['facts']
+        service.test_clock[0] += 15 * 86400
+        assert not restarted.snapshot()['reviews']
+    finally:
+        restarted.close()
+
+
 def test_conflicting_flow_identity_records_coverage_without_a_fabricated_review(service):
     values=rows(count=16)
     for index,row in enumerate(values):

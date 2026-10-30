@@ -15,6 +15,7 @@ from .evidence_storage import epoch, utc
 from .endpoint_context import retained_context, context_available, facts_text, _library_references, ContextError
 from .endpoint_hour_counts import read_hour_counts, SOURCE as HOUR_COUNT_SOURCE, COUNT_SOURCES as HOUR_COUNT_SOURCES
 from .local_install import _atomic_write, _regular_owned_file
+from .layered_review import layered_reviews, LIMIT_GAP as LAYERED_LIMIT_GAP
 from .network_review_context import for_pattern as network_context_for_pattern
 from .retained_history import RetainedEvidenceReader
 from .security_patterns import CONTEXT, analyze_hour, inventory_hour, candidate, stable, WORKFLOWS, MAX_RECORDS
@@ -263,6 +264,13 @@ class IntelligenceService(RetainedEvidenceReader):
                     if data.get('state')=='failed' and data.get('error_code') in {'INVALID_REQUEST','INVALID_ARGUMENTS','UNKNOWN_TOOL','INVALID_TARGET'}:
                         candidates.append(candidate('REJECTED_TOOL',('this PC','local',row['source'],'audit'),start,end,
                             dict(error_code=data['error_code']),[row['id']],[row['id'].split(':')[0]]))
+            layered, layered_gaps = layered_reviews(candidates, start, end)
+            # Existing individual findings retain priority within the hourly cap.
+            room = max(0, 64 - len(candidates))
+            if len(layered) > room:
+                layered_gaps.append(LAYERED_LIMIT_GAP)
+            candidates += layered[:room]
+            gaps = list(dict.fromkeys(gaps + layered_gaps))
             # Durable completion checkpoint shares the final compact baseline
             # transaction. A crash can repeat a stable ID, never double-count it.
             checkpoint=('patterns_hour',dict(end=end))
