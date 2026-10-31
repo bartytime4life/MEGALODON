@@ -26,6 +26,15 @@ This state is not model acceptance. Provider containment, artifact provenance,
 owner binding, independent security acceptance, and release/deployment remain
 separate HOLDs.
 
+The [offline-v1 artifacts](fixtures/offline-v1/manifest.json) provide a concrete,
+unsigned synthetic corpus with 28 cases. The companion
+[`qwen_offline_corpus.py`](../../../tools/qwen_offline_corpus.py) checks the
+source pins and exact fixture bytes before component-only replay. See the
+[case catalog and evidence limits](../../../docs/qwen-offline-corpus.md).
+The existing manifest validator's scope remains unchanged: it does not read or
+authenticate fixtures. Neither artifact validation nor component replay is a
+model execution receipt or a signature.
+
 ## Corpus manifest
 
 `manifest-schema.json` describes the frozen, privacy-minimized corpus manifest
