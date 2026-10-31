@@ -54,6 +54,35 @@ sensor corroboration. NAT, reused addresses, overlapping sensors and legitimate
 scheduled work remain alternative explanations. An empty combined-review list
 does not establish safety or complete observation.
 
+### Evidence qualification
+
+New combined reviews record `facts.evidence_qualification` and show fixed
+uncertainty notes in the existing Findings projection:
+
+- `shared_reference_count` counts exact retained references occurring in both
+  selected component pages. Its scope is `selected_reference_pages`, not all
+  observations: pages can omit support, and different references can describe
+  the same traffic. Shared references disclose reused evidence; zero shared
+  references do not establish independent corroboration.
+- `support_time_relation` is `separated`, `overlapping_extents` or `unavailable`.
+  `support_time_gap_seconds` is the nonnegative separation (zero for overlapping
+  extents), or null when unavailable. Only `HOST_FANOUT`, `REGULAR_INTERVAL` and
+  `PORT_53_BURST` currently supply comparable support extents. These span each
+  rule's full qualifying set, including support outside its reference page.
+  Missing, malformed, reversed or out-of-hour extents remain unknown and do not
+  discard the review. Extent overlap does not prove simultaneous activity;
+  separation does not prove address reuse or unrelated activity.
+- `authorization_context` remains `unavailable`. Scenario labels, model prose
+  and an operator's Expected activity feedback are not authenticated job or
+  address-ownership records and cannot grant an authorization exemption.
+
+These are evidence qualifications, not a threat score or a priority ranking.
+No threshold, pair selection, review admission or individual finding changes.
+New review IDs reflect the additional facts; fingerprints and cooldown remain
+unchanged. Historical stored reviews are not rewritten or retroactively qualified.
+The [evaluation comparison](layered-evaluation.md#evidence-qualification-after-pr-713)
+explains what the ordinary examples can and cannot establish.
+
 ## Storage, bounds and authority
 
 - At most 64 hourly candidates are examined and eight combined reviews emitted.

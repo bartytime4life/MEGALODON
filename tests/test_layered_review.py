@@ -8,6 +8,7 @@ from megalodon.config import AISettings
 from megalodon.evidence_storage import utc
 from megalodon.intelligence import explain
 from megalodon.layered_review import layered_reviews, MAX_INPUTS, MAX_REVIEWS, INVALID_GAP, LIMIT_GAP
+from megalodon.layered_review import SHARED_SUPPORT, SEPARATED_SUPPORT, UNKNOWN_TIMING, UNKNOWN_AUTHORIZATION
 from megalodon.security_patterns import candidate
 
 START = 1790726400
@@ -147,3 +148,92 @@ def test_data_and_model_text_cannot_supply_rules_commands_or_response_authority(
 def test_invalid_hour_refused(start, end):
     with pytest.raises(ValueError):
         layered_reviews(pair(), start, end)
+
+
+def timed_pair():
+    items = pair()
+    for item, first, last in zip(items, (0, 3000), (15, 3040)):
+        item['facts'] = dict(first_seen=utc(START + first), last_seen=utc(START + last))
+    return items
+
+
+def test_separated_support_is_disclosed_without_inferring_address_reuse_or_hiding_evidence():
+    items = timed_pair()
+    original = deepcopy(items)
+    review, = layered_reviews(items, START, START + 3600)[0]
+    assert items == original
+    assert review['facts']['evidence_qualification'] == dict(
+        reference_scope='selected_reference_pages', shared_reference_count=0,
+        support_time_relation='separated', support_time_gap_seconds=2985,
+        authorization_context='unavailable')
+    assert SEPARATED_SUPPORT in review['missing_information'][:4]
+    assert UNKNOWN_AUTHORIZATION in review['missing_information'][0]
+    assert review['evidence_refs'] == [f'{SEGMENT}:1', f'{SEGMENT}:2']
+    assert layered_reviews(list(reversed(items)), START, START + 3600)[0] == [review]
+
+
+def test_shared_support_counts_retained_references_without_claiming_complete_equivalence():
+    items = pair()
+    items[1]['evidence_refs'] = items[0]['evidence_refs'][:]
+    items[0]['facts'] = dict(references_omitted=100)
+    review, = layered_reviews(items, START, START + 3600)[0]
+    qualification = review['facts']['evidence_qualification']
+    assert qualification['shared_reference_count'] == 1
+    assert qualification['reference_scope'] == 'selected_reference_pages'
+    assert qualification['support_time_relation'] == 'unavailable'
+    assert qualification['support_time_gap_seconds'] is None
+    assert SHARED_SUPPORT in review['missing_information'][:4]
+    assert review['facts']['independent_corroboration'] is False
+
+
+@pytest.mark.parametrize('facts', [None, [], {}, {'first_seen': True, 'last_seen': 123},
+    {'first_seen': 'bad', 'last_seen': 'bad'},
+    {'first_seen': utc(START - 1), 'last_seen': utc(START + 15)},
+    {'first_seen': utc(START), 'last_seen': utc(START + 3600)},
+    {'first_seen': utc(START + 15), 'last_seen': utc(START)},
+    {'first_seen': 'x' * 41, 'last_seen': utc(START)}])
+def test_invalid_optional_support_extent_retains_review_and_reports_unknown(facts):
+    items = timed_pair(); items[0]['facts'] = facts
+    review, = layered_reviews(items, START, START + 3600)[0]
+    assert review['facts']['evidence_qualification']['support_time_relation'] == 'unavailable'
+    assert UNKNOWN_TIMING in review['missing_information']
+    assert review['action_status'] == 'not_attempted'
+
+
+def test_unsupported_rule_timestamps_are_not_interpreted_as_support_extents():
+    items = timed_pair(); items[0]['rule'] = 'PORT_SCAN'
+    review, = layered_reviews(items, START, START + 3600)[0]
+    assert review['facts']['evidence_qualification']['support_time_relation'] == 'unavailable'
+
+
+def test_overlapping_extents_are_not_a_claim_of_simultaneous_activity():
+    items = timed_pair()
+    items[0]['facts']['last_seen'] = utc(START + 3010)
+    review, = layered_reviews(items, START, START + 3600)[0]
+    qualification = review['facts']['evidence_qualification']
+    assert qualification['support_time_relation'] == 'overlapping_extents'
+    assert qualification['support_time_gap_seconds'] == 0
+    assert review['facts']['attack_sequence_established'] is False
+    assert review['facts']['independent_corroboration'] is False
+
+
+def test_qualification_notes_survive_bounded_coverage_projection_without_losing_individual_notes():
+    items = timed_pair()
+    items[0]['missing_information'] = [f'Synthetic coverage note {n}.' for n in range(18)]
+    original = deepcopy(items)
+    review, = layered_reviews(items, START, START + 3600)[0]
+    assert items == original
+    assert SEPARATED_SUPPORT in review['missing_information'][:4]
+    assert UNKNOWN_AUTHORIZATION in review['missing_information'][0]
+    assert any('inspect the individual signals' in gap for gap in review['missing_information'])
+    assert len(review['missing_information']) <= 18
+
+
+def test_component_coverage_is_visible_alongside_shared_support_and_unknown_timing():
+    items = pair(); items[1]['evidence_refs'] = items[0]['evidence_refs'][:]
+    items[0]['missing_information'].insert(0, 'Synthetic source loss.')
+    review, = layered_reviews(items, START, START + 3600)[0]
+    assert 'Synthetic source loss.' in review['missing_information'][:4]
+    assert SHARED_SUPPORT in review['missing_information'][:4]
+    assert UNKNOWN_TIMING in review['missing_information'][:4]
+    assert len(review['missing_information'][0]) <= 512

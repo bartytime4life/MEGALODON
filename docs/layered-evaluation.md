@@ -132,6 +132,65 @@ about 61 KiB peak traced Python allocations. These are illustrative local sample
 not throughput, RSS, installed-PC or comparative performance acceptance. Each
 CI artifact contains its own exact environment and cost samples.
 
+## Evidence qualification after PR #713
+
+Comparison base: PR #713's merge, `e4738da7ef16aa53fcc4686e6819e45c332dd054`,
+tree `17673411a48f4b02bb3baf93ad6c4e13f5102e96`. The corpus, labels,
+detector rules and correlation selection are unchanged. The additional
+[qualification](layered-activity-review.md#evidence-qualification) reports
+reference-page overlap, full support extents and unavailable authorization
+context without filtering findings or assigning a likelihood/priority score.
+The evaluator checks qualification against fixture observations independently
+of the correlator's timing facts and includes it in repeated/permuted digests.
+
+| Ordinary case producing a review | Reliable metadata available now | Independent context still needed |
+| --- | --- | --- |
+| `authorized_discovery_and_schedule` | Disjoint reference pages; support extents separated by 285 seconds. Input is byte-identical to `suspicious_sweep_and_callback`. | A time/scope-qualified inventory and scheduled-job authorization record. The label's rationale is withheld from the analyzer. |
+| `scheduled_dns_connections` | Both signals cite the same 20 retained observations. Input is byte-identical to `suspicious_dns_and_callback`. | Approved resolver/job context; port 53 and regular timing cannot establish intent or application identity. |
+| `address_reuse_same_hour` | Support extents are separated by 2,985 seconds. This is a temporal gap, not proof of two machines. | Time-qualified address ownership and authorized-task records for both intervals. |
+| `overlapping_sensor_observations` | The selected pair reuses 20 references; extra sensor labels do not authenticate separate vantage points. | Producer/vantage identity and overlap context. Distinct references from two sensors can still describe the same traffic. |
+
+All four remain reviews. The available metadata can distinguish evidence
+relationships, but cannot resolve any of these four into a defensible safe or
+malicious verdict. In particular, suppressing the two byte-identical ordinary
+cases also suppresses their useful counterparts. A temporal cutoff would be an
+unvalidated heuristic: separated support can still belong to one useful sequence.
+No new collection, authorization-file importer or suppression mechanism is added.
+
+| Measurement, unchanged 25-case corpus | PR #713 | Qualified |
+| --- | ---: | ---: |
+| Individual candidates | 38 | 38 |
+| All layered candidates | 12 | 12 |
+| Useful cases with / without layered review | 7 / 3 | 7 / 3 |
+| Ordinary cases with / without layered review | 4 / 6 | 4 / 6 |
+| Indeterminate cases excluded from confusion counts | 5 | 5 |
+| Evidence errors / permutation-sensitive cases | 0 / 0 | 0 / 0 |
+| Checked reference occurrences | 796 | 796 |
+
+Four of twelve reviews now disclose shared selected references (two ordinary,
+two useful). Eight disclose separated support extents (two ordinary, five useful,
+one indeterminate). Every review reports unavailable authorization context.
+These categories describe evidence, not precision improvements. Operational
+accuracy and false-positive rate remain null. All individual candidate objects
+and combined reference/dependency unions are preserved.
+
+A local Linux x86-64 / Python 3.12.3 comparison alternated five fresh processes
+per revision, reversing order each round, with five repeats of all 25 cases per
+process: 625 timed analyzer/correlator calls per revision. The median of process
+wall medians was 0.589 ms at #713 and 0.597 ms qualified (about +1.3%); CPU
+medians were 0.589 and 0.596 ms. Maximum wall observations were 1.195 and 1.498 ms;
+maximum separately traced Python allocations were 61,302 and 61,102 bytes.
+These small shared-runtime samples include scheduling noise and are not a
+throughput, memory-improvement or performance acceptance claim. Costs exclude
+fixture/oracle work, disk I/O and installed-service admission. CI retains its
+own candidate measurements; there is no timing threshold.
+
+Local focused checks and the bounded Findings projection pass. The wider
+managed-storage/Findings suite is environment-blocked: the same 38 fixture setup
+errors reproduce on #713 (untrusted `/tmp` ancestry or read-only home). Guards
+were preserved. Native candidate CI must establish persistence/restoration
+acceptance; synthetic projection checks cannot substitute for it.
+
 ## Integration and remaining boundary
 
 Ordinary source and extracted-sdist pytest suites include this evaluation. The
