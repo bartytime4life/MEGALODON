@@ -27,6 +27,47 @@ LIMIT_GAP = 'Layered review work limit reached; additional signal combinations w
 INVALID_GAP = 'A signal with incomplete or invalid provenance was excluded from layered review.'
 BOUNDARY = ('Signals share a recorded address, interface and hour, not a verified host identity or attack sequence. '
             'Sensors may observe the same traffic; independent corroboration is not established.')
+SHARED_SUPPORT = ('The selected signals cite some of the same retained observations; '
+                  'different rule families do not add independent evidence.')
+SEPARATED_SUPPORT = ('Recorded support extents are separated in time; same-hour grouping does not establish '
+                     'one activity sequence or continuous address ownership.')
+UNKNOWN_TIMING = 'Comparable component support times are unavailable; temporal proximity was not assessed.'
+UNKNOWN_AUTHORIZATION = ('Authorized activity and address ownership context are unavailable; '
+                         'metadata alone cannot distinguish approved work from suspicious activity.')
+TIMED_RULES = {'HOST_FANOUT', 'REGULAR_INTERVAL', 'PORT_53_BURST'}
+
+
+def _support_extent(signal, start, end):
+    """Only these fixed rules record extents of their actual supporting set.
+
+    Missing/invalid optional timing is unknown, never a reason to lose a review.
+    An extent is not continuous activity, verified clock provenance or identity.
+    """
+    facts = signal.get('facts')
+    if signal['rule'] not in TIMED_RULES or type(facts) is not dict:
+        return None
+    try:
+        first, last = epoch(facts['first_seen']), epoch(facts['last_seen'])
+        return (first, last) if start <= first <= last < end else None
+    except (KeyError, TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def _qualification(pair, start, end):
+    shared = len(set(pair[0]['evidence_refs']) & set(pair[1]['evidence_refs']))
+    extents = [_support_extent(v, start, end) for v in pair]
+    relation, gap = 'unavailable', None
+    notes = [SHARED_SUPPORT] if shared else []
+    if all(v is not None for v in extents):
+        gap = round(max(0, max(v[0] for v in extents) - min(v[1] for v in extents)), 6)
+        relation = 'separated' if gap > 0 else 'overlapping_extents'
+        if gap > 0:
+            notes.append(SEPARATED_SUPPORT)
+    else:
+        notes.append(UNKNOWN_TIMING)
+    return dict(reference_scope='selected_reference_pages', shared_reference_count=shared,
+                support_time_relation=relation, support_time_gap_seconds=gap,
+                authorization_context='unavailable'), notes
 
 
 def _text(value, maximum):
@@ -104,13 +145,18 @@ def layered_reviews(items, start, end):
             continue
         refs = sorted({r for v in pair for r in v['evidence_refs']})
         assert len(refs) <= MAX_REFERENCES
+        qualification, qualification_notes = _qualification(pair, start, end)
         facts = dict(window_seconds=3600, relationship='same_address_interface_hour',
             signals=[dict(rule=v['rule'], sensor=v['sensor'], measurement=v['measurement']) for v in pair],
-            independent_corroboration=False, attack_sequence_established=False)
-        source_gaps = list(dict.fromkeys(g for v in pair for g in v['missing_information']))
+            independent_corroboration=False, attack_sequence_established=False,
+            evidence_qualification=qualification)
+        source_gaps = list(dict.fromkeys([*qualification_notes,
+            *(g for v in pair for g in v['missing_information'])]))
         if len(source_gaps) > 15:
-            source_gaps = ['Additional component coverage notes exceed this combined review; inspect the individual signals.'] + source_gaps[:14]
-        source_gaps.insert(0, BOUNDARY)
+            source_gaps = source_gaps[:14] + ['Additional component coverage notes exceed this combined review; inspect the individual signals.']
+        # Keep one component coverage note inside Findings' four-note page,
+        # even when both shared support and unavailable timing need disclosure.
+        source_gaps.insert(0, BOUNDARY + ' ' + UNKNOWN_AUTHORIZATION)
         review = candidate('LAYERED_ACTIVITY', (*key, 'Separate source-qualified signals', 'signal co-occurrence'),
             start, end, facts, refs, segments, gaps=source_gaps,
             source_start=min(epoch(v['source_start']) for v in pair))
