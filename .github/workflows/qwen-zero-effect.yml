@@ -65,7 +65,8 @@ jobs:
             tests/test_model_selection.py \
             tests/test_model_evaluation_manifest.py \
             tests/test_model_evaluation.py \
-            tests/test_qwen_evaluation_input.py
+            tests/test_qwen_evaluation_input.py \
+            tests/test_qwen_offline_corpus.py
       - name: Retain exact-head UNBOUND projections
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -95,6 +96,11 @@ jobs:
           assert readiness["tools_used_or_authorized"] is False
           assert not any(readiness["authority"].values())
           PYVERIFY
+          python -B tools/qwen_offline_corpus.py \
+            > "$RUNNER_TEMP/qwen-offline-components.json"
+          python -B tools/qwen_evaluation_manifest.py \
+            contracts/local-model-evaluation/v1/fixtures/offline-v1/manifest.json \
+            > "$RUNNER_TEMP/qwen-offline-manifest-validation.json"
       - name: Upload bounded exact-head evidence
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -102,6 +108,9 @@ jobs:
           path: |
             ${{ runner.temp }}/qwen-unbound-binding.json
             ${{ runner.temp }}/qwen-unbound-readiness.json
+            ${{ runner.temp }}/qwen-offline-components.json
+            ${{ runner.temp }}/qwen-offline-manifest-validation.json
+            contracts/local-model-evaluation/v1/fixtures/offline-v1/*.json
           if-no-files-found: error
           retention-days: 30
           overwrite: false
