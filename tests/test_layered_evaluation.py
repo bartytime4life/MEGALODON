@@ -216,3 +216,69 @@ def test_same_result_in_fresh_interpreters_and_hash_seeds():
                                 text=True, timeout=30, check=True)
         outputs.append(result.stdout)
     assert outputs[0] == outputs[1]
+
+
+def test_evidence_qualification_exposes_ordinary_ambiguity_without_changing_workload():
+    cases = {c['case']: c for c in report()['cases']}
+    for name in ('scheduled_dns_connections', 'overlapping_sensor_observations'):
+        qualification, = cases[name]['evidence_qualification']
+        assert qualification['shared_reference_count'] == 20
+        assert qualification['support_time_relation'] == 'overlapping_extents'
+        assert qualification['authorization_context'] == 'unavailable'
+    reuse, = cases['address_reuse_same_hour']['evidence_qualification']
+    assert reuse['support_time_gap_seconds'] == 2985
+    approved, = cases['authorized_discovery_and_schedule']['evidence_qualification']
+    assert approved['support_time_gap_seconds'] == 285
+    assert approved == cases['suspicious_sweep_and_callback']['evidence_qualification'][0]
+    assert cases['scheduled_dns_connections']['evidence_qualification'] == cases['suspicious_dns_and_callback']['evidence_qualification']
+    # Full support ends at 629, beyond the displayed 24-reference page.
+    omitted, = cases['reference_page_omissions']['evidence_qualification']
+    assert omitted['shared_reference_count'] == 24
+    assert omitted['reference_scope'] == 'selected_reference_pages'
+
+
+@pytest.mark.parametrize('field,value', [('shared_reference_count', 1),
+    ('support_time_relation', 'overlapping_extents'), ('support_time_gap_seconds', 0),
+    ('reference_scope', 'all_traffic'), ('authorization_context', 'approved')])
+def test_oracle_rejects_unsupported_qualification_claims(field, value):
+    start, _, rows, oracle = scenario('suspicious_sweep_and_callback')
+    result = evaluation._run(rows, start, [])
+    result['layered'][0]['facts']['evidence_qualification'][field] = value
+    assert evaluation.evidence_errors(result, oracle, start)['errors']['incorrect_evidence_qualification'] == 1
+
+
+def test_timing_qualification_uses_full_support_beyond_the_display_page():
+    corpus, _ = evaluation.load_corpus()
+    case = deepcopy(next(c for c in corpus['cases'] if c['id'] == 'reference_page_omissions'))
+    case['blocks'].append(dict(offsets=list(range(625, 641)), port=445,
+                               fanout=True, supports=['HOST_FANOUT'], segment=2))
+    rows, oracle = evaluation.observations(case, corpus['start'])
+    result = evaluation._run(rows, corpus['start'], [])
+    burst = next(c for c in result['individual'] if c['rule'] == 'PORT_53_BURST')
+    assert max(evaluation.epoch(oracle[r]['row']['data']['first_seen'])
+               for r in burst['evidence_refs']) < corpus['start'] + 625
+    qualification = result['layered'][0]['facts']['evidence_qualification']
+    assert qualification['support_time_relation'] == 'overlapping_extents'
+    assert qualification['support_time_gap_seconds'] == 0
+    assert evaluation.evidence_errors(result, oracle, corpus['start'])['errors'] == {}
+
+
+def test_qualification_survives_the_real_selected_findings_projection():
+    from threading import RLock
+    from types import SimpleNamespace
+    from megalodon.findings_review import FindingsReview
+    from megalodon.layered_review import SHARED_SUPPORT, UNKNOWN_AUTHORIZATION
+
+    start, _, rows, _ = scenario('scheduled_dns_connections')
+    review, = evaluation._run(rows, start, [])['layered']
+    # Exercise the bounded projection only; no storage, model or response fixture.
+    service = FindingsReview.__new__(FindingsReview)
+    service.lock, service.feedback = RLock(), {}
+    service.intelligence = SimpleNamespace(lock=RLock(), reviews={review['id']: review},
+                                           feedback={}, _valid=lambda item, sources: True)
+    service._available = lambda: set(review['source_segments'])
+    selected, = service._patterns(start, start + 3600)
+    assert selected['facts']['recorded_evidence']['evidence_qualification'] == review['facts']['evidence_qualification']
+    assert SHARED_SUPPORT in selected['gaps']
+    assert UNKNOWN_AUTHORIZATION in selected['gaps'][0]
+    assert selected['finding']['severity'] == 'unknown'

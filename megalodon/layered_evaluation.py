@@ -178,6 +178,26 @@ def evidence_errors(result, oracle, start):
             errors.append('incorrect_layered_reference_union')
         if set(review['source_segments']) != {s for c in components for s in c['source_segments']}:
             errors.append('incorrect_layered_dependency_union')
+        # Derive timing independently from full fixture support, including
+        # observations omitted from a candidate's displayed reference page.
+        extents = []
+        for component in components:
+            times = [epoch(entry['row']['data']['first_seen']) for entry in oracle.values()
+                     if component['rule'] in entry['supports']
+                     and entry['row']['source'] == component['sensor']
+                     and entry['row']['data']['interface'] == component['interface']
+                     and (component['rule'] != 'REGULAR_INTERVAL'
+                          or entry['row']['data']['dst_port'] == component['facts']['port'])]
+            extents.append((min(times), max(times)))
+        gap = round(max(0, max(v[0] for v in extents) - min(v[1] for v in extents)), 6)
+        expected_qualification = dict(reference_scope='selected_reference_pages',
+            shared_reference_count=len(set(components[0]['evidence_refs']) & set(components[1]['evidence_refs'])),
+            support_time_relation='separated' if gap > 0 else 'overlapping_extents',
+            support_time_gap_seconds=gap, authorization_context='unavailable')
+        actual = review['facts'].get('evidence_qualification')
+        if (actual != expected_qualification or type(actual.get('shared_reference_count')) is not int
+                or type(actual.get('support_time_gap_seconds')) not in {int, float}):
+            errors.append('incorrect_evidence_qualification')
         if (review['facts']['independent_corroboration'] is not False
                 or review['facts']['attack_sequence_established'] is not False
                 or review['action_status'] != 'not_attempted' or review['workflow'] != 'evidence_summary'):
@@ -231,6 +251,7 @@ def evaluate_layered(*, source_commit, source_tree, repeats=3, benchmark=False):
                             observations=len(rows), candidates=len(result['individual']),
                             candidate_rules=sorted(Counter(c['rule'] for c in result['individual']).items()),
                             layered_reviews=len(result['layered']),
+                            evidence_qualification=[c['facts']['evidence_qualification'] for c in result['layered']],
                             layered_before_hourly_cap=result['layered_before_hourly_cap'],
                             layered_omitted_by_hourly_cap=result['layered_omitted_by_hourly_cap'],
                             evidence=validation, gaps=result['gaps'],
@@ -251,6 +272,7 @@ def evaluate_layered(*, source_commit, source_tree, repeats=3, benchmark=False):
                                     indeterminate_excluded=counts['indeterminate']),
                   synthetic_workload=dict(confusion, false_alert_definition='Ordinary case with a layered candidate, not a malicious verdict.',
                                           missed_case_definition='Useful case without a layered candidate; individual findings can still exist.'),
+                  qualification_basis='Selected reference-page overlap and full component support extents; no ranking, suppression, identity or authorization inference.',
                   totals=dict(candidates=sum(r['candidates'] for r in results),
                               layered_reviews=sum(r['layered_reviews'] for r in results),
                               checked_references=sum(r['evidence']['checked_references'] for r in results),
