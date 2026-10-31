@@ -3,6 +3,12 @@
 Status: ● **implemented offline receipt validation; no evaluation executed**  
 Related gate: issue #261
 
+Issue [#446](https://github.com/bartytime4life/MEGALODON/issues/446) now also has a
+[concrete unsigned synthetic component corpus](qwen-offline-corpus.md): 28
+reproducible fixtures across all seven categories, source integrity pins, a
+canonical manifest and scoped offline replay. The manifest stays
+`synthetic_fixture`; component replay is not signed-corpus model execution.
+
 `tools/qwen_evaluation_receipt.py` validates one explicit, privacy-minimized
 receipt:
 
