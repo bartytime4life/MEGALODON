@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');const vm=require('node:vm');
 let input='';process.stdin.on('data',chunk=>input+=chunk);
 process.stdin.on('end',async()=>{
- const {code,fixture}=JSON.parse(input),nodes=new Map(),listeners={},timers=new Map(),requests=[];let seq=0,payload=fixture,responseStatus=200,failure=false,oversized=false,hold=null;
+ const {code,fixture,unbound_model}=JSON.parse(input),nodes=new Map(),listeners={},timers=new Map(),requests=[];let seq=0,payload=fixture,responseStatus=200,failure=false,oversized=false,hold=null;
  function element(tag=''){return {tag,textContent:'',children:[],attributes:{},dataset:{},events:{},value:'',hidden:false,disabled:false,setAttribute(k,v){this.attributes[k]=v;},append(...v){this.children.push(...v);},replaceChildren(...v){this.children=v;},addEventListener(k,v){this.events[k]=v;},focus(){this.focused=true;}};}
  const get=id=>{if(id==='workspace-setup')return null; /* legacy embedding contract */ if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
  const document={hidden:false,getElementById:get,createElement:element,addEventListener:(k,v)=>listeners[k]=v};
@@ -15,6 +15,34 @@ process.stdin.on('end',async()=>{
  failure=true;await click('support-apps-configure');await settle();assert.match(get('live-interface-name').textContent,/unavailable/);assert.match(get('live-geography-opt-in').textContent,/unavailable/);failure=false;await click('support-config-retry');await settle();assert.equal(requests.length,2);assert.equal(requests[0].opts.method,'GET');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');assert.equal(get('support-apps-configure').attributes['aria-expanded'],'true');assert.equal(get('support-config').hidden,false);
  assert.equal(get('support-config-interface').value,'eth0');assert.equal(get('support-config-nmap-target').value,'127.0.0.1/32');assert.equal(get('support-config-capture-stop').disabled,true);assert.equal(get('support-config-capture-start').disabled,false);
  assert.ok(!JSON.stringify([...nodes.values()]).includes(fixture.token),'configuration nonce never enters DOM');
+ // The actual UNBOUND producer must hydrate Setup without allowing provider actions.
+ payload={...fixture,model:unbound_model};await click('support-config-retry');await settle();
+ assert.equal(get('support-config-retry').hidden,true,'UNBOUND is valid status, not a failed GET');
+ assert.equal(get('support-config-interface').disabled,false,'AI hold does not freeze capture choices');
+ assert.equal(get('support-config-tool-directory').disabled,false);
+ assert.equal(get('support-model-authorization').hidden,false);
+ assert.match(get('support-model-saved').textContent,/Saved preference/);
+ assert.match(get('support-model-select').children[0].textContent,/Discovery paused/);
+ assert.equal(get('support-model-loaded').textContent,'Authorization required');
+ assert.doesNotMatch(get('support-model-lifecycle').textContent,/Retrying|Turn on/);
+ assert.match(get('support-model-metrics').textContent,/have not been checked/);
+ for(const id of ['support-model-select','support-model-compute','support-model-timeout','support-model-save','support-model-ready','support-model-load','support-config-qwen','support-config-qwen-setup'])assert.equal(get(id).disabled,true,id);
+ const unboundPosts=postCount(),unboundReads=requests.length;
+ assert.equal(get('support-model-refresh').disabled,false);
+ assert.equal(get('support-model-refresh').textContent,'Check authorization');
+ await click('support-model-refresh');await settle();
+ assert.equal(requests.length,unboundReads+1);assert.equal(requests.at(-1).opts.method,'GET');assert.equal(postCount(),unboundPosts);
+ for(const id of ['support-model-save','support-model-load','support-config-qwen','support-config-qwen-setup'])await click(id);
+ get('support-model-ready').events.change();await settle();assert.equal(postCount(),unboundPosts,'no AI action while unbound');
+ // All shared scanner job states remain valid even though Sensors owns its action.
+ for(const state of ['running','finished','failed']){payload={...fixture,model:unbound_model,job:{...fixture.job,state,action:'clamav_self_check'}};await click('support-config-retry');await settle();assert.equal(get('support-config-retry').hidden,true,state);}
+ // Unknown lifecycle states still fail closed, with a usable read-only retry.
+ payload={...fixture,model:{...unbound_model,lifecycle:{...unbound_model.lifecycle,state:'invented'}}};await click('support-config-retry');await settle();
+ assert.equal(get('support-config-retry').hidden,false);assert.equal(get('support-config-capture-start').disabled,true);
+ assert.match(get('support-model-select').children[0].textContent,/unavailable/);
+ assert.equal(get('support-model-loaded').textContent,'Loaded state unavailable');
+ assert.equal(get('support-model-refresh').textContent,'Retry model status');assert.equal(get('support-model-refresh').disabled,false);
+ payload=fixture;await click('support-model-refresh');await settle();assert.equal(requests.at(-1).opts.method,'GET');assert.equal(postCount(),unboundPosts);assert.equal(get('support-config-capture-start').disabled,false);
  // Mixed reference coverage must label each source, not repeat the aggregate state.
  const referenceFeed=(source,state)=>({source,state,indicators:1,publisher_at:'2026-10-16T12:00:00Z',expires_at:'2026-10-18T12:00:00Z'});
  payload={...fixture,host_security:{schema:'megalodon-host-security-v1',feed_state:'partial',message:'Dated reference context only.',feeds:[referenceFeed('drop-v4','ready'),referenceFeed('drop-v6','stale'),referenceFeed('ipsum','ready')]}};

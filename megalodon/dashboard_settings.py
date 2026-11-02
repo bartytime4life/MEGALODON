@@ -278,7 +278,7 @@ SETTINGS_JS = r'''
   const value=event.detail;if(!value)return;
   document.getElementById('settings-traffic-summary').textContent={idle:'Not capturing',stopped:'Stopped',starting:'Starting',running:'Capturing',failed:'Needs attention'}[value.capture?.state]||'Unavailable';
   const model=value.model,lifecycle=model?.lifecycle;
-  document.getElementById('settings-model-summary').textContent=lifecycle?.state==='ready'&&model.loaded===true?'Loaded':lifecycle?.state==='retrying'?'Reconnecting':model?.loaded===true?'Loaded':model?.loaded===false?'Not loaded':'Not checked';
+  document.getElementById('settings-model-summary').textContent=model?.model_state==='unbound'||lifecycle?.state==='unbound'?'Authorization required':lifecycle?.state==='ready'&&model.loaded===true?'Loaded':lifecycle?.state==='retrying'?'Reconnecting':model?.loaded===true?'Loaded':model?.loaded===false?'Not loaded':'Not checked';
   document.getElementById('settings-model-name').textContent=model?.model||'No saved model';
  });
  function apps(){const count=heartbeatState.report?.tools.filter(tool=>tool.installed==='yes').length;document.getElementById('settings-apps-summary').textContent=heartbeatStale()?'Status unavailable':count===undefined?'Checking…':count+' installed';}
