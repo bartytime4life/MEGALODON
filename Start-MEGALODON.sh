@@ -10,9 +10,10 @@ case "${1:-}" in
     echo 'Double-click this script and choose Run in Terminal, or run ./Start-MEGALODON.sh.'
     echo 'The first run installs MEGALODON. Later runs reopen the local HUD.'
     echo 'Use --update to install this checkout again, or --check to check the installation.'
+    echo 'If Linux hides process records at the release limit, use --update-with-process-check for a read-only administrator check.'
     exit 0 ;;
-  ''|--update|--check) ;;
-  *) echo 'Use no options, --update, --check, or --help.' >&2; exit 2 ;;
+  ''|--update|--update-with-process-check|--check) ;;
+  *) echo 'Use --help to see supported options.' >&2; exit 2 ;;
 esac
 if (( $# > 1 )); then echo 'Only one option is accepted.' >&2; exit 2; fi
 if [[ "$(uname -s)" != Linux || "$EUID" == 0 ]]; then
@@ -34,7 +35,10 @@ fi
 if [[ "${1:-}" == --check ]]; then
   exec "$local_python" -E -s -m megalodon.local_install status
 fi
-if [[ "${1:-}" == --update ]] || ! "$local_python" -E -s -m megalodon.local_install status --json >/dev/null 2>&1; then
+if [[ "${1:-}" == --update-with-process-check ]]; then
+  echo 'Checking protected process references. Only system inspection tools use administrator access.'
+  "$local_python" -E -s -m megalodon.local_install install --source "$checkout_dir" --inspect-protected
+elif [[ "${1:-}" == --update ]] || ! "$local_python" -E -s -m megalodon.local_install status --json >/dev/null 2>&1; then
   echo 'Installing MEGALODON for this user…'
   "$local_python" -E -s -m megalodon.local_install install --source "$checkout_dir"
 fi

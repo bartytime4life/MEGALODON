@@ -669,22 +669,26 @@ def _restore_active(paths: InstallPaths, old: Path | None) -> None:
             pass
 
 
-def install(source: Path, paths: InstallPaths | None = None) -> dict[str, object]:
+def install(source: Path, paths: InstallPaths | None = None, *, inspect_protected=False) -> dict[str, object]:
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     source, pyproject = _validated_source(source)
     _prepare_directories(selected)
     with _mutation_lock(selected):
-        return _install_selected(source, pyproject, selected)
+        return _install_selected(source, pyproject, selected, inspect_protected=inspect_protected)
 
 
-def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths) -> dict[str, object]:
+def _install_selected(source: Path, pyproject: bytes, selected: InstallPaths, *, inspect_protected=False) -> dict[str, object]:
     from .install_lifecycle import service_running, service_action, verify_running, retire_releases
     existing = _load_manifest(selected)
     if existing is not None and len(existing["releases"]) >= MAX_RETAINED_RELEASES:
         existing = retire_releases(selected, existing)
+        if len(existing['releases']) >= MAX_RETAINED_RELEASES and inspect_protected:
+            from .release_inspection import authorize
+            authorize()
+            existing = retire_releases(selected, existing, inspect_protected=True)
         if len(existing['releases']) >= MAX_RETAINED_RELEASES:
-            raise InstallError("Retained-release limit reached; old releases are in use or process access is uncertain. Review release retention before upgrading")
+            raise InstallError("Retained-release limit reached; old releases are in use or process access is uncertain. For protected process checks, see Start-MEGALODON.sh --help")
     previous_bytes: dict[str, bytes | None] = {}
     modes = _artifact_modes()
     for name, path in _artifact_paths(selected).items():
@@ -915,6 +919,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     install_parser = commands.add_parser("install", help="install or upgrade from a reviewed checkout")
+    install_parser.add_argument('--inspect-protected', action='store_true', help='allow read-only sudo checks at the retained-release limit')
     install_parser.add_argument("--source", type=Path, required=True)
     status_parser = commands.add_parser("status", help="check the installed release and desktop artifacts")
     status_parser.add_argument("--json", action="store_true", help="print the bounded status receipt as JSON")
@@ -932,7 +937,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "install":
-            result = install(args.source)
+            result = install(args.source, inspect_protected=args.inspect_protected)
             print(f"MEGALODON {result['version']} is installed for this user.")
             print("Open MEGALODON from your application menu, or run megalodon-hud.")
             print("Use ~/.local/bin/megalodon-manage status to check the installation.")

@@ -498,6 +498,20 @@ administrative browser denial; no alternate browser was used to bypass it.
 
 ## Verified upgrades
 
+If the updater reports **Retained-release limit reached**, run
+`python3 -I -B tools/diagnose_release_retention.py` from the checkout in your
+desktop terminal. It prints process names and IDs, without printing their arguments.
+A permission error can occur for a healthy login service.
+
+If Linux denied inspection, run `./Start-MEGALODON.sh --update-with-process-check`
+as your usual desktop user. At the 40-copy limit, after ordinary cleanup cannot
+free a slot, sudo may ask for your password. Only fixed system find and grep
+commands gain permission to check references in the otherwise inaccessible
+same-user process. They return match indicators. The installer itself runs as
+you. Recovery frees at most one verified unused slot, keeps current, rollback
+and recent copies, and stops if inspection is still uncertain. The application
+then follows its normal verified update and launch procedure.
+
 Run `./Start-MEGALODON.sh --update` from the reviewed checkout. The installer
 builds and verifies a private release before stopping the managed user service.
 Stopping flushes pending evidence. It then activates, restarts and compares the
