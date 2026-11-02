@@ -75,4 +75,7 @@ def snapshot(configuration, companions):
             'Saved host evidence is unavailable; review Host findings in Setup.' if unavailable else
             saved['message'] if saved else 'Use Host security in Setup to run an explicit local check.',
             saved['checked_at'] if saved else None,metrics)
-    return dict(schema='megalodon-support-workflows-v1',observed_at=now(),mode='background',tools=tools)
+    value = dict(schema='megalodon-support-workflows-v1',observed_at=now(),mode='background',tools=tools)
+    if hasattr(configuration, 'scanner_check_status'):
+        value['scanner_check'] = configuration.scanner_check_status()
+    return value

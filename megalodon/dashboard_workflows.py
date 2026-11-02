@@ -50,6 +50,16 @@ def compose_workflows(html: str) -> str:
     local = before + overview + '''
     <nav class="workflow-actions" aria-label="Background tool controls"><a class="companion-button" href="#support-apps-title">Start background tools</a><a href="#support-config-title" id="workflows-configure">Configure apps</a><a href="#live-globe-title">Monitoring start / stop</a><button type="button" id="workflows-refresh">Refresh status</button></nav>
     <p class="workflow-explainer">Normal startup uses background commands. No Wireshark, Zenmap or ClamTk windows open.</p>
+    <section class="scanner-check" aria-labelledby="scanner-check-title">
+      <h3 id="scanner-check-title">Is my file scanner working?</h3>
+      <p>ClamAV scans a copy of the harmless EICAR test file and an ordinary file. This checks the scanner installed on this PC.</p>
+      <details><summary>Get the test file first</summary><p>Save the official 68-byte <strong>eicar.com</strong> file in your Downloads folder.
+      If your browser or another security tool blocks it, leave that protection on. ClamAV needs the file to complete this check.
+      <a href="https://www.amtso.org/feature-settings-check-download-of-malware/" target="_blank" rel="noreferrer noopener">AMTSO instructions (opens a new tab)</a></p></details>
+      <button type="button" id="scanner-check-run" disabled>Check my file scanner</button>
+      <p id="scanner-check-status" role="status">Waiting for local scanner status.</p>
+      <p id="scanner-check-counts"></p><small id="scanner-check-version"></small>
+    </section>
     <div class="integration-controls workflow-filters">''' + filters + '''</div>
     <p class="reference-status workflow-status" id="integrations-status" role="status" aria-live="polite" aria-atomic="true">Checking local workflow status…</p>
     ''' + cards + '''
@@ -61,6 +71,9 @@ def compose_workflows(html: str) -> str:
 
 
 WORKFLOWS_CSS = r'''
+.scanner-check {margin:1rem 22px;padding:1rem 1.15rem;border:1px solid #355361;border-radius:10px;background:#102631;color:#d7e7eb;overflow-wrap:anywhere}
+.scanner-check h3,.scanner-check p {margin:.3rem 0}.scanner-check details {margin:.65rem 0}.scanner-check a {color:#a9ece5}
+.scanner-check button {min-height:44px;margin:.4rem 0}.scanner-check small {color:#bdd0db}
 .workflow-actions { display:flex; flex-wrap:wrap; gap:.8rem 1.2rem; align-items:center; padding:.4rem 22px 0; }
 .workflow-actions a { color:#a9ece5; font-size:.9rem; text-underline-offset:3px; }
 .workflow-actions button { margin-left:auto; min-height:44px; }
@@ -119,6 +132,28 @@ WORKFLOWS_JS = r'''
   const text=(value,max)=>typeof value==='string'&&value.length<=max&&!/[\x00-\x1f\x7f]/.test(value);
   const stamp=value=>text(value,40)&&/Z$/.test(value)&&Number.isFinite(Date.parse(value));
   const time=value=>new Date(value).toISOString().replace('T',' ').replace('.000Z',' UTC');
+  let submittingCheck=false, checkError='', acceptedCheck=null;
+  function validCheck(c){
+    if(!c||!['idle','running','recognized','missed','unavailable'].includes(c.state)||!text(c.message,512))return false;
+    if(c.state==='idle')return c.run_id===null&&c.finished_at===null;
+    if(typeof c.run_id!=='string'||!/^[0-9a-f]{16}$/.test(c.run_id))return false;
+    if(c.state==='running')return c.finished_at===null;
+    if(!stamp(c.finished_at)||(c.engine!=null&&!/^\d+(?:\.\d+){1,3}$/.test(c.engine))
+       ||(c.database!=null&&!/^[1-9]\d{0,9}$/.test(c.database)))return false;
+    const count=x=>x==null||(x.scanned===1&&[0,1].includes(x.matched));
+    if(!count(c.clean)||!count(c.test))return false;
+    if(c.state==='recognized'||c.state==='missed')return c.clean?.matched===0&&c.test?.matched===(c.state==='recognized'?1:0);
+    return true;
+  }
+  function showCheck(){
+    const c=view.payload?.scanner_check, current=fresh()&&validCheck(c);
+    byId('scanner-check-run').disabled=!current||view.pending||submittingCheck||acceptedCheck||c?.state==='running';
+    byId('scanner-check-status').textContent=checkError||(submittingCheck?'Requesting a check…':acceptedCheck?'Check requested. Waiting for the result…':
+      current?c.message:view.failed?'Scanner status unavailable. Refresh to try again.':'Waiting for local scanner status.');
+    const report=current&&!submittingCheck&&!acceptedCheck&&!checkError&&c.finished_at;
+    byId('scanner-check-counts').textContent=report?[['Ordinary file',c.clean],['Test file',c.test]].filter(([,x])=>x).map(([label,x])=>label+': '+x.matched+' of '+x.scanned+' flagged').join(' · '):'';
+    byId('scanner-check-version').textContent=report?['Last check '+time(c.finished_at),c.engine?'ClamAV '+c.engine:'',c.database?'Signatures '+c.database:''].filter(Boolean).join(' · '):'';
+  }
   function checked(value){
     if(!value||value.schema!=='megalodon-support-workflows-v1'||value.mode!=='background'||!stamp(value.observed_at)||Date.parse(value.observed_at)>Date.now()+5000||!Array.isArray(value.tools)||value.tools.length>12)throw Error('Invalid workflow status');
     const seen=new Set();for(const row of value.tools){if(!row||!ids.includes(row.id)||seen.has(row.id)||!text(row.name,80)||!row.name.length||(!Object.hasOwn(labels,row.state)||row.state==='saved_result')||(row.review_required!==undefined&&typeof row.review_required!=='boolean')||!text(row.message,512)||(row.updated_at!==null&&(!stamp(row.updated_at)||Date.parse(row.updated_at)>Date.parse(value.observed_at)+5000))||!Array.isArray(row.metrics)||row.metrics.length>6||!row.metrics.every(metric=>metric&&text(metric.label,64)&&metric.label.length>0&&Number.isFinite(metric.value)&&text(metric.unit,32)))throw Error('Invalid workflow row');seen.add(row.id);}
@@ -154,6 +189,7 @@ WORKFLOWS_JS = r'''
   renderIntegrationMap=function(){
     const payload=view.payload,query=byId('integrations-query').value.slice(0,160).trim().toLowerCase(),filter=byId('integrations-status-filter').value;
     overview(filter);
+    showCheck();
     const rows=payload?payload.tools.filter(row=>matches(row,filter)&&(!query||[names[row.id],roles[row.id],row.name,row.message,displayLabel(row),...row.metrics.map(metric=>metric.label)].some(value=>value.toLowerCase().includes(query)))):[];
     const children=rows.map(card);if(!children.length)children.push(textNode('p',payload?(payload.tools.length?'No tools match these filters.':'No tool observations were returned.'):(view.failed?'Local workflow status is unavailable. Refresh to try again.':'Checking local workflow status…'),'integration-empty'));
     byId('integrations-cards').replaceChildren(...children);byId('integrations-cards').setAttribute('aria-busy',view.pending?'true':'false');
@@ -165,10 +201,32 @@ WORKFLOWS_JS = r'''
   };
   function cancel(){if(view.timer!==null)clearTimeout(view.timer);view.timer=null;}
   function schedule(){cancel();if(visible())view.timer=setTimeout(read,5000);}
-  async function body(response){if(Number(response.headers.get('content-length'))>65536)throw Error('Response too large');if(response.body&&response.body.getReader){const reader=response.body.getReader(),parts=[];let length=0;try{while(true){const part=await reader.read();if(part.done)break;length+=part.value.byteLength;if(length>65536)throw Error('Response too large');parts.push(part.value);}}catch(error){await reader.cancel();throw error;}const bytes=new Uint8Array(length);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.byteLength;}return JSON.parse(new TextDecoder().decode(bytes));}const content=await response.text();if(new TextEncoder().encode(content).length>65536)throw Error('Response too large');return JSON.parse(content);}
-  async function read(){if(view.pending||!visible())return;cancel();view.pending=true;renderIntegrationMap();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);try{const response=await fetch('/api/support-workflows',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'X-Megalodon-Check':'1'},signal:controller.signal});if(!response.ok)throw Error('Unavailable');view.payload=checked(await body(response));view.failed=false;view.lastAt=Date.now();}catch(_){view.failed=true;}finally{clearTimeout(timeout);view.pending=false;renderIntegrationMap();schedule();}}
+  async function body(response, limit=65536){if(Number(response.headers.get('content-length'))>limit)throw Error('Response too large');if(response.body&&response.body.getReader){const reader=response.body.getReader(),parts=[];let length=0;try{while(true){const part=await reader.read();if(part.done)break;length+=part.value.byteLength;if(length>limit)throw Error('Response too large');parts.push(part.value);}}catch(error){await reader.cancel();throw error;}const bytes=new Uint8Array(length);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.byteLength;}return JSON.parse(new TextDecoder().decode(bytes));}const content=await response.text();if(new TextEncoder().encode(content).length>limit)throw Error('Response too large');return JSON.parse(content);}
+  async function read(){if(view.pending||submittingCheck||!visible())return;cancel();view.pending=true;renderIntegrationMap();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);try{const response=await fetch('/api/support-workflows',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'X-Megalodon-Check':'1'},signal:controller.signal});if(!response.ok)throw Error('Unavailable');view.payload=checked(await body(response));if(acceptedCheck){if(view.payload.scanner_check?.run_id!==acceptedCheck)checkError='The requested result is no longer current. Refresh status to see the latest check.';acceptedCheck=null;}view.failed=false;view.lastAt=Date.now();}catch(_){view.failed=true;}finally{clearTimeout(timeout);view.pending=false;renderIntegrationMap();schedule();}}
   function sync(){cancel();if(visible())read();else renderIntegrationMap();}
-  byId('workflows-refresh').addEventListener('click',read);
+  async function checkScanner(){
+    if(!visible()||byId('scanner-check-run').disabled||submittingCheck)return;
+    cancel();submittingCheck=true;checkError='';showCheck();
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
+    const options={credentials:'same-origin',cache:'no-store',signal:controller.signal};
+    try{
+      const session=await fetch('/api/support-config',{...options,headers:{'X-Megalodon-Check':'1'}});
+      if(!session.ok)throw Error();
+      const token=(await body(session,1048576)).token;
+      if(typeof token!=='string'||!/^[a-f0-9]{32}$/.test(token))throw Error();
+      const reply=await fetch('/api/support-config',{...options,method:'POST',headers:{'Content-Type':'application/json','X-Megalodon-Config-Token':token},body:JSON.stringify({action:'clamav_self_check'})});
+      if(reply.status===409)checkError='Another local check is running. Try again when it finishes.';
+      else if(reply.status!==202)throw Error();
+      else{
+        const id=(await body(reply,1048576)).scanner_check_id;
+        if(typeof id!=='string'||!/^[0-9a-f]{16}$/.test(id))throw Error();
+        acceptedCheck=id;
+      }
+    }catch(_){checkError='Could not confirm the request. Refresh status to see whether the check started.';}
+    finally{clearTimeout(timeout);submittingCheck=false;showCheck();await read();}
+  }
+  byId('scanner-check-run').addEventListener('click',checkScanner);
+  byId('workflows-refresh').addEventListener('click',()=>{checkError='';acceptedCheck=null;read();});
   for(const key of overviewFilters)byId('workflows-show-'+key).addEventListener('click',()=>{if(byId('workflows-show-'+key).disabled)return;byId('integrations-status-filter').value=key;renderIntegrationMap();});
   byId('workflows-configure').addEventListener('click',()=>{if(window.megalodonSupportConfiguration)window.megalodonSupportConfiguration.open();});
   document.addEventListener('visibilitychange',sync);
