@@ -152,6 +152,47 @@ parsed. Running without the option still gives the original sender-only report.
 This is a supervisor-issued **fixture** grant. No request is forwarded or executed,
 and no production job, TCP connection, firewall decision or model is involved.
 
+### Which process holds a TCP socket at observation time?
+
+From the repository root on Linux, run this as your ordinary user:
+
+```bash
+python3 -I -B tools/replay_linux_tcp_holder.py
+```
+
+The supervisor binds a listener and a client to ephemeral ports on IPv4
+loopback. A child connects the client. The observer closes its client copy and
+keeps the accepted peer. No application bytes are sent over TCP. Separate
+local control messages hold the child at three checkpoints. The observer only
+examines two designated descriptor slots in that child.
+
+| Checkpoint | Original slot | Spare slot | Independent control |
+| --- | --- | --- | --- |
+| Open | Observed holder | Unknown | The established client matches the fixture's initial socket inode. |
+| Moved | Unknown | Observed holder | The same TCP socket stays established. The original slot now holds an unrelated Unix socket. |
+| Closed | Unknown | Unknown | The child stays alive after closing the last client descriptor. |
+
+Each observation reads both `/proc/<child>/fd` links before and after an exact
+`SOCK_DIAG_BY_FAMILY` kernel query. The request names the loopback address and
+port at both ends and requests no table dump. Only a stable link matching the
+established socket inode qualifies. The first reply supplies the kernel socket
+cookie for subsequent queries. The TCP fixture's initial inode is an additional
+test check; it cannot supply a missing observation. See [Linux socket
+diagnostics](https://man7.org/linux/man-pages/man7/sock_diag.7.html) and
+[descriptor links](https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html).
+
+The JSON reports the checkpoint results and whether descriptor reuse occurred.
+It omits PIDs, addresses, ports, inodes and cookies. Exit 0 means all checkpoints
+and controls passed. Exit 1 signals an unexpected observed result. Exit 2 means
+the platform, privileges, diagnostic evidence or synchronization was insufficient.
+This test accepts no target arguments and never enumerates other processes or
+connections. The production HUD continues to exclude loopback traffic.
+
+`observed_holder` means the named descriptor held that socket during the
+controlled observation. `unknown` means these reads cannot establish the link.
+Neither outcome identifies who opened a historical flow, grants job permission
+or classifies malware.
+
 ## Labels and denominators
 
 [Cases](../megalodon/reference/layered-v1/cases.json) describe synthetic flow
