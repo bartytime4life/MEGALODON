@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 from dataclasses import replace
+from functools import partial
 from http.client import HTTPConnection
 from ipaddress import ip_network
 import json
@@ -13,7 +14,7 @@ import secrets
 import shutil
 import socket
 import subprocess
-from threading import Lock, RLock, Thread
+from threading import Event, Lock, RLock, Thread
 import time
 
 from .companion_automation import _run_fixed
@@ -57,7 +58,7 @@ ACTION_FIELDS = {
     'capture_permissions': {'interface'}, 'capture_start': {'interface'}, 'capture_stop': set(),
     'wireshark_open': {'interface'}, 'wireshark_stop': set(),
     'nmap_configure': {'nmap_target'}, 'clamav_configure': {'scan_folder'},
-    'signature_update': set(), 'osquery_configure': set(), 'qwen_check': set(),
+    'clamav_self_check': set(), 'signature_update': set(), 'osquery_configure': set(), 'qwen_check': set(),
     'zeek_check': set(), 'suricata_check': set(),
     'tool_directory_set': {'tool_id', 'directory'},
     'background_start': {'interface'}, 'background_stop': set(),
@@ -205,6 +206,8 @@ class SupportConfiguration:
         self._background_enabled = False
         self._geography_enabled = False
         self._tools = {}
+        self._scanner_stop = Event()
+        self._scanner_check = dict(run_id=None, state='idle', message='No check has run in this session.', finished_at=None)
         self._job = dict(state='idle', action=None, message='Choose an app to configure.', started_at=None, finished_at=None)
         self.geography = Geography(self.home)
         self.connections = LiveConnections(self.geography)
@@ -405,6 +408,10 @@ class SupportConfiguration:
         """This account's programs with network sockets, refreshed at most once per PROCESS_TTL seconds in the background."""
         return self._background('process', PROCESS_TTL, process_network.review, process_network.SCHEMA)
 
+    def scanner_check_status(self):
+        with self._lock:
+            return dict(self._scanner_check)
+
     def snapshot(self, include_token=False):
         backups = backup_evidence.snapshot(self.home)
         hardening = self._hardening_snapshot()
@@ -468,12 +475,18 @@ class SupportConfiguration:
         with self._lock:
             if self._job['state'] == 'running' or (self.startup and self.startup.snapshot()['state'] == 'running'):
                 raise ConfigBusy('Another support action is running.')
+            if request['action'] == 'clamav_self_check':
+                check_id = secrets.token_hex(8)
+                self._scanner_check = dict(run_id=check_id, state='running', message='Checking the ordinary file and the EICAR test file…', finished_at=None)
             self._job.update(state='running', action=request['action'], message='Applying the selected configuration…', started_at=now(), finished_at=None)
             if request['action'] in {'capture_start','background_start'}:
                 self._cancel_capture_start = False
             self._thread = Thread(target=self._work, args=(request,), daemon=True, name='megalodon-support-config')
             self._thread.start()
-        return self.snapshot()
+        response = self.snapshot()
+        if request['action'] == 'clamav_self_check':
+            response['scanner_check_id'] = check_id
+        return response
 
     def _tool(self, identifier, state, message):
         with self._lock:
@@ -514,6 +527,7 @@ class SupportConfiguration:
         if action == 'tool_directory_set':
             tool = request['tool_id']
         failed = False
+        scanner_result = None
         try:
             if action in {'capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'}:
                 valid_interface(request['interface'])
@@ -605,6 +619,14 @@ class SupportConfiguration:
                 self.companions.configure(updates, before_apply=lambda: self._save(settings=proposed, configured=configured))
                 states = self.companions.request_collection({tool})
                 message = f'Configuration saved. Collector {states[tool]}; results appear in its HUD panel.'
+            elif action == 'clamav_self_check':
+                from .clamav_check import run_check
+                runner = partial(_run_fixed, cancel=self._scanner_stop) if self.run is _run_fixed else self.run
+                scanner_result = run_check(self.home, runner)
+                message = scanner_result['message']
+                failed = scanner_result['state'] != 'recognized'
+                # The self-test has its own result. Never replace a normal scan or setup receipt.
+                return
             elif action == 'signature_update':
                 self._execute(['/usr/bin/pkexec','/usr/bin/systemctl','start','clamav-freshclam.service'],90)
                 self._execute(['systemctl','is-active','--quiet','clamav-freshclam.service'])
@@ -722,9 +744,13 @@ class SupportConfiguration:
                 self._tool(tool, 'failed', message)
         finally:
             with self._lock:
+                if action == 'clamav_self_check':
+                    self._scanner_check = dict(scanner_result or dict(state='unavailable',message='The scanner check could not finish.'),
+                                               run_id=self._scanner_check['run_id'], finished_at=now())
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
 
     def close(self):
+        self._scanner_stop.set()
         self.model_lifecycle.close()
         from .ai_provider import cancel_current
         cancel_current()

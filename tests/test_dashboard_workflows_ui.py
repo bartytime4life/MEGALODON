@@ -37,7 +37,12 @@ def test_workflow_local_composition_preserves_hosted_reference():
     assert 'support-workflows' not in INTEGRATIONS_JS
     assert 'Background tools' not in INTEGRATIONS_HTML
     assert 'innerHTML' not in WORKFLOWS_JS
-    assert "method:'POST'" not in WORKFLOWS_JS
+    # Status polling stays read-only. Only the new, explicit scanner-check button can post.
+    poll = WORKFLOWS_JS.split('async function read(){', 1)[1].split('function sync(){', 1)[0]
+    assert "method:'GET'" in poll and "method:'POST'" not in poll
+    assert WORKFLOWS_JS.count("method:'POST'") == 1
+    assert "JSON.stringify({action:'clamav_self_check'})" in WORKFLOWS_JS
+    assert "byId('scanner-check-run').addEventListener('click',checkScanner)" in WORKFLOWS_JS
     assert 'id="support-config-qwen-setup"' in INDEX_HTML
     assert 'id="support-config-suricata-setup"' in INDEX_HTML
     assert 'Optional desktop inspection' in INDEX_HTML

@@ -16,6 +16,8 @@ async def exercise_workflow_overview(browser, port, password, passed):
     collecting_scan = False
     suricata_activity = None
     requests, errors, violations = [], [], []
+    scanner = {'state':'idle', 'message':'No check has run.', 'finished_at':None, 'run_id':None}
+    scanner_runs = []
 
     async def fixture(route):
         target = urlsplit(route.request.url)
@@ -23,11 +25,22 @@ async def exercise_workflow_overview(browser, port, password, passed):
         if target.scheme != "http" or target.netloc != f"127.0.0.1:{port}":
             violations.append("nonlocal workflow request")
             await route.abort()
+        elif target.path == "/api/support-config" and route.request.method == "POST":
+            assert route.request.post_data_json == {"action":"clamav_self_check"}
+            assert route.request.headers["x-megalodon-config-token"] == "a"*32
+            identifier = f"{len(scanner_runs)+1:016x}"
+            scanner_runs.append(identifier)
+            scanner.clear()
+            scanner.update(state="running", message="Checking both files…", finished_at=None, run_id=identifier)
+            await route.fulfill(status=202,json={"scanner_check_id":identifier})
+        elif target.path == "/api/support-config" and route.request.headers.get("x-megalodon-check")=="1" and scanner.get("testing"):
+            await route.fulfill(json={"token":"a"*32})
         elif target.path == "/api/support-workflows":
             if unavailable:
                 await route.fulfill(status=503, content_type="application/json", body="{}")
                 return
             value = workflow_fixture()
+            value["scanner_check"] = dict(scanner)
             value["observed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             for row in value["tools"]:
                 row["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 90))
@@ -131,6 +144,31 @@ async def exercise_workflow_overview(browser, port, password, passed):
         passed("native Sensors failed refresh removes current counts and metrics")
         passed("native Sensors navigation starts no tools, scans, model or response", not any(
             method == "POST" for _, method in requests))
+        unavailable=False
+        for state,message,matches in [
+                ("recognized","ClamAV recognized the test file and left the ordinary file alone.",1),
+                ("missed","ClamAV scanned both files and missed the EICAR test file.",0),
+                ("unavailable","Save the official 68-byte EICAR file in Downloads.",None)]:
+            scanner["testing"]=True
+            await page.locator("#workflows-refresh").click()
+            button=page.get_by_role("button",name="Check my file scanner")
+            await expect(button).to_be_enabled()
+            await button.click()
+            await expect(page.locator("#scanner-check-status")).to_have_text("Checking both files…")
+            await expect(button).to_be_disabled()
+            assert len(scanner_runs)=={"recognized":1,"missed":2,"unavailable":3}[state]
+            scanner.update(state=state,message=message,finished_at=time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
+                           clean={"scanned":1,"matched":0} if matches is not None else None,
+                           test={"scanned":1,"matched":matches} if matches is not None else None,
+                           engine="1.5.4" if matches is not None else None,database="28168" if matches is not None else None)
+            await page.locator("#workflows-refresh").click()
+            await expect(page.locator("#scanner-check-status")).to_have_text(message)
+            if matches is None:
+                await expect(page.locator("#scanner-check-counts")).to_be_empty()
+            else:
+                await expect(page.locator("#scanner-check-counts")).to_contain_text(f"Test file: {matches} of 1 flagged")
+                await expect(page.locator("#scanner-check-version")).to_contain_text("ClamAV 1.5.4")
+        passed("native Sensors scanner check requires a click and shows recognized, missed and unavailable separately")
         passed("native Sensors overview has no page error or nonlocal request", not errors and not violations)
     finally:
         await context.close()

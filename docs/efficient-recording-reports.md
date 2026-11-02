@@ -1,5 +1,28 @@
 # Efficient recording and automatic visual reports
 
+## Check whether the file scanner works
+
+In **Sensors**, find **Is my file scanner working?** Save the official 68-byte
+EICAR file as `eicar.com` in your Downloads folder, then click **Check my file
+scanner**. The on-screen instructions link to [AMTSO’s manual-download
+check](https://www.amtso.org/feature-settings-check-download-of-malware/).
+If your browser or another security tool intercepts the download, leave that
+protection enabled. Sensors will explain that it could not test ClamAV.
+
+MEGALODON checks the file’s expected fingerprint and uses the installed
+`/usr/bin/clamscan` and its local signatures. It scans an ordinary file and a
+private copy of the test file separately, then removes the temporary copies.
+It leaves the file in Downloads as you supplied it. No internet connection is
+needed during the check.
+
+The result lists how many files ClamAV flagged in each scan and the engine
+and signature versions when available. A successful check verifies recognition
+of this one test file. A missed result requires two completed scans. Missing
+signatures, errors, interference, or a flagged ordinary file give an
+inconclusive result. The most recent check stays visible for this app session,
+separate from alerts about your files.
+
+
 ## Everyday use
 
 Open **Reports** to read the latest saved report. **Make report now** covers the last 24 hours by default. Choose Today, Last 7 days, or custom dates when needed. **Save report** downloads a self-contained visual HTML file; **Print / save PDF** uses the browser's print dialog. Technical CSV, JSON, and the address-free hosted summary are under **Advanced exports**.
