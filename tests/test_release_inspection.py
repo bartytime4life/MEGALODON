@@ -57,3 +57,22 @@ def test_recovery_only_retires_one_confirmed_unused_copy(layout,monkeypatch):
     assert len(install_lifecycle.retire_releases(layout,manifest,inspect_protected=True)['releases'])==39
     assert calls==ids[:2] and not (layout.releases/ids[1]).exists()
     assert all((layout.releases/i).is_dir() for i in ids if i!=ids[1])
+
+
+
+@pytest.mark.parametrize('link', ['cwd', 'exe', 'fd/8'])
+def test_ordinary_retirement_protects_exact_directory_or_executable_links(layout, monkeypatch, link):
+    local_install._prepare_directories(layout)
+    ids = [f'1-20261001T1200{i:02d}Z-aaaabbbb' for i in range(6)]
+    for name in ids:
+        (layout.releases/name).mkdir(mode=0o700)
+    process = layout.app/'proc'/'123'
+    (process/'fd').mkdir(parents=True)
+    (process/'cmdline').write_bytes(b'normal')
+    (process/'maps').write_bytes(b'')
+    (process/link).symlink_to(layout.releases/ids[0])
+    real = Path.iterdir
+    monkeypatch.setattr(Path, 'iterdir', lambda p: iter([process]) if p==Path('/proc') else real(p))
+    manifest = dict(active_release=ids[-1],previous_release=ids[-2],releases=[dict(id=i) for i in ids])
+    install_lifecycle.retire_releases(layout,manifest)
+    assert (layout.releases/ids[0]).is_dir() and not (layout.releases/ids[1]).exists()

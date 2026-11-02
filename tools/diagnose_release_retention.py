@@ -37,10 +37,17 @@ def report(paths, manifest, proc=Path('/proc')):
                 except FileNotFoundError:
                     continue
             marker = any(f.startswith(str(releases)+'/') and f.endswith('/megalodon') for f in fds)
+            links = list(fds)
+            for field in ('cwd', 'exe'):
+                step = field
+                try:
+                    links.append(str((pid/field).readlink()))
+                except FileNotFoundError:
+                    continue
             alias = os.fsencode(paths.current) in command and not marker
             matched = {i for i, name in names.items()
                        if name in command or os.fsencode(paths.releases/i) in command
-                       or any(f.startswith(str(releases/i)+'/') for f in fds)}
+                       or any(f == str(releases/i) or f.startswith(str(releases/i)+'/') for f in links)}
             if alias:
                 reason = 'mentions the current launcher but has no release marker'
                 unknown = True

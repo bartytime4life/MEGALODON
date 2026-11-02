@@ -148,9 +148,15 @@ def retire_releases(paths, manifest, *, inspect_protected=False):
                     # Older runtimes may use the mutable alias without a
                     # release descriptor. Keep uncertain releases intact.
                     ambiguous=str(paths.current).encode() in command and not marker
+                    links = list(descriptors)
+                    for key in ('cwd', 'exe'):
+                        try:
+                            links.append(str((process/key).readlink()))
+                        except FileNotFoundError:
+                            continue
                     if (ambiguous or str(path).encode() in command or held.encode() in command
                             or held.encode() in (process / 'maps').read_bytes()
-                            or any(value.startswith(held+'/') for value in descriptors)):
+                            or any(value == held or value.startswith(held+'/') for value in links)):
                         used = True
                         break
                 except FileNotFoundError:
