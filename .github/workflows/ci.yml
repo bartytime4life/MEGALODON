@@ -146,6 +146,8 @@ jobs:
         run: python -I -B tools/replay_linux_sender_identity.py --job-scope
       - name: Observe one loopback TCP holder across descriptor reuse and close
         run: python -I -B tools/replay_linux_tcp_holder.py
+      - name: Explain five measured connections with one cadence finding
+        run: python -I -B tools/replay_linux_cadence_case.py
       - name: Offline layered evaluation and existing replay contracts
         run: |
           set -euo pipefail
