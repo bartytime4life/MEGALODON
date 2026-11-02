@@ -54,6 +54,11 @@ async def exercise_findings_workbench(browser, port, password, passed):
         elif query.get('selected'):
             selected = next((row for row in value['items'] if row['id'] == query['selected'][0]), None)
             value['selected']['finding'] = selected
+            if selected and selected['kind']=='pattern':
+                value['selected']['facts'] = dict(rule='REGULAR_INTERVAL',recorded_evidence=dict(
+                    port=443, protocol='TCP', unique_observations=5, median_interval_us=3000000))
+                value['selected']['cadence_connection'] = dict(destination='192.0.2.55', checked=5,
+                    programs={'example-app':4} if scenario['mode']!='no_program' else {})
             if scenario['analyzed']:
                 value['selected']['analysis'].update(state='ready',
                     explanation='The recorded observation contains 100 TCP packets; intent is unknown.',
@@ -141,6 +146,20 @@ async def exercise_findings_workbench(browser, port, password, passed):
             await page.locator('#fw-feed > summary').click()
         await expect(rows).to_have_count(2)
         passed('native failed and empty Findings stay explicit and recover through navigation')
+        await rows.nth(1).click()
+        card = page.locator('#fw-cadence')
+        await expect(card).to_contain_text('example-app')
+        await expect(card).to_contain_text('4 of 5')
+        await expect(card).to_contain_text('Program unknown for 1')
+        await expect(card).to_contain_text('192.0.2.55')
+        await expect(card).to_contain_text('typically 3 seconds apart')
+        await refresh('no_program')
+        await rows.nth(1).click()
+        await expect(card.locator('strong')).to_have_text('Program unknown')
+        await expect(card).not_to_contain_text('example-app')
+        await rows.first.click()
+        await expect(card).to_be_hidden()
+        passed('native Findings shows recorded program coverage, destination and timing and clears stale names')
         passed('native Findings has no uncaught error or unintended host/network action',
             not errors and not violations and all(method != 'POST' or action == 'analyze' for _, method, action in requests))
         (output/'manifest.json').write_text(json.dumps(dict(schema='active-findings-browser-v1',

@@ -146,6 +146,10 @@ jobs:
         run: python -I -B tools/replay_linux_sender_identity.py --job-scope
       - name: Observe one loopback TCP holder across descriptor reuse and close
         run: python -I -B tools/replay_linux_tcp_holder.py
+      - name: Verify a live Linux program on a stored repeating-connection finding
+        env:
+          MEGALODON_TEST_NATIVE_HOLDER: "1"
+        run: python -m pytest -q -s tests/test_connection_program.py::test_linux_open_socket_through_sensor_storage_and_findings
       - name: Explain five measured connections with one cadence finding
         run: python -I -B tools/replay_linux_cadence_case.py
       - name: Offline layered evaluation and existing replay contracts

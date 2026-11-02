@@ -2206,6 +2206,7 @@ def serve(
             from .evidence_storage import EvidenceStorage,ManagedDashboardReader
             from .network_topology import NetworkTopology
             from .flow_ingestion import FlowIngestor
+            from .connection_program import ConnectionPrograms
             handler.evidence=EvidenceStorage(runtime_settings)
             from .managed_receipts import ManagedReceipts
             if handler.evidence.enabled:
@@ -2216,7 +2217,7 @@ def serve(
             handler.support_config.evidence=handler.evidence
             handler.defense = Defense(handler.operations, handler.support_config)
             handler.support_config.capture.evidence=handler.evidence
-            handler.flow_ingestor=FlowIngestor(handler.evidence,on_flow=lambda row:handler.support_config.connections.observe_summary(row)
+            handler.flow_ingestor=FlowIngestor(handler.evidence,programs=ConnectionPrograms(),on_flow=lambda row:handler.support_config.connections.observe_summary(row)
                 if handler.evidence.recording_mode=='connection_summaries' else None,
                 enabled=lambda:handler.support_config.background.snapshot()['enabled'])
             handler.support_config.sensors.flow_ingestor=handler.flow_ingestor

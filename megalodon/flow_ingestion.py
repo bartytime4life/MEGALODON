@@ -153,10 +153,10 @@ def _tail(value):
 
 
 class FlowIngestor:
-    def __init__(self,evidence,*,home=None,eve_path=Path('/var/log/suricata/eve.json'),on_flow=None,enabled=lambda:True):
+    def __init__(self,evidence,*,home=None,eve_path=Path('/var/log/suricata/eve.json'),on_flow=None,enabled=lambda:True,programs=None):
         self.evidence=evidence;self.home=Path.home() if home is None else Path(home)
         self.paths={'suricata':Path(eve_path),'zeek':self.home/'.local/share/megalodon/support/zeek/conn.log'}
-        self.on_flow=on_flow;self.enabled=enabled
+        self.on_flow=on_flow;self.enabled=enabled;self.programs=programs
         self._lock=Lock();self._work_lock=RLock();self._stop=Event();self._thread=None
         self._state=dict(state='stopped',source=None,source_detail=None,accepted=0,rejected=0,imported_flows=0,imported_findings=0,
                          backlog_bytes=0,rotations=0,gaps=0,sampling_gaps=0,samples=0,updated_at=None,message='Flow collection is stopped.')
@@ -183,6 +183,8 @@ class FlowIngestor:
         self._stop.set()
         if self._thread:self._thread.join(4)
         if self._thread and self._thread.is_alive():raise ValueError('Flow collector is still finishing its checkpoint.')
+        if self.programs is not None:
+            with self._work_lock:self.programs.clear()
 
     def _recent_source(self,source):
         """Read a bounded tail; existence alone is never source readiness."""
@@ -220,7 +222,10 @@ class FlowIngestor:
 
     def _run(self):
         while not self._stop.is_set():
-            if self.evidence.enabled and self.enabled():self._cycle()
+            if self.evidence.enabled and self.enabled():
+                self._cycle()
+            elif self.programs is not None:
+                with self._work_lock:self.programs.clear()
             self._stop.wait(.1 if self.snapshot()['backlog_bytes'] else 1)
 
     def _cycle(self):
@@ -228,6 +233,10 @@ class FlowIngestor:
         # or is no longer polled must not keep the loop at its fast backlog pace.
         with self._lock:self._backlog.clear()
         try:
+            if self.programs is not None:
+                with self._work_lock:
+                    if self.evidence.recording_mode=='connection_summaries':self.programs.sample()
+                    else:self.programs.clear()
             primary,detail=self.select_source()
             if detail=='file':self.poll(primary,include_flows=self.evidence.recording_mode=='connection_summaries')
             if primary!='suricata':
@@ -343,6 +352,11 @@ class FlowIngestor:
 
     def _commit(self,source,category,batch,checkpoint):
         try:
+            if (category=='flows' and self.programs is not None and self.enabled()
+                    and self.evidence.recording_mode=='connection_summaries'):
+                for row in batch:
+                    witness=self.programs.match(row['data'])
+                    if witness is not None:row['data']['local_tcp_holder']=witness
             accepted=self.evidence.append_records(category,batch,checkpoint=('flow_'+source,checkpoint))
             if accepted!=len(batch):raise ValueError('Sensor batch was not fully admitted; its checkpoint will be reviewed.')
         except BaseException:
