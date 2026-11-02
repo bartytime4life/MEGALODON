@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-eNm/a2Zbvtak04mFm/LLxoTmEfw0vd4AEs46Ysae6AU='; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Cadence evidence review · MEGALODON</title>
+<style>
+:root { color-scheme: light; font: 100%/1.5 system-ui, sans-serif; color: #152e36; background: #eef3f2; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 62rem; margin: auto; padding: 1.5rem clamp(.9rem, 4vw, 3rem) 3rem; }
+header, article, .finding, .finish { padding: clamp(1rem, 3vw, 2rem); border-radius: .7rem; }
+header { background: #123840; color: white; }
+header p { max-width: 45rem; }
+h1, h2, h3, p { margin: 0 0 .55rem; }
+h1 { font-size: clamp(2rem, 5vw, 3.3rem); line-height: 1.1; letter-spacing: -.04em; }
+h2 { font-size: 1.45rem; }
+.kicker { font-weight: 700; font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; }
+header .kicker { color: #a7e9d6; }
+.finding, article, .finish { margin-top: 1rem; background: white; border: 1px solid #becbc9; }
+.finding { border-left: .35rem solid #167264; }
+code { overflow-wrap: anywhere; font-size: .95em; }
+details { margin-top: .6rem; }
+summary { cursor: pointer; color: #115c58; font-weight: 650; }
+.instructions { margin: 1.7rem 0 .6rem; max-width: 48rem; }
+.bundle { display: block; font-weight: 700; color: #356061; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+caption { text-align: left; font-weight: 700; }
+th, td { text-align: left; vertical-align: top; padding: .45rem; border-bottom: 1px solid #dce4e2; overflow-wrap: anywhere; }
+thead { background: #eef3f2; }
+fieldset { min-width: 0; margin: .85rem 0 0; border: 1px solid #c8d3d1; padding: .45rem .7rem .65rem; border-radius: .4rem; }
+legend { font-weight: 700; padding: 0 .25rem; }
+label { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .6rem .35rem 0; cursor: pointer; }
+input { width: 1.05rem; height: 1.05rem; accent-color: #126458; }
+button { margin-top: .5rem; font: inherit; font-weight: 700; padding: .6rem 1rem; background: #155e54; color: white; border: 0; border-radius: .4rem; cursor: pointer; }
+button:disabled { background: #d5dedd; color: #405456; cursor: default; }
+:focus-visible { outline: 3px solid #2576c2; outline-offset: 3px; }
+.feedback { margin-top: .85rem; border-left: .25rem solid #3f7571; padding-left: .8rem; }
+footer { font-size: .9rem; margin-top: 1.1rem; color: #405456; }
+@media (max-width: 34rem) { th, td { padding: .4rem .25rem; } table { font-size: .9rem; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+<p class="kicker">MEGALODON / Operator practice</p>
+<h1>Cadence evidence review</h1>
+<p>Five connections triggered one finding. Decide what the job grant and the socket observations support in each of three evidence bundles.</p>
+</header>
+<section class="finding" aria-labelledby="finding-title">
+<p class="kicker">Shared finding · REGULAR_INTERVAL</p>
+<h2 id="finding-title">Connections recur at similar intervals.</h2>
+<p>Scheduled tasks can produce this pattern. Timing alone cannot establish intent. The finding is unreviewed and its action status is <code>not_attempted</code>.</p>
+<details><summary>Finding ID, timing and reference key</summary><p id="metadata"></p><p>Each reference below is the segment key followed by a colon and its row number.</p></details>
+</section>
+<div class="instructions">
+<h2>Review the three bundles</h2>
+<p>Each bundle uses the same five accepts and a finite grant for the registered child job. Compare the observed endpoint with the permitted endpoint. A lookup after close cannot establish who held the socket at accept.</p>
+<p>Choose a conclusion and cite its rows. For a complete match, cite every row. For a conflict, cite each conflicting row. If holder evidence is incomplete, cite each row missing a timely observation.</p>
+</div>
+<noscript>This offline exercise needs JavaScript to display the bundles and check your responses.</noscript>
+<div id="bundles"></div>
+<section class="finish" aria-labelledby="review-status">
+<h2 id="review-status">Review status</h2>
+<p id="progress" role="status">Choose a conclusion and at least one reference for each bundle.</p>
+<button id="reveal" type="button" disabled>Check my decisions</button>
+</section>
+<footer>Offline practice from a disposable Linux fixture. All choices stay on this page. Reload to start a fresh review.</footer>
+</main>
+<script type="application/json" id="receipt">
+{
+  "finding": "7c50d18dd3edae63e2062640b233b6bb",
+  "segment": "920593d1b5dbc87a1b2694e1112bca12",
+  "median_us": 3000016,
+  "spread_us": 168,
+  "observed": "fixture-listener",
+  "bundles": [
+    {
+      "grant": "reserved-alternate",
+      "samples": [
+        "held",
+        "held",
+        "held",
+        "held",
+        "held"
+      ]
+    },
+    {
+      "grant": "fixture-listener",
+      "samples": [
+        "held",
+        "held",
+        "held",
+        "held",
+        "after_close"
+      ]
+    },
+    {
+      "grant": "fixture-listener",
+      "samples": [
+        "held",
+        "held",
+        "held",
+        "held",
+        "held"
+      ]
+    }
+  ]
+}
+</script>
+<script>
+'use strict';
+const receipt = JSON.parse(document.getElementById('receipt').textContent);
+const labels = { match: 'Within grant scope', conflict: 'Destination conflicts with grant', unknown: 'Insufficient evidence' };
+const sampleText = { held: 'Registered job observed while open', after_close: 'Slot empty at lookup after close' };
+const cases = [...receipt.bundles];
+// The letter identifies a display position only.
+for (let end = cases.length - 1; end > 0; end--) {
+  const pick = Math.floor(Math.random() * (end + 1));
+  [cases[pick], cases[end]] = [cases[end], cases[pick]];
+}
+const root = document.getElementById('bundles');
+const reveal = document.getElementById('reveal');
+const progress = document.getElementById('progress');
+document.getElementById('metadata').textContent = 'Finding ' + receipt.finding +
+  ' · Segment ' + receipt.segment + ' · Median interval ' + receipt.median_us.toLocaleString('en-US') +
+  ' µs · Interval spread ' + receipt.spread_us + ' µs.';
+function add(parent, tag, content) {
+  const element = document.createElement(tag);
+  if (content !== undefined) element.textContent = content;
+  parent.append(element);
+  return element;
+}
+function choice(group, type, name, value, text) {
+  const label = add(group, 'label');
+  const input = add(label, 'input');
+  Object.assign(input, { type, name, value });
+  label.append(text);
+}
+function showBundle(bundle, index) {
+  const letter = 'ABC'[index];
+  const article = add(root, 'article');
+  const title = add(article, 'h3', 'Bundle ' + letter);
+  title.id = 'bundle-' + letter;
+  article.setAttribute('aria-labelledby', title.id);
+  add(article, 'p', 'Permitted endpoint: ' + bundle.grant).className = 'bundle';
+  const table = add(article, 'table');
+  add(table, 'caption', 'Connection evidence');
+  const heading = add(add(table, 'thead'), 'tr');
+  for (const name of ['Reference', 'Observed endpoint', 'Holder observation']) add(heading, 'th', name).scope = 'col';
+  const body = add(table, 'tbody');
+  bundle.samples.forEach((sample, index) => {
+    const row = add(body, 'tr');
+    add(row, 'th', ':' + (index + 1)).scope = 'row';
+    add(row, 'td', receipt.observed);
+    add(row, 'td', sampleText[sample]);
+  });
+  const conclusions = add(article, 'fieldset');
+  add(conclusions, 'legend', 'Conclusion for bundle ' + letter);
+  for (const [value, text] of Object.entries(labels)) choice(conclusions, 'radio', 'decision-' + letter, value, text);
+  const refs = add(article, 'fieldset');
+  add(refs, 'legend', 'Cited references for bundle ' + letter);
+  bundle.samples.forEach((_, index) => choice(refs, 'checkbox', 'refs-' + letter, String(index + 1), ':' + (index + 1)));
+  return article;
+}
+const articles = cases.map(showBundle);
+function selection(article) {
+  return {
+    decision: article.querySelector('input[type=radio]:checked')?.value,
+    refs: Array.from(article.querySelectorAll('input[type=checkbox]:checked'), input => Number(input.value))
+  };
+}
+function update() {
+  const ready = articles.map(selection).filter(answer => answer.decision && answer.refs.length).length;
+  progress.textContent = ready + ' of 3 bundles answered with references.';
+  reveal.disabled = ready !== articles.length;
+}
+function evidenceKey(bundle) {
+  const all = bundle.samples.map((_, index) => index + 1);
+  const missing = all.filter(n => bundle.samples[n - 1] !== 'held');
+  if (missing.length) return { decision: 'unknown', refs: missing, why: 'The lookup came after close. A holder observation during the connection is missing.' };
+  if (bundle.grant !== receipt.observed) return { decision: 'conflict', refs: all, why: 'The registered job held the sockets at the observed endpoint. Its grant names a different endpoint.' };
+  return { decision: 'match', refs: all, why: 'Every cited connection has a timely registered-job holder observation at the endpoint named in its grant.' };
+}
+root.addEventListener('change', update);
+reveal.addEventListener('click', () => {
+  const answers = articles.map(selection);
+  if (reveal.disabled || answers.some(answer => !answer.decision || !answer.refs.length)) return;
+  articles.forEach((article, index) => {
+    const answer = answers[index];
+    const key = evidenceKey(cases[index]);
+    const refsMatch = answer.refs.length === key.refs.length && answer.refs.every((n, i) => n === key.refs[i]);
+    const result = add(article, 'div');
+    result.className = 'feedback';
+    add(result, 'h4', 'Evidence check');
+    add(result, 'p', 'Decision ' + (answer.decision === key.decision ? 'agrees' : 'differs') +
+      ' · References ' + (refsMatch ? 'agree' : 'differ') + '.');
+    add(result, 'p', labels[key.decision] + '. ' + key.why);
+    add(result, 'p', 'Supporting references: ' + key.refs.map(n => receipt.segment + ':' + n).join(', '));
+    result.style.overflowWrap = 'anywhere';
+    for (const fieldset of article.querySelectorAll('fieldset')) fieldset.disabled = true;
+  });
+  reveal.disabled = true;
+  progress.textContent = 'Review complete. Each bundle now shows the expected conclusion and its supporting references.';
+  const first = articles[0].querySelector('h4');
+  first.tabIndex = -1;
+  first.focus();
+});
+update();
+</script>
+</body>
+</html>
