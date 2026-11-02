@@ -242,6 +242,33 @@ These are fixture grants and contemporaneous holder observations. The case
 does not establish ownership of an earlier unobserved connection, legitimate
 intent or malware. It neither persists records nor controls a host.
 
+### Offline operator exercise
+
+Open [the cadence review](../examples/cadence-review.html) in a browser from a
+source checkout. On a Linux desktop, run this from the repository root:
+
+```bash
+xdg-open examples/cadence-review.html
+```
+
+Give a reviewer the HTML file on its own, before sharing the replay report or
+answer table. It works offline. One finding and its five references stay fixed
+across three alternative evidence bundles, presented in shuffled order. The
+reviewer chooses a conclusion and cites rows for each bundle before revealing
+the comparison. Choices last only for the open page. To evaluate usability,
+ask a fresh reviewer to record their first decisions and cited rows before
+reveal, including anything they could not decide from the page.
+
+The file transcribes a bounded projection of [Ubuntu CI job
+125495799362](https://github.com/bartytime4life/MEGALODON/actions/runs/41509051681/job/125495799362)
+for [replay source bdcef27](https://github.com/bartytime4life/MEGALODON/commit/bdcef271697c2efe1143967dd8383e01bb5e352f).
+Only the two fixture destinations appear. A held sample describes the job
+observed during that connection. The late sample describes the empty slot
+after close. Every bundle uses the detector's original reference key and
+measured timing. This fixed, inspectable exercise measures neither detection
+accuracy nor independent reviewer performance. It has no link to a running
+dashboard or response system.
+
 ## Labels and denominators
 
 [Cases](../megalodon/reference/layered-v1/cases.json) describe synthetic flow
