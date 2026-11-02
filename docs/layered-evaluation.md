@@ -116,6 +116,42 @@ integrity, the truth of an observer's report, job authorization and ownership
 of historical TCP flows remain unverified. No local message enters the
 production evidence store or changes a finding.
 
+### Does the identified job have permission on this channel?
+
+Run the bounded job grant experiment from the repository root on Linux:
+
+```bash
+python3 -I -B tools/replay_linux_sender_identity.py --job-scope
+```
+
+Before either child starts, the parent grants the first invocation permission
+to submit the fixed fixture record on channels 1, 2, 4 and 5 for the duration
+of the eight-second lab budget. The grant lives only in the parent’s policy
+comparison and refers to its child-process object and receiver objects. A PID,
+descriptor number or job label supplied in a message cannot transfer it to
+another invocation. The second child has the same account, endpoints and
+message bytes, but receives no grant.
+
+The parent checks permission **at receipt**, using its own monotonic clock. It
+revokes the grant before reading channel 4. Messages there can already be queued.
+The experiment makes no claim about permission at the time of transmission.
+
+| Receiving channel | Registered sender | Second sender |
+| --- | --- | --- |
+| 1 and 2 | Within the active scope | No matching grant |
+| 3 | Outside the permitted channel set | No matching grant |
+| 4 and 5 | Grant revoked before receipt | No matching grant |
+
+The receiver compares all ten decisions against the expected sender and channel.
+A pass requires the original kernel-identity checks plus two simulated permits,
+eight simulated denials and zero unsupported permits. Unknown credentials grant
+nothing. An incomplete native run yields no positive job result. Only this one
+fixed option is accepted; no external policies, identifiers or requests are
+parsed. Running without the option still gives the original sender-only report.
+
+This is a supervisor-issued **fixture** grant. No request is forwarded or executed,
+and no production job, TCP connection, firewall decision or model is involved.
+
 ## Labels and denominators
 
 [Cases](../megalodon/reference/layered-v1/cases.json) describe synthetic flow

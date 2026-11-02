@@ -142,6 +142,8 @@ jobs:
         run: python -m pytest -ra
       - name: Check Linux sender credentials on private Unix sockets
         run: python -I -B tools/replay_linux_sender_identity.py
+      - name: Check a parent-issued grant against kernel-identified job submissions
+        run: python -I -B tools/replay_linux_sender_identity.py --job-scope
       - name: Offline layered evaluation and existing replay contracts
         run: |
           set -euo pipefail
