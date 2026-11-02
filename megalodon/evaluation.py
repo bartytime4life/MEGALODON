@@ -110,6 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--source-tree", required=True, action=_Once)
     report.add_argument("--scenario", action=_Once)
 
+    groups.add_parser("cadence-scope", allow_abbrev=False,
+                      help="Compare synthetic execution and job evidence for five connection starts.")
     layered = groups.add_parser(
         "layered-report", allow_abbrev=False,
         help="Bundled synthetic layered-review evaluation; no live data or actions.",
@@ -146,6 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.group == "detectors":
             result = registry_document()
+        elif args.group == "cadence-scope":
+            from .cadence_scope_evaluation import cadence_scope_report
+            result = cadence_scope_report()
         elif args.group == "layered-report":
             from .layered_evaluation import evaluate_layered
             result = evaluate_layered(source_commit=args.source_commit, source_tree=args.source_tree,

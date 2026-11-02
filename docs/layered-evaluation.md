@@ -45,6 +45,40 @@ It does **not** mean all useful cases were detected or all ordinary cases avoide
 review. Exit 1 preserves a completed report with a regression; exit 2 rejects
 invalid arguments or fixture integrity. No arbitrary input path is accepted.
 
+## Five-connection execution and scope experiment
+
+From the repository root, run `python3 -B -m megalodon.evaluation cadence-scope`
+(or the installed `megalodon-evaluate cadence-scope`). This separate Stage 0
+replay needs Python 3.11+ and accepts no arguments or external records.
+
+The scheduled health-check and suspicious cadence-only fixtures supply identical
+five-connection inputs to the existing detector. Each produces one unreviewed
+`REGULAR_INTERVAL` finding and zero layered reviews. The replay preserves the
+full original finding and shows the same 13 alternative evidence conditions on
+each case. Scenario IDs select the pair. Labels, rationales and expected results
+are excluded from the comparison that decides scope.
+
+| Result | Evidence required | Operator interpretation |
+| --- | --- | --- |
+| `scope_match` | All five connection starts have one matching socket witness apiece for the same execution. One time-valid job record explicitly permits the observed address, port and protocol. | A match describes only those connections and the declared scope. |
+| `scope_mismatch` | The execution and time still match, but a witnessed destination differs from the sole permitted endpoint. The report lists the affected starts and the permitted destination. | Inspect the conflicting facts before drawing conclusions about intent. |
+| `unknown` | Ownership or authorization is missing, partial, contradictory, self-reported, expired, or bound to a different execution. | Obtain a separate socket observation at each start and one authoritative job scope covering that host, boot, invocation and interval. |
+
+The synthetic socket witness joins on vantage, interface, local address/port,
+remote address/port/protocol and exact connection-start time. The two fixtures
+share a clock by construction. The job interval includes its start and excludes
+its end. A present-day process snapshot or PID alone cannot bind older traffic.
+Producer identities, clock agreement and exclusive policy scope are stipulated
+for this experiment. They have no authentication or retroactive authority on a
+real host.
+
+Exit 0 means both twins agree and every fixture outcome meets its expectation.
+Exit 1 reports a replay discrepancy. Exit 2 rejects invalid arguments, corpus
+integrity failures or an unexpected baseline shape. No runtime collector, policy
+importer, dashboard action, suppression or model execution participates. The
+original 25-case workload measures are separate; this experiment supplies no
+operational accuracy estimate.
+
 ## Labels and denominators
 
 [Cases](../megalodon/reference/layered-v1/cases.json) describe synthetic flow
