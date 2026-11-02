@@ -193,6 +193,55 @@ controlled observation. `unknown` means these reads cannot establish the link.
 Neither outcome identifies who opened a historical flow, grants job permission
 or classifies malware.
 
+### End-to-end Linux cadence case
+
+From the root of a clean source checkout, run as an ordinary Linux user:
+
+```bash
+python3 -I -B tools/replay_linux_cadence_case.py
+```
+
+This prints one read-only JSON case report. A supervised child opens five TCP
+connections to one disposable IPv4 loopback listener at scheduled three-second
+intervals. The parent timestamps each actual accept with its monotonic clock
+and maps elapsed time to a single UTC anchor. These are first-observation times.
+The test does not timestamp SYN packets. The existing retained-hour analyzer
+runs in memory on the five observed tuples and timestamps using a one-hour
+evaluation window beginning at the first observation rounded down to a second.
+If scheduling jitter prevents its unchanged rule from firing, the command
+returns inconclusive. It never substitutes scheduled timestamps or retries
+until the detector produces a finding.
+
+Start with `finding`: its ID, five evidence references, unreviewed state and
+action status come directly from the detector. Each context explains the same
+references. The exclusive grants were issued as alternatives before launch;
+both name the same child invocation and finite interval. TCP tuple comparisons
+use the observed addresses and ports. The report calls the real listener
+`fixture-listener` and the distinct bound, unused endpoint `reserved-alternate`.
+The child sends no application bytes over TCP.
+
+| Case | What the operator should see |
+| --- | --- |
+| Matching grant | All five references have bracketed live socket-holder observations for the registered child at the permitted destination. |
+| Conflicting destination | All five references show the observed listener and a different permitted endpoint. |
+| Delayed fifth lookup | The first four retain their live observations. A fresh fifth kernel lookup runs after the child acknowledges close. The report names that unresolved reference and returns `unknown`. |
+
+For live ownership the supervisor uses the pinned child descriptor directory
+and an exact TCP diagnostic query per flow. It checks stable descriptor links
+on both sides of the query and verifies the fixture inode. The grant must cover
+the accepted connection through the witness observation, before the parent
+releases that socket for closure. The delayed lookup does not borrow the
+earlier positive witness. A pass also requires the last slot to have cleared.
+The report omits PIDs, raw endpoints, inodes and socket cookies. Finding IDs,
+per-run references and measured timing can differ between runs.
+
+Exit 0 means the original finding and all three evidence outcomes passed.
+Exit 1 means a completed case disagreed with the expected outcome. Exit 2
+means the kernel, timing or available evidence could not produce the case.
+These are fixture grants and contemporaneous holder observations. The case
+does not establish ownership of an earlier unobserved connection, legitimate
+intent or malware. It neither persists records nor controls a host.
+
 ## Labels and denominators
 
 [Cases](../megalodon/reference/layered-v1/cases.json) describe synthetic flow
