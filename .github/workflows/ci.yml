@@ -140,6 +140,8 @@ jobs:
         run: python -m compileall -q megalodon tests
       - name: Run tests
         run: python -m pytest -ra
+      - name: Check Linux sender credentials on private Unix sockets
+        run: python -I -B tools/replay_linux_sender_identity.py
       - name: Offline layered evaluation and existing replay contracts
         run: |
           set -euo pipefail

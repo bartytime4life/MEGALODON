@@ -79,6 +79,43 @@ importer, dashboard action, suppression or model execution participates. The
 original 25-case workload measures are separate; this experiment supplies no
 operational accuracy estimate.
 
+### Checking sender identity on Linux
+
+From a clean source checkout, as an ordinary Linux user, run:
+
+```bash
+python3 -I -B tools/replay_linux_sender_identity.py
+```
+
+This separate lab tests one assumption behind the synthetic scope comparison.
+A parent creates five unnamed Unix sequenced-packet socket pairs. Two disposable
+children of the same account inherit the same five sending endpoints and send
+the same fixed job label. The parent registers the first child, holds both
+identities during observation, and classifies each message from its Linux
+`SCM_CREDENTIALS` record. The channel and the label are identical for both
+children. Only the credential distinguishes them. A connection-time peer credential would
+describe the socket-pair creator. Per-message credentials describe the sender.
+See [Linux unix(7)](https://man7.org/linux/man-pages/man7/unix.7.html).
+
+The second child supplies its own PID with `sendmsg` as a positive control,
+then attempts the identical operation using the registered child's PID. Passing
+requires five registered-sender and five other-sender observations, one of each
+on every channel, explicit `EPERM` on the other-PID attempt, and no extra record.
+Output contains only fixed statuses and counts. No process or user IDs are
+retained. The probe creates no IP sockets, public listener or background service.
+
+Exit 0 means the bounded native experiment passed. Exit 1 means observed
+behavior disagreed with the expected result. Exit 2 means the platform,
+account, kernel permissions or available evidence were insufficient. In
+particular, a sandbox that prohibits credential delivery cannot supply a pass.
+The existing Linux CI test job runs the native command and requires exit 0.
+
+This establishes the sender of a local message under these test conditions.
+The children's identities are known because the harness started them. Executable
+integrity, the truth of an observer's report, job authorization and ownership
+of historical TCP flows remain unverified. No local message enters the
+production evidence store or changes a finding.
+
 ## Labels and denominators
 
 [Cases](../megalodon/reference/layered-v1/cases.json) describe synthetic flow
