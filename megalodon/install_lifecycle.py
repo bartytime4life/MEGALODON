@@ -107,7 +107,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def retire_releases(paths, manifest):
+def retire_releases(paths, manifest, *, inspect_protected=False):
     """Keep current/previous plus recent releases; refuse uncertain process use.
 
     Only manifest-listed, private trees are eligible. Untracked directories and
@@ -148,13 +148,26 @@ def retire_releases(paths, manifest):
                     # Older runtimes may use the mutable alias without a
                     # release descriptor. Keep uncertain releases intact.
                     ambiguous=str(paths.current).encode() in command and not marker
+                    links = list(descriptors)
+                    for key in ('cwd', 'exe'):
+                        try:
+                            links.append(str((process/key).readlink()))
+                        except FileNotFoundError:
+                            continue
                     if (ambiguous or str(path).encode() in command or held.encode() in command
                             or held.encode() in (process / 'maps').read_bytes()
-                            or any(value.startswith(held+'/') for value in descriptors)):
+                            or any(value == held or value.startswith(held+'/') for value in links)):
                         used = True
                         break
                 except FileNotFoundError:
                     continue
+                except PermissionError:
+                    if inspect_protected:
+                        from .release_inspection import protected_process_holds
+                        if not protected_process_holds(process, paths, path):
+                            continue
+                    used = True
+                    break
                 except OSError:
                     used = True
                     break
@@ -164,6 +177,8 @@ def retire_releases(paths, manifest):
             # are expected). The private release root itself was validated.
             shutil.rmtree(path)
         retired.append(row)
+        if inspect_protected:
+            break  # Only one verified slot is needed for this upgrade.
     if retired:
         manifest['releases'] = [r for r in manifest['releases'] if r not in retired]
         _atomic_write(paths.manifest, (json.dumps(manifest, sort_keys=True, separators=(',', ':'))+'\n').encode(), 0o600)
