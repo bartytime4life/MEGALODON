@@ -242,22 +242,24 @@ These are fixture grants and contemporaneous holder observations. The case
 does not establish ownership of an earlier unobserved connection, legitimate
 intent or malware. It neither persists records nor controls a host.
 
-### Offline operator exercise
+### Try the practice alert
 
-Open [the cadence review](../examples/cadence-review.html) in a browser from a
-source checkout. On a Linux desktop, run this from the repository root:
+Double-click [the practice file](../examples/cadence-review.html) to open it
+in your browser. You can use it without an internet connection.
 
-```bash
-xdg-open examples/cadence-review.html
-```
+Imagine a worker may call only the front desk. A phone record tells you which
+desk was called. Someone checking during the call can also see who was on the
+line. In this exercise the worker is a program and the calls are computer
+connections. Each of three cases shows the same five connections with a
+different rule or a different record of who was on the line.
 
-Give a reviewer the HTML file on its own, before sharing the replay report or
-answer table. It works offline. One finding and its five references stay fixed
-across three alternative evidence bundles, presented in shuffled order. The
-reviewer chooses a conclusion and cites rows for each bundle before revealing
-the comparison. Choices last only for the open page. To evaluate usability,
-ask a fresh reviewer to record their first decisions and cited rows before
-reveal, including anything they could not decide from the page.
+Read one case at a time. Pick what you think happened and the row numbers
+that helped you decide. You can go back and change an answer. After the last
+case, select **Check my answers** to see your choices and the explanations.
+
+To try this with someone new, give them just the HTML file. Ask them to show
+you the results screen and tell you which words or steps were confusing.
+Reloading clears the answers.
 
 The file transcribes a bounded projection of [Ubuntu CI job
 125495799362](https://github.com/bartytime4life/MEGALODON/actions/runs/41509051681/job/125495799362)

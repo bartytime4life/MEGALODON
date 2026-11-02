@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-eNm/a2Zbvtak04mFm/LLxoTmEfw0vd4AEs46Ysae6AU='; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-<title>Cadence evidence review · MEGALODON</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Ln62/pSDdZiFnrFj/1rvRLrvFXQpQTkLun0hcxwF7Es='; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Did the program follow the rule? · MEGALODON</title>
 <style>
 :root { color-scheme: light; font: 100%/1.5 system-ui, sans-serif; color: #152e36; background: #eef3f2; }
 * { box-sizing: border-box; }
 body { margin: 0; }
-main { max-width: 62rem; margin: auto; padding: 1.5rem clamp(.9rem, 4vw, 3rem) 3rem; }
+main { max-width: 50rem; margin: auto; padding: 1.5rem clamp(.9rem, 4vw, 3rem) 3rem; }
 header, article, .finding, .finish { padding: clamp(1rem, 3vw, 2rem); border-radius: .7rem; }
 header { background: #123840; color: white; }
 header p { max-width: 45rem; }
@@ -23,8 +23,9 @@ header .kicker { color: #a7e9d6; }
 code { overflow-wrap: anywhere; font-size: .95em; }
 details { margin-top: .6rem; }
 summary { cursor: pointer; color: #115c58; font-weight: 650; }
-.instructions { margin: 1.7rem 0 .6rem; max-width: 48rem; }
-.bundle { display: block; font-weight: 700; color: #356061; }
+[hidden] { display: none !important; }
+.rule { margin-bottom: .2rem; }
+.place { display: inline-block; color: #115c58; font-size: 1.3rem; }
 table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
 caption { text-align: left; font-weight: 700; }
 th, td { text-align: left; vertical-align: top; padding: .45rem; border-bottom: 1px solid #dce4e2; overflow-wrap: anywhere; }
@@ -32,11 +33,15 @@ thead { background: #eef3f2; }
 fieldset { min-width: 0; margin: .85rem 0 0; border: 1px solid #c8d3d1; padding: .45rem .7rem .65rem; border-radius: .4rem; }
 legend { font-weight: 700; padding: 0 .25rem; }
 label { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .6rem .35rem 0; cursor: pointer; }
-input { width: 1.05rem; height: 1.05rem; accent-color: #126458; }
+fieldset:has(input[type=radio]) label { display: flex; }
+label { min-height: 2.75rem; }
+input { flex-shrink: 0; width: 1.05rem; height: 1.05rem; accent-color: #126458; }
 button { margin-top: .5rem; font: inherit; font-weight: 700; padding: .6rem 1rem; background: #155e54; color: white; border: 0; border-radius: .4rem; cursor: pointer; }
+.secondary, #back { background: white; color: #115c58; border: 1px solid #9db6b2; }
 button:disabled { background: #d5dedd; color: #405456; cursor: default; }
 :focus-visible { outline: 3px solid #2576c2; outline-offset: 3px; }
 .feedback { margin-top: .85rem; border-left: .25rem solid #3f7571; padding-left: .8rem; }
+footer details { margin-bottom: .8rem; }
 footer { font-size: .9rem; margin-top: 1.1rem; color: #405456; }
 @media (max-width: 34rem) { th, td { padding: .4rem .25rem; } table { font-size: .9rem; } }
 </style>
@@ -44,29 +49,31 @@ footer { font-size: .9rem; margin-top: 1.1rem; color: #405456; }
 <body>
 <main>
 <header>
-<p class="kicker">MEGALODON / Operator practice</p>
-<h1>Cadence evidence review</h1>
-<p>Five connections triggered one finding. Decide what the job grant and the socket observations support in each of three evidence bundles.</p>
+<p class="kicker">MEGALODON · Practice alert</p>
+<h1>Did the program follow the rule?</h1>
+<p>A test computer made five connections about three seconds apart. Routine programs do this too. Let’s see what the records can tell us.</p>
 </header>
-<section class="finding" aria-labelledby="finding-title">
-<p class="kicker">Shared finding · REGULAR_INTERVAL</p>
-<h2 id="finding-title">Connections recur at similar intervals.</h2>
-<p>Scheduled tasks can produce this pattern. Timing alone cannot establish intent. The finding is unreviewed and its action status is <code>not_attempted</code>.</p>
-<details><summary>Finding ID, timing and reference key</summary><p id="metadata"></p><p>Each reference below is the segment key followed by a colon and its row number.</p></details>
+<section class="finding" aria-labelledby="example-title">
+<h2 id="example-title">Think of a phone call</h2>
+<p>Imagine a worker has permission to call only the front desk. To check a call, you need two facts: which desk was called, and who was on the line. If you check after they hang up, the number is still on the record, but you can’t tell who was using the phone.</p>
+<p>Here, the worker is a program. “Front desk” and “Mailroom” are nicknames for two places it could connect to.</p>
 </section>
-<div class="instructions">
-<h2>Review the three bundles</h2>
-<p>Each bundle uses the same five accepts and a finite grant for the registered child job. Compare the observed endpoint with the permitted endpoint. A lookup after close cannot establish who held the socket at accept.</p>
-<p>Choose a conclusion and cite its rows. For a complete match, cite every row. For a conflict, cite each conflicting row. If holder evidence is incomplete, cite each row missing a timely observation.</p>
-</div>
-<noscript>This offline exercise needs JavaScript to display the bundles and check your responses.</noscript>
+<noscript>Turn on JavaScript in your browser to try the three practice cases. This file works offline.</noscript>
 <div id="bundles"></div>
-<section class="finish" aria-labelledby="review-status">
-<h2 id="review-status">Review status</h2>
-<p id="progress" role="status">Choose a conclusion and at least one reference for each bundle.</p>
-<button id="reveal" type="button" disabled>Check my decisions</button>
+<section class="finish" id="navigation" aria-label="Move between cases" hidden>
+<p id="progress" role="status"></p>
+<button id="back" type="button" hidden>Go back</button>
+<button id="next" type="button" disabled>Next case</button>
 </section>
-<footer>Offline practice from a disposable Linux fixture. All choices stay on this page. Reload to start a fresh review.</footer>
+<section class="finish" id="results" aria-labelledby="results-title" hidden>
+<p class="kicker">Practice complete</p>
+<h2 id="results-title" tabindex="-1">Here’s what the records show</h2>
+<p>Your first answers are below. You can show someone this screen if you want to talk through a case.</p>
+</section>
+<footer>
+<details><summary>Technical details (optional)</summary><p id="metadata"></p><p>The finding is unreviewed. Its action status is <code>not_attempted</code>. Each row number matches the last part of its original evidence reference.</p></details>
+<p>This practice file works offline. Your answers stay on this page until you reload or close it.</p>
+</footer>
 </main>
 <script type="application/json" id="receipt">
 {
@@ -112,20 +119,28 @@ footer { font-size: .9rem; margin-top: 1.1rem; color: #405456; }
 <script>
 'use strict';
 const receipt = JSON.parse(document.getElementById('receipt').textContent);
-const labels = { match: 'Within grant scope', conflict: 'Destination conflicts with grant', unknown: 'Insufficient evidence' };
-const sampleText = { held: 'Registered job observed while open', after_close: 'Slot empty at lookup after close' };
+const labels = {
+  match: 'The program followed the rule on all five calls.',
+  conflict: 'The program called a different place.',
+  unknown: 'We can’t tell whether the program followed the rule.'
+};
+const place = { 'fixture-listener': 'Front desk', 'reserved-alternate': 'Mailroom' };
+const sampleText = { held: 'The program was on the line.', after_close: 'The call had ended before anyone checked.' };
 const cases = [...receipt.bundles];
-// The letter identifies a display position only.
+// The number identifies a display position only.
 for (let end = cases.length - 1; end > 0; end--) {
   const pick = Math.floor(Math.random() * (end + 1));
   [cases[pick], cases[end]] = [cases[end], cases[pick]];
 }
 const root = document.getElementById('bundles');
-const reveal = document.getElementById('reveal');
+const back = document.getElementById('back');
+const next = document.getElementById('next');
 const progress = document.getElementById('progress');
-document.getElementById('metadata').textContent = 'Finding ' + receipt.finding +
+const navigation = document.getElementById('navigation');
+const results = document.getElementById('results');
+document.getElementById('metadata').textContent = 'REGULAR_INTERVAL · Finding ' + receipt.finding +
   ' · Segment ' + receipt.segment + ' · Median interval ' + receipt.median_us.toLocaleString('en-US') +
-  ' µs · Interval spread ' + receipt.spread_us + ' µs.';
+  ' µs · Interval spread ' + receipt.spread_us + ' µs. Front desk = fixture-listener. Mailroom = reserved-alternate.';
 function add(parent, tag, content) {
   const element = document.createElement(tag);
   if (content !== undefined) element.textContent = content;
@@ -138,33 +153,45 @@ function choice(group, type, name, value, text) {
   Object.assign(input, { type, name, value });
   label.append(text);
 }
-function showBundle(bundle, index) {
-  const letter = 'ABC'[index];
+function showCase(bundle, index) {
+  const number = index + 1;
   const article = add(root, 'article');
-  const title = add(article, 'h3', 'Bundle ' + letter);
-  title.id = 'bundle-' + letter;
+  article.hidden = true;
+  const title = add(article, 'h2', 'Case ' + number + ' of ' + cases.length);
+  title.id = 'case-' + number;
+  title.tabIndex = -1;
   article.setAttribute('aria-labelledby', title.id);
-  add(article, 'p', 'Permitted endpoint: ' + bundle.grant).className = 'bundle';
+  add(article, 'p', 'The program was allowed to call only one place.').className = 'rule';
+  add(article, 'strong', place[bundle.grant]).className = 'place';
   const table = add(article, 'table');
-  add(table, 'caption', 'Connection evidence');
+  add(table, 'caption', 'The five calls');
   const heading = add(add(table, 'thead'), 'tr');
-  for (const name of ['Reference', 'Observed endpoint', 'Holder observation']) add(heading, 'th', name).scope = 'col';
+  for (const name of ['Row', 'Place called', 'Who was on the line?']) add(heading, 'th', name).scope = 'col';
   const body = add(table, 'tbody');
   bundle.samples.forEach((sample, index) => {
     const row = add(body, 'tr');
-    add(row, 'th', ':' + (index + 1)).scope = 'row';
-    add(row, 'td', receipt.observed);
+    add(row, 'th', String(index + 1)).scope = 'row';
+    add(row, 'td', place[receipt.observed]);
     add(row, 'td', sampleText[sample]);
   });
   const conclusions = add(article, 'fieldset');
-  add(conclusions, 'legend', 'Conclusion for bundle ' + letter);
-  for (const [value, text] of Object.entries(labels)) choice(conclusions, 'radio', 'decision-' + letter, value, text);
+  add(conclusions, 'legend', '1. What can you tell from these calls?');
+  for (const [value, text] of Object.entries(labels)) choice(conclusions, 'radio', 'decision-' + number, value, text);
   const refs = add(article, 'fieldset');
-  add(refs, 'legend', 'Cited references for bundle ' + letter);
-  bundle.samples.forEach((_, index) => choice(refs, 'checkbox', 'refs-' + letter, String(index + 1), ':' + (index + 1)));
+  add(refs, 'legend', '2. Which rows show you why?');
+  add(refs, 'p', 'If every call fits the rule, choose all five. Otherwise, choose the rows where the place was different or the check came too late.');
+  bundle.samples.forEach((_, i) => choice(refs, 'checkbox', 'refs-' + number, String(i + 1), 'Row ' + (i + 1)));
+  const all = add(refs, 'button', 'Select all five');
+  all.type = 'button';
+  all.className = 'secondary';
+  all.addEventListener('click', () => {
+    for (const input of refs.querySelectorAll('input')) input.checked = true;
+    update();
+  });
   return article;
 }
-const articles = cases.map(showBundle);
+const articles = cases.map(showCase);
+let current = 0;
 function selection(article) {
   return {
     decision: article.querySelector('input[type=radio]:checked')?.value,
@@ -172,41 +199,63 @@ function selection(article) {
   };
 }
 function update() {
-  const ready = articles.map(selection).filter(answer => answer.decision && answer.refs.length).length;
-  progress.textContent = ready + ' of 3 bundles answered with references.';
-  reveal.disabled = ready !== articles.length;
+  const answer = selection(articles[current]);
+  next.disabled = !answer.decision || !answer.refs.length;
+  back.hidden = current === 0;
+  next.textContent = current === cases.length - 1 ? 'Check my answers' : 'Next case';
+  if (!answer.decision) progress.textContent = 'Choose one answer for this case.';
+  else if (!answer.refs.length) progress.textContent = 'Now choose at least one row that helped you decide.';
+  else progress.textContent = current === cases.length - 1 ? 'All three cases are answered. You can check your answers now.' : 'Your answer is ready. You can go to the next case.';
+}
+function move(index) {
+  articles[current].hidden = true;
+  current = index;
+  articles[current].hidden = false;
+  update();
+  articles[current].querySelector('h2').focus();
 }
 function evidenceKey(bundle) {
   const all = bundle.samples.map((_, index) => index + 1);
   const missing = all.filter(n => bundle.samples[n - 1] !== 'held');
-  if (missing.length) return { decision: 'unknown', refs: missing, why: 'The lookup came after close. A holder observation during the connection is missing.' };
-  if (bundle.grant !== receipt.observed) return { decision: 'conflict', refs: all, why: 'The registered job held the sockets at the observed endpoint. Its grant names a different endpoint.' };
-  return { decision: 'match', refs: all, why: 'Every cited connection has a timely registered-job holder observation at the endpoint named in its grant.' };
+  if (missing.length) return { decision: 'unknown', refs: missing, why: 'The place was right, but on row ' + missing.join(', ') + ' the call had already ended. We can’t tell who was on the line for that call.' };
+  if (bundle.grant !== receipt.observed) return { decision: 'conflict', refs: all, why: 'The program was on the line for all five calls. Each went to the ' + place[receipt.observed].toLowerCase() + ', but only the ' + place[bundle.grant].toLowerCase() + ' was allowed.' };
+  return { decision: 'match', refs: all, why: 'All five calls went to the allowed place, and someone saw the program on the line each time.' };
+}
+function rowNames(refs) {
+  return (refs.length === 1 ? 'row ' : 'rows ') + refs.join(', ');
+}
+function finish() {
+  const answers = articles.map(selection);
+  if (answers.some(answer => !answer.decision || !answer.refs.length)) return;
+  cases.forEach((bundle, index) => {
+    const answer = answers[index];
+    const key = evidenceKey(bundle);
+    const card = add(results, 'section');
+    card.className = 'feedback';
+    add(card, 'h3', 'Case ' + (index + 1));
+    add(card, 'p', 'You chose: ' + labels[answer.decision] + ' You picked ' + rowNames(answer.refs) + '.');
+    add(card, 'p', key.why);
+    const sameRows = answer.refs.length === key.refs.length && answer.refs.every((n, i) => n === key.refs[i]);
+    add(card, 'p', (answer.decision === key.decision ? 'Your answer fits.' : 'The supported answer is “' + labels[key.decision] + '”') +
+      ' ' + (sameRows ? 'You picked the supporting ' + (key.refs.length === 1 ? 'row.' : 'rows.') : 'Look at ' + rowNames(key.refs) + '.'));
+    const details = add(card, 'details');
+    add(details, 'summary', 'Original record IDs');
+    add(details, 'code', key.refs.map(n => receipt.segment + ':' + n).join(', '));
+  });
+  root.hidden = true;
+  navigation.hidden = true;
+  results.hidden = false;
+  document.getElementById('results-title').focus();
 }
 root.addEventListener('change', update);
-reveal.addEventListener('click', () => {
-  const answers = articles.map(selection);
-  if (reveal.disabled || answers.some(answer => !answer.decision || !answer.refs.length)) return;
-  articles.forEach((article, index) => {
-    const answer = answers[index];
-    const key = evidenceKey(cases[index]);
-    const refsMatch = answer.refs.length === key.refs.length && answer.refs.every((n, i) => n === key.refs[i]);
-    const result = add(article, 'div');
-    result.className = 'feedback';
-    add(result, 'h4', 'Evidence check');
-    add(result, 'p', 'Decision ' + (answer.decision === key.decision ? 'agrees' : 'differs') +
-      ' · References ' + (refsMatch ? 'agree' : 'differ') + '.');
-    add(result, 'p', labels[key.decision] + '. ' + key.why);
-    add(result, 'p', 'Supporting references: ' + key.refs.map(n => receipt.segment + ':' + n).join(', '));
-    result.style.overflowWrap = 'anywhere';
-    for (const fieldset of article.querySelectorAll('fieldset')) fieldset.disabled = true;
-  });
-  reveal.disabled = true;
-  progress.textContent = 'Review complete. Each bundle now shows the expected conclusion and its supporting references.';
-  const first = articles[0].querySelector('h4');
-  first.tabIndex = -1;
-  first.focus();
+back.addEventListener('click', () => { if (current > 0) move(current - 1); });
+next.addEventListener('click', () => {
+  if (next.disabled) return;
+  if (current < cases.length - 1) move(current + 1);
+  else finish();
 });
+articles[current].hidden = false;
+navigation.hidden = false;
 update();
 </script>
 </body>
