@@ -20,6 +20,7 @@ from threading import Event, RLock, Thread
 import time
 
 from . import ai_provider
+from .connection_program import cadence_detail
 from .evidence_storage import epoch, utc
 from .intelligence import SELECTED_EXPLANATION_CONTRACT, explain
 from .packet_qualification import QUALIFIED_RUN_SQL
@@ -607,6 +608,8 @@ class FindingsReview(RetainedEvidenceReader):
             row = next((r for r in records if r['finding']['id'] == query['selected']), None)
             if row and self._valid(row):
                 selected = {k: deepcopy(row[k]) for k in ('finding', 'facts', 'context_sha256', 'evidence_refs', 'gaps')}
+                if row['facts'].get('rule')=='REGULAR_INTERVAL' and row['finding']['kind']=='pattern':
+                    selected['cadence_connection'] = cadence_detail(self.evidence, row)
                 selected.update(analysis=self._analysis(row), impact=self.impact(row))
             else:
                 message = 'The selected finding is no longer in this retained scope. Select a current row.'

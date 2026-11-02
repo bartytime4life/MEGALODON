@@ -17,6 +17,8 @@ env:
   PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
   PYTEST_PLUGINS: ""
   PYTEST_ADDOPTS: ""
+  # Include the real unprivileged TCP-holder journey in both full Linux suites.
+  MEGALODON_TEST_NATIVE_HOLDER: "1"
 
 jobs:
   sqlite-lock-acceptance:

@@ -14,6 +14,29 @@ and missing information remain available through the evidence disclosures.
 Compacted findings retain qualified original links when those links are present.
 Missing measurements are not reconstructed from current settings.
 
+## Which program used a repeating connection?
+
+Open **Findings** and select a **Regular Interval** row. The new section shows
+the destination, the number of connection starts, and the usual time between
+them. When Linux saw a program holding a matching socket, the section gives
+its executable filename and the number of linked connections it helps explain.
+“Program unknown” means no qualifying observation was saved for that connection.
+
+On Linux, program observations run while background collection and managed
+**connection summaries** recording are enabled. The collector samples established
+IPv4 TCP sockets for the current non-root account. It checks the same kernel
+socket before and after reading the program's open files. A filename is attached
+only when the local and remote addresses and ports match and the whole check
+falls inside the sensor's reported connection interval. The observation
+identifies a holder at that moment. A shared socket can have other holders,
+and a filename alone does not establish who opened it or whether it was safe.
+
+The timing rule runs on completed hours. The program count covers up to eight
+linked records shown in Findings. Short connections, other accounts, UDP, IPv6,
+older records and unavailable kernel information can leave the program unknown.
+Opening a finding reads saved evidence. It never uses today's running programs
+to fill a gap in yesterday's alert.
+
 ## Ask for another perspective
 
 **Ask local AI** submits the selected displayed fact packet to the saved local
