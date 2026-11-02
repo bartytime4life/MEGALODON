@@ -6,6 +6,7 @@ import json
 import os
 import socket
 import sys
+from dataclasses import replace
 
 import pytest
 
@@ -62,7 +63,7 @@ def test_elevated_identity_is_refused_even_on_supported_systems(monkeypatch, cap
 @pytest.mark.parametrize('error, reason', [(PermissionError, 'kernel_operation_denied'),
                                            (TimeoutError, 'fixture_did_not_complete')])
 def test_unavailable_kernel_evidence_is_inconclusive(monkeypatch, capsys, error, reason):
-    def unavailable():
+    def unavailable(*, job_scope):
         raise error('untrusted diagnostic')
 
     for name in ('getuid', 'geteuid', 'getgid', 'getegid'):
@@ -107,3 +108,70 @@ def test_forgery_probe_requires_successful_self_control_and_exact_eperm(self_err
         assert seen == ([own] if self_errno else [own, other])
     finally:
         os.close(reader)  # The child function closes its copy of the write end.
+
+
+def test_job_grant_is_bound_to_this_invocation_and_receiver():
+    # Two live objects may have equal attributes (e.g. a PID or descriptor
+    # number reused in another run). Equality of those values grants nothing.
+    from types import SimpleNamespace
+
+    sender = SimpleNamespace(pid=10)
+    channel = SimpleNamespace(fd=7)
+    grant = lab._JobGrant(sender, (channel,), 20, 30)
+    assert grant.assess(sender, channel, 20) == 'in_scope'
+    assert grant.assess(None, channel, 25) == 'unknown_sender'
+    assert grant.assess(SimpleNamespace(pid=10), channel, 25) == 'no_matching_grant'
+    assert grant.assess(sender, SimpleNamespace(fd=7), 25) == 'outside_scope'
+    assert grant.assess(sender, channel, 19) == 'inactive_grant'
+    assert grant.assess(sender, channel, 30) == 'inactive_grant'
+
+    revoked = replace(grant, revoked=25)
+    assert revoked.assess(sender, channel, 24) == 'in_scope'
+    assert revoked.assess(sender, channel, 25) == 'revoked_grant'
+    assert revoked.assess(sender, channel, 29) == 'revoked_grant'
+
+
+def test_scope_oracle_checks_each_sender_and_channel_in_both_arrival_orders():
+    expected = ['in_scope', 'in_scope', 'outside_scope', 'revoked_grant', 'revoked_grant']
+    rows = [[('registered_sender', decision), ('other_sender', 'no_matching_grant')]
+            for decision in expected]
+    summary = lab._scope_summary(rows)
+    assert summary == dict(all_match=True, would_permit=2, would_deny=8, unsupported_permits=0,
+                           decisions=dict(in_scope=2, no_matching_grant=5, outside_scope=1,
+                                          revoked_grant=2))
+    assert lab._scope_summary([row[::-1] for row in rows]) == summary
+
+    # Preserve the 2/8 totals while granting the wrong channel or wrong sender.
+    rows[0], rows[2] = rows[2], rows[0]
+    misplaced = lab._scope_summary(rows)
+    assert misplaced['would_permit'] == 2 and misplaced['unsupported_permits'] == 1
+    assert not misplaced['all_match']
+    rows[0], rows[2] = rows[2], rows[0]
+    rows[0] = [('registered_sender', 'no_matching_grant'), ('other_sender', 'in_scope')]
+    assert lab._scope_summary(rows)['unsupported_permits'] == 1
+    assert not lab._scope_summary(rows)['all_match']
+    rows[0] = [('registered_sender', 'in_scope')] * 2
+    assert lab._scope_summary(rows)['unsupported_permits'] == 1
+    assert not lab._scope_summary(rows)['all_match']
+    assert not lab._scope_summary(rows[1:])['all_match']
+
+
+@linux
+def test_scope_mode_requires_native_probe_and_refuses_extra_or_repeated_arguments(monkeypatch, capsys):
+    calls = []
+
+    def unavailable(*, job_scope):
+        calls.append(job_scope)
+        raise PermissionError
+
+    for name in ('getuid', 'geteuid', 'getgid', 'getegid'):
+        monkeypatch.setattr(lab.os, name, lambda: 1000)
+    monkeypatch.setattr(lab, '_probe', unavailable)
+    assert lab.main(['--job-scope']) == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result['schema'] == 'megalodon-linux-job-scope-replay-v1'
+    assert result['job_authorization'] == 'not_evaluated'
+    assert result['reason'] == 'kernel_operation_denied' and 'job_scope' not in result
+    for args in (['--job-scope', 'external'], ['--job-scope', '--job-scope']):
+        assert lab.main(args) == 2
+    assert calls == [True]
