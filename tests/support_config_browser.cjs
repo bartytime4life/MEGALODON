@@ -15,25 +15,40 @@ process.stdin.on('end',async()=>{
  failure=true;await click('support-apps-configure');await settle();assert.match(get('live-interface-name').textContent,/unavailable/);assert.match(get('live-geography-opt-in').textContent,/unavailable/);failure=false;await click('support-config-retry');await settle();assert.equal(requests.length,2);assert.equal(requests[0].opts.method,'GET');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');assert.equal(get('support-apps-configure').attributes['aria-expanded'],'true');assert.equal(get('support-config').hidden,false);
  assert.equal(get('support-config-interface').value,'eth0');assert.equal(get('support-config-nmap-target').value,'127.0.0.1/32');assert.equal(get('support-config-capture-stop').disabled,true);assert.equal(get('support-config-capture-start').disabled,false);
  assert.ok(!JSON.stringify([...nodes.values()]).includes(fixture.token),'configuration nonce never enters DOM');
- // The actual UNBOUND producer must hydrate Setup without allowing provider actions.
+ // UNBOUND permits explicit model choices; all model execution remains held.
  payload={...fixture,model:unbound_model};await click('support-config-retry');await settle();
  assert.equal(get('support-config-retry').hidden,true,'UNBOUND is valid status, not a failed GET');
  assert.equal(get('support-config-interface').disabled,false,'AI hold does not freeze capture choices');
  assert.equal(get('support-config-tool-directory').disabled,false);
  assert.equal(get('support-model-authorization').hidden,false);
  assert.match(get('support-model-saved').textContent,/Saved preference/);
- assert.match(get('support-model-select').children[0].textContent,/Discovery paused/);
+ assert.match(get('support-model-select').children[0].textContent,/Refresh installed models/);
  assert.equal(get('support-model-loaded').textContent,'Authorization required');
  assert.doesNotMatch(get('support-model-lifecycle').textContent,/Retrying|Turn on/);
- assert.match(get('support-model-metrics').textContent,/have not been checked/);
- for(const id of ['support-model-select','support-model-compute','support-model-timeout','support-model-save','support-model-ready','support-model-load','support-config-qwen','support-config-qwen-setup'])assert.equal(get(id).disabled,true,id);
- const unboundPosts=postCount(),unboundReads=requests.length;
+ assert.match(get('support-model-metrics').textContent,/remain unverified/);
+ for(const id of ['support-model-select','support-model-compute','support-model-timeout','support-model-ready'])assert.equal(get(id).disabled,false,id);
+ for(const id of ['support-model-save','support-model-load','support-config-qwen','support-config-qwen-setup'])assert.equal(get(id).disabled,true,id);
+ const choicePosts=postCount(),unboundReads=requests.length;
  assert.equal(get('support-model-refresh').disabled,false);
- assert.equal(get('support-model-refresh').textContent,'Check authorization');
+ assert.equal(get('support-model-refresh').textContent,'Refresh installed models');
+ const choices=[{name:'llama3.2:3b',digest:'b'.repeat(64),size_bytes:2**30},{name:'qwen2.5:7b',digest:'c'.repeat(64),size_bytes:2**31}];
+ payload={...fixture,model:{...unbound_model,options:choices,updated_at:'2026-11-03T01:00:00Z'}};
  await click('support-model-refresh');await settle();
- assert.equal(requests.length,unboundReads+1);assert.equal(requests.at(-1).opts.method,'GET');assert.equal(postCount(),unboundPosts);
- for(const id of ['support-model-save','support-model-load','support-config-qwen','support-config-qwen-setup'])await click(id);
- get('support-model-ready').events.change();await settle();assert.equal(postCount(),unboundPosts,'no AI action while unbound');
+ assert.equal(requests.length,unboundReads+1);assert.equal(requests.at(-1).opts.method,'POST');assert.equal(postCount(),choicePosts+1);
+ assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_refresh'});
+ assert.equal(get('support-model-select').children.length,3);
+ change('support-model-select','llama3.2:3b');change('support-model-compute','auto');
+ payload={...payload,model:{...payload.model,model:'llama3.2:3b',compute_mode:'auto'},job:{...fixture.job,state:'finished',action:'model_select'}};
+ await click('support-model-save');await settle();
+ assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_select',model:'llama3.2:3b',model_digest:'b'.repeat(64),compute_mode:'auto',timeout_seconds:300});
+ assert.equal(postCount(),choicePosts+2);
+ for(const id of ['support-model-load','support-config-qwen','support-config-qwen-setup'])await click(id);
+ assert.equal(postCount(),choicePosts+2,'model execution remains blocked');
+ payload={...payload,job:{...fixture.job,state:'finished',action:'model_policy'}};
+ get('support-model-ready').checked=false;get('support-model-ready').events.change();await settle();
+ assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_policy',keep_ready:false});
+ assert.equal(postCount(),choicePosts+3);
+ const unboundPosts=postCount();
  // All shared scanner job states remain valid even though Sensors owns its action.
  for(const state of ['running','finished','failed']){payload={...fixture,model:unbound_model,job:{...fixture.job,state,action:'clamav_self_check'}};await click('support-config-retry');await settle();assert.equal(get('support-config-retry').hidden,true,state);}
  // Unknown lifecycle states still fail closed, clear stale recovery details,
@@ -65,7 +80,7 @@ process.stdin.on('end',async()=>{
  payload=fixture;await click('support-config-retry');await settle();
  // Polling refreshes backend state without losing settings typed by the user.
  change('support-config-interface','wlan0');change('support-config-nmap-target','192.168.1.0/24');change('support-config-scan-folder','Documents');await poll(10000);
- assert.equal(get('support-config-interface').value,'wlan0');assert.equal(get('support-config-nmap-target').value,'192.168.1.0/24');assert.equal(get('support-config-scan-folder').value,'Documents');assert.equal(postCount(),0);
+ assert.equal(get('support-config-interface').value,'wlan0');assert.equal(get('support-config-nmap-target').value,'192.168.1.0/24');assert.equal(get('support-config-scan-folder').value,'Documents');assert.equal(postCount(),unboundPosts);
 
  // A selected install directory stays a bounded, fixed-tool setup action.
  change('support-config-tool-directory','/home/operator/apps/zeek/bin');

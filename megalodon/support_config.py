@@ -273,7 +273,11 @@ class SupportConfiguration:
             self.settings = replace(self.settings,ai=ai)
             if self.companions:
                 self.companions.ai = ai
-            self.qwen_status.update(state='ready',message='Pinned local model configured; a completed response is required to confirm advice.',updated_at=now())
+            from .local_model_runtime import binding_failure
+            if binding_failure() is not None:
+                self.qwen_status.update(state='needs_setup',message='Saved model choice restored. Model loading and responses remain paused pending acceptance.',updated_at=now())
+            else:
+                self.qwen_status.update(state='ready',message='Pinned local model configured; a completed response is required to confirm advice.',updated_at=now())
         except FileNotFoundError:
             pass
         except (OSError,ValueError,TypeError,RecursionError):
@@ -642,9 +646,13 @@ class SupportConfiguration:
                 self.settings=replace(self.settings,ai=replace(self.settings.ai,keep_warm=self._model_keep_ready))
                 if self.companions:
                     self.companions.ai=self.settings.ai
-                self.model_lifecycle.request()
-                message=('Selected model will load automatically and recover its local connection.' if self._model_keep_ready else
-                         'Selected model loads on demand. An existing memory lease expires within five minutes after its last use.')
+                from .local_model_runtime import binding_failure
+                if binding_failure() is None:
+                    self.model_lifecycle.request()
+                    message=('Selected model will load automatically and recover its local connection.' if self._model_keep_ready else
+                             'Selected model loads on demand. An existing memory lease expires within five minutes after its last use.')
+                else:
+                    message='Model readiness preference saved. Automatic loading remains paused pending model acceptance.'
                 tool='qwen'
             elif action == 'model_load':
                 if not self.settings.ai.enabled:
@@ -682,21 +690,38 @@ class SupportConfiguration:
                 self._execute(['/usr/bin/pkexec','/bin/sh','-c',SURICATA_SCRIPT,'megalodon-suricata',request['interface']],90)
                 message = 'Passive Suricata service configured for the selected interface; the HUD reads bounded recent EVE summaries while monitoring runs.'
             elif action == 'model_select':
-                from .ai_provider import _admitted, status
+                from .ai_provider import _admitted, model_choices, status, AIProviderError
+                from .local_model_runtime import binding_failure
                 candidate=replace(self.settings.ai,enabled=True,model=request['model'],model_digest=request['model_digest'],compute_mode=request['compute_mode'],timeout_seconds=request.get('timeout_seconds',self.settings.ai.timeout_seconds))
-                _admitted(candidate)  # Fresh local capability and digest check before changing the profile.
+                unbound=binding_failure() is not None
+                if unbound:
+                    # Fresh tag identity before saving preferences; no show, ps or generation.
+                    options=model_choices()
+                    match=next((row for row in options if row['name']==candidate.model),None)
+                    if match is None:
+                        raise AIProviderError('MODEL_MISSING')
+                    if match['digest']!=candidate.model_digest:
+                        raise AIProviderError('MODEL_MISMATCH')
+                else:
+                    _admitted(candidate)
                 self._paths();path=self.home/'.config/megalodon/qwen-profile.json'
                 if os.path.lexists(path):_regular_owned_file(path,maximum=1024)
                 value=dict(schema='megalodon-local-model-v2',model=candidate.model,model_digest=candidate.model_digest,compute_mode=candidate.compute_mode,timeout_seconds=candidate.timeout_seconds)
                 _atomic_write(path,json.dumps(value).encode(),0o600)
                 self._load_qwen();self.model_telemetry.invalidate()
-                self.model_lifecycle.request()
-                result=status(self.settings.ai,probe=True)
-                message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
-                    'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
+                if unbound:
+                    message='Saved '+candidate.model+'. Local AI execution remains paused pending model acceptance. No model was loaded and no prompt was sent.'
+                    self.qwen_status.update(state='needs_setup',message=message,updated_at=now())
+                else:
+                    self.model_lifecycle.request()
+                    result=status(self.settings.ai,probe=True)
+                    message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
+                        'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
             elif action == 'model_refresh':
+                from .local_model_runtime import binding_failure
                 self.model_telemetry.refresh_installed_models()
-                message=('Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
+                message=('Installed Ollama list refreshed. No model was downloaded or loaded and no prompt was sent.'
+                         if binding_failure() is not None else 'Refreshing installed Ollama models and current availability. No model was downloaded or loaded.'
                          if self.settings.ai.enabled else 'Installed local models refreshed by your request. No model was downloaded or loaded.')
             elif action == 'qwen_check':
                 from .ai_provider import status

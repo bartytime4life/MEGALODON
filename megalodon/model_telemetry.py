@@ -55,11 +55,13 @@ def _recent_response(value):
 
 
 class ModelTelemetry:
-    def __init__(self, settings, *, inspect=None, loaded=None, catalog=None):
+    def __init__(self, settings, *, inspect=None, loaded=None, catalog=None, choices=None):
         self.settings=settings
         self.inspect=inspect or (lambda value:ai_provider.status(value,probe=False))
         self.loaded=loaded or ai_provider.loaded_model
         self.catalog=catalog or ai_provider.model_catalog
+        self.choices=choices or ai_provider.model_choices
+        self._choices=dict(options=[],truncated=False,checked_at=None,error_code=None)
         self._lock=Lock();self._thread=None;self._key=None;self._value=None;self._at=0.;self._pending=False
 
     def _refresh(self,settings,key):
@@ -99,8 +101,22 @@ class ModelTelemetry:
 
     def refresh_installed_models(self):
         """Read installed models only for the operator's explicit Setup action."""
-        ai_provider._require_binding()
         settings=self.settings()
+        if local_model_runtime.binding_failure() is not None:
+            # Runtime observations remain separate from this explicit list read.
+            with self._lock:
+                self._choices=dict(options=[],truncated=False,checked_at=None,error_code=None)
+            try:
+                options=self.choices()
+                options.sort(key=lambda row:(row['name']!=settings.model,row['name']))
+            except ai_provider.AIProviderError as exc:
+                with self._lock:
+                    self._choices['error_code']=exc.code
+                raise
+            with self._lock:
+                self._choices=dict(options=options[:64],truncated=len(options)>64,
+                    checked_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),error_code=None)
+            return
         if settings.enabled:
             self.invalidate()
             return
@@ -115,13 +131,19 @@ class ModelTelemetry:
     def snapshot(self):
         settings=self.settings();key=(settings.enabled,settings.model,settings.model_digest,settings.compute_mode)
         failure=local_model_runtime.binding_failure()
-        if settings.enabled and failure is not None:
+        if failure is not None:
             # No thread, provider read or historical observation can imply readiness.
+            with self._lock:
+                choices=dict(self._choices)
+            message=local_model_runtime.MESSAGE
+            if choices['error_code']:
+                message=MESSAGES.get(ERROR_STATES.get(choices['error_code']),'Installed models could not be read.')+' '+message
             return dict(timeout_seconds=settings.timeout_seconds,running=False,started_at=None,
-                options=[],truncated=False,compute_mode=settings.compute_mode,
+                options=choices['options'],truncated=choices['truncated'],compute_mode=settings.compute_mode,
                 selected_digest=settings.model_digest,state='needs_setup',model=settings.model,
-                model_state='unbound',model_present=False,message=local_model_runtime.MESSAGE,
-                updated_at=None,last_response_at=None,last_attempt_at=None,error_code=failure,
+                model_state='unbound' if settings.enabled else 'disabled',binding_status='UNBOUND',selection_available=True,
+                model_present=False,message=message,
+                updated_at=choices['checked_at'],last_response_at=None,last_attempt_at=None,error_code=failure,
                 last_error_code=None,drift=None,installed_digest=None,response_ms=None,
                 inference_verified=False,loaded=None,memory_bytes=None,vram_bytes=None)
         with self._lock:
