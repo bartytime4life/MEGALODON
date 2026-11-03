@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),vm=require('node:vm');let input='';process.stdin.on('data',value=>input+=value);
 process.stdin.on('end',async()=>{
- const {code,fixture,export_html}=JSON.parse(input),nodes=new Map(),timers=new Map(),requests=[],listeners={};let seq=0,intersection,mutation,payload=fixture,fail=false,large=false,now=Date.parse(fixture.observed_at);
+ const {code,fixture,export_html,session_token}=JSON.parse(input),nodes=new Map(),timers=new Map(),requests=[],listeners={};let seq=0,intersection,mutation,payload=fixture,fail=false,large=false,now=Date.parse(fixture.observed_at),scannerToken=null;
  class Element{constructor(tag='div'){this.tag=tag;this.textContent='';this.children=[];this.value='';this.dataset={};this.attrs={};this.events={};this.hidden=false;this.open=false;this.disabled=false;}append(...values){this.children.push(...values);}replaceChildren(...values){this.children=values;}setAttribute(key,value){this.attrs[key]=value;}addEventListener(key,fn){(this.events[key]??=[]).push(fn);}get firstElementChild(){return this.children[0];}set innerHTML(_){throw Error('Unsafe HTML assignment');}}
  const get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
  const text=(tag,value,cls)=>{const item=new Element(tag);item.textContent=String(value);if(cls)item.className=cls;return item;};
@@ -12,7 +12,7 @@ process.stdin.on('end',async()=>{
  const context={document,Date:clock,localHudLaunch:{},window:{},Intl,TextEncoder,TextDecoder,Uint8Array,AbortController,byId:get,textNode:text,
   setupState:{readiness:null},workflowToolIds:['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap'],appsPresenceFreshnessNote:()=> 'Old startup check.',toolPresenceText:()=> 'Not checked',heartbeatLight:()=>text('i',''),heartbeatDetail:()=>text('span',''),installControl:()=>text('span',''),MegalodonControls:{mount(){}},
   IntersectionObserver:class{constructor(fn){intersection=fn;}observe(target){assert.equal(target,get('workspace-interfaces'),'the visible overview must load even when tool cards are below the fold');}},MutationObserver:class{constructor(fn){mutation=fn;}observe(){}},
-  setTimeout(fn,ms){const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},fetch:async(path,options)=>{requests.push({path,options});if(fail)throw Error('PRIVATE_BACKEND_DIAGNOSTIC');return {ok:true,headers:{get:()=>large?'65537':null},text:async()=>JSON.stringify(payload)};}};
+  setTimeout(fn,ms){const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},fetch:async(path,options)=>{requests.push({path,options});if(fail)throw Error('PRIVATE_BACKEND_DIAGNOSTIC');let value=payload,status=200;if(path==='/api/support-config'){if(options.method==='POST'){assert.equal(options.headers['X-Megalodon-Config-Token'],scannerToken);assert.deepEqual(JSON.parse(options.body),{action:'clamav_self_check'});status=202;value={scanner_check_id:'0123456789abcdef'};payload={...fixture,scanner_check:{state:'running',message:'Checking both files…',finished_at:null,run_id:value.scanner_check_id}};}else value={token:scannerToken};}return {ok:true,status,headers:{get:()=>large?'65537':null},text:async()=>JSON.stringify(value)};}};
  get('integrations-status-filter').value='ALL';get('integrations-presence-filter').value='ALL';get('integrations-platform').value='linux';
  vm.createContext(context);vm.runInContext(code,context);await settle();assert.equal(requests.length,0,'offscreen tool list does not poll');
  assert.equal(get('workflows-count-attention').textContent,'—');assert.equal(get('workflows-show-attention').disabled,true,'no current count is invented before a response');
@@ -74,5 +74,19 @@ process.stdin.on('end',async()=>{
  const pollCount=()=>[...timers.values()].filter(timer=>timer.ms===5000).length;
  get('workspace-interfaces').hidden=true;mutation();await settle();assert.equal(pollCount(),0);const count=requests.length;await event('workflows-refresh');assert.equal(requests.length,count,'hidden workspace cannot request');get('workspace-interfaces').hidden=false;mutation();await settle();assert.equal(requests.length,count+1);assert.equal(pollCount(),1);
  intersection([{isIntersecting:false}]);assert.equal(pollCount(),0);intersection([{isIntersecting:true}]);await settle();document.hidden=true;listeners.visibilitychange();assert.equal(pollCount(),0);assert.ok(requests.every(request=>request.options.method==='GET'),'view never starts a tool');
+ // Exercise the generated click handler with backend-shaped tokens, not only hex.
+ document.hidden=false;
+ const idle=()=>({...fixture,scanner_check:{state:'idle',message:'No check has run.',finished_at:null,run_id:null}});
+ for(const token of [session_token||'a'.repeat(32),'A'.repeat(30)+'-_','a'.repeat(32)]){
+  scannerToken=token;payload=idle();await event('workflows-refresh');assert.equal(get('scanner-check-run').disabled,false);
+  const before=requests.filter(request=>request.options.method==='POST').length;await event('scanner-check-run');
+  assert.equal(requests.filter(request=>request.options.method==='POST').length,before+1,'valid backend token starts exactly one check');
+  assert.equal(get('scanner-check-status').textContent,'Checking both files…');assert.equal(get('scanner-check-run').disabled,true);
+ }
+ for(const token of [null,42,'','a'.repeat(31),'a'.repeat(33),'a'.repeat(31)+'!','a'.repeat(31)+'\n','a'.repeat(32)+'\n','a'.repeat(32)+'\r\n']){
+  scannerToken=token;payload=idle();await event('workflows-refresh');const before=requests.filter(request=>request.options.method==='POST').length;
+  await event('scanner-check-run');assert.equal(requests.filter(request=>request.options.method==='POST').length,before,'malformed session token never posts');
+  assert.match(get('scanner-check-status').textContent,/Could not confirm the request/);
+ }
  if(export_html)process.stdout.write(JSON.stringify({readyHTML,failedHTML,emptyHTML}));else console.log('workflow UI behavior passed');
 }).on('error',error=>{console.error(error);process.exitCode=1;});process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});

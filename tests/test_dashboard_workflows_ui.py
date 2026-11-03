@@ -11,6 +11,7 @@ import pytest
 from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_integrations import INTEGRATIONS_HTML, INTEGRATIONS_JS
 from megalodon.dashboard_workflows import WORKFLOWS_CSS, WORKFLOWS_JS, local_workflow_script
+from test_support_config import manager
 
 
 def workflow_fixture():
@@ -19,11 +20,11 @@ def workflow_fixture():
     return dict(schema='megalodon-support-workflows-v1', mode='background', observed_at='2026-09-30T20:10:00Z', tools=[dict(id=name, name=name, state=state, message=f'{name} synthetic observation.', updated_at='2026-09-30T20:09:30Z', metrics=[dict(label='Source records', value=12, unit='records')]) for name, state in zip(ids, states)])
 
 
-def test_workflow_runtime_validation_and_visibility():
+def test_workflow_runtime_validation_and_visibility(manager):
     node = shutil.which('node')
     if not node:
         pytest.skip('Node unavailable')
-    result = subprocess.run([node, str(Path(__file__).with_name('workflows_browser.cjs'))], input=json.dumps(dict(code=local_workflow_script(INTEGRATIONS_JS)+WORKFLOWS_JS, fixture=workflow_fixture())), capture_output=True, text=True, timeout=10, check=False)
+    result = subprocess.run([node, str(Path(__file__).with_name('workflows_browser.cjs'))], input=json.dumps(dict(code=local_workflow_script(INTEGRATIONS_JS)+WORKFLOWS_JS, fixture=workflow_fixture(), session_token=manager.snapshot(include_token=True)['token'])), capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
 
 

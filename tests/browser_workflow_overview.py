@@ -1,5 +1,6 @@
 """Real browser journey over inert workflow responses; no tool starts."""
 import json
+import secrets
 import time
 from urllib.parse import urlsplit
 
@@ -18,6 +19,7 @@ async def exercise_workflow_overview(browser, port, password, passed):
     requests, errors, violations = [], [], []
     scanner = {'state':'idle', 'message':'No check has run.', 'finished_at':None, 'run_id':None}
     scanner_runs = []
+    scanner_token = secrets.token_urlsafe(24)
 
     async def fixture(route):
         target = urlsplit(route.request.url)
@@ -27,14 +29,14 @@ async def exercise_workflow_overview(browser, port, password, passed):
             await route.abort()
         elif target.path == "/api/support-config" and route.request.method == "POST":
             assert route.request.post_data_json == {"action":"clamav_self_check"}
-            assert route.request.headers["x-megalodon-config-token"] == "a"*32
+            assert route.request.headers["x-megalodon-config-token"] == scanner_token
             identifier = f"{len(scanner_runs)+1:016x}"
             scanner_runs.append(identifier)
             scanner.clear()
             scanner.update(state="running", message="Checking both files…", finished_at=None, run_id=identifier)
             await route.fulfill(status=202,json={"scanner_check_id":identifier})
         elif target.path == "/api/support-config" and route.request.headers.get("x-megalodon-check")=="1" and scanner.get("testing"):
-            await route.fulfill(json={"token":"a"*32})
+            await route.fulfill(json={"token":scanner_token})
         elif target.path == "/api/support-workflows":
             if unavailable:
                 await route.fulfill(status=503, content_type="application/json", body="{}")
