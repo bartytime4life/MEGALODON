@@ -1,4 +1,4 @@
-"""Explicit offline verification of one local Ollama/Qwen artifact's bytes.
+"""Explicit offline verification of one local Ollama artifact's bytes.
 
 This is an evidence collector, not runtime admission. It never contacts Ollama,
 executes a provider, reads prompt contents into a receipt, or changes a binding.
@@ -15,14 +15,17 @@ import re
 import stat
 from time import monotonic
 
+from .config import valid_model_name
+
 SCHEMA = 'megalodon-local-model-artifact-observation-v1'
 MAX_MANIFEST_BYTES = 65536
 MAX_COMPONENTS = 32
 MAX_TOTAL_BYTES = 32 * 1024**3
+LARGE_TOTAL_BYTES = 96 * 1024**3
 MAX_PROVIDER_BYTES = 256 * 1024**2
 MAX_SECONDS = 120
+LARGE_SECONDS = 300
 CHUNK_BYTES = 1024**2
-MODEL = re.compile(r'(qwen[0-9]+(?:\.[0-9]+)?):([A-Za-z0-9][A-Za-z0-9_.-]{0,95})')
 HEX = re.compile(r'[a-f0-9]{64}')
 ROLES = {
     'application/vnd.docker.container.image.v1+json': 'config',
@@ -36,6 +39,21 @@ ROLES = {
 
 class ArtifactError(ValueError):
     """Fixed, path-free diagnostic; no caller or file content is echoed."""
+
+
+def _model_location(model):
+    """Resolve a bounded tag to local directories, never a network endpoint."""
+    if not valid_model_name(model) or ':' not in model:
+        raise ArtifactError('EXACT_LOCAL_MODEL_TAG_REQUIRED')
+    name, tag = model.rsplit(':', 1)
+    parts = name.split('/')
+    if tag.lower() == 'latest' or len(parts) > 3:
+        raise ArtifactError('EXACT_LOCAL_MODEL_TAG_REQUIRED')
+    if len(parts) == 1:
+        parts = ['registry.ollama.ai', 'library', *parts]
+    elif len(parts) == 2:
+        parts = ['registry.ollama.ai', *parts]
+    return ['manifests', *parts], tag
 
 
 def _identity(info):
@@ -78,9 +96,10 @@ def _child_directory(parent, parts):
 
 
 class _Reader:
-    def __init__(self, clock):
+    def __init__(self, clock, total_limit, seconds):
         self.clock = clock
-        self.deadline = clock() + MAX_SECONDS
+        self.deadline = clock() + seconds
+        self.total_limit = total_limit
         self.total = 0
 
     def check(self):
@@ -101,7 +120,7 @@ class _Reader:
                 raise ArtifactError('FILE_SIZE_LIMIT')
             if expected_size is not None and before.st_size != expected_size:
                 raise ArtifactError('COMPONENT_SIZE_MISMATCH')
-            if self.total + before.st_size > MAX_TOTAL_BYTES:
+            if self.total + before.st_size > self.total_limit:
                 raise ArtifactError('TOTAL_BYTES_LIMIT')
             digest = hashlib.sha256()
             chunks = []
@@ -113,7 +132,7 @@ class _Reader:
                     break
                 count += len(data)
                 self.total += len(data)
-                if count > before.st_size or self.total > MAX_TOTAL_BYTES:
+                if count > before.st_size or self.total > self.total_limit:
                     raise ArtifactError('FILE_CHANGED')
                 digest.update(data)
                 if retain:
@@ -139,7 +158,7 @@ def _pairs(pairs):
     return result
 
 
-def _descriptors(raw):
+def _descriptors(raw, total_limit):
     try:
         value = json.loads(raw, object_pairs_hook=_pairs,
                            parse_constant=lambda _: (_ for _ in ()).throw(ArtifactError('INVALID_MANIFEST')))
@@ -157,8 +176,10 @@ def _descriptors(raw):
         if (type(row) is not dict or set(row) not in ({'mediaType', 'digest', 'size'}, {'mediaType', 'digest', 'size', 'from'})
                 or type(row['mediaType']) is not str or row['mediaType'] not in ROLES
                 or type(row['digest']) is not str or re.fullmatch(r'sha256:[a-f0-9]{64}', row['digest']) is None
-                or type(row['size']) is not int or not 0 < row['size'] <= MAX_TOTAL_BYTES):
+                or type(row['size']) is not int or row['size'] <= 0):
             raise ArtifactError('INVALID_COMPONENT')
+        if row['size'] > total_limit:
+            raise ArtifactError('TOTAL_BYTES_LIMIT')
         # Ollama adds optional source labels to imported layers. They are bounded
         # metadata only: never a path to read, URL to fetch, or provenance proof.
         if 'from' in row and (type(row['from']) is not str
@@ -171,26 +192,28 @@ def _descriptors(raw):
         result.append(dict(role=role, sha256=row['digest'][7:], size_bytes=row['size']))
     if sum(row['role'] == 'weights' for row in result) != 1:
         raise ArtifactError('EXACTLY_ONE_WEIGHT_COMPONENT_REQUIRED')
-    if sum(row['size_bytes'] for row in result) > MAX_TOTAL_BYTES - MAX_MANIFEST_BYTES:
+    if sum(row['size_bytes'] for row in result) > total_limit - MAX_MANIFEST_BYTES:
         raise ArtifactError('TOTAL_BYTES_LIMIT')
     return result
 
 
 def observe_artifact(store, model, provider='/usr/local/bin/ollama', *,
-                     manifest_pin=None, provider_pin=None, clock=monotonic):
+                     manifest_pin=None, provider_pin=None, verification_profile='standard', clock=monotonic):
     """Hash one explicit artifact and provider; no provider API or activation.
 
     Pins are optional independently obtained comparison targets. A content-address
     match verifies consistency with the local manifest, not publisher provenance.
     The time budget is cooperative: it cannot interrupt a blocked kernel read.
     """
-    match = MODEL.fullmatch(model) if type(model) is str else None
-    if match is None or match[2] == 'latest' or '..' in match[2]:
-        raise ArtifactError('EXACT_QWEN_TAG_REQUIRED')
+    model_parts, tag = _model_location(model)
+    if type(verification_profile) is not str or verification_profile not in {'standard','large-local'}:
+        raise ArtifactError('INVALID_VERIFICATION_PROFILE')
+    total_limit, seconds = ((MAX_TOTAL_BYTES, MAX_SECONDS) if verification_profile == 'standard'
+                            else (LARGE_TOTAL_BYTES, LARGE_SECONDS))
     for pin in (manifest_pin, provider_pin):
         if pin is not None and (type(pin) is not str or HEX.fullmatch(pin) is None):
             raise ArtifactError('INVALID_PIN')
-    reader = _Reader(clock)
+    reader = _Reader(clock, total_limit, seconds)
     try:
         provider = Path(provider)
         with _directory(provider.parent) as directory:
@@ -199,18 +222,18 @@ def observe_artifact(store, model, provider='/usr/local/bin/ollama', *,
         if provider_pin is not None and provider_digest != provider_pin:
             raise ArtifactError('PROVIDER_PIN_MISMATCH')
         with _directory(store) as root:
-            with _child_directory(root, ['manifests', 'registry.ollama.ai', 'library', match[1]]) as manifests:
+            with _child_directory(root, model_parts) as manifests:
                 manifest_digest, _, raw, manifest_identity = reader.read(
-                    manifests, match[2], MAX_MANIFEST_BYTES, retain=True)
+                    manifests, tag, MAX_MANIFEST_BYTES, retain=True)
                 if manifest_pin is not None and manifest_digest != manifest_pin:
                     raise ArtifactError('MANIFEST_PIN_MISMATCH')
-                descriptors = _descriptors(raw)
+                descriptors = _descriptors(raw, total_limit)
                 identities = []
                 with _child_directory(root, ['blobs']) as blobs:
                     blob_directory_identity = _directory_identity(blobs)
                     for row in descriptors:
                         _, _, _, identity = reader.read(
-                            blobs, 'sha256-' + row['sha256'], MAX_TOTAL_BYTES,
+                            blobs, 'sha256-' + row['sha256'], total_limit,
                             expected_size=row['size_bytes'], expected_digest=row['sha256'])
                         identities.append(identity)
                     # Recheck every directory entry after the complete closure read.
@@ -218,16 +241,16 @@ def observe_artifact(store, model, provider='/usr/local/bin/ollama', *,
                         if _identity(os.stat('sha256-' + row['sha256'], dir_fd=blobs,
                                              follow_symlinks=False)) != identity:
                             raise ArtifactError('FILE_CHANGED')
-                if _identity(os.stat(match[2], dir_fd=manifests, follow_symlinks=False)) != manifest_identity:
+                if _identity(os.stat(tag, dir_fd=manifests, follow_symlinks=False)) != manifest_identity:
                     raise ArtifactError('FILE_CHANGED')
                 # Also re-resolve the operator's path: a renamed whole store or
                 # component directory must not leave a stale open directory valid.
                 with _directory(store) as current_root:
                     if _directory_identity(current_root) != _directory_identity(root):
                         raise ArtifactError('FILE_CHANGED')
-                    with _child_directory(current_root, ['manifests', 'registry.ollama.ai', 'library', match[1]]) as current_manifests:
+                    with _child_directory(current_root, model_parts) as current_manifests:
                         if (_directory_identity(current_manifests) != _directory_identity(manifests)
-                                or _identity(os.stat(match[2], dir_fd=current_manifests, follow_symlinks=False)) != manifest_identity):
+                                or _identity(os.stat(tag, dir_fd=current_manifests, follow_symlinks=False)) != manifest_identity):
                             raise ArtifactError('FILE_CHANGED')
                     with _child_directory(current_root, ['blobs']) as current_blobs:
                         if _directory_identity(current_blobs) != blob_directory_identity:
@@ -249,6 +272,8 @@ def observe_artifact(store, model, provider='/usr/local/bin/ollama', *,
         'provider': {'executable_sha256': provider_digest, 'size_bytes': provider_size,
                      'version': None, 'provenance_verified': False},
         'components': descriptors, 'total_bytes_read': reader.total,
+        'verification_limits': {'profile':verification_profile,'max_total_bytes':total_limit,
+                                'max_seconds':seconds,'chunk_bytes':CHUNK_BYTES},
         'pin_comparisons': {'manifest': 'matched' if manifest_pin else 'not_supplied',
                             'provider': 'matched' if provider_pin else 'not_supplied'},
         'authority': {'contacts_provider': False, 'starts_model': False, 'accepts_model': False,

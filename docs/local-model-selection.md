@@ -14,6 +14,13 @@ or changed artifact is rejected before saving. No model is loaded or given a
 prompt, and the UI keeps runtime acceptance visibly separate. Refresh errors
 clear earlier choices; passive polling never discovers models while UNBOUND.
 
+Before acceptance, the separate [offline file verifier](qwen-runtime-unbound.md#verify-an-installed-models-files-before-binding)
+can measure an explicitly selected Qwen, Llama, Nemotron or other supported
+local Ollama artifact. It accepts an explicit tag and optional namespace/registry,
+reads only the supplied local store, and never loads or accepts the model. Its
+default 32-GiB budget can refuse large choices even though Setup can save them;
+an explicit `large-local` profile has a fixed 96-GiB / 300-second budget.
+
 ## Execution behavior awaiting acceptance
 
 The following response, loaded-memory and automatic-advice flows describe dormant
