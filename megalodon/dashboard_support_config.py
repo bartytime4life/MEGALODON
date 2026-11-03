@@ -31,6 +31,8 @@ SUPPORT_CONFIG_HTML = r'''
   <details class="support-service-settings"><summary>Local AI and background sensors</summary><div class="support-tool-settings">
     <section aria-labelledby="support-model-title" class="settings-model">
       <h5 id="support-model-title" tabindex="-1">Selected model</h5>
+      <p id="support-model-saved" class="support-config-note">Saved model preference has not been checked.</p>
+      <div id="support-model-authorization" class="support-config-feedback" role="status" hidden><div><strong>Local AI needs authorization</strong><p>Model discovery, selection and loading are paused until this release has an accepted owner model binding. Installed models have not been checked.</p><a href="https://github.com/bartytime4life/MEGALODON/issues/446" target="_blank" rel="noopener noreferrer">Review AI acceptance requirements (#446)</a></div></div>
       <div class="settings-model-fields"><div><label for="support-model-select">Installed model</label><select id="support-model-select" disabled><option value="">Checking installed models…</option></select></div><div><label for="support-model-compute">Compute</label><select id="support-model-compute" disabled><option value="cpu">CPU · keep GPU available</option><option value="auto">Ollama automatic · may use GPU</option></select></div></div>
       <div class="support-config-actions"><button type="button" id="support-model-save" class="support-config-primary" disabled>Save model</button><button type="button" id="support-model-refresh" disabled>Refresh list</button><button type="button" id="support-model-adopt" hidden>Use installed version</button></div>
       <div class="settings-switch-row"><label class="settings-switch-copy" for="support-model-ready"><strong>Keep model ready while HUD is running</strong><small>Load the saved model at startup and retry after a lost connection.</small></label><input id="support-model-ready" class="settings-switch" type="checkbox" role="switch" disabled></div>
@@ -130,6 +132,10 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     'support-config-tool-directory-save':'tool_directory_set','support-config-qwen-setup':'qwen_configure','support-config-suricata-setup':'suricata_configure','support-config-qwen':'qwen_check','support-config-zeek':'zeek_check','support-config-suricata':'suricata_check',
     'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
   const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',persistence_baseline:'Recording initial persistence baseline',tool_directory_set:'Saving tool directory',model_policy:'Saving model loading preference',model_load:'Loading the saved model',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
+  // Sensors owns the scanner self-check; its job can still appear in this shared status.
+  const jobActions=new Set([...Object.keys(actionNames),'clamav_self_check']);
+  const modelActions=new Set(['model_select','model_refresh','model_cancel','model_policy','model_load','qwen_check','qwen_configure']);
+  const modelUnbound=(model=state.payload?.model)=>model?.model_state==='unbound'||model?.lifecycle?.state==='unbound'||model?.error_code==='OWNER_MODEL_BINDING_NOT_RECORDED';
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout','support-config-tool-id','support-config-tool-directory'];
   const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
@@ -143,7 +149,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       || !object(v.settings) || !text(v.settings.interface,64) || !text(v.settings.nmap_target,64) || !['Downloads','Documents'].includes(v.settings.scan_folder)
       || !object(v.tool_directories) || Object.keys(v.tool_directories).length>8 || !['ready','unavailable'].includes(v.tool_directories_status)
       || !Object.entries(v.tool_directories).every(([id,directory])=>['tshark','zeek','suricata','nftables','clamav','osquery','qwen','nmap'].includes(id)&&text(directory,1024)&&directory.startsWith('/'))
-      || !object(v.job) || !['idle','running','finished','failed'].includes(v.job.state) || !(v.job.action===null || Object.hasOwn(actionNames,v.job.action))
+      || !object(v.job) || !['idle','running','finished','failed'].includes(v.job.state) || !(v.job.action===null || jobActions.has(v.job.action))
       || !text(v.job.message) || !stamp(v.job.started_at) || !stamp(v.job.finished_at)
       || !object(v.capture) || !['idle','starting','running','stopped','failed'].includes(v.capture.state) || !['received','accepted','skipped'].every(k=>count(v.capture[k]))
       || !(v.capture.failure_reason===undefined || v.capture.failure_reason===null || (v.capture.state==='failed' && v.capture.failure_reason==='permission_required'))
@@ -154,7 +160,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       || !text(v.command,512) || (needToken&&!/^[A-Za-z0-9_-]{32}$/.test(v.token||'')) || (v.token!==undefined&&!/^[A-Za-z0-9_-]{32}$/.test(v.token)))throw Error('Invalid configuration response');
     if(v.model!==undefined){const m=v.model;if(!object(m)||!text(m.model,96)||!text(m.message,512)||!['cpu','auto'].includes(m.compute_mode)||!Array.isArray(m.options)||m.options.length>64||!m.options.every(row=>object(row)&&text(row.name,96)&&/^[a-f0-9]{64}$/.test(row.digest)&&count(row.size_bytes))||!stamp(m.updated_at)||!stamp(m.last_response_at)||!stamp(m.last_attempt_at)||!(m.response_ms===null||count(m.response_ms))||!(m.drift===undefined||m.drift===null||['digest_changed','missing'].includes(m.drift))||!(m.installed_digest===undefined||m.installed_digest===null||/^[a-f0-9]{64}$/.test(m.installed_digest))||!['loaded','memory_bytes','vram_bytes'].every(key=>key==='loaded'?(m[key]===null||typeof m[key]==='boolean'):(m[key]===null||count(m[key]))))throw Error('Invalid model telemetry');}
     if(v.model?.keep_ready!==undefined&&typeof v.model.keep_ready!=='boolean')throw Error('Invalid model policy');
-    if(v.model?.lifecycle!==undefined){const l=v.model.lifecycle;if(!object(l)||!['disabled','paused','checking','loading','ready','retrying','error'].includes(l.state)||!text(l.message,512)||!(l.error_code===null||text(l.error_code,80))||!(l.retry_in_seconds===null||count(l.retry_in_seconds))||!stamp(l.updated_at))throw Error('Invalid model lifecycle');}
+    if(v.model?.lifecycle!==undefined){const l=v.model.lifecycle;if(!object(l)||!['unbound','disabled','paused','checking','loading','ready','retrying','error'].includes(l.state)||!text(l.message,512)||!(l.error_code===null||text(l.error_code,80))||(l.state==='unbound'&&l.error_code!=='OWNER_MODEL_BINDING_NOT_RECORDED')||!(l.retry_in_seconds===null||count(l.retry_in_seconds))||!stamp(l.updated_at))throw Error('Invalid model lifecycle');}
     return v;
   }
   const capturing=()=>state.payload && ['starting','running'].includes(state.payload.capture.state);
@@ -168,17 +174,21 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   function controls(){
     const changing=state.pending && (!state.readDone || !state.hydrated);
     const blocked=changing || !state.valid || !workspaceVisible();
+    const aiBlocked=blocked||modelUnbound();
     for(const [id,action] of Object.entries(actions)){
       if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
         || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
         || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!el('support-model-select').value) || (action==='model_cancel'&&!state.payload?.model?.running)
-        || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
+        || (modelActions.has(action)&&aiBlocked) || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
     }
-    el('support-model-adopt').disabled=blocked||!!working();
-    el('support-model-load').disabled=blocked||!!working()||!state.payload?.model?.model||state.payload?.model?.keep_ready!==true||['checking','loading'].includes(state.payload?.model?.lifecycle?.state);
-    el('support-model-ready').disabled=blocked||!!working();
-    for(const id of inputIds)el(id).disabled=blocked||!!working();
+    el('support-model-adopt').disabled=aiBlocked||!!working();
+    el('support-model-load').disabled=aiBlocked||!!working()||!state.payload?.model?.model||state.payload?.model?.keep_ready!==true||['checking','loading'].includes(state.payload?.model?.lifecycle?.state);
+    el('support-model-ready').disabled=aiBlocked||!!working();
+    for(const id of inputIds)el(id).disabled=(id.startsWith('support-model-')?aiBlocked:blocked)||!!working();
+    // A failed status read or an authorization hold must retain a read-only retry.
+    el('support-model-refresh').disabled=state.pending||!workspaceVisible()||(state.valid&&!modelUnbound()&&!!working());
+    el('support-model-refresh').textContent=!state.valid?'Retry model status':modelUnbound()?'Check authorization':'Refresh list';
     el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
     el('support-config').setAttribute('aria-busy',changing?'true':'false');
   }
@@ -204,8 +214,11 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
 
     if(v.model){
       const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')||document.activeElement===select?select.value:model.model;
+      const unbound=modelUnbound(model);
+      el('support-model-saved').textContent='Saved preference · '+(model.model||'No model selected');
+      el('support-model-authorization').hidden=!unbound;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});
-      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=unbound?'Discovery paused · authorization required':options.length?'Choose a model':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';
       const key=JSON.stringify([placeholder.textContent,model.options.map(row=>[row.name,row.size_bytes])]);
       if(select.dataset.optionsKey!==key){select.replaceChildren(placeholder,...options);select.dataset.optionsKey=key;}
       const choice=model.options.some(row=>row.name===chosen)?chosen:'';if(select.value!==choice)select.value=choice;
@@ -213,9 +226,9 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       if(!state.dirty.has('compute_mode'))el('support-model-compute').value=model.compute_mode;
       if(!state.dirty.has('keep_ready'))el('support-model-ready').checked=model.keep_ready===true;
       const lifecycle=model.lifecycle;
-      el('support-model-loaded').textContent=model.loaded===true?'Loaded in memory':model.loaded===false?'Not loaded':'Loaded state unavailable';
+      el('support-model-loaded').textContent=unbound?'Authorization required':model.loaded===true?'Loaded in memory':model.loaded===false?'Not loaded':'Loaded state unavailable';
       el('support-model-loaded-state').dataset.state=lifecycle?.state||'disabled';
-      el('support-model-lifecycle').textContent=lifecycle?lifecycle.message+(model.keep_ready!==true?' Turn on Keep model ready to enable Load now.':'')+(lifecycle.retry_in_seconds>0?' Retrying in '+lifecycle.retry_in_seconds+' s.':''):'Automatic model loading is unavailable in this service version.';
+      el('support-model-lifecycle').textContent=unbound?'Automatic loading is paused. Saved keep-ready preference: '+(model.keep_ready===true?'on.':'off.'):lifecycle?lifecycle.message+(model.keep_ready!==true?' Turn on Keep model ready to enable Load now.':'')+(lifecycle.retry_in_seconds>0?' Retrying in '+lifecycle.retry_in_seconds+' s.':''):'Automatic model loading is unavailable in this service version.';
       el('support-model-status').textContent=model.message+(model.truncated?' First 64 installed artifacts shown.':'');
       // Ollama replaced the pinned model's files: re-pin the same name to the digest Ollama now reports.
       el('support-model-adopt').hidden=model.drift!=='digest_changed'||!model.options.some(row=>row.name===model.model);
@@ -223,7 +236,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       metrics.push(model.last_response_at?'Last accepted response '+time(model.last_response_at)+(model.inference_verified===true?' · recent':' · reverify for current readiness'):'No accepted response recorded for this model');
       if(model.last_attempt_at)metrics.push('Last attempt '+time(model.last_attempt_at));if(model.response_ms!==null)metrics.push('Last attempt duration '+(model.response_ms/1000).toFixed(2)+' s');
       if(model.loaded===false)metrics.push('Selected model is unloaded');else if(model.loaded===true&&model.memory_bytes!==null&&model.vram_bytes!==null)metrics.push('Loaded allocation '+(model.memory_bytes/1024**3).toFixed(1)+' GiB · GPU '+(model.vram_bytes/1024**3).toFixed(1)+' GiB');
-      if(model.updated_at)metrics.push('Availability checked '+time(model.updated_at));el('support-model-metrics').textContent=metrics.join(' · ');
+      if(model.updated_at)metrics.push('Availability checked '+time(model.updated_at));el('support-model-metrics').textContent=unbound?'Installed models and loaded memory have not been checked.':metrics.join(' · ');
     }
     const selected=state.dirty.has('interface')||document.activeElement===el('support-config-interface') ? el('support-config-interface').value : (v.settings.interface || (v.interfaces.find(i=>i.default&&i.up)||v.interfaces.find(i=>i.up)||{}).name || '');
     const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=v.interfaces.length?'Select an interface':'No interfaces returned';
@@ -274,7 +287,18 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     }finally{clearTimeout(timer);}
   }
   function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='tool_directory_set')state.dirty.delete('tool_directory');if(action==='model_policy')state.dirty.delete('keep_ready');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
-  function fail(error){renderRecoveryReadiness(el('recovery-readiness'),null);renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);renderPersistence(el('persistence-review'),null);renderGateway(el('gateway-review'),null);renderProcessNetwork(el('process-network-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
+  function modelUnavailable(){
+    const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Model list unavailable · retry status';
+    const select=el('support-model-select');select.replaceChildren(placeholder);delete select.dataset.optionsKey;
+    el('support-model-authorization').hidden=true;
+    el('support-model-saved').textContent='Saved model preference unavailable.';
+    el('support-model-loaded').textContent='Loaded state unavailable';
+    el('support-model-loaded-state').dataset.state='error';
+    el('support-model-lifecycle').textContent='Automatic loading status unavailable.';
+    el('support-model-status').textContent='Unable to read Local AI status. Use Retry model status to check again.';
+    el('support-model-metrics').textContent='';el('support-model-adopt').hidden=true;
+  }
+  function fail(error){modelUnavailable();renderRecoveryReadiness(el('recovery-readiness'),null);renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);renderPersistence(el('persistence-review'),null);renderGateway(el('gateway-review'),null);renderProcessNetwork(el('process-network-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;}
   async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();let finished;state.readDone=new Promise(resolve=>{finished=resolve;});state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;state.readDone=null;controls();schedule();finished();}}
   function payloadFor(action){
     const value={action};
@@ -297,7 +321,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   async function act(action){
     if(state.readDone)await state.readDone;
     const button=Object.entries(actions).find(([,value])=>value===action);
-    if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible())return;
+    if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible()||(modelActions.has(action)&&modelUnbound()))return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
     const focusedControl=document.activeElement?.id;
     cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]|| (action==='model_cancel'?'Cancelling AI request':'Saving local AI settings')}…${['capture_permissions','signature_update','qwen_configure','suricata_configure'].includes(action)?' A system authorization prompt may appear.':''}`,'working');controls();
@@ -308,8 +332,9 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     if(setupWorkspace&&typeof navigateWorkspace==='function')navigateWorkspace(value?'setup':'live');
     if(value){if(typeof window!=='undefined')window.megalodonSettings?.select('traffic');el('support-config-title').focus();read(true);}else{el('support-apps-configure').focus();schedule();}}
   el('support-apps-configure').addEventListener('click',()=>open(!state.open));el('support-config-close').addEventListener('click',()=>open(false));el('support-config-retry').addEventListener('click',()=>read(true));if(el('live-action-retry'))el('live-action-retry').addEventListener('click',()=>read(true));
-  for(const [id,action] of Object.entries(actions))if(el(id)&&id!=='support-model-ready')el(id).addEventListener('click',()=>act(action));
-  el('support-model-ready').addEventListener('change',()=>{state.dirty.add('keep_ready');act('model_policy');});
+  for(const [id,action] of Object.entries(actions))if(el(id)&&!['support-model-ready','support-model-refresh'].includes(id))el(id).addEventListener('click',()=>act(action));
+  el('support-model-refresh').addEventListener('click',()=>!state.valid||modelUnbound()?read(true):act('model_refresh'));
+  el('support-model-ready').addEventListener('change',()=>{if(el('support-model-ready').disabled)return;state.dirty.add('keep_ready');act('model_policy');});
   el('support-model-adopt').addEventListener('click',()=>{
     const model=state.payload?.model;if(!model||model.drift!=='digest_changed')return;
     el('support-model-select').value=model.model;state.dirty.delete('model');controls();act('model_select');

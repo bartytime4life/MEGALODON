@@ -52,7 +52,8 @@ def test_real_projections_render_and_forged_or_stale_readiness_is_cleared():
 def test_existing_setup_route_renders_and_clears_panel_without_actions():
     assert 'id="recovery-readiness"' in SUPPORT_CONFIG_HTML
     assert "renderRecoveryReadiness(el('recovery-readiness'),v.recovery_readiness,v.backup_evidence)" in SUPPORT_CONFIG_JS
-    assert "function fail(error){renderRecoveryReadiness(el('recovery-readiness'),null)" in SUPPORT_CONFIG_JS
+    failure_handler = SUPPORT_CONFIG_JS.split('function fail(error){', 1)[1].split('\n  async function read(', 1)[0]
+    assert "renderRecoveryReadiness(el('recovery-readiness'),null)" in failure_handler
     assert 'fetch(' not in RECOVERY_READINESS_JS
     assert 'innerHTML' not in RECOVERY_READINESS_JS
     assert '<button' not in SUPPORT_CONFIG_HTML.split('id="recovery-readiness-title"', 1)[1].split('id="hardening-title"', 1)[0]

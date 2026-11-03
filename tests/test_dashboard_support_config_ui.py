@@ -25,8 +25,15 @@ def test_support_config_behavior(script):
                    background=dict(enabled=False, state="stopped", message="Background off.", session_count=0),
                    geography_enabled=False,
                    command="~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_config")
+    # Use the real release-fenced producer: no synthetic binding or provider I/O.
+    from megalodon.config import AISettings
+    from megalodon.model_lifecycle import ModelLifecycle
+    from megalodon.model_telemetry import ModelTelemetry
+    settings = AISettings(enabled=True)
+    unbound_model = ModelTelemetry(lambda: settings).snapshot()
+    unbound_model.update(keep_ready=True, lifecycle=ModelLifecycle(lambda: settings).snapshot())
     result = subprocess.run([node, str(Path(__file__).with_name(script))],
-                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture)),
+                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture, unbound_model=unbound_model)),
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
 
