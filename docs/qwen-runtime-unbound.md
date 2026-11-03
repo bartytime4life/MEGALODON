@@ -54,18 +54,36 @@ action/body checks. Runtime catalogs, preparation, generation and AI questions
 continue to refuse. This exception revises explicit discovery only; historical
 #704 zero-effect evidence retains its original source and scope.
 
-## Verify the installed candidate's files before binding
+## Verify an installed model's files before binding
 
-`tools/qwen_local_artifact.py` is an explicit offline evidence collector. It
-closes one missing step in #446: measuring a real local model's manifest,
+`tools/local_model_artifact.py` is an explicit offline evidence collector. It
+advances the acceptance work historically tracked in #446 by measuring a local model's manifest,
 referenced components and provider executable. Run it from the reviewed
 checkout, using the actual model store configured for Ollama:
 
 ```bash
-python3 -B tools/qwen_local_artifact.py \
+python3 -B tools/local_model_artifact.py \
   --store /var/snap/ollama/common/models \
   --model qwen2.5:7b-instruct-fp16
 ```
+
+Qwen is not required. The verifier accepts the same bounded local model-name
+grammar as Setup, with an explicit tag, up to three name segments and no
+`:latest` (including case variants). It maps names to these local manifest
+locations; a registry name is a directory component, never a URL to contact:
+
+| Requested name | Path relative to the supplied model store |
+| --- | --- |
+| `llama3.2:3b` | `manifests/registry.ollama.ai/library/llama3.2/3b` |
+| `acme/model:Q4_K_M` | `manifests/registry.ollama.ai/acme/model/Q4_K_M` |
+| `hf.co/acme/model:Q4_K_M` | `manifests/hf.co/acme/model/Q4_K_M` |
+
+Missing namespaces never fall back to `library` or another registry. URLs,
+registry ports, traversal, links and additional path segments are refused.
+The original `tools/qwen_local_artifact.py` command remains a compatibility
+entry point to the same implementation. Existing Qwen observations retain
+their historical scope; generic file verification does not accept other models
+for execution. Unsupported component closures still refuse.
 
 The directory above is an example of a configured store, not a fallback or a
 discovered installation. Supply your actual absolute `OLLAMA_MODELS` path.
@@ -75,9 +93,26 @@ The command reads files and prints a bounded JSON observation. It does not
 contact Ollama, load a model, update signatures, modify the selected model or
 enable Local AI. It refuses `:latest`, links, pipes, unsupported components,
 missing files, inconsistent sizes, digest mismatches and observed replacement.
-At most 32 components and 32 GiB total are read, using 1-MiB chunks and a
-cooperative 120-second deadline. A kernel-blocked filesystem operation cannot
-be interrupted by that deadline.
+Both profiles read at most 32 components in 1-MiB chunks. The default
+`--verification-profile standard` limits total reads to 32 GiB and uses a
+cooperative 120-second deadline. An explicit `--verification-profile large-local`
+allows at most 96 GiB and 300 seconds for larger installed artifacts. Arbitrary
+budgets and profiles are refused; selecting a model in Setup never changes these
+limits. The observation records the profile and its exact limits. Over-budget
+closures refuse with `TOTAL_BYTES_LIMIT` before any blob reads. Neither deadline
+can interrupt an individual kernel-blocked filesystem operation.
+
+For an already-local large model, from the reviewed checkout:
+
+```bash
+python3 -B tools/local_model_artifact.py \
+  --store /var/snap/ollama/common/models \
+  --model nemotron-3-super:120b-a12b-q4_K_M \
+  --verification-profile large-local
+```
+
+Supply the actual store/tag for this computer. This is a potentially substantial
+disk read, not model loading, runtime acceptance or a hardware recommendation.
 
 `ARTIFACT_BYTES_VERIFIED` means the file bytes matched their local manifest.
 It does not mean Qwen is running, accepted or safe. The output keeps
@@ -116,7 +151,9 @@ monkeypatch is not a production activation interface or acceptance evidence.
 The runtime gate suite never requests it. This preserves transport, deadline,
 framing and policy regression coverage without pretending a binding exists.
 
-Issue #446 remains **HOLD**. The canonical owner decision is still UNBOUND;
+Runtime acceptance remains **HOLD**. Historical issue #446 is closed, while the
+canonical binding and release fence remain UNBOUND. Closing the issue does not
+record model acceptance or add an activation path. Outstanding evidence includes
 model provenance/authentication, actual loaded-byte verification, the signed
 seven-category adversarial corpus, independent review and owner acceptance
-remain separate gates. Model choice does not satisfy any of them.
+as separate gates. Model choice does not satisfy any of them.
