@@ -192,6 +192,37 @@ _JOB_SQL = """CREATE TABLE jobs (
     updated_at INTEGER NOT NULL)"""
 
 
+def _admit_schema(connection):
+    """Atomic first initialization, including known-empty interrupted starts.
+
+    An existing unknown schema, populated partial schema or wrong version is
+    never reset or repaired. The lifetime library flock is already held.
+    """
+    expected = {"jobs": _JOB_SQL, "models": _MODEL_SQL}
+    with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        records = connection.execute(
+            "SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").fetchall()
+        objects = {name: sql for kind, name, sql in records if kind == 'table'}
+        if len(objects) != len(records):
+            raise LibraryError("UNAVAILABLE")
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        if objects == expected and version == 1:
+            return
+        if (version != 0 or not objects.keys() <= expected.keys()
+                or any(sql != expected[name] for name, sql in objects.items())):
+            raise LibraryError("UNAVAILABLE")
+        # These identifiers are closed source constants, never database input.
+        for name in ("jobs", "models"):
+            if name in objects and connection.execute(
+                    "SELECT 1 FROM jobs LIMIT 1" if name == "jobs" else "SELECT 1 FROM models LIMIT 1").fetchone():
+                raise LibraryError("UNAVAILABLE")
+        for name in ("models", "jobs"):
+            if name not in objects:
+                connection.execute(expected[name])
+        connection.execute("PRAGMA user_version=1")
+
+
 class _Store:
     """Owner-private, descriptor-admitted SQLite; separate from all telemetry."""
     def __init__(self, root):
@@ -212,7 +243,7 @@ class _Store:
             except BlockingIOError:
                 raise LibraryError("BUSY") from None
             path = root / "library.sqlite3"
-            self.descriptor, created = storage._open_private_database(
+            self.descriptor, _ = storage._open_private_database(
                 path, self.directory, writable=True, create=True, prefix="MODEL_LIBRARY",
                 normalize_writable_mode=False)
             storage._validate_sqlite_sidecars(path, self.directory, writable=True, prefix="MODEL_LIBRARY")
@@ -228,16 +259,7 @@ class _Store:
             self.connection.execute("PRAGMA max_page_count=256")
             if self.connection.execute("PRAGMA page_size").fetchone()[0] != 4096:
                 raise LibraryError("UNAVAILABLE")
-            objects = self.connection.execute(
-                "SELECT name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()
-            if created:
-                self.connection.execute(_MODEL_SQL)
-                self.connection.execute(_JOB_SQL)
-                self.connection.execute("PRAGMA user_version=1")
-                self.connection.commit()
-            elif objects != [("jobs", _JOB_SQL), ("models", _MODEL_SQL)] or self.connection.execute(
-                    "PRAGMA user_version").fetchone()[0] != 1:
-                raise LibraryError("UNAVAILABLE")
+            _admit_schema(self.connection)
             storage._validate_sqlite_sidecars(path, self.directory, writable=True, prefix="MODEL_LIBRARY")
         except BaseException:
             self.close()

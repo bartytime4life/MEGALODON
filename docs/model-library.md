@@ -99,6 +99,12 @@ prompts, provider output, personal paths or redirect URLs. History is capped at
 latest 16 jobs from validated in-memory snapshots; GET never writes the ledger.
 No history pruning/automatic retention job is introduced.
 
+Initial tables and schema version commit in one transaction. An interrupted
+first start can recover an existing empty database, or an exact known empty
+version-zero partial schema, while holding the exclusive library lock. Unknown
+objects (including triggers/indexes), changed schemas, populated partial tables
+and unexpected versions are refused; they are never reset or deleted.
+
 States are `downloading`, `verifying`, `staged_verified`, `failed`, `cancelled`
 or `interrupted`. File publication precedes one transaction recording both the
 verified model and successful job. A database/commit failure is not displayed

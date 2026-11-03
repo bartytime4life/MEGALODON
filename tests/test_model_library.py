@@ -90,6 +90,59 @@ def test_store_refuses_ambiguous_home_before_any_file_access(tmp_path, monkeypat
         library._Store(tmp_path / '..' / 'elsewhere')
 
 
+@pytest.mark.parametrize('tables', [(), ('models',), ('jobs',), ('models','jobs')])
+def test_known_empty_interrupted_schema_initialization_recovers_atomically(tmp_path, tables):
+    path = tmp_path / 'inert.sqlite3'
+    path.touch()  # Also exercise an already-existing zero-byte database.
+    with sqlite3.connect(path) as connection:
+        for name in tables:
+            connection.execute(library._MODEL_SQL if name == 'models' else library._JOB_SQL)
+        connection.commit()
+        library._admit_schema(connection)
+        assert connection.execute('PRAGMA user_version').fetchone() == (1,)
+        assert connection.execute('SELECT count(*) FROM models').fetchone() == (0,)
+        assert connection.execute('SELECT count(*) FROM jobs').fetchone() == (0,)
+    with sqlite3.connect(path) as connection:
+        library._admit_schema(connection)
+        assert connection.execute('PRAGMA user_version').fetchone() == (1,)
+
+
+def test_interrupted_initialization_rolls_back_all_schema_writes(tmp_path):
+    path = tmp_path / 'inert.sqlite3'
+    connection = sqlite3.connect(path)
+    connection.set_authorizer(lambda action, *_: sqlite3.SQLITE_DENY
+        if action == sqlite3.SQLITE_CREATE_TABLE and _[0] == 'jobs' else sqlite3.SQLITE_OK)
+    with pytest.raises(sqlite3.DatabaseError): library._admit_schema(connection)
+    connection.close()
+    with sqlite3.connect(path) as connection:
+        assert connection.execute('SELECT name FROM sqlite_master').fetchall() == []
+        assert connection.execute('PRAGMA user_version').fetchone() == (0,)
+        library._admit_schema(connection)
+
+
+@pytest.mark.parametrize('kind', ['unknown','populated','wrong_version','changed_sql'])
+def test_schema_recovery_never_resets_unknown_or_populated_data(tmp_path, kind):
+    with sqlite3.connect(tmp_path / 'inert.sqlite3') as connection:
+        if kind == 'unknown': connection.execute('CREATE TABLE unrelated(value)')
+        elif kind == 'changed_sql': connection.execute('CREATE TABLE models(value)')
+        else:
+            connection.execute(library._MODEL_SQL)
+            if kind == 'populated': connection.execute("INSERT INTO models VALUES ('x','missing','x',1,1)")
+            else: connection.execute('PRAGMA user_version=2')
+        connection.commit()
+        before = connection.execute('SELECT name,sql FROM sqlite_master').fetchall()
+        with pytest.raises(library.LibraryError): library._admit_schema(connection)
+        assert connection.execute('SELECT name,sql FROM sqlite_master').fetchall() == before
+
+
+def test_schema_admission_rejects_trigger_with_a_known_table_name(tmp_path):
+    with sqlite3.connect(tmp_path / 'inert.sqlite3') as connection:
+        library._admit_schema(connection)
+        connection.execute('CREATE TRIGGER jobs AFTER INSERT ON jobs BEGIN SELECT 1; END')
+        connection.commit()
+        with pytest.raises(library.LibraryError): library._admit_schema(connection)
+
+
 def test_stage_verify_sqlite_readback_and_reuse_without_second_transfer(staged):
     model, entry, calls = staged
     assert "not been imported" in model.execute(entry.id)
@@ -311,6 +364,17 @@ def test_native_private_sqlite_modes_flock_and_schema(private_tmp_path):
         store.connection.execute('CREATE TABLE unexpected(value)')
         store.connection.commit()
     with pytest.raises(library.LibraryError): library._Store(root)
+
+
+def test_native_first_connect_interruption_recovers_existing_zero_byte_database(private_tmp_path, monkeypatch):
+    root = private_tmp_path / 'model-library'
+    def interrupted(*_a, **_kw): raise OSError('synthetic initial connect interruption')
+    with monkeypatch.context() as patch:
+        patch.setattr(library.storage, '_connect_verified_sqlite', interrupted)
+        with pytest.raises(OSError): library._Store(root)
+    assert (root / 'library.sqlite3').stat().st_size == 0
+    with library._Store(root) as store:
+        assert store.connection.execute('PRAGMA user_version').fetchone() == (1,)
 
 
 def test_native_stage_end_to_end(private_tmp_path, monkeypatch):
