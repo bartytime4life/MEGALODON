@@ -96,6 +96,12 @@ an operator-token-gated HUD question route. This is a draft capability, not
 acceptance of Ollama process containment or loaded model provenance. It does
 not expand either original advisory policy or enable firewall application.
 
+An explicit Linux [model staging library](docs/model-library.md) adds a protected
+Setup download action for a closed, revision/size/SHA-256-pinned GGUF catalog.
+It keeps private staging files and a separate bounded SQLite job journal.
+Page loads and restart do not download; staging does not import, select, load
+or activate a model and does not lift the release's `UNBOUND` runtime fence.
+
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
 metadata queue. The callback does not block; the first overflow makes the

@@ -10,7 +10,7 @@ from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS
 
 
-@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs"])
+@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs"])
 def test_support_config_behavior(script):
     node = shutil.which("node")
     if node is None:
@@ -32,8 +32,10 @@ def test_support_config_behavior(script):
     settings = AISettings(enabled=True)
     unbound_model = ModelTelemetry(lambda: settings).snapshot()
     unbound_model.update(keep_ready=True, lifecycle=ModelLifecycle(lambda: settings).snapshot())
+    from megalodon.model_library import ModelLibrary
+    library = ModelLibrary(Path('/unused-home')).snapshot()
     result = subprocess.run([node, str(Path(__file__).with_name(script))],
-                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture, unbound_model=unbound_model)),
+                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture, unbound_model=unbound_model, library=library)),
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
 

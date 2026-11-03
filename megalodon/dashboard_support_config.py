@@ -6,6 +6,7 @@ from .dashboard_gateway import GATEWAY_HTML, GATEWAY_CSS, GATEWAY_JS
 from .dashboard_process_network import PROCESS_NETWORK_HTML, PROCESS_NETWORK_CSS, PROCESS_NETWORK_JS
 from .dashboard_recovery_readiness import RECOVERY_READINESS_HTML, RECOVERY_READINESS_CSS, RECOVERY_READINESS_JS
 from .dashboard_refresh import REFRESH_JS
+from .dashboard_model_library import MODEL_LIBRARY_HTML, MODEL_LIBRARY_CSS, MODEL_LIBRARY_JS
 
 SUPPORT_CONFIG_HTML = r'''
 <section class="support-config" id="support-config" aria-labelledby="support-config-title" hidden>
@@ -39,6 +40,7 @@ SUPPORT_CONFIG_HTML = r'''
       <div id="support-model-loaded-state" class="settings-model-state" role="status" aria-live="polite"><strong id="support-model-loaded">Checking loaded state…</strong><button type="button" id="support-model-load" disabled>Load now</button></div>
       <p id="support-model-lifecycle" class="support-config-note">Checking automatic loading…</p>
       <p id="support-model-status" role="status" class="support-config-note">Checking the selected model…</p>
+      <!-- MODEL_LIBRARY -->
       <details class="settings-disclosure"><summary>Response checks and connection options</summary>
         <label for="support-model-timeout">AI response limit (seconds)</label><input id="support-model-timeout" type="number" min="1" max="1800" step="1" value="300" disabled><p class="support-config-note">Default: 5 minutes. Up to 30 minutes for large models. Collection continues while AI works.</p>
         <p id="support-model-metrics" class="support-config-note"></p>
@@ -72,9 +74,9 @@ SUPPORT_CONFIG_HTML = r'''
   </details>
   <details class="support-config-results"><summary>Latest tool results</summary><p class="support-config-note">Each result keeps its own check time. Setup and availability do not prove a tool is feeding the HUD.</p><ul id="support-config-tools"><li>No tool checks returned yet.</li></ul></details>
 </section>
-'''.replace('    <!-- HOST_FINDINGS -->', HOST_FINDINGS_HTML).replace('    <!-- RECOVERY_READINESS -->', RECOVERY_READINESS_HTML).replace('    <!-- HARDENING -->', HARDENING_HTML).replace('    <!-- PERSISTENCE -->', PERSISTENCE_HTML).replace('    <!-- GATEWAY -->', GATEWAY_HTML).replace('    <!-- PROCESS_NETWORK -->', PROCESS_NETWORK_HTML)
+'''.replace('      <!-- MODEL_LIBRARY -->', MODEL_LIBRARY_HTML).replace('    <!-- HOST_FINDINGS -->', HOST_FINDINGS_HTML).replace('    <!-- RECOVERY_READINESS -->', RECOVERY_READINESS_HTML).replace('    <!-- HARDENING -->', HARDENING_HTML).replace('    <!-- PERSISTENCE -->', PERSISTENCE_HTML).replace('    <!-- GATEWAY -->', GATEWAY_HTML).replace('    <!-- PROCESS_NETWORK -->', PROCESS_NETWORK_HTML)
 
-SUPPORT_CONFIG_CSS = HOST_FINDINGS_CSS + RECOVERY_READINESS_CSS + HARDENING_CSS + PERSISTENCE_CSS + GATEWAY_CSS + PROCESS_NETWORK_CSS + r'''
+SUPPORT_CONFIG_CSS = MODEL_LIBRARY_CSS + HOST_FINDINGS_CSS + RECOVERY_READINESS_CSS + HARDENING_CSS + PERSISTENCE_CSS + GATEWAY_CSS + PROCESS_NETWORK_CSS + r'''
 .support-apps #support-apps-configure { border-color:#75e6e1; box-shadow:inset 0 0 0 1px #75e6e1; }
 .support-apps #support-apps-configure[aria-expanded="true"] { background:#244955; }
 .support-config { border-top:1px solid #4b6b79; margin-top:1rem; padding-top:1.25rem; }
@@ -126,6 +128,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   const actions={
     'host-security-audit':'security_audit','host-security-baseline':'security_baseline','host-security-check':'security_check','host-security-refresh':'security_refresh','persistence-baseline':'persistence_baseline',
     'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh','support-model-load':'model_load','support-model-ready':'model_policy',
+    'model-library-download':'model_stage_download','model-library-check':'model_library_check','model-library-cancel':'model_stage_cancel',
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
@@ -133,6 +136,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
   const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',persistence_baseline:'Recording initial persistence baseline',tool_directory_set:'Saving tool directory',model_policy:'Saving model loading preference',model_load:'Loading the saved model',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   // Sensors owns the scanner self-check; its job can still appear in this shared status.
+  Object.assign(actionNames,{model_stage_download:'Downloading and staging model',model_library_check:'Checking staged files',model_stage_cancel:'Cancelling model staging'});
   const jobActions=new Set([...Object.keys(actionNames),'clamav_self_check']);
   const modelActions=new Set(['model_select','model_refresh','model_cancel','model_policy','model_load','qwen_check','qwen_configure']);
   const modelRunActions=new Set(['model_cancel','model_load','qwen_check','qwen_configure']);
@@ -143,6 +147,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   const text=(v,max=512)=>typeof v==='string' && v.length<=max && !/[\x00-\x1f\x7f]/.test(v);
   const stamp=v=>v===null || (text(v,40) && /Z$/.test(v) && Number.isFinite(Date.parse(v)));
   const count=v=>Number.isSafeInteger(v) && v>=0;
+  // MODEL_LIBRARY
   const time=v=>v ? new Date(v).toISOString().replace('T',' ').replace('.000Z',' UTC') : 'Time unavailable';
   function checked(v,needToken) {
     if(!object(v) || v.schema!=='megalodon-support-config-v1' || !Array.isArray(v.interfaces) || v.interfaces.length>32
@@ -163,6 +168,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     if(v.model?.keep_ready!==undefined&&typeof v.model.keep_ready!=='boolean')throw Error('Invalid model policy');
     if(v.model?.selection_available!==undefined&&typeof v.model.selection_available!=='boolean')throw Error('Invalid model selection capability');
     if(v.model?.lifecycle!==undefined){const l=v.model.lifecycle;if(!object(l)||!['unbound','disabled','paused','checking','loading','ready','retrying','error'].includes(l.state)||!text(l.message,512)||!(l.error_code===null||text(l.error_code,80))||(l.state==='unbound'&&l.error_code!=='OWNER_MODEL_BINDING_NOT_RECORDED')||!(l.retry_in_seconds===null||count(l.retry_in_seconds))||!stamp(l.updated_at))throw Error('Invalid model lifecycle');}
+    libraryChecked(v.model_library);
     return v;
   }
   const capturing=()=>state.payload && ['starting','running'].includes(state.payload.capture.state);
@@ -194,8 +200,10 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     el('support-model-refresh').textContent=!state.valid?'Retry model status':'Refresh installed models';
     el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
     el('support-config').setAttribute('aria-busy',changing?'true':'false');
+    libraryControls(blocked);
   }
   function render(v){
+    libraryRender(v.model_library);
     const h=v.host_security;
     renderHostFindings(el('host-findings'),h);
     renderRecoveryReadiness(el('recovery-readiness'),v.recovery_readiness,v.backup_evidence);
@@ -313,6 +321,11 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       value.nmap_target=target;
     }
     if(action==='model_policy')value.keep_ready=el('support-model-ready').checked;
+    if(action==='model_stage_download'){
+      if(!el('model-library-online').checked)throw Error('Confirm the download source first.');
+      value.catalog_id=el('model-library-select').value;
+      if(!state.payload.model_library?.catalog.some(row=>row.id===value.catalog_id))throw Error('Choose a catalog model.');
+    }
     if(action==='model_select'){const row=state.payload.model?.options.find(row=>row.name===el('support-model-select').value);if(!row)throw Error('Refresh and choose an installed model.');Object.assign(value,{model:row.name,model_digest:row.digest,compute_mode:el('support-model-compute').value,timeout_seconds:Number(el('support-model-timeout').value)});}
     if(action==='clamav_configure'){value.scan_folder=el('support-config-scan-folder').value;if(!['Downloads','Documents'].includes(value.scan_folder))throw Error('Choose Downloads or Documents.');}
     if(action==='tool_directory_set'){
@@ -356,7 +369,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     observer.observe(el('support-config'));if(el('live-globe'))observer.observe(el('live-globe'));
   }
 })();
-'''
+'''.replace('  // MODEL_LIBRARY', MODEL_LIBRARY_JS)
 
 
 def local_support_help(html: str) -> str:

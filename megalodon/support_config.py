@@ -65,6 +65,7 @@ ACTION_FIELDS = {
     'geography_refresh': set(), 'geography_disable': set(),
     'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
     'model_policy': {'keep_ready'}, 'model_load': set(),
+    'model_library_check': set(), 'model_stage_download': {'catalog_id'}, 'model_stage_cancel': set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
 TOOL_NAMES = {'security':'Host security and threat context', 'persistence':'Persistence review', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
@@ -183,6 +184,9 @@ def validate_action(value):
         if (not valid_model_name(value['model']) or type(value['model_digest']) is not str
                 or not re.fullmatch(r'[a-f0-9]{64}',value['model_digest']) or value['compute_mode'] not in ('cpu','auto')):
             raise ValueError('Choose one installed model and a supported compute mode.')
+    if action=='model_stage_download':
+        from .model_library import artifact
+        artifact(value['catalog_id'])
     return dict(value)
 
 
@@ -251,6 +255,8 @@ class SupportConfiguration:
         self.model_telemetry=ModelTelemetry(lambda:self.settings.ai)
         from .model_lifecycle import ModelLifecycle
         self.model_lifecycle=ModelLifecycle(lambda:self.settings.ai,on_change=self.model_telemetry.invalidate)
+        from .model_library import ModelLibrary
+        self.model_library=ModelLibrary(self.home)
 
     def _load_qwen(self):
         from .config import AISettings, valid_model_name
@@ -434,6 +440,7 @@ class SupportConfiguration:
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
+                         model_library=self.model_library.snapshot(),
                          host_security=host_security, recovery_readiness=recovery_readiness.review(host_security),
                          backup_evidence=backups,
                          hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
@@ -473,6 +480,9 @@ class SupportConfiguration:
             from .ai_provider import cancel_current
             cancel_current()
             return self.snapshot()
+        if request['action']=='model_stage_cancel':
+            self.model_library.cancel()
+            return self.snapshot()
         installer = getattr(self.startup, 'installer', None)
         if installer is not None and installer.status()['state'] == 'running':
             raise ConfigBusy('Another support action is running.')
@@ -485,6 +495,8 @@ class SupportConfiguration:
             self._job.update(state='running', action=request['action'], message='Applying the selected configuration…', started_at=now(), finished_at=None)
             if request['action'] in {'capture_start','background_start'}:
                 self._cancel_capture_start = False
+            if request['action'] in {'model_library_check','model_stage_download'}:
+                self.model_library.prepare()
             self._thread = Thread(target=self._work, args=(request,), daemon=True, name='megalodon-support-config')
             self._thread.start()
         response = self.snapshot()
@@ -538,7 +550,9 @@ class SupportConfiguration:
                 with self._lock:
                     settings = dict(self._settings, interface=request['interface'])
                 self._save(settings=settings)
-            if action.startswith('security_'):
+            if action in {'model_library_check','model_stage_download'}:
+                message = self.model_library.execute(request.get('catalog_id'))
+            elif action.startswith('security_'):
                 message = self.host_security.execute(action.removeprefix('security_'))
             elif action == 'persistence_baseline':
                 result = persistence_review.PersistenceReview(self.home).record_baseline(initial=True)
@@ -776,6 +790,7 @@ class SupportConfiguration:
 
     def close(self):
         self._scanner_stop.set()
+        self.model_library.cancel()
         self.model_lifecycle.close()
         from .ai_provider import cancel_current
         cancel_current()
