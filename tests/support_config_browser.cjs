@@ -23,7 +23,7 @@ process.stdin.on('end',async()=>{
  assert.equal(get('support-model-authorization').hidden,false);
  assert.match(get('support-model-saved').textContent,/Saved preference/);
  assert.match(get('support-model-select').children[0].textContent,/Refresh installed models/);
- assert.equal(get('support-model-loaded').textContent,'Authorization required');
+ assert.equal(get('support-model-loaded').textContent,'Automatic loading paused');
  assert.doesNotMatch(get('support-model-lifecycle').textContent,/Retrying|Turn on/);
  assert.match(get('support-model-metrics').textContent,/remain unverified/);
  for(const id of ['support-model-select','support-model-compute','support-model-timeout','support-model-ready'])assert.equal(get(id).disabled,false,id);
@@ -36,7 +36,7 @@ process.stdin.on('end',async()=>{
  await click('support-model-refresh');await settle();
  assert.equal(requests.length,unboundReads+1);assert.equal(requests.at(-1).opts.method,'POST');assert.equal(postCount(),choicePosts+1);
  assert.deepEqual(JSON.parse(requests.at(-1).opts.body),{action:'model_refresh'});
- assert.equal(get('support-model-select').children.length,3);
+ assert.equal(get('support-model-select').children.length,4);
  change('support-model-select','llama3.2:3b');change('support-model-compute','auto');
  payload={...payload,model:{...payload.model,model:'llama3.2:3b',compute_mode:'auto'},job:{...fixture.job,state:'finished',action:'model_select'}};
  await click('support-model-save');await settle();
