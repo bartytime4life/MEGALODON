@@ -55,6 +55,7 @@ jobs:
             tests/test_qwen_zero_effect.py \
             tests/test_qwen_runtime_gate.py \
             tests/test_model_choices.py \
+            tests/test_ollama_model_test.py \
             tests/test_model_artifact.py \
             tests/test_model_lifecycle.py \
             tests/test_ai_doctor_consent.py \

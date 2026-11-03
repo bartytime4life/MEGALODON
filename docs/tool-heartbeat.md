@@ -17,6 +17,14 @@ The Qwen row explicitly describes the example `qwen2.5:7b` manifest; it does
 not assess the selected AI model, its digest, provider health or admission.
 Use the separate opt-in AI readiness workflow for that evidence.
 
+With shared model telemetry, the Ollama row now keeps its process/connection
+observation distinct from `UNBOUND` analysis acceptance. After a successful
+explicit model-list refresh, a currently observed installed/running Ollama
+process can show **Ollama connected · AI analysis paused**. This is a presence
+indicator and a dated list observation, not a verified model response or an
+accepted analysis runtime. Unknown/stopped process observation does not turn
+green. See the separate explicit [fixed response test](ollama-response-test.md).
+
 ## History since the HUD started
 
 The detail line also shows how the tool has behaved since you opened the HUD:

@@ -6,6 +6,9 @@
 > matched model/compute preference. Generation, model preparation, runtime
 > inventory and AI questions still refuse; telemetry and keep-ready workers
 > cannot start provider activity.
+> A deliberate [fixed READY response test](ollama-response-test.md) is a separate
+> diagnostic exception. It can load/test the saved local model, sends no
+> telemetry or caller prompt, and does not accept operational inference.
 > The operational flows below describe dormant lower layers, not permission
 > to activate them. See [the runtime fence and its limits](qwen-runtime-unbound.md).
 

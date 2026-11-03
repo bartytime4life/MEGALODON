@@ -102,6 +102,11 @@ It keeps private staging files and a separate bounded SQLite job journal.
 Page loads and restart do not download; staging does not import, select, load
 or activate a model and does not lift the release's `UNBOUND` runtime fence.
 
+A separate explicit [Ollama response test](docs/ollama-response-test.md) can
+load the saved local model for one compiled READY diagnostic. It sends no
+telemetry or caller prompt, retains no raw response, and cannot promote the
+binding, operational response cache, background advice or detector authority.
+
 Optional Scapy code exists outside that proposed evaluation artifact pending
 the #68 resource and capture-liveness gates. Its intake uses a fixed 1,024-event
 metadata queue. The callback does not block; the first overflow makes the

@@ -307,7 +307,7 @@ def test_get_is_read_only_and_action_requires_no_installer_token(endpoint):
     assert endpoint[3].install_operator_token is None
 
 
-@pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_stage_cancel'])
+@pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_stage_cancel','model_test','model_test_cancel'])
 def test_model_library_http_actions_require_existing_operator_token_and_origin(endpoint, action):
     from megalodon.model_library import CATALOG
     value = dict(action=action)
@@ -318,6 +318,22 @@ def test_model_library_http_actions_require_existing_operator_token_and_origin(e
     assert endpoint[2] == []
     assert request(endpoint,body=body)[0] == 202
     assert endpoint[2] == [value]
+
+
+def test_model_test_worker_is_explicit_and_does_not_enable_live_analysis(manager,monkeypatch):
+    from megalodon.config import AISettings
+    manager.settings=replace(manager.settings,ai=AISettings(enabled=True,model='qwen3:4b',model_digest='b'*64))
+    calls=[]
+    monkeypatch.setattr('megalodon.ai_provider.test_selected_model',lambda settings,**kw:calls.append(settings.model))
+    assert manager.snapshot()['model']['response_test']['state']=='idle' and calls==[]
+    manager.start({'action':'model_test'});manager._thread.join(2)
+    snapshot=manager.snapshot()
+    assert calls==['qwen3:4b'] and snapshot['job']['state']=='finished'
+    assert snapshot['model']['response_test']['state']=='passed'
+    assert snapshot['model']['binding_status']=='UNBOUND' and snapshot['model']['inference_verified'] is False
+    assert manager.model_lifecycle._thread is None
+    manager.start({'action':'model_test_cancel'})
+    assert calls==['qwen3:4b']
 
 
 @pytest.mark.parametrize('extra,omit,code',[

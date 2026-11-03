@@ -113,6 +113,10 @@ Its protected maintenance actions are `model_library_check`,
 `model_stage_download` (one closed `catalog_id`) and `model_stage_cancel`.
 Staging does not import a model into Ollama or change the runtime binding.
 
+An explicit [fixed local response test](ollama-response-test.md) is available
+after saving a selection. It can load the model for a bounded READY check,
+without sending network observations or granting operational AI acceptance.
+
 ## Longer jobs and collector priority
 
 HUD endpoint analysis, Setup verification and collector advice run in background
