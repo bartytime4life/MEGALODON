@@ -1,6 +1,6 @@
 """Reboot preferences and fixed service setup with no live service mutations."""
 import json
-from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -100,6 +100,16 @@ def test_unavailable_query_does_not_select_another_ollama_service(manager):
     assert startup_policy.service_observation('qwen',run)['unit'] is None
 
 
+def test_explicit_missing_alternative_does_not_hide_standard_ollama(manager):
+    policy,_,_,_=manager
+    real=policy.run
+    def run(argv,*args):
+        if argv[-1]=='snap.ollama.listener.service':
+            return b'LoadState=not-found\nActiveState=inactive\nUnitFileState=\n',4
+        return real(argv,*args)
+    assert startup_policy.service_observation('qwen',run)['unit']=='ollama'
+
+
 @pytest.mark.parametrize('status',['enabled-runtime','static','alias','masked'])
 def test_exit_zero_is_not_persistent_login_enablement(manager,status):
     policy,_,_,state=manager
@@ -143,5 +153,7 @@ def test_invalid_saved_profile_does_not_activate_a_different_default_model(tmp_p
     monkeypatch.setattr(support_config,'interfaces',lambda:[])
     monkeypatch.setattr(support_config.os.path,'lexists',lambda p:str(p).endswith('qwen-profile.json'))
     monkeypatch.setattr(support_config,'_regular_owned_file',lambda *a,**kw:b'{"invalid":true}')
-    value=support_config.SupportConfiguration(Settings(db_path=tmp_path/'events.db',ai=AISettings(enabled=True)),home=tmp_path)
+    companions=SimpleNamespace(ai=AISettings(enabled=True))
+    value=support_config.SupportConfiguration(Settings(db_path=tmp_path/'events.db',ai=companions.ai),companions=companions,home=tmp_path)
     assert value._model_selection_state=='invalid' and value.settings.ai.enabled is False
+    assert companions.ai.enabled is False

@@ -29,7 +29,7 @@ def service_observation(identifier, run=_run_fixed):
                 values = dict(line.split('=', 1) for line in raw.decode('utf-8').splitlines() if '=' in line)
                 if code == 0 and set(values)=={'LoadState','ActiveState','UnitFileState'} and values.get('LoadState') in {'loaded','masked'} and values.get('ActiveState') in {'active','inactive','failed'}:
                     observed.append((unit, values))
-                elif code or values.get('LoadState')!='not-found':
+                elif values != {'LoadState':'not-found','ActiveState':'inactive','UnitFileState':''}:
                     unknown = True
             except (OSError, ValueError, UnicodeError, RuntimeError):
                 unknown = True

@@ -295,6 +295,8 @@ class SupportConfiguration:
         except (OSError,ValueError,TypeError,RecursionError):
             self._model_selection_state = 'invalid'
             self.settings = replace(self.settings, ai=replace(self.settings.ai, enabled=False))
+            if self.companions:
+                self.companions.ai = self.settings.ai
             self.qwen_status.update(state='needs_setup',message='Saved model profile could not be validated; select a local model in Setup again.')
 
     def _paths(self):
