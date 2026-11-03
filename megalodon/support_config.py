@@ -842,6 +842,8 @@ def main(argv=None):
     parser.add_argument('--scan-folder', choices=['Downloads','Documents'])
     parser.add_argument('--model')
     parser.add_argument('--model-digest')
+    from .model_library import CATALOG
+    parser.add_argument('--catalog-id', choices=[entry.id for entry in CATALOG])
     parser.add_argument('--compute-mode', choices=['cpu','auto'],default='cpu')
     parser.add_argument('--timeout-seconds',type=int)
     parser.add_argument('--config', type=Path)

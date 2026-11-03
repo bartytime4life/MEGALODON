@@ -713,7 +713,8 @@ def test_workflow_endpoint_observes_without_model_or_service_execution(endpoint,
 
 
 @pytest.mark.parametrize('configured,expected', [('localhost','127.0.0.1'), ('127.0.0.2','127.0.0.2')])
-def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,expected):
+@pytest.mark.parametrize('arguments', [['qwen_check'], ['model_stage_download','--catalog-id','qwen25-05b-q4km']])
+def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,expected,arguments):
     requests=[]
     payload={'schema':config.SCHEMA,'token':'x'*32,
              'job':{'state':'finished','message':'Ready.'},
@@ -730,7 +731,7 @@ def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,
     monkeypatch.setattr('megalodon.config.load_settings',
                         lambda path:Settings(dashboard=DashboardSettings(host=configured)))
     monkeypatch.setattr(config,'HTTPConnection',Connection)
-    assert config.main(['qwen_check'])==0
+    assert config.main(arguments)==0
     assert requests==[('GET',None),('POST',f'http://{expected}:8797')]
 
 
