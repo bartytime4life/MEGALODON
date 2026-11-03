@@ -53,6 +53,7 @@ GATEWAY_TTL = 10
 # The process review walks this account's open files, so it also refreshes off the request path.
 PROCESS_TTL = 15
 ACTION_FIELDS = {
+    'startup_check':set(), 'startup_enable':set(), 'startup_disable':set(), 'startup_services':set(),
     'security_audit':set(), 'security_baseline':set(), 'security_check':set(), 'security_refresh':set(),
     'persistence_baseline':set(),
     'capture_permissions': {'interface'}, 'capture_start': {'interface'}, 'capture_stop': set(),
@@ -72,7 +73,7 @@ ACTION_FIELDS = {
 TOOL_NAMES = {'security':'Host security and threat context', 'persistence':'Persistence review', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
               'qwen':'Local AI / Ollama', 'zeek':'Zeek', 'suricata':'Suricata',
-              'background':'Background traffic', 'geography':'IP geography'}
+              'background':'Background traffic', 'geography':'IP geography', 'startup':'Startup settings'}
 # Only a root-owned packaged capture helper gains two packet capabilities.
 # PKEXEC_UID is supplied by pkexec, never by an HTTP parameter. ACL access is
 # immediate for this user, so a desktop logout/group refresh is unnecessary.
@@ -249,6 +250,7 @@ class SupportConfiguration:
                 self._model_keep_ready = False
                 self._tool('qwen','needs_setup','Saved model readiness preference is unsafe; review it in Setup.')
         self.settings = replace(self.settings,ai=replace(self.settings.ai,keep_warm=self._model_keep_ready))
+        self._model_selection_state = 'configured' if self.settings.ai.enabled else 'none'
         self._load_qwen()
         if self.companions:
             self.companions.ai=self.settings.ai
@@ -260,6 +262,8 @@ class SupportConfiguration:
         self.model_library=ModelLibrary(self.home)
         from .model_test import ModelTest
         self.model_test=ModelTest(lambda:self.settings.ai)
+        from .startup_policy import StartupPolicy
+        self.startup_policy=StartupPolicy(run=run)
 
     def _load_qwen(self):
         from .config import AISettings, valid_model_name
@@ -280,6 +284,7 @@ class SupportConfiguration:
                 raise ValueError('Unrecognized local model profile')
             ai = replace(self.settings.ai,enabled=True,keep_warm=self._model_keep_ready,**{k:v for k,v in value.items() if k!='schema'})
             self.settings = replace(self.settings,ai=ai)
+            self._model_selection_state = 'restored'
             if self.companions:
                 self.companions.ai = ai
             from .local_model_runtime import binding_failure
@@ -287,9 +292,11 @@ class SupportConfiguration:
                 self.qwen_status.update(state='needs_setup',message='Saved model choice restored. Model loading and responses remain paused pending acceptance.',updated_at=now())
             else:
                 self.qwen_status.update(state='ready',message='Pinned local model configured; a completed response is required to confirm advice.',updated_at=now())
-        except FileNotFoundError:
-            pass
         except (OSError,ValueError,TypeError,RecursionError):
+            self._model_selection_state = 'invalid'
+            self.settings = replace(self.settings, ai=replace(self.settings.ai, enabled=False))
+            if self.companions:
+                self.companions.ai = self.settings.ai
             self.qwen_status.update(state='needs_setup',message='Saved model profile could not be validated; select a local model in Setup again.')
 
     def _paths(self):
@@ -443,7 +450,8 @@ class SupportConfiguration:
                          tool_directories=tool_directories, tool_directories_status=tool_directories_status,
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
-                         model_library=self.model_library.snapshot(),
+                         model_library=self.model_library.snapshot(), startup=self.startup_policy.snapshot(),
+                         configured_collectors=sorted(self._configured),
                          host_security=host_security, recovery_readiness=recovery_readiness.review(host_security),
                          backup_evidence=backups,
                          hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
@@ -451,6 +459,7 @@ class SupportConfiguration:
             value['model']['keep_ready'] = self._model_keep_ready
             value['model']['lifecycle'] = self.model_lifecycle.snapshot()
             value['model']['response_test'] = self.model_test.snapshot()
+            value['model']['selection_state'] = self._model_selection_state
             if include_token:
                 value['token'] = self.token
             return value
@@ -732,6 +741,9 @@ class SupportConfiguration:
                 value=dict(schema='megalodon-local-model-v2',model=candidate.model,model_digest=candidate.model_digest,compute_mode=candidate.compute_mode,timeout_seconds=candidate.timeout_seconds)
                 _atomic_write(path,json.dumps(value).encode(),0o600)
                 self._load_qwen();self.model_telemetry.invalidate()
+                if self._model_selection_state!='restored' or self.settings.ai!=candidate:
+                    raise ValueError('The written model choice could not be restored. Review the private saved profile.')
+                self._model_selection_state = 'saved'
                 if unbound:
                     message='Saved '+candidate.model+'. Local AI execution remains paused pending model acceptance. No model was loaded and no prompt was sent.'
                     self.qwen_status.update(state='needs_setup',message=message,updated_at=now())
@@ -742,6 +754,13 @@ class SupportConfiguration:
                         'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
             elif action == 'model_test':
                 message=self.model_test.run()
+            elif action == 'startup_check':
+                self.startup_policy.check()
+                message='Startup settings refreshed. No service was started or changed.'
+            elif action in {'startup_enable','startup_disable'}:
+                message=self.startup_policy.login(action=='startup_enable')
+            elif action == 'startup_services':
+                message=self.startup_policy.enable_services(clamav_configured='clamav' in self._configured)
             elif action == 'model_refresh':
                 from .local_model_runtime import binding_failure
                 self.model_telemetry.refresh_installed_models()

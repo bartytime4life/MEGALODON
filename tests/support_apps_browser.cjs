@@ -21,7 +21,7 @@ process.stdin.on('end',async()=>{
   const click=id=>get(id).events.click();
   vm.runInNewContext(code,context);await settled();
   assert.equal(requests.length,1);assert.equal(requests[0].path,'/api/support-start');assert.equal(requests[0].opts.method,'GET');assert.equal(requests[0].opts.headers['X-Megalodon-Check'],'1');
-  assert.equal(polls().length,0,'idle read does not start a poll chain');assert.equal(get('support-apps-start').disabled,false);assert.match(status(),/Ready when you are/);
+  assert.equal(polls().length,0,'idle read does not start a poll chain');assert.equal(get('support-apps-start').disabled,false);assert.match(status(),/Saved monitoring and configured collectors/);
   await click('support-apps-copy');assert.equal(clipboard,fixture.command);assert.ok(!clipboard.includes(fixture.token));
   assert.ok(!JSON.stringify([...nodes.values()]).includes(fixture.token),'action token never enters the DOM');
   // An explicit start uses only the action nonce and fixed action; duplicate clicks are ignored.

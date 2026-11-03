@@ -99,6 +99,14 @@ jobs:
             python tests/browser_native_profile.py'
       - name: Review offline cadence evidence in Chrome
         run: python tests/browser_cadence_review.py
+      - name: Retain synthetic startup and model screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: startup-model-synthetic-${{ github.sha }}
+          path: artifacts/startup-ux/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Retain synthetic finding inspector screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -745,3 +745,12 @@ first 8 KiB can be retained for fixed-message classification. It is never shown
 in the browser or included in the snapshot. Decoder EOF ends intake even if the
 helper's diagnostic descriptor is still open. Process cleanup and finite packet,
 time, metadata and storage bounds remain in force.
+
+### Startup settings
+
+The protected support-configuration route accepts the closed, fieldless
+`startup_check`, `startup_enable`, `startup_disable` and `startup_services`
+actions. Its cached `startup` projection reports login and fixed-service
+boot settings; `model.selection_state` distinguishes saved/restored, configured,
+absent and invalid preferences. GET does not run these checks or change startup.
+See [startup and model preferences](startup-and-model-preferences.md).

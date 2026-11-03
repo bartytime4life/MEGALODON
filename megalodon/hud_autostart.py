@@ -140,6 +140,17 @@ def enable(*, start: bool = False) -> None:
         _systemctl("start", UNIT)
 
 
+def disable_login() -> None:
+    """Disable future sign-in startup without stopping the requesting HUD."""
+    unit = unit_path()
+    managed = validate_unit()
+    state = _service_state()
+    if state is None or loaded_elsewhere(state, unit, managed) or loaded_dropins(state):
+        raise InstallError("HUD startup identity could not be confirmed; preserve and review it")
+    if managed:
+        _systemctl("disable", UNIT)
+
+
 def validate_unit(paths: InstallPaths | None = None) -> bool:
     """Read-only identity check shared by removal preview and application."""
     selected = install_paths() if paths is None else paths
