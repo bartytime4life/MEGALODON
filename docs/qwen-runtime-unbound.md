@@ -33,6 +33,48 @@ retain their own authority and audit contracts. Other defensive collection or
 analysis workers are not stopped by this change; their model calls are refused.
 No host, firewall, service, existing external model process or data is changed.
 
+## Verify the installed candidate's files before binding
+
+`tools/qwen_local_artifact.py` is an explicit offline evidence collector. It
+closes one missing step in #446: measuring a real local model's manifest,
+referenced components and provider executable. Run it from the reviewed
+checkout, using the actual model store configured for Ollama:
+
+```bash
+python3 -B tools/qwen_local_artifact.py \
+  --store /var/snap/ollama/common/models \
+  --model qwen2.5:7b-instruct-fp16
+```
+
+The directory above is an example of a configured store, not a fallback or a
+discovered installation. Supply your actual absolute `OLLAMA_MODELS` path.
+The provider defaults to `/usr/local/bin/ollama`; `--provider` selects the
+executable file to hash, never execute. Python 3.11 or newer is required.
+The command reads files and prints a bounded JSON observation. It does not
+contact Ollama, load a model, update signatures, modify the selected model or
+enable Local AI. It refuses `:latest`, links, pipes, unsupported components,
+missing files, inconsistent sizes, digest mismatches and observed replacement.
+At most 32 components and 32 GiB total are read, using 1-MiB chunks and a
+cooperative 120-second deadline. A kernel-blocked filesystem operation cannot
+be interrupted by that deadline.
+
+`ARTIFACT_BYTES_VERIFIED` means the file bytes matched their local manifest.
+It does not mean Qwen is running, accepted or safe. The output keeps
+`binding_status: UNBOUND`, reports all runtime authority as false, omits
+paths and file contents, and names the remaining gates. Optional
+`--manifest-sha256` and `--provider-sha256` compare independently retained
+pins. A stale pin produces `MANIFEST_PIN_MISMATCH` or `PROVIDER_PIN_MISMATCH`
+before weight reads; it is never replaced with the newly observed value.
+Ollama layer `from` labels are bounded input metadata, never a URL to fetch,
+a path to open, or publisher authentication.
+
+Retain actual observations privately. Before binding, independently review
+the selected tag, measured bytes and source/license evidence. Signing and
+executing the adversarial corpus, native containment, loaded-byte attestation,
+exact-head independent security review and separate owner acceptance remain
+required. A reviewed runtime admission implementation is also still needed;
+this collector deliberately does not modify the release fence.
+
 ## Evidence and remaining gates
 
 `tests/test_qwen_runtime_gate.py` uses prepared fixtures and forbids file opens,
