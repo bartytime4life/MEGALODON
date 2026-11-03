@@ -643,7 +643,13 @@ telemetry and the closed `model_refresh` / `model_select` actions. See
 [the model-selection contract](local-model-selection.md#persistence-and-interfaces)
 for fields, bounds, persistence and legacy compatibility. Model selection never
 accepts a provider destination or generates a host command. Availability reads
-do not infer; selection and `qwen_check` perform an explicit bounded response test.
+do not infer. While UNBOUND, explicit `model_refresh` reads only the fixed local
+tag list and `model_select` rechecks the selected name/digest before saving private
+preferences. They cannot call show, loaded allocation, generation or loading.
+Telemetry declares `selection_available: true` and `binding_status: UNBOUND`;
+cached choices cannot imply inference readiness. `qwen_check` and all model
+execution remain held. The dormant admitted selection path retains its bounded
+response check after future acceptance.
 
 ### Device observation history and AI response budgets
 

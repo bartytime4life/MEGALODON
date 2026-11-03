@@ -19,10 +19,11 @@ evidence. The setting alone must not resume model operation after an upgrade.
 | --- | --- |
 | AI provider admission, generation and preparation | Raise the fixed binding failure before posture, queue ownership, cancellation, observations or I/O. Exact disabled settings retain `DISABLED` precedence. |
 | Provider inventory and status | Return binding failure; status is `unbound`, inference false and provider/listener availability unknown. False inventory presence/digest fields with an error do not establish absence. |
-| Catalog, loaded allocation and internal fixed HTTP request | Refuse before provider access, including explicit Setup refresh. |
+| Runtime catalog, loaded allocation and internal fixed HTTP request | Refuse before provider access. |
+| Explicit Setup model refresh and selection | One bounded `GET /api/tags` to an admitted literal-loopback listener; save a freshly matched tag/digest and compute preferences. No `/api/show`, `/api/ps`, generation, model load or binding change. Passive snapshots never initiate this read. |
 | Original and anomaly Airlock invocation | Pure preflight denials retain precedence; admitted and explicitly enabled calls return `DENY / POLICY_DENIED` with the fixed binding failure before locks or transport. The supplied model identity is unaccepted preflight data. |
 | AI fixed questions | Refuse before broker dispatch or receipts. CLI does so after config loading but before receipt-store/reader construction. Authorized HUD requests return 503 before body reads or audit-store creation. Existing HTTP authentication still precedes the binding denial. |
-| Model telemetry | Return `needs_setup / unbound` without a refresh thread; cached success cannot imply readiness. Queued refresh also rechecks the hold. |
+| Model telemetry | Return `needs_setup / unbound` without a refresh thread. Explicitly refreshed choices are cached separately and cannot imply runtime readiness. Queued runtime refresh also rechecks the hold. |
 | Keep-ready lifecycle | No worker start, provider inspection, retry, cancellation or change callback. Snapshot reports the hold, with no retry countdown. |
 
 These are model-entry boundaries, not a universal application no-effect claim.
@@ -31,7 +32,27 @@ Imports and input/config preparation are outside the guarded invocation. CLI
 read-only commands and writes its audit receipt. Explicit broker tools still
 retain their own authority and audit contracts. Other defensive collection or
 analysis workers are not stopped by this change; their model calls are refused.
-No host, firewall, service, existing external model process or data is changed.
+Model-choice and readiness preferences are explicit private application writes.
+No firewall, service or existing external model process is changed.
+
+## Choose other installed Ollama models
+
+In **Setup → Local AI**, press **Refresh installed models**, choose an installed
+local artifact, select CPU or Ollama automatic compute, and press **Save model**.
+This works for other valid local model names as well as Qwen. No model is pulled,
+loaded or given a prompt. The list is a metadata observation, not publisher or
+completion-capability verification. Changing models cannot lift UNBOUND.
+
+The discovery exception accepts only the exact bodyless tag-list GET, with a
+three-second deadline and the existing bounded response, concurrency and literal
+loopback transport. Unknown/wildcard listener posture refuses before the request.
+Cloud-backed and non-GGUF catalog entries are omitted. Selection re-reads the
+list and rejects missing/changed tags before persistence. A failed refresh clears
+the old choices. Passive status reads neither contact Ollama nor start a worker.
+The protected support route retains its session, origin, host, token and closed
+action/body checks. Runtime catalogs, preparation, generation and AI questions
+continue to refuse. This exception revises explicit discovery only; historical
+#704 zero-effect evidence retains its original source and scope.
 
 ## Verify the installed candidate's files before binding
 
@@ -83,6 +104,11 @@ thread starts and firewall actions during the scoped calls. It also checks
 queue/cancellation/observation preservation, fixed-question refusal, stale
 telemetry and keep-ready behavior. `tests/test_qwen_zero_effect.py` retains the
 separate disabled/preflight evidence. Both run in the exact-head Qwen workflow.
+`tests/test_model_choices.py` separately exercises the explicit discovery
+exception, changed/missing choices, private preference persistence and restart,
+without a synthetic runtime binding or model execution. The browser regression
+clicks refresh, chooses another family, saves compute preferences, and confirms
+that all execution buttons remain held.
 
 Existing synthetic provider suites explicitly opt into the test-only
 `synthetic_runtime_binding` fixture to exercise dormant lower layers. That
@@ -93,4 +119,4 @@ framing and policy regression coverage without pretending a binding exists.
 Issue #446 remains **HOLD**. The canonical owner decision is still UNBOUND;
 model provenance/authentication, actual loaded-byte verification, the signed
 seven-category adversarial corpus, independent review and owner acceptance
-remain separate gates. No model or provider was operated for this change.
+remain separate gates. Model choice does not satisfy any of them.

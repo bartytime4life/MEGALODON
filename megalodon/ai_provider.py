@@ -124,9 +124,17 @@ def _strict_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 
 def _request(path: str, method: str, body: bytes | None, timeout: float,
-             *, deadline: float | None = None) -> bytes:
+             *, deadline: float | None = None, catalog_read: bool = False) -> bytes:
     """Exactly one request on the compiled literal-loopback transport."""
-    _require_binding()
+    if catalog_read is not False:
+        # An explicit Setup refresh may list local names before model acceptance.
+        # This exception cannot send a prompt, inspect a model, load, or mutate it.
+        if (catalog_read is not True or (path, method, body) != ('/api/tags', 'GET', None)
+                or type(timeout) not in (int, float) or not math.isfinite(timeout)
+                or not 0 < timeout <= 3):
+            raise AIProviderError('POLICY_REJECTION')
+    else:
+        _require_binding()
     if (path,method) not in {("/api/tags","GET"),("/api/ps","GET"),("/api/show","POST"),("/api/generate","POST")}:
         raise AIProviderError("POLICY_REJECTION")
     if body is not None and len(body) > transport.MAX_PROVIDER_REQUEST_BYTES:
@@ -272,7 +280,17 @@ def model_catalog() -> list[dict]:
     """Read installed artifacts only after release binding admission."""
     _require_binding()
     _listener_admitted()
-    value=_json(_request('/api/tags','GET',None,3))
+    return _catalog_rows(_json(_request('/api/tags','GET',None,3)))
+
+
+def model_choices() -> list[dict]:
+    """One explicit, loopback-only tag read; this grants no inference authority."""
+    deadline=time.monotonic()+3
+    _listener_admitted(deadline)
+    return _catalog_rows(_json(_request('/api/tags','GET',None,3,deadline=deadline,catalog_read=True)))
+
+
+def _catalog_rows(value) -> list[dict]:
     if type(value) is not dict or type(value.get('models')) is not list or len(value['models'])>256:
         raise AIProviderError('INVALID_RESPONSE')
     rows=[];seen=set()

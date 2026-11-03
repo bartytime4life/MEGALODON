@@ -156,11 +156,21 @@ def test_unbound_telemetry_never_starts_thread_or_uses_stale_success(monkeypatch
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_even_explicit_inventory_refresh_refuses_unbound(monkeypatch, enabled):
-    monitor = model_telemetry.ModelTelemetry(lambda: replace(ENABLED, enabled=enabled))
+def test_explicit_choices_are_separate_from_unbound_runtime_observations(monkeypatch, enabled):
+    calls=[]
+    row=dict(name='llama3.2:3b',digest='b'*64,size_bytes=1024)
+    monitor = model_telemetry.ModelTelemetry(lambda: replace(ENABLED, enabled=enabled),
+        choices=lambda: calls.append('explicit-tag-list') or [dict(row)])
     with no_effects(monkeypatch):
-        with pytest.raises(ai_provider.AIProviderError, match="^" + FAILURE + "$"):
-            monitor.refresh_installed_models()
+        assert monitor.snapshot()['options']==[]
+        assert calls==[]
+        monitor.refresh_installed_models()
+        result=monitor.snapshot()
+        assert monitor.snapshot()==result
+    assert calls==['explicit-tag-list']
+    assert result['options']==[row] and result['selection_available'] is True
+    assert result['binding_status']=='UNBOUND' and result['inference_verified'] is False
+    assert result['loaded'] is None and result['last_response_at'] is None
     assert monitor._thread is None and monitor._value is None
 
 

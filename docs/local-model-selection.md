@@ -1,16 +1,24 @@
 # Choose a local AI model
 
 > **Current release hold (#446):** local model runtime is `UNBOUND`. Enabling
-> AI or selecting a model cannot authorize provider access. Generation, model
-> preparation, inventory/refresh and AI questions refuse before their model
-> work; telemetry and keep-ready workers cannot start provider activity.
-> The operational flows below describe dormant lower layers, not permission
-> to activate them. See [the runtime fence and its limits](qwen-runtime-unbound.md).
+> AI or selecting a model cannot authorize inference. Explicit Setup refresh
+> and saving model/compute preferences are available. Loading, generation,
+> runtime inventory and AI questions remain held. See
+> [the runtime fence and discovery exception](qwen-runtime-unbound.md).
 
-Open **Setup → Local AI · Ollama**. Choose an installed model, choose CPU or
-Ollama automatic compute, set the response limit, then press **Use selected model**. MEGALODON saves the
-exact installed digest and verifies one short response. **Verify selected model**
-retries that check; **Refresh installed models** only reads metadata.
+Open **Setup → Local AI**, press **Refresh installed models**, choose an installed
+model and CPU or Ollama automatic compute, then press **Save model**. MEGALODON
+re-reads the local list and saves the exact reported tag/digest, compute mode and
+response-limit preference. Other local model families are supported. A missing
+or changed artifact is rejected before saving. No model is loaded or given a
+prompt, and the UI keeps runtime acceptance visibly separate. Refresh errors
+clear earlier choices; passive polling never discovers models while UNBOUND.
+
+## Execution behavior awaiting acceptance
+
+The following response, loaded-memory and automatic-advice flows describe dormant
+lower layers. They remain unavailable until reviewed runtime admission and the
+separate model acceptance evidence exist. Saving a choice does not activate them.
 
 The same selection serves endpoint analysis in the HUD, automatic collector
 advice, and the separately authorized AI broker. Selecting a model grants no
@@ -21,10 +29,11 @@ that an address is hostile or execute their generated commands.
 
 ## Availability and compute
 
-- Only installed, local GGUF text-completion models can be selected. Embedding
+- The current chooser lists installed local GGUF candidates. Completion capability
+  is not verified by discovery or saving. Before an accepted execution, embedding
   models, cloud-backed models, invalid identifiers and changed digests are
   rejected before an evidence prompt is sent. Some installed artifacts may appear
-  in the list but fail the completion-capability check when selected.
+  in the list but fail the completion-capability check before execution.
 - The adapter verifies the loopback listener, exact tag digest, and `/api/show`
   local completion capabilities before each response. A loopback Ollama service
   alone does not establish that a model runs locally. Metadata replies have a

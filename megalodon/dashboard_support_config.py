@@ -32,7 +32,7 @@ SUPPORT_CONFIG_HTML = r'''
     <section aria-labelledby="support-model-title" class="settings-model">
       <h5 id="support-model-title" tabindex="-1">Selected model</h5>
       <p id="support-model-saved" class="support-config-note">Saved model preference has not been checked.</p>
-      <div id="support-model-authorization" class="support-config-feedback" role="status" hidden><div><strong>Local AI needs authorization</strong><p>Model discovery, selection and loading are paused until this release has an accepted owner model binding. Installed models have not been checked.</p><a href="https://github.com/bartytime4life/MEGALODON/issues/446" target="_blank" rel="noopener noreferrer">Review AI acceptance requirements (#446)</a></div></div>
+      <div id="support-model-authorization" class="support-config-feedback" role="status" hidden><div><strong>Choose a model; running it still needs acceptance</strong><p>Refresh the installed Ollama list, choose a model, and save your compute preference. Saving does not load it or send a prompt. Loading and responses remain paused until model acceptance is recorded.</p><a href="https://github.com/bartytime4life/MEGALODON/issues/446" target="_blank" rel="noopener noreferrer">Review AI acceptance requirements (#446)</a></div></div>
       <div class="settings-model-fields"><div><label for="support-model-select">Installed model</label><select id="support-model-select" disabled><option value="">Checking installed models…</option></select></div><div><label for="support-model-compute">Compute</label><select id="support-model-compute" disabled><option value="cpu">CPU · keep GPU available</option><option value="auto">Ollama automatic · may use GPU</option></select></div></div>
       <div class="support-config-actions"><button type="button" id="support-model-save" class="support-config-primary" disabled>Save model</button><button type="button" id="support-model-refresh" disabled>Refresh list</button><button type="button" id="support-model-adopt" hidden>Use installed version</button></div>
       <div class="settings-switch-row"><label class="settings-switch-copy" for="support-model-ready"><strong>Keep model ready while HUD is running</strong><small>Load the saved model at startup and retry after a lost connection.</small></label><input id="support-model-ready" class="settings-switch" type="checkbox" role="switch" disabled></div>
@@ -43,7 +43,7 @@ SUPPORT_CONFIG_HTML = r'''
         <label for="support-model-timeout">AI response limit (seconds)</label><input id="support-model-timeout" type="number" min="1" max="1800" step="1" value="300" disabled><p class="support-config-note">Default: 5 minutes. Up to 30 minutes for large models. Collection continues while AI works.</p>
         <p id="support-model-metrics" class="support-config-note"></p>
         <div class="support-config-actions"><button type="button" id="support-config-qwen" disabled>Verify a response</button><button type="button" id="support-model-cancel" disabled>Cancel AI request</button><button type="button" id="support-config-qwen-setup" disabled>Configure Ollama access</button></div>
-        <p class="support-config-note">Saving verifies a local text response and pins the installed version. Loaded state and the last verified response are separate observations. Keeping a model ready uses memory; turn the switch off to release it after HUD requests. No downloads or cloud inference occur here. Ollama configuration may request system authorization.</p>
+        <p class="support-config-note">Saving pins the version reported by local Ollama. It does not establish publisher provenance or model acceptance. When execution is accepted, response verification and loaded memory remain separate observations. Keep-ready preferences apply only after acceptance. No downloads or cloud inference occur here. Ollama configuration may request system authorization.</p>
       </details>
     </section>
     <section><h5>Zeek</h5><p>Prepare the automatic background sampler and its private working folder.</p><button type="button" id="support-config-zeek" disabled>Prepare Zeek sampler</button><p class="support-config-note">Source summaries appear in Actions; they are separate from HUD packet totals and detector findings.</p></section>
@@ -135,7 +135,8 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   // Sensors owns the scanner self-check; its job can still appear in this shared status.
   const jobActions=new Set([...Object.keys(actionNames),'clamav_self_check']);
   const modelActions=new Set(['model_select','model_refresh','model_cancel','model_policy','model_load','qwen_check','qwen_configure']);
-  const modelUnbound=(model=state.payload?.model)=>model?.model_state==='unbound'||model?.lifecycle?.state==='unbound'||model?.error_code==='OWNER_MODEL_BINDING_NOT_RECORDED';
+  const modelRunActions=new Set(['model_cancel','model_load','qwen_check','qwen_configure']);
+  const modelUnbound=(model=state.payload?.model)=>model?.binding_status==='UNBOUND'||model?.model_state==='unbound'||model?.lifecycle?.state==='unbound'||model?.error_code==='OWNER_MODEL_BINDING_NOT_RECORDED';
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout','support-config-tool-id','support-config-tool-directory'];
   const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
@@ -160,6 +161,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       || !text(v.command,512) || (needToken&&!/^[A-Za-z0-9_-]{32}$/.test(v.token||'')) || (v.token!==undefined&&!/^[A-Za-z0-9_-]{32}$/.test(v.token)))throw Error('Invalid configuration response');
     if(v.model!==undefined){const m=v.model;if(!object(m)||!text(m.model,96)||!text(m.message,512)||!['cpu','auto'].includes(m.compute_mode)||!Array.isArray(m.options)||m.options.length>64||!m.options.every(row=>object(row)&&text(row.name,96)&&/^[a-f0-9]{64}$/.test(row.digest)&&count(row.size_bytes))||!stamp(m.updated_at)||!stamp(m.last_response_at)||!stamp(m.last_attempt_at)||!(m.response_ms===null||count(m.response_ms))||!(m.drift===undefined||m.drift===null||['digest_changed','missing'].includes(m.drift))||!(m.installed_digest===undefined||m.installed_digest===null||/^[a-f0-9]{64}$/.test(m.installed_digest))||!['loaded','memory_bytes','vram_bytes'].every(key=>key==='loaded'?(m[key]===null||typeof m[key]==='boolean'):(m[key]===null||count(m[key]))))throw Error('Invalid model telemetry');}
     if(v.model?.keep_ready!==undefined&&typeof v.model.keep_ready!=='boolean')throw Error('Invalid model policy');
+    if(v.model?.selection_available!==undefined&&typeof v.model.selection_available!=='boolean')throw Error('Invalid model selection capability');
     if(v.model?.lifecycle!==undefined){const l=v.model.lifecycle;if(!object(l)||!['unbound','disabled','paused','checking','loading','ready','retrying','error'].includes(l.state)||!text(l.message,512)||!(l.error_code===null||text(l.error_code,80))||(l.state==='unbound'&&l.error_code!=='OWNER_MODEL_BINDING_NOT_RECORDED')||!(l.retry_in_seconds===null||count(l.retry_in_seconds))||!stamp(l.updated_at))throw Error('Invalid model lifecycle');}
     return v;
   }
@@ -175,20 +177,21 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     const changing=state.pending && (!state.readDone || !state.hydrated);
     const blocked=changing || !state.valid || !workspaceVisible();
     const aiBlocked=blocked||modelUnbound();
+    const choiceBlocked=blocked||(modelUnbound()&&state.payload?.model?.selection_available!==true);
     for(const [id,action] of Object.entries(actions)){
       if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
         || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
         || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!el('support-model-select').value) || (action==='model_cancel'&&!state.payload?.model?.running)
-        || (modelActions.has(action)&&aiBlocked) || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
+        || (modelRunActions.has(action)&&aiBlocked) || (modelActions.has(action)&&!modelRunActions.has(action)&&choiceBlocked) || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
     }
     el('support-model-adopt').disabled=aiBlocked||!!working();
     el('support-model-load').disabled=aiBlocked||!!working()||!state.payload?.model?.model||state.payload?.model?.keep_ready!==true||['checking','loading'].includes(state.payload?.model?.lifecycle?.state);
-    el('support-model-ready').disabled=aiBlocked||!!working();
-    for(const id of inputIds)el(id).disabled=(id.startsWith('support-model-')?aiBlocked:blocked)||!!working();
+    el('support-model-ready').disabled=choiceBlocked||!!working();
+    for(const id of inputIds)el(id).disabled=(id.startsWith('support-model-')?choiceBlocked:blocked)||!!working();
     // A failed status read or an authorization hold must retain a read-only retry.
-    el('support-model-refresh').disabled=state.pending||!workspaceVisible()||(state.valid&&!modelUnbound()&&!!working());
-    el('support-model-refresh').textContent=!state.valid?'Retry model status':modelUnbound()?'Check authorization':'Refresh list';
+    el('support-model-refresh').disabled=state.pending||!workspaceVisible()||(state.valid&&(!!working()||choiceBlocked));
+    el('support-model-refresh').textContent=!state.valid?'Retry model status':'Refresh installed models';
     el('support-config-retry').disabled=state.pending;if(el('live-action-retry'))el('live-action-retry').disabled=state.pending;
     el('support-config').setAttribute('aria-busy',changing?'true':'false');
   }
@@ -218,7 +221,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       el('support-model-saved').textContent='Saved preference · '+(model.model||'No model selected');
       el('support-model-authorization').hidden=!unbound;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});
-      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=unbound?'Discovery paused · authorization required':options.length?'Choose a model':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':unbound&&!model.updated_at?'Click Refresh installed models':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';
       const key=JSON.stringify([placeholder.textContent,model.options.map(row=>[row.name,row.size_bytes])]);
       if(select.dataset.optionsKey!==key){select.replaceChildren(placeholder,...options);select.dataset.optionsKey=key;}
       const choice=model.options.some(row=>row.name===chosen)?chosen:'';if(select.value!==choice)select.value=choice;
@@ -236,7 +239,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       metrics.push(model.last_response_at?'Last accepted response '+time(model.last_response_at)+(model.inference_verified===true?' · recent':' · reverify for current readiness'):'No accepted response recorded for this model');
       if(model.last_attempt_at)metrics.push('Last attempt '+time(model.last_attempt_at));if(model.response_ms!==null)metrics.push('Last attempt duration '+(model.response_ms/1000).toFixed(2)+' s');
       if(model.loaded===false)metrics.push('Selected model is unloaded');else if(model.loaded===true&&model.memory_bytes!==null&&model.vram_bytes!==null)metrics.push('Loaded allocation '+(model.memory_bytes/1024**3).toFixed(1)+' GiB · GPU '+(model.vram_bytes/1024**3).toFixed(1)+' GiB');
-      if(model.updated_at)metrics.push('Availability checked '+time(model.updated_at));el('support-model-metrics').textContent=unbound?'Installed models and loaded memory have not been checked.':metrics.join(' · ');
+      if(model.updated_at)metrics.push('Availability checked '+time(model.updated_at));el('support-model-metrics').textContent=unbound?(model.updated_at?'Installed list checked '+time(model.updated_at)+'. Model loading and responses remain unverified.':'Click Refresh installed models to read local choices. Model loading and responses remain unverified.'):metrics.join(' · ');
     }
     const selected=state.dirty.has('interface')||document.activeElement===el('support-config-interface') ? el('support-config-interface').value : (v.settings.interface || (v.interfaces.find(i=>i.default&&i.up)||v.interfaces.find(i=>i.up)||{}).name || '');
     const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=v.interfaces.length?'Select an interface':'No interfaces returned';
@@ -321,7 +324,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   async function act(action){
     if(state.readDone)await state.readDone;
     const button=Object.entries(actions).find(([,value])=>value===action);
-    if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible()||(modelActions.has(action)&&modelUnbound()))return;
+    if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible()||(modelRunActions.has(action)&&modelUnbound()))return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
     const focusedControl=document.activeElement?.id;
     cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]|| (action==='model_cancel'?'Cancelling AI request':'Saving local AI settings')}…${['capture_permissions','signature_update','qwen_configure','suricata_configure'].includes(action)?' A system authorization prompt may appear.':''}`,'working');controls();
@@ -333,7 +336,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     if(value){if(typeof window!=='undefined')window.megalodonSettings?.select('traffic');el('support-config-title').focus();read(true);}else{el('support-apps-configure').focus();schedule();}}
   el('support-apps-configure').addEventListener('click',()=>open(!state.open));el('support-config-close').addEventListener('click',()=>open(false));el('support-config-retry').addEventListener('click',()=>read(true));if(el('live-action-retry'))el('live-action-retry').addEventListener('click',()=>read(true));
   for(const [id,action] of Object.entries(actions))if(el(id)&&!['support-model-ready','support-model-refresh'].includes(id))el(id).addEventListener('click',()=>act(action));
-  el('support-model-refresh').addEventListener('click',()=>!state.valid||modelUnbound()?read(true):act('model_refresh'));
+  el('support-model-refresh').addEventListener('click',()=>!state.valid?read(true):act('model_refresh'));
   el('support-model-ready').addEventListener('change',()=>{if(el('support-model-ready').disabled)return;state.dirty.add('keep_ready');act('model_policy');});
   el('support-model-adopt').addEventListener('click',()=>{
     const model=state.payload?.model;if(!model||model.drift!=='digest_changed')return;
