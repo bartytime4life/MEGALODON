@@ -647,8 +647,12 @@ do not infer. While UNBOUND, explicit `model_refresh` reads only the fixed local
 tag list and `model_select` rechecks the selected name/digest before saving private
 preferences. They cannot call show, loaded allocation, generation or loading.
 Telemetry declares `selection_available: true` and `binding_status: UNBOUND`;
-cached choices cannot imply inference readiness. `qwen_check` and all model
-execution remain held. The dormant admitted selection path retains its bounded
+cached choices cannot imply inference readiness. `qwen_check` and operational model
+execution remain held. The separate closed `model_test` / `model_test_cancel`
+actions implement only the [fixed READY diagnostic](ollama-response-test.md).
+`model.response_test` is its process-local, selection-qualified result;
+`model.connection_state` describes the explicit installed-list read and does
+not imply operational model readiness. The dormant admitted selection path retains its bounded
 response check after future acceptance.
 
 ### Device observation history and AI response budgets

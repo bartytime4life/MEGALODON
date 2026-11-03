@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import http.client
 import json
@@ -123,10 +124,53 @@ def _strict_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
+MODEL_TEST_PROMPT = "Reply with exactly READY and nothing else. Do not add punctuation."
+MODEL_TEST_OWNER = 'hud-model-test'
+MODEL_TEST_MAX_SECONDS = 300
+
+
+@dataclass(frozen=True)
+class _ModelTest:
+    model: str
+    digest: str
+    compute: str
+
+    def payload(self):
+        return dict(model=self.model,prompt=MODEL_TEST_PROMPT,stream=False,think=False,raw=False,
+                    keep_alive=60,options=dict(temperature=0,num_ctx=512,num_batch=32,
+                    num_gpu=0 if self.compute=='cpu' else -1,num_predict=32))
+
+
+def _encoded(value):
+    return json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode('ascii')
+
+
+def _test_request_allowed(test, path, method, body, timeout):
+    # An explicit fixed probe is not general generation admission. The exact
+    # three request shapes cannot carry telemetry, a caller prompt or tools.
+    if (type(path) is not str or type(method) is not str or (body is not None and type(body) is not bytes)
+            or type(test) is not _ModelTest or not valid_model_name(test.model)
+            or type(test.digest) is not str or re.fullmatch(r'[a-f0-9]{64}',test.digest) is None
+            or test.compute not in ('cpu','auto') or type(timeout) not in (int,float)
+            or not math.isfinite(timeout) or not 0<timeout<=MODEL_TEST_MAX_SECONDS):
+        return False
+    allowed = {
+        ('/api/tags','GET'):None,
+        ('/api/show','POST'):_encoded(dict(model=test.model)),
+        ('/api/generate','POST'):_encoded(test.payload()),
+    }
+    return (path,method) in allowed and body==allowed[(path,method)] and (
+        path=='/api/generate' or timeout<=3)
+
+
 def _request(path: str, method: str, body: bytes | None, timeout: float,
-             *, deadline: float | None = None, catalog_read: bool = False) -> bytes:
+             *, deadline: float | None = None, catalog_read: bool = False,
+             model_test: _ModelTest | None = None) -> bytes:
     """Exactly one request on the compiled literal-loopback transport."""
-    if catalog_read is not False:
+    if model_test is not None:
+        if catalog_read is not False or not _test_request_allowed(model_test,path,method,body,timeout):
+            raise AIProviderError('POLICY_REJECTION')
+    elif catalog_read is not False:
         # An explicit Setup refresh may list local names before model acceptance.
         # This exception cannot send a prompt, inspect a model, load, or mutate it.
         if (catalog_read is not True or (path, method, body) != ('/api/tags', 'GET', None)
@@ -238,6 +282,24 @@ def _listener_admitted(deadline: float | None = None) -> None:
 
 def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, Any]:
     _require_enabled(settings)
+    _validate_settings(settings)
+    if deadline is not None and time.monotonic() >= deadline:
+        raise AIProviderError("REQUEST_TIMEOUT")
+    _listener_admitted(deadline)
+    remaining = 3 if deadline is None else min(3, deadline - time.monotonic())
+    if remaining <= 0:
+        raise AIProviderError("REQUEST_TIMEOUT")
+    tags = _json(_request("/api/tags", "GET", None, remaining, deadline=deadline))
+    _match_tag(tags,settings.model,settings.model_digest)
+    remaining=3 if deadline is None else min(3,deadline-time.monotonic())
+    if remaining<=0:raise AIProviderError('REQUEST_TIMEOUT')
+    details=_json(_request('/api/show','POST',json.dumps({'model':settings.model}).encode(),remaining,
+                           deadline=deadline))
+    _local_completion(details)
+    return {"model": settings.model, "digest": settings.model_digest, "loopback_only": True}
+
+
+def _validate_settings(settings):
     if (settings.provider != "ollama" or settings.endpoint != "http://127.0.0.1:11434"
             or type(settings.model) is not str
             or not valid_model_name(settings.model)
@@ -247,33 +309,87 @@ def _admitted(settings: AISettings, deadline: float | None = None) -> dict[str, 
             or settings.compute_mode not in ("cpu", "auto") or type(settings.keep_warm) is not bool
             or type(settings.max_context) is not int or not 256 <= settings.max_context <= 4096):
         raise AIProviderError("POLICY_REJECTION")
-    if deadline is not None and time.monotonic() >= deadline:
-        raise AIProviderError("REQUEST_TIMEOUT")
-    _listener_admitted(deadline)
-    remaining = 3 if deadline is None else min(3, deadline - time.monotonic())
-    if remaining <= 0:
-        raise AIProviderError("REQUEST_TIMEOUT")
-    tags = _json(_request("/api/tags", "GET", None, remaining, deadline=deadline))
+
+
+def _match_tag(tags, model, expected_digest):
     if type(tags) is not dict or type(tags.get("models")) is not list or len(tags["models"]) > 256:
         raise AIProviderError("INVALID_RESPONSE")
-    matches = [item for item in tags["models"] if type(item) is dict and item.get("name") == settings.model]
+    matches = [item for item in tags["models"] if type(item) is dict and item.get("name") == model]
     if len(matches) != 1:
         raise AIProviderError("MODEL_MISSING")
     digest = matches[0].get("digest")
     if type(digest) is not str or re.fullmatch(r"[a-f0-9]{64}", digest) is None:
         raise AIProviderError("INVALID_RESPONSE")
-    if digest != settings.model_digest:
+    if digest != expected_digest:
         raise AIProviderError("MODEL_MISMATCH")
-    remaining=3 if deadline is None else min(3,deadline-time.monotonic())
-    if remaining<=0:raise AIProviderError('REQUEST_TIMEOUT')
-    details=_json(_request('/api/show','POST',json.dumps({'model':settings.model}).encode(),remaining,
-                           deadline=deadline))
+    if matches[0].get('remote_host') or matches[0].get('remote_model'):
+        raise AIProviderError('MODEL_NOT_LOCAL')
+
+
+def _local_completion(details):
     # A loopback daemon may proxy cloud models. Never send evidence to those.
     if (type(details) is not dict or details.get('remote_host') or details.get('remote_model')
             or type(details.get('details')) is not dict or details['details'].get('format')!='gguf'
             or type(details.get('capabilities')) is not list or 'completion' not in details['capabilities']):
         raise AIProviderError('MODEL_NOT_LOCAL')
-    return {"model": settings.model, "digest": digest, "loopback_only": True}
+
+
+def test_selected_model(settings: AISettings, *, cancel_event: threading.Event | None = None) -> None:
+    """One operator-requested fixed READY probe; never records runtime acceptance.
+
+    Caller has already saved a freshly matched model preference. Admission is
+    repeated here before inference and after the reply. No response text or
+    operational readiness observation is retained. All ordinary generation,
+    preparation, broker and Airlock paths keep their release fence.
+    """
+    if settings.enabled is not True:
+        raise AIProviderError('DISABLED')
+    _validate_settings(settings)
+    if cancel_event is not None and type(cancel_event) is not threading.Event:
+        raise AIProviderError('POLICY_REJECTION')
+    if cancel_event is not None and cancel_event.is_set():
+        raise AIProviderError('REQUEST_CANCELLED')
+    deadline=time.monotonic()+min(settings.timeout_seconds,MODEL_TEST_MAX_SECONDS)
+    test=_ModelTest(settings.model,settings.model_digest,settings.compute_mode)
+    if not _generation_lock.acquire(blocking=False):
+        raise AIProviderError('CONCURRENCY_LIMIT_REACHED')
+    global _active_priority, _active_owner
+    with _priority_lock:
+        _active_priority='manual';_active_owner=MODEL_TEST_OWNER;_active_cancel.clear()
+    class Cancellation:
+        def is_set(self):
+            return _active_cancel.is_set() or (cancel_event is not None and cancel_event.is_set())
+    cancellation=Cancellation()
+    previous=getattr(_request_context,'cancel',None)
+    _request_context.cancel=cancellation
+    def call(path,method,body=None):
+        if cancellation.is_set():raise AIProviderError('REQUEST_CANCELLED')
+        remaining=deadline-time.monotonic()
+        if remaining<=0:raise AIProviderError('REQUEST_TIMEOUT')
+        timeout=min(3,remaining) if path!='/api/generate' else remaining
+        return _request(path,method,body,timeout,deadline=deadline,model_test=test)
+    try:
+        if cancellation.is_set():raise AIProviderError('REQUEST_CANCELLED')
+        _listener_admitted(deadline)
+        _match_tag(_json(call('/api/tags','GET')),test.model,test.digest)
+        _local_completion(_json(call('/api/show','POST',_encoded(dict(model=test.model)))))
+        # Close the metadata-read race before submitting even the fixed prompt.
+        _match_tag(_json(call('/api/tags','GET')),test.model,test.digest)
+        _listener_admitted(deadline)
+        data=call('/api/generate','POST',_encoded(test.payload()))
+        try:
+            reply,_=transport._parse_provider_output(data,test.model)
+        except (ValueError,transport._ProviderResponseInvalid):
+            raise AIProviderError('INVALID_RESPONSE') from None
+        if reply.strip()!='READY':raise AIProviderError('INVALID_RESPONSE')
+        _match_tag(_json(call('/api/tags','GET')),test.model,test.digest)
+        if cancellation.is_set():raise AIProviderError('REQUEST_CANCELLED')
+        if time.monotonic()>=deadline:raise AIProviderError('REQUEST_TIMEOUT')
+    finally:
+        _request_context.cancel=previous
+        with _priority_lock:
+            _active_priority=None;_active_owner=None
+        _generation_lock.release()
 
 
 def model_catalog() -> list[dict]:

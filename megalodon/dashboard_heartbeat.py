@@ -44,7 +44,7 @@ function heartbeatAge(iso) {
 function heartbeatText(tool) {
   if (heartbeatStale()) return heartbeatState.report ? 'Previous observation is stale · retrying while this tab is visible' : 'Heartbeat unavailable · retrying while this tab is visible';
   if (!tool) return heartbeatState.failed ? 'Heartbeat unavailable' : 'Checking…';
-  if(tool.selected_model)return tool.selected_model.message+(tool.selected_model.updated_at?' · checked '+new Date(tool.selected_model.updated_at).toLocaleTimeString():'');
+  if(tool.selected_model){const selected=tool.selected_model;return (selected.connection_state==='reachable'?'Ollama is reachable. ':'')+selected.message+(selected.updated_at?' · installed list checked '+new Date(selected.updated_at).toLocaleTimeString():'');}
   const modelOnly = tool.light === 'amber' && tool.service !== 'stopped' && tool.model === 'missing';
   const parts = [modelOnly ? 'Ollama observed · example model not found'
     : tool.light === 'amber' && tool.service === 'stopped' ? 'Installed · expected process not observed'

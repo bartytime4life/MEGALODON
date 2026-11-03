@@ -425,6 +425,12 @@ class Heartbeat:
                 row['model']='present' if observed['model_present'] else 'unknown'
                 row['selected_model']={k:observed[k] for k in ('model','state','message','updated_at','last_response_at')}
                 row['light']='green' if observed['state']=='connected' else 'grey' if observed['state']=='collecting' else 'amber'
+                for key in ('binding_status','connection_state'):
+                    if key in observed:row['selected_model'][key]=observed[key]
+                # A successful explicit catalog read proves endpoint reachability,
+                # while UNBOUND still withholds all operational AI readiness.
+                if observed.get('binding_status')=='UNBOUND' and observed.get('connection_state')=='reachable':
+                    row['light']=_light(row['installed'],row['service'],row['expects_service'])
             report["history"] = self._history.observe(report)
             payload = json.dumps(report, sort_keys=True,
                                  separators=(",", ":"), allow_nan=False).encode()

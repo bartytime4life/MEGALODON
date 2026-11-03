@@ -33,9 +33,13 @@ SUPPORT_CONFIG_HTML = r'''
     <section aria-labelledby="support-model-title" class="settings-model">
       <h5 id="support-model-title" tabindex="-1">Selected model</h5>
       <p id="support-model-saved" class="support-config-note">Saved model preference has not been checked.</p>
-      <div id="support-model-authorization" class="support-config-feedback" role="status" hidden><div><strong>Choose a model; running it still needs acceptance</strong><p>Refresh the installed Ollama list, choose a model, and save your compute preference. Saving does not load it or send a prompt. Loading and responses remain paused until model acceptance is recorded.</p><a href="https://github.com/bartytime4life/MEGALODON/issues/446" target="_blank" rel="noopener noreferrer">Review AI acceptance requirements (#446)</a></div></div>
+      <div id="support-model-authorization" class="support-config-feedback" role="status" hidden><div><strong>Connect and test Ollama; live-analysis AI needs acceptance</strong><p>Refresh the installed list, choose a model, save your preference, then test one fixed local reply below. The test can load your model. Automatic loading and analysis of network data stay paused pending acceptance.</p><a href="https://github.com/bartytime4life/MEGALODON/issues/446" target="_blank" rel="noopener noreferrer">Review AI acceptance requirements (#446)</a></div></div>
       <div class="settings-model-fields"><div><label for="support-model-select">Installed model</label><select id="support-model-select" disabled><option value="">Checking installed models…</option></select></div><div><label for="support-model-compute">Compute</label><select id="support-model-compute" disabled><option value="cpu">CPU · keep GPU available</option><option value="auto">Ollama automatic · may use GPU</option></select></div></div>
       <div class="support-config-actions"><button type="button" id="support-model-save" class="support-config-primary" disabled>Save model</button><button type="button" id="support-model-refresh" disabled>Refresh list</button><button type="button" id="support-model-adopt" hidden>Use installed version</button></div>
+      <p id="support-ollama-connection" role="status" class="support-config-note">Ollama connection has not been checked in this session.</p>
+      <div class="support-config-actions"><button type="button" id="support-model-test" disabled>Test selected model</button><button type="button" id="support-model-test-cancel" disabled>Cancel model test</button></div>
+      <p id="support-model-test-status" role="status" aria-live="polite" class="support-config-note">Save an installed model, then test its response.</p>
+      <p class="support-config-note">The test sends only a fixed request to reply READY to local Ollama. It may load the saved model with a 512-token context and a 60-second idle lease. No network observations or personal data are sent. A successful test does not accept the model for live analysis.</p>
       <div class="settings-switch-row"><label class="settings-switch-copy" for="support-model-ready"><strong>Keep model ready while HUD is running</strong><small>Load the saved model at startup and retry after a lost connection.</small></label><input id="support-model-ready" class="settings-switch" type="checkbox" role="switch" disabled></div>
       <div id="support-model-loaded-state" class="settings-model-state" role="status" aria-live="polite"><strong id="support-model-loaded">Checking loaded state…</strong><button type="button" id="support-model-load" disabled>Load now</button></div>
       <p id="support-model-lifecycle" class="support-config-note">Checking automatic loading…</p>
@@ -128,6 +132,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   const actions={
     'host-security-audit':'security_audit','host-security-baseline':'security_baseline','host-security-check':'security_check','host-security-refresh':'security_refresh','persistence-baseline':'persistence_baseline',
     'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh','support-model-load':'model_load','support-model-ready':'model_policy',
+    'support-model-test':'model_test','support-model-test-cancel':'model_test_cancel',
     'model-library-download':'model_stage_download','model-library-check':'model_library_check','model-library-cancel':'model_stage_cancel',
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
@@ -137,6 +142,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',persistence_baseline:'Recording initial persistence baseline',tool_directory_set:'Saving tool directory',model_policy:'Saving model loading preference',model_load:'Loading the saved model',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   // Sensors owns the scanner self-check; its job can still appear in this shared status.
   Object.assign(actionNames,{model_stage_download:'Downloading and staging model',model_library_check:'Checking staged files',model_stage_cancel:'Cancelling model staging'});
+  Object.assign(actionNames,{model_test:'Testing the saved local model',model_test_cancel:'Cancelling the local model test'});
   const jobActions=new Set([...Object.keys(actionNames),'clamav_self_check']);
   const modelActions=new Set(['model_select','model_refresh','model_cancel','model_policy','model_load','qwen_check','qwen_configure']);
   const modelRunActions=new Set(['model_cancel','model_load','qwen_check','qwen_configure']);
@@ -167,6 +173,8 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     if(v.model!==undefined){const m=v.model;if(!object(m)||!text(m.model,96)||!text(m.message,512)||!['cpu','auto'].includes(m.compute_mode)||!Array.isArray(m.options)||m.options.length>64||!m.options.every(row=>object(row)&&text(row.name,96)&&/^[a-f0-9]{64}$/.test(row.digest)&&count(row.size_bytes))||!stamp(m.updated_at)||!stamp(m.last_response_at)||!stamp(m.last_attempt_at)||!(m.response_ms===null||count(m.response_ms))||!(m.drift===undefined||m.drift===null||['digest_changed','missing'].includes(m.drift))||!(m.installed_digest===undefined||m.installed_digest===null||/^[a-f0-9]{64}$/.test(m.installed_digest))||!['loaded','memory_bytes','vram_bytes'].every(key=>key==='loaded'?(m[key]===null||typeof m[key]==='boolean'):(m[key]===null||count(m[key]))))throw Error('Invalid model telemetry');}
     if(v.model?.keep_ready!==undefined&&typeof v.model.keep_ready!=='boolean')throw Error('Invalid model policy');
     if(v.model?.selection_available!==undefined&&typeof v.model.selection_available!=='boolean')throw Error('Invalid model selection capability');
+    if(v.model?.connection_state!==undefined&&!['reachable','unavailable','error','unchecked'].includes(v.model.connection_state))throw Error('Invalid Ollama connection state');
+    if(v.model?.response_test!==undefined){const t=v.model.response_test;if(!object(t)||!['idle','running','passed','failed','cancelled'].includes(t.state)||!text(t.model,96)||!text(t.message)||typeof t.selection_saved!=='boolean'||!['cpu','auto'].includes(t.compute_mode)||!stamp(t.started_at)||!stamp(t.finished_at)||!(t.duration_ms===null||count(t.duration_ms))||!(t.error_code===null||text(t.error_code,64))||!count(t.timeout_seconds)||t.timeout_seconds<1||t.timeout_seconds>300)throw Error('Invalid local model test');}
     if(v.model?.lifecycle!==undefined){const l=v.model.lifecycle;if(!object(l)||!['unbound','disabled','paused','checking','loading','ready','retrying','error'].includes(l.state)||!text(l.message,512)||!(l.error_code===null||text(l.error_code,80))||(l.state==='unbound'&&l.error_code!=='OWNER_MODEL_BINDING_NOT_RECORDED')||!(l.retry_in_seconds===null||count(l.retry_in_seconds))||!stamp(l.updated_at))throw Error('Invalid model lifecycle');}
     libraryChecked(v.model_library);
     return v;
@@ -185,7 +193,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     const aiBlocked=blocked||modelUnbound();
     const choiceBlocked=blocked||(modelUnbound()&&state.payload?.model?.selection_available!==true);
     for(const [id,action] of Object.entries(actions)){
-      if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
+      if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel','model_test_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
         || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
         || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!el('support-model-select').value) || (action==='model_cancel'&&!state.payload?.model?.running)
@@ -194,6 +202,8 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     el('support-model-adopt').disabled=aiBlocked||!!working();
     el('support-model-load').disabled=aiBlocked||!!working()||!state.payload?.model?.model||state.payload?.model?.keep_ready!==true||['checking','loading'].includes(state.payload?.model?.lifecycle?.state);
     el('support-model-ready').disabled=choiceBlocked||!!working();
+    el('support-model-test').disabled=blocked||!!working()||state.payload?.model?.response_test?.selection_saved!==true||['model','compute_mode','timeout_seconds'].some(key=>state.dirty.has(key));
+    el('support-model-test-cancel').disabled=blocked||state.payload?.model?.response_test?.state!=='running';
     for(const id of inputIds)el(id).disabled=(id.startsWith('support-model-')?choiceBlocked:blocked)||!!working();
     // A failed status read or an authorization hold must retain a read-only retry.
     el('support-model-refresh').disabled=state.pending||!workspaceVisible()||(state.valid&&(!!working()||choiceBlocked));
@@ -227,6 +237,9 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       const model=v.model,select=el('support-model-select'),chosen=state.dirty.has('model')||document.activeElement===select?select.value:model.model;
       const unbound=modelUnbound(model);
       el('support-model-saved').textContent='Saved preference · '+(model.model||'No model selected');
+      el('support-ollama-connection').textContent={reachable:'Ollama connected · installed models were read successfully.',unavailable:'Ollama unavailable at 127.0.0.1:11434. Check its service, then refresh.',error:'The Ollama connection check failed. Refresh to retry.',unchecked:'Ollama connection has not been checked in this session.'}[model.connection_state]||'Refresh installed models to check the Ollama connection.';
+      const test=model.response_test;
+      el('support-model-test-status').textContent=test?(test.state==='running'?'Testing '+test.model+' · limit '+test.timeout_seconds+' s.':test.message+(test.finished_at?' · '+time(test.finished_at):'')):'Model testing is unavailable in this service version.';
       el('support-model-authorization').hidden=!unbound;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});
       const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':unbound&&!model.updated_at?'Click Refresh installed models':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';

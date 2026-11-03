@@ -135,6 +135,8 @@ class ModelTelemetry:
             # No thread, provider read or historical observation can imply readiness.
             with self._lock:
                 choices=dict(self._choices)
+            connection=('reachable' if choices['checked_at'] else 'unavailable' if choices['error_code']=='OLLAMA_UNAVAILABLE'
+                        else 'error' if choices['error_code'] else 'unchecked')
             message=local_model_runtime.MESSAGE
             if choices['error_code']:
                 message=MESSAGES.get(ERROR_STATES.get(choices['error_code']),'Installed models could not be read.')+' '+message
@@ -142,6 +144,7 @@ class ModelTelemetry:
                 options=choices['options'],truncated=choices['truncated'],compute_mode=settings.compute_mode,
                 selected_digest=settings.model_digest,state='needs_setup',model=settings.model,
                 model_state='unbound' if settings.enabled else 'disabled',binding_status='UNBOUND',selection_available=True,
+                connection_state=connection,
                 model_present=False,message=message,
                 updated_at=choices['checked_at'],last_response_at=None,last_attempt_at=None,error_code=failure,
                 last_error_code=None,drift=None,installed_digest=None,response_ms=None,
