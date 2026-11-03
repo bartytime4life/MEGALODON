@@ -22,6 +22,37 @@ signatures, errors, interference, or a flagged ordinary file give an
 inconclusive result. The most recent check stays visible for this app session,
 separate from alerts about your files.
 
+### Accept the feature on the installed Linux PC
+
+After review and approval of the source you intend to install, run these from
+that checkout's root as your ordinary desktop user:
+
+```bash
+./Start-MEGALODON.sh --update
+./Start-MEGALODON.sh --check
+/usr/bin/clamscan --version
+```
+
+If installation refuses or its status is not ready, stop and resolve that
+failure. A checkout update or passing CI does not establish an installed
+upgrade. Reopen the HUD and reload the browser before testing Sensors.
+
+Prepare only the official reference linked above; do not execute the downloaded
+file. Click **Check my file scanner** once and wait for the completed result.
+Record the source commit, installation status, displayed result time, engine and
+signature versions, and both scan counts. Recognition requires ordinary file
+**0 of 1 flagged** and test file **1 of 1 flagged**. A completed miss requires
+both files scanned and **0 of 1 flagged** for each. Neither outcome measures
+detection of other malware or download blocking.
+
+A missing/intercepted reference, unavailable signatures, a scanner error, a
+changed file or a flagged control must remain inconclusive. Exercise missing
+signatures and scanner errors with isolated test fixtures, not by removing the
+PC's signatures or changing another security product. A request error or an
+unavailable result is not acceptance. Leave browser and endpoint protections
+enabled if they prevent reference preparation; record that limit instead of
+forcing a successful scan. The scanner check itself performs no download.
+
 
 ## Everyday use
 

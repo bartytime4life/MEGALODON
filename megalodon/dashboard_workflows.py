@@ -213,7 +213,7 @@ WORKFLOWS_JS = r'''
       const session=await fetch('/api/support-config',{...options,headers:{'X-Megalodon-Check':'1'}});
       if(!session.ok)throw Error();
       const token=(await body(session,1048576)).token;
-      if(typeof token!=='string'||!/^[a-f0-9]{32}$/.test(token))throw Error();
+      if(typeof token!=='string'||!/^[A-Za-z0-9_-]{32}$/.test(token))throw Error();
       const reply=await fetch('/api/support-config',{...options,method:'POST',headers:{'Content-Type':'application/json','X-Megalodon-Config-Token':token},body:JSON.stringify({action:'clamav_self_check'})});
       if(reply.status===409)checkError='Another local check is running. Try again when it finishes.';
       else if(reply.status!==202)throw Error();

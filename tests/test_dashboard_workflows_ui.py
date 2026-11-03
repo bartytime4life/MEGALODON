@@ -1,5 +1,6 @@
 """Local workflow rows use validated runtime observations, not capability claims."""
 import json
+import secrets
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
@@ -23,7 +24,7 @@ def test_workflow_runtime_validation_and_visibility():
     node = shutil.which('node')
     if not node:
         pytest.skip('Node unavailable')
-    result = subprocess.run([node, str(Path(__file__).with_name('workflows_browser.cjs'))], input=json.dumps(dict(code=local_workflow_script(INTEGRATIONS_JS)+WORKFLOWS_JS, fixture=workflow_fixture())), capture_output=True, text=True, timeout=10, check=False)
+    result = subprocess.run([node, str(Path(__file__).with_name('workflows_browser.cjs'))], input=json.dumps(dict(code=local_workflow_script(INTEGRATIONS_JS)+WORKFLOWS_JS, fixture=workflow_fixture(), session_token=secrets.token_urlsafe(24))), capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
 
 
