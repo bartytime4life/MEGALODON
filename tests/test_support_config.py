@@ -48,6 +48,28 @@ def test_only_fixed_actions_and_bounded_scopes(manager,body):
     assert manager.snapshot()['job']['state']=='idle'
 
 
+def test_model_staging_uses_protected_worker_and_separate_cancel(manager, monkeypatch):
+    from megalodon import ai_provider
+    from megalodon.model_library import CATALOG
+    monkeypatch.setattr(ai_provider, '_request', lambda *_a, **_kw: pytest.fail('staging must not invoke Ollama'))
+    calls = []
+    def execute(identifier=None):
+        calls.append(identifier)
+        return 'Staging fixture finished without activation.'
+    monkeypatch.setattr(manager.model_library, 'execute', execute)
+    before = manager.settings.ai
+    manager.start({'action':'model_stage_download','catalog_id':CATALOG[0].id})
+    manager._thread.join(2)
+    assert manager.snapshot()['job']['state'] == 'finished'
+    manager.start({'action':'model_library_check'})
+    manager._thread.join(2)
+    assert calls == [CATALOG[0].id, None]
+    manager.start({'action':'model_stage_cancel'})
+    assert manager.model_library._stop.is_set()
+    assert manager.settings.ai == before
+    assert manager.snapshot()['model']['binding_status'] == 'UNBOUND'
+
+
 def test_selected_tool_directory_is_saved_without_running_tool(manager,private_tmp_path):
     directory = private_tmp_path / 'custom/bin'
     directory.mkdir(parents=True)
@@ -283,6 +305,19 @@ def test_get_is_read_only_and_action_requires_no_installer_token(endpoint):
     assert code==200 and value['token']==endpoint[1].token and endpoint[2]==[]
     assert request(endpoint)[0]==202 and endpoint[2]==[{'action':'qwen_check'}]
     assert endpoint[3].install_operator_token is None
+
+
+@pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_stage_cancel'])
+def test_model_library_http_actions_require_existing_operator_token_and_origin(endpoint, action):
+    from megalodon.model_library import CATALOG
+    value = dict(action=action)
+    if action == 'model_stage_download': value['catalog_id'] = CATALOG[0].id
+    body = json.dumps(value).encode()
+    assert request(endpoint,body=body,omit=('X-Megalodon-Config-Token',))[0] == 403
+    assert request(endpoint,body=body,extra=(('Origin','http://evil.invalid'),),omit=('Origin',))[0] == 403
+    assert endpoint[2] == []
+    assert request(endpoint,body=body)[0] == 202
+    assert endpoint[2] == [value]
 
 
 @pytest.mark.parametrize('extra,omit,code',[
@@ -678,7 +713,8 @@ def test_workflow_endpoint_observes_without_model_or_service_execution(endpoint,
 
 
 @pytest.mark.parametrize('configured,expected', [('localhost','127.0.0.1'), ('127.0.0.2','127.0.0.2')])
-def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,expected):
+@pytest.mark.parametrize('arguments', [['qwen_check'], ['model_stage_download','--catalog-id','qwen25-05b-q4km']])
+def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,expected,arguments):
     requests=[]
     payload={'schema':config.SCHEMA,'token':'x'*32,
              'job':{'state':'finished','message':'Ready.'},
@@ -695,7 +731,7 @@ def test_terminal_configuration_uses_configured_loopback(monkeypatch,configured,
     monkeypatch.setattr('megalodon.config.load_settings',
                         lambda path:Settings(dashboard=DashboardSettings(host=configured)))
     monkeypatch.setattr(config,'HTTPConnection',Connection)
-    assert config.main(['qwen_check'])==0
+    assert config.main(arguments)==0
     assert requests==[('GET',None),('POST',f'http://{expected}:8797')]
 
 
@@ -936,6 +972,11 @@ def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager,
     monkeypatch.setattr(gateway_review, '_BYTE_ORDER', 'little')  # test_gateway_review.route() is little-endian
     monkeypatch.setattr(manager, '_gateway_snapshot', lambda: worst_gateway(manager.home.parent))
     monkeypatch.setattr(manager, '_process_snapshot', lambda: worst_process(manager.home.parent))
+    from megalodon.model_library import CATALOG
+    manager.model_library._update(jobs=[dict(job_id=format(i,'032x'), catalog_id=CATALOG[0].id,
+        state='staged_verified',bytes_received=CATALOG[0].size,error_code=None,
+        started_at=1793675078,updated_at=1793675078) for i in range(16)],
+        models=[dict(catalog_id=CATALOG[0].id,state='staged_verified',checked_at=1793675078)])
     size = len(json.dumps(manager.snapshot(include_token=True), sort_keys=True, separators=(',', ':')).encode())
     assert size < 48 * 1024, size  # the browser rejects support-config responses over 64 KiB
 

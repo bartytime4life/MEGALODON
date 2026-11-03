@@ -107,6 +107,12 @@ continues to require its separate launch authorization token.
 Original fingerprint-pinned Qwen run-count and anomaly contracts remain separate;
 this selector does not silently broaden their model admission rules.
 
+Setup also offers an explicit [download-and-stage model library](model-library.md)
+with a small pinned catalog, private files and a separate SQLite job journal.
+Its protected maintenance actions are `model_library_check`,
+`model_stage_download` (one closed `catalog_id`) and `model_stage_cancel`.
+Staging does not import a model into Ollama or change the runtime binding.
+
 ## Longer jobs and collector priority
 
 HUD endpoint analysis, Setup verification and collector advice run in background
