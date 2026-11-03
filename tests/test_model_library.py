@@ -84,6 +84,12 @@ def test_init_and_snapshot_have_no_files_network_or_model_use(tmp_path, monkeypa
     assert model.snapshot()["catalog"]
 
 
+def test_store_refuses_ambiguous_home_before_any_file_access(tmp_path, monkeypatch):
+    monkeypatch.setattr(library.storage, '_open_private_directory', lambda *_a, **_kw: pytest.fail('ambiguous path opened'))
+    with pytest.raises(library.storage.StorageSchemaError, match='AMBIGUOUS_PATH'):
+        library._Store(tmp_path / '..' / 'elsewhere')
+
+
 def test_stage_verify_sqlite_readback_and_reuse_without_second_transfer(staged):
     model, entry, calls = staged
     assert "not been imported" in model.execute(entry.id)

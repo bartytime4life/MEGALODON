@@ -201,6 +201,8 @@ class _Store:
             if sys.platform != "linux" or os.geteuid() == 0:
                 raise LibraryError("UNAVAILABLE")
             import fcntl
+            root = storage._absolute_database_path(root / "library.sqlite3", "MODEL_LIBRARY").parent
+            self.root = root
             self.directory = storage._open_private_directory(root, create=True, prefix="MODEL_LIBRARY")
             self.lockfile = os.open("library.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
                                     0o600, dir_fd=self.directory)
