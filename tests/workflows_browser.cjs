@@ -83,7 +83,7 @@ process.stdin.on('end',async()=>{
   assert.equal(requests.filter(request=>request.options.method==='POST').length,before+1,'valid backend token starts exactly one check');
   assert.equal(get('scanner-check-status').textContent,'Checking both files…');assert.equal(get('scanner-check-run').disabled,true);
  }
- for(const token of [null,42,'','a'.repeat(31),'a'.repeat(33),'a'.repeat(31)+'!','a'.repeat(31)+'\n']){
+ for(const token of [null,42,'','a'.repeat(31),'a'.repeat(33),'a'.repeat(31)+'!','a'.repeat(31)+'\n','a'.repeat(32)+'\n','a'.repeat(32)+'\r\n']){
   scannerToken=token;payload=idle();await event('workflows-refresh');const before=requests.filter(request=>request.options.method==='POST').length;
   await event('scanner-check-run');assert.equal(requests.filter(request=>request.options.method==='POST').length,before,'malformed session token never posts');
   assert.match(get('scanner-check-status').textContent,/Could not confirm the request/);
