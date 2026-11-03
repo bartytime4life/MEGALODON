@@ -65,6 +65,7 @@ ACTION_FIELDS = {
     'geography_refresh': set(), 'geography_disable': set(),
     'model_select': {'model','model_digest','compute_mode'}, 'model_refresh':set(), 'model_cancel':set(),
     'model_policy': {'keep_ready'}, 'model_load': set(),
+    'model_test': set(), 'model_test_cancel': set(),
     'model_library_check': set(), 'model_stage_download': {'catalog_id'}, 'model_stage_cancel': set(),
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
@@ -257,6 +258,8 @@ class SupportConfiguration:
         self.model_lifecycle=ModelLifecycle(lambda:self.settings.ai,on_change=self.model_telemetry.invalidate)
         from .model_library import ModelLibrary
         self.model_library=ModelLibrary(self.home)
+        from .model_test import ModelTest
+        self.model_test=ModelTest(lambda:self.settings.ai)
 
     def _load_qwen(self):
         from .config import AISettings, valid_model_name
@@ -447,6 +450,7 @@ class SupportConfiguration:
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             value['model']['keep_ready'] = self._model_keep_ready
             value['model']['lifecycle'] = self.model_lifecycle.snapshot()
+            value['model']['response_test'] = self.model_test.snapshot()
             if include_token:
                 value['token'] = self.token
             return value
@@ -480,6 +484,9 @@ class SupportConfiguration:
             from .ai_provider import cancel_current
             cancel_current()
             return self.snapshot()
+        if request['action']=='model_test_cancel':
+            self.model_test.cancel()
+            return self.snapshot()
         if request['action']=='model_stage_cancel':
             self.model_library.cancel()
             return self.snapshot()
@@ -497,6 +504,8 @@ class SupportConfiguration:
                 self._cancel_capture_start = False
             if request['action'] in {'model_library_check','model_stage_download'}:
                 self.model_library.prepare()
+            if request['action']=='model_test':
+                self.model_test.prepare()
             self._thread = Thread(target=self._work, args=(request,), daemon=True, name='megalodon-support-config')
             self._thread.start()
         response = self.snapshot()
@@ -731,6 +740,8 @@ class SupportConfiguration:
                     result=status(self.settings.ai,probe=True)
                     message='Selected '+candidate.model+'. '+('Response verified; HUD analysis and collector advice now use this model.' if result['inference_verified'] else
                         'Selection saved; response verification failed ('+result['state']+'). Retry Verify selected model.')
+            elif action == 'model_test':
+                message=self.model_test.run()
             elif action == 'model_refresh':
                 from .local_model_runtime import binding_failure
                 self.model_telemetry.refresh_installed_models()
@@ -791,6 +802,7 @@ class SupportConfiguration:
     def close(self):
         self._scanner_stop.set()
         self.model_library.cancel()
+        self.model_test.cancel()
         self.model_lifecycle.close()
         from .ai_provider import cancel_current
         cancel_current()

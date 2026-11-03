@@ -423,6 +423,10 @@ POLISH_JS = r'''
 const appRailLabels = {running: 'Running', ready: 'Installed', stopped: 'Stopped', attention: 'Needs attention', missing: 'Not installed', unknown: 'Status unknown'};
 function appRailState(tool, stale) {
   if (!tool || stale) return 'unknown';
+  if (tool.id==='qwen' && tool.selected_model?.binding_status==='UNBOUND') {
+    if (tool.light==='green' && tool.selected_model.connection_state==='reachable') return 'ready';
+    return tool.light==='grey'?'unknown':'attention';
+  }
   if (tool.light === 'green') return tool.service === 'running' ? 'running' : 'ready';
   if (tool.light === 'amber') return tool.service === 'stopped' ? 'stopped' : 'attention';
   if (tool.light === 'red') return 'missing';
@@ -433,6 +437,7 @@ function appRailDetail(tool, state, stale = false) {
   // The heartbeat light remains authoritative; these labels never promote it.
   const selected = !stale && tool && tool.id === 'qwen' && tool.selected_model;
   if (selected) {
+    if (selected.binding_status==='UNBOUND') return selected.connection_state==='reachable'&&tool.light==='green'?'Ollama connected · AI analysis paused':selected.connection_state==='unavailable'?'Ollama unavailable · check service':selected.connection_state==='error'?'Ollama check failed · retry in Setup':'AI analysis paused · check Ollama in Setup';
     if (selected.state === 'ready' && tool.light === 'amber') return 'Model available · verify response';
     if (selected.state === 'connected' && tool.light === 'green') return 'Recent AI response';
     if (selected.state === 'needs_setup' && tool.light === 'amber') return 'Local AI needs setup';

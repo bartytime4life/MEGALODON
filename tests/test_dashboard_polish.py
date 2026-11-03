@@ -87,6 +87,12 @@ assert.notEqual(tiles[8].label.textContent,'Recent AI response','a conflicting a
 qwen.light='green';context.renderAppStatusRail();
 assert.equal(rail[8].dataset.state,'running');
 assert.equal(tiles[8].label.textContent,'Recent AI response');
+qwen.selected_model.binding_status='UNBOUND';qwen.selected_model.connection_state='reachable';
+context.renderAppStatusRail();
+assert.equal(rail[8].dataset.state,'ready');assert.equal(tiles[8].label.textContent,'Ollama connected · AI analysis paused');
+qwen.selected_model.connection_state='unchecked';qwen.light='amber';context.renderAppStatusRail();
+assert.equal(tiles[8].label.textContent,'AI analysis paused · check Ollama in Setup');
+assert.doesNotMatch(tiles[8].label.textContent,/needs setup/);
 stale=true;context.renderAppStatusRail();
 assert.ok(rail.every(n=>n.dataset.state==='unknown'),'stale observations never show green');
 assert.equal(tiles[8].label.textContent,'Status unknown','stale AI observations must not retain recent-response wording');
