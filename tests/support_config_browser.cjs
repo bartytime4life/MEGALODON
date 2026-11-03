@@ -36,9 +36,15 @@ process.stdin.on('end',async()=>{
  get('support-model-ready').events.change();await settle();assert.equal(postCount(),unboundPosts,'no AI action while unbound');
  // All shared scanner job states remain valid even though Sensors owns its action.
  for(const state of ['running','finished','failed']){payload={...fixture,model:unbound_model,job:{...fixture.job,state,action:'clamav_self_check'}};await click('support-config-retry');await settle();assert.equal(get('support-config-retry').hidden,true,state);}
- // Unknown lifecycle states still fail closed, with a usable read-only retry.
+ // Unknown lifecycle states still fail closed, clear stale recovery details,
+ // and retain a usable read-only retry even when Local AI clears first.
+ const recoveryPanel=get('recovery-readiness'),staleRecovery=element('details');
+ staleRecovery.textContent='Earlier file-integrity scope';recoveryPanel.replaceChildren(staleRecovery);
  payload={...fixture,model:{...unbound_model,lifecycle:{...unbound_model.lifecycle,state:'invented'}}};await click('support-config-retry');await settle();
  assert.equal(get('support-config-retry').hidden,false);assert.equal(get('support-config-capture-start').disabled,true);
+ assert.equal(recoveryPanel.children.length,1,'failed Setup read clears earlier recovery details');
+ assert.notEqual(recoveryPanel.children[0],staleRecovery,'failed Setup read replaces stale recovery details');
+ assert.match(recoveryPanel.children[0].textContent,/Recovery readiness is unavailable/);
  assert.match(get('support-model-select').children[0].textContent,/unavailable/);
  assert.equal(get('support-model-loaded').textContent,'Loaded state unavailable');
  assert.equal(get('support-model-refresh').textContent,'Retry model status');assert.equal(get('support-model-refresh').disabled,false);
