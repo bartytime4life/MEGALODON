@@ -8,7 +8,10 @@
 The optional Linux HUD [file inspector](docs/file-inspection.md) receives one
 operator-selected executable only after **Inspect**. This is a separate,
 protected local-file capability; it does not admit packet contents to the
-telemetry model. Confined LIEF/Detect It Easy adapters project bounded static
+telemetry model. It requires configured local HUD sign-in and authenticated
+requests; the sign-in-disabled HUD mode cannot expose reports, issue an
+inspection nonce or accept inspection/cancellation submissions.
+Confined LIEF/Detect It Easy adapters project bounded static
 metadata and identification clues into one session-memory report. No sample
 contents, sample hashes, raw tool output, AI request, quarantine, unpacking,
 execution, firewall action or core-store write is added. The exact HTTP,

@@ -214,6 +214,71 @@ def test_native_die_address_limit_and_hard_memory_cap(native_home, monkeypatch):
         os.close(fd)
 
 
+def test_native_authenticated_http_and_report_refusal_without_sign_in(native_home):
+    import base64
+    from http.client import HTTPConnection
+    from http.server import ThreadingHTTPServer
+    import secrets
+    from types import SimpleNamespace
+    from megalodon.dashboard import DashboardHandler
+
+    inspector = FileInspection(native_home)
+    password = 'synthetic-native-inspector-password'
+    configuration = SimpleNamespace(token=secrets.token_urlsafe(24))
+    handler = type('NativeInspectionHandler', (DashboardHandler,), dict(
+        file_inspection=inspector, support_config=configuration,
+        http_read_password=password, http_password_verifier=None))
+    server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
+    worker = Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    host = f'127.0.0.1:{server.server_port}'
+    def request(method='GET', path='/api/file-inspection', body=None, *, authenticated=True, nonce=None):
+        headers = {'X-Megalodon-Check': '1'}
+        if authenticated:
+            headers['Authorization'] = 'Basic ' + base64.b64encode(('megalodon:' + password).encode()).decode()
+        if body is not None:
+            headers.update({'Origin': 'http://' + host,
+                'Content-Type': 'application/json' if path.endswith('/cancel') else 'application/octet-stream',
+                'X-Megalodon-Config-Token': nonce or configuration.token})
+        connection = HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+        try:
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            return response.status, json.loads(response.read())
+        finally:
+            connection.close()
+    try:
+        assert request(authenticated=False)[0] == 401
+        status, initial = request()
+        assert status == 200 and initial['report'] is None
+        raw = elf()
+        assert request('POST', '/api/file-inspection/run', raw, nonce=initial['token'])[0] == 202
+        deadline = time.monotonic() + 35
+        while True:
+            status, result = request()
+            assert status == 200 and time.monotonic() < deadline
+            if result['state'] not in ('receiving', 'running'):
+                break
+            time.sleep(.05)
+        assert result['state'] == 'completed'
+        assert result['report']['structure']['format'] == 'ELF'
+        assert [t['state'] for t in result['report']['tools']] == ['completed', 'completed']
+        handler.http_read_password = None
+        # A real normalized report now exists. Turning off sign-in must never
+        # turn that report, its nonce or another inspection into a public route.
+        for method, path, body in [('GET', '/api/file-inspection', None),
+                ('POST', '/api/file-inspection/run', raw),
+                ('POST', '/api/file-inspection/cancel', b'{}')]:
+            status, result = request(method, path, body, authenticated=False)
+            assert status == 403 and result['code'] == 'file_inspection_sign_in_required'
+            assert 'report' not in result and 'token' not in result
+    finally:
+        inspector.close()
+        server.shutdown()
+        server.server_close()
+        worker.join(3)
+
+
 @pytest.mark.parametrize('tool', ['lief', 'die'])
 def test_native_parent_death_removes_namespace(native_home, tool):
     # Crash a disposable controller without calling close(). Its worker must

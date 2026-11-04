@@ -7,6 +7,10 @@
 
 The optional [file inspector](docs/file-inspection.md) adds authenticated,
 same-origin, nonce-protected binary submission to the non-root Linux HUD.
+Configured HTTP sign-in is mandatory for this capability. HUDs using the
+default sign-in-disabled mode expose no inspector service, report or nonce;
+all three inspection routes refuse before accessing the service. Existing
+password-verifier and session-cookie authentication remain in use.
 Caller paths, commands, flags, filenames and URLs are not accepted. A reserved
 one-job slot bounds receipt before bytes are read; upload, CPU, memory and
 output bounds apply. Parsing occurs only in separate required namespaces with
