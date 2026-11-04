@@ -20,11 +20,11 @@ import sys
 from threading import Lock, Thread
 import time
 
-from .tool_installer import service_unit
+from .tool_installer import service_unit, SERVICE_UNITS
 
 SCHEMA = "megalodon-support-startup-v1"
 COMMAND = "~/.local/share/megalodon/current/venv/bin/python -I -m megalodon.support_startup"
-SERVICES = (("suricata", "Suricata", "suricata"), ("qwen", "Ollama / Qwen", "ollama"))
+SERVICES = (("suricata", "Suricata", "suricata"), ("qwen", "Ollama", "ollama"))
 
 
 def _trusted_system_executable(name):
@@ -107,11 +107,15 @@ class SupportApps:
         pkexec = _trusted_system_executable("pkexec")
         pending = []
         for identifier, name, unit in SERVICES:
-            if self._active(unit + ".service"):
+            active = [candidate for candidate in SERVICE_UNITS[identifier] if self._active(candidate+'.service')]
+            unit = service_unit(identifier)
+            if len(active)>1:
+                self._item(identifier, name, 'needs_setup', 'Multiple services are active; review them in Startup settings.')
+            elif active:
                 self._item(identifier, name, "running", "Service is already active. Data and model readiness are checked separately.")
             elif identifier == 'suricata' and not Path('/etc/systemd/system/suricata.service.d/zz-megalodon-passive.conf').is_file():
                 self._item(identifier,name,'needs_setup','Use Configure Suricata once to select the passive interface and allow HUD log access.')
-            elif not systemctl or service_unit(identifier) is None:
+            elif not systemctl or unit is None:
                 self._item(identifier, name, "missing", "No supported installed service was found; skipped.")
             elif not pkexec:
                 self._item(identifier, name, "needs_setup", "System authorization is unavailable. Start the installed service from a terminal.")
@@ -160,6 +164,8 @@ class SupportApps:
             self._item("zeek", "Zeek", state, message)
             self._item("scapy", "Scapy / alternate capture", "not_needed", "Standby alternative: the TShark feed supplies live packets, avoiding a redundant Python capture process.")
             self._item("nftables", "nftables", "not_needed", "Command-line tool; no app to open. Firewall rules are not changed by startup.")
+            self._item("lynis", "Lynis", "not_needed", "Runs when you request a host audit in Setup; no permanent service is needed.")
+            self._item("aide", "AIDE", "not_needed", "Runs when you request a file-integrity check in Setup; no permanent service is needed.")
         except Exception:
             # No subprocess error strings, paths or environment values escape.
             self._item("launcher", "Support startup", "failed", "Startup stopped unexpectedly; completed items remain shown. Retry after checking the local session.")

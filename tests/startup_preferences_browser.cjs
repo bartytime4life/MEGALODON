@@ -1,0 +1,38 @@
+const assert=require('node:assert/strict'),vm=require('node:vm');
+let input='';process.stdin.on('data',s=>input+=s);
+process.stdin.on('end',async()=>{
+ const {code,fixture,unbound_model}=JSON.parse(input),nodes=new Map(),requests=[],timers=new Map();let seq=0;
+ let payload={...fixture,configured_collectors:['clamav','osquery'],background:{...fixture.background,enabled:true},model:{...unbound_model,selection_state:'restored',connection_state:'unchecked'},startup:{checked_at:null,login:'unchecked',services:[],message:'Check startup.'}};
+ function element(){return {textContent:'',children:[],attributes:{},dataset:{},events:{},value:'',hidden:false,disabled:false,setAttribute(k,v){this.attributes[k]=v;},append(...v){this.children.push(...v);},replaceChildren(...v){this.children=v;},addEventListener(k,v){this.events[k]=v;},focus(){}};}
+ const get=id=>{if(id==='workspace-setup')return null;if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
+ const context={localHudLaunch:{},document:{hidden:false,getElementById:get,createElement:element,addEventListener(){}},TextEncoder,TextDecoder,Uint8Array,AbortController,setTimeout(fn,ms){const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},fetch:async(path,opts)=>{requests.push({path,opts});return {status:200,ok:true,headers:{get:()=>null},text:async()=>JSON.stringify(payload)};}};
+ const settle=()=>new Promise(resolve=>setImmediate(resolve)),click=id=>get(id).events.click(),posts=()=>requests.filter(x=>x.opts.method==='POST');
+ const refresh=async()=>{await click('support-config-retry');await settle();};
+ vm.runInNewContext(code,context);await click('support-apps-configure');await settle();
+ assert.equal(posts().length,0,'page reads do not enable startup or contact models');
+ assert.equal(get('support-model-select').value,unbound_model.model,'saved selection remains visible before discovery');
+ assert.match(get('support-model-persistence').textContent,/Restored from this computer/);
+ assert.equal(get('support-model-save').disabled,true,'a remembered option is not a freshly verified catalog row');
+ assert.match(get('startup-collectors').textContent,/ClamAV, osquery/);
+ assert.match(get('startup-monitor-state').textContent,/resumes with HUD/);
+ const saved=get('support-model-select').value;
+ payload.model.connection_state='unavailable';await refresh();
+ assert.equal(get('support-model-select').value,saved,'offline daemon cannot erase saved choice');
+ payload.startup={checked_at:'2026-11-03T05:00:00Z',login:'enabled',services:[{id:'qwen',name:'Ollama',unit:'snap.ollama.listener',active:'running',enabled:'enabled',message:'Observed.'}],message:'Checked.'};
+ await click('startup-check');await settle();
+ assert.deepEqual(JSON.parse(posts().at(-1).opts.body),{action:'startup_check'});
+ assert.equal(get('startup-enable').disabled,true);assert.equal(get('startup-disable').disabled,false);
+ assert.match(get('startup-service-list').children[0].children[1].textContent,/Enabled at boot · running/);
+ await click('startup-services-enable');await settle();
+ assert.deepEqual(JSON.parse(posts().at(-1).opts.body),{action:'startup_services'});
+ assert.equal(posts().at(-1).opts.headers['X-Megalodon-Config-Token'],fixture.token);
+ payload.model.options=[{name:saved,digest:'b'.repeat(64),size_bytes:2**30}];
+ await refresh();get('support-model-compute').value='auto';get('support-model-compute').events.change();
+ assert.match(get('support-model-draft').textContent,/Unsaved changes/);
+ assert.equal(get('support-model-save').disabled,false);
+ payload.startup.services[0].unit='arbitrary.service';await refresh();
+ assert.equal(get('startup-services-enable').disabled,true,'malformed startup status fails closed');
+ assert.equal(get('support-config-retry').hidden,false);
+ console.log('Saved-model and startup controls passed');
+}).on('error',e=>{console.error(e);process.exitCode=1;});
+process.on('unhandledRejection',e=>{console.error(e);process.exitCode=1;});

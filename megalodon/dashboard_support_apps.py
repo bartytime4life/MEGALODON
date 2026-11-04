@@ -7,7 +7,7 @@ SUPPORT_APPS_HTML = r'''
     <div class="support-apps-actions"><button type="button" id="support-apps-start" disabled>Start background tools</button><button type="button" id="support-apps-configure" aria-expanded="false" aria-controls="support-config">Configure apps</button><button type="button" id="support-apps-copy" class="button-secondary" disabled>Copy command</button><p id="support-apps-copy-status" class="support-apps-copy-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
   </div>
   <div class="support-apps-feedback"><p id="support-apps-status" role="status" aria-live="polite" aria-atomic="true">Checking background controls…</p><button type="button" id="support-apps-check" class="button-secondary" hidden>Check status</button></div>
-  <p class="support-apps-note">A system authorization prompt may appear when a service needs permission. <a href="#integrations-title">View tool status</a> · <a href="#live-globe-title">Background monitoring controls</a></p>
+  <p class="support-apps-note">A system authorization prompt may appear when a service needs permission. <a href="#startup-title">Startup settings</a> · <a href="#integrations-title">View tool status</a> · <a href="#live-globe-title">Background monitoring controls</a></p>
   <!-- HUD_SUPPORT_CONFIG -->
   <details id="support-apps-details"><summary id="support-apps-summary">Tool startup status</summary><ul id="support-apps-items"><li>Waiting for the local service.</li></ul><p class="support-apps-note">These are startup outcomes. Open Actions for current tool status and source updates. Collectors use their saved configuration.</p><div id="support-apps-command-wrap" hidden><label for="support-apps-command">Command for your terminal</label><input id="support-apps-command" readonly spellcheck="false"></div></details>
 </section>
@@ -46,7 +46,7 @@ SUPPORT_APPS_JS = r'''
   if (typeof localHudLaunch === 'undefined' || !el('support-apps')) return;
   const workspace=el('workspace-live'),visible=()=>!document.hidden&&!(workspace&&workspace.hidden);
   const app = {payload:null, token:null, command:null, pending:false, starting:false, valid:false, timer:null, deadline:0};
-  const labels = {idle:'Not started',checking:'Checking',running:'Running',launched:'Launch requested',queued:'Queued',missing:'Not installed',needs_setup:'Needs setup',failed:'Failed',not_needed:'Ready'};
+  const labels = {idle:'Not started',checking:'Checking',running:'Running',launched:'Launch requested',queued:'Queued',missing:'Not installed',needs_setup:'Needs setup',failed:'Failed',not_needed:'On demand / standby'};
   const text = (v,max=512) => typeof v === 'string' && v.length <= max && !/[\x00-\x1f\x7f]/.test(v);
   const timestamp = v => v === null || (text(v,40) && /Z$/.test(v) && Number.isFinite(Date.parse(v)));
   function checked(v, needToken) {
@@ -83,7 +83,7 @@ SUPPORT_APPS_JS = r'''
       const ready=count(['running','not_needed']),launched=count(['launched']),queued=count(['queued']),attention=count(['missing','needs_setup','failed']);
       const completed=v.finished_at ? ' at '+new Date(v.finished_at).toISOString().replace('T',' ').replace('.000Z',' UTC') : ' · completion time unavailable';
       feedback(`Last start completed${completed} · ${ready} were running or ready${launched ? ' · '+launched+' launch request'+(launched===1 ? '' : 's') : ''}${queued ? ' · '+queued+' queued' : ''}${attention ? ' · '+attention+' need attention — see last startup results.' : '.'}`, attention ? 'stale' : 'finished');
-    } else feedback('Ready when you are. Background tools start when you press Start background tools.');
+    } else feedback('Saved monitoring and configured collectors resume with the HUD. Use Start background tools to check services or retry setup.');
     if (document.hidden) feedback('Updates paused while this tab is hidden. Background startup continues on this PC.', 'stale');
   }
   async function responseBody(response) {

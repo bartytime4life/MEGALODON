@@ -10,7 +10,7 @@ from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS
 
 
-@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs"])
+@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs", "startup_preferences_browser.cjs"])
 def test_support_config_behavior(script):
     node = shutil.which("node")
     if node is None:
@@ -31,7 +31,7 @@ def test_support_config_behavior(script):
     from megalodon.model_telemetry import ModelTelemetry
     settings = AISettings(enabled=True)
     unbound_model = ModelTelemetry(lambda: settings).snapshot()
-    unbound_model.update(keep_ready=True, lifecycle=ModelLifecycle(lambda: settings).snapshot())
+    unbound_model.update(selection_state='restored',keep_ready=True, lifecycle=ModelLifecycle(lambda: settings).snapshot())
     from megalodon.model_library import ModelLibrary
     library = ModelLibrary(Path('/unused-home')).snapshot()
     from megalodon.model_test import ModelTest

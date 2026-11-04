@@ -307,7 +307,7 @@ def test_get_is_read_only_and_action_requires_no_installer_token(endpoint):
     assert endpoint[3].install_operator_token is None
 
 
-@pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_stage_cancel','model_test','model_test_cancel'])
+@pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_stage_cancel','model_test','model_test_cancel','startup_check','startup_enable','startup_disable','startup_services'])
 def test_model_library_http_actions_require_existing_operator_token_and_origin(endpoint, action):
     from megalodon.model_library import CATALOG
     value = dict(action=action)

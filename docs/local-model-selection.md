@@ -130,3 +130,10 @@ remains available while a synchronous compatibility request owns the mutation
 lock; other configuration actions still require that lock.
 Shutdown cancels this process’s active provider connection. It does not kill the
 Ollama daemon or change other applications’ model settings.
+
+## Restoring a choice after restart
+
+The [startup and model preferences panel](startup-and-model-preferences.md) keeps
+the saved choice visible even before an installed-list refresh or while Ollama
+is offline. Name, digest, compute and timeout restore from the private profile.
+Remembering a choice is independent of loading it or runtime admission.

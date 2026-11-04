@@ -108,7 +108,7 @@ def install_command(tool_id: str, *, which: Callable[[str], str | None] = shutil
 # first unit file that exists on this host is started; nothing else is.
 SERVICE_UNITS: dict[str, tuple[str, ...]] = {
     "suricata": ("suricata",),
-    "qwen": ("ollama",),
+    "qwen": ("ollama", "snap.ollama.listener"),
 }
 UNIT_DIRECTORIES = ("/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system")
 

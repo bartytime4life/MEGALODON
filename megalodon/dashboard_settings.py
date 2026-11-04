@@ -48,6 +48,7 @@ def compose_settings(html: str) -> str:
     start, launch = _take_match(start, r'<details class="setup-launch-help"[^>]*>')
     start, data = _take_match(start, r'<details class="setup-actions-card"[^>]*>')
 
+    support, startup = _take(support, "startup-settings")
     support, feedback = _take_match(support, r'<div class="support-config-feedback"[^>]*>')
     support, capture = _take_match(support, r'<section class="support-capture"[^>]*>')
     support, collectors = _take_match(support, r'<details class="support-collector-settings"[^>]*>')
@@ -86,7 +87,7 @@ def compose_settings(html: str) -> str:
       <a href="#support-capture-title"><span>Traffic</span><strong id="settings-traffic-summary">Checking…</strong><small>Interface and capture</small><b aria-hidden="true">↗</b></a>
       <a href="#support-model-title"><span>Local AI</span><strong id="settings-model-summary">Checking…</strong><small id="settings-model-name">Saved model</small><b aria-hidden="true">↗</b></a>
       <a href="#apps-connections-title"><span>Apps</span><strong id="settings-apps-summary">Checking…</strong><small>Install and configure</small><b aria-hidden="true">↗</b></a>
-    </div>''' + health
+    </div>''' + startup + health
     traffic = capture + _disclosure('Background sensors · Zeek and Suricata',
         _inside(services).split('<div class="support-tool-settings">', 1)[1].rsplit('</div>', 1)[0])
     traffic += _disclosure('Device discovery', network) + _disclosure('IP location data', geography)
@@ -278,7 +279,7 @@ SETTINGS_JS = r'''
   const value=event.detail;if(!value)return;
   document.getElementById('settings-traffic-summary').textContent={idle:'Not capturing',stopped:'Stopped',starting:'Starting',running:'Capturing',failed:'Needs attention'}[value.capture?.state]||'Unavailable';
   const model=value.model,lifecycle=model?.lifecycle;
-  document.getElementById('settings-model-summary').textContent=model?.model_state==='unbound'||lifecycle?.state==='unbound'?'Authorization required':lifecycle?.state==='ready'&&model.loaded===true?'Loaded':lifecycle?.state==='retrying'?'Reconnecting':model?.loaded===true?'Loaded':model?.loaded===false?'Not loaded':'Not checked';
+  document.getElementById('settings-model-summary').textContent=model?.selection_state==='none'?'No model saved':model?.selection_state==='invalid'?'Saved profile needs attention':model?.response_test?.state==='passed'?'Local test passed':model?.model_state==='unbound'||lifecycle?.state==='unbound'?'Choice saved · analysis paused':lifecycle?.state==='ready'&&model.loaded===true?'Loaded':lifecycle?.state==='retrying'?'Reconnecting':model?.loaded===true?'Loaded':model?.loaded===false?'Not loaded':'Not checked';
   document.getElementById('settings-model-name').textContent=model?.model||'No saved model';
  });
  function apps(){const count=heartbeatState.report?.tools.filter(tool=>tool.installed==='yes').length;document.getElementById('settings-apps-summary').textContent=heartbeatStale()?'Status unavailable':count===undefined?'Checking…':count+' installed';}
