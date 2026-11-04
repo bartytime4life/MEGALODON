@@ -19,6 +19,11 @@ workflows keep action authority separate.
 **Core use needs no subscription, cloud account, model or GPU.** Optional tools
 have their own dependencies, licenses and operational requirements.
 
+**Optional file inspection:** choose a downloaded Linux, Windows or macOS
+program in the Linux HUD, then select **Inspect** for local structural and
+identification clues. [Setup, coverage and safety boundaries](docs/file-inspection.md).
+The program is never launched or unpacked; results give no safety verdict.
+
 <p>
   <a href="docs/gui-quick-start.md"><strong>Start on Linux</strong></a> ·
   <a href="https://github.com/bartytime4life/MEGALODON/wiki"><strong>Explore the Wiki</strong></a> ·

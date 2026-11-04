@@ -1,0 +1,45 @@
+{
+  "schema": "megalodon-file-inspection-runtime-v1",
+  "versions": {
+    "lief": "1.0.0",
+    "die": "3.21",
+    "qt": "5.15.13",
+    "icu": "74.2"
+  },
+  "artifacts": {
+    "die": {
+      "url": "https://github.com/horsicq/DIE-engine/releases/download/3.21/die_3.21_Ubuntu_24.04_amd64.deb",
+      "size": 11785982,
+      "sha256": "96e8e82e822e3ca8a829536312b92e8b241147fe38c8ab29c9dbfc1ab21aa25d"
+    },
+    "qtcore": {
+      "url": "https://archive.ubuntu.com/ubuntu/pool/universe/q/qtbase-opensource-src/libqt5core5t64_5.15.13+dfsg-1ubuntu1_amd64.deb",
+      "size": 2010540,
+      "sha256": "8fb5c6a51ae436fefc41e0c9ad7a363ba8ab6b35db727eff5a469de2ee9f52bc"
+    },
+    "qtscript": {
+      "url": "https://archive.ubuntu.com/ubuntu/pool/universe/q/qtscript-opensource-src/libqt5script5_5.15.13+dfsg-1_amd64.deb",
+      "size": 758194,
+      "sha256": "e0be9535a8c6868f94b9e7faddcb6dad1a1c3549a5329ef08549272b0289454a"
+    },
+    "icu": {
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu74_74.2-1ubuntu3_amd64.deb",
+      "size": 10860410,
+      "sha256": "d29c97a21a3e3254731cfac186e4d4e611e5e67d2c9a0430f6acfbd9acaefa2e"
+    },
+    "cp311": {
+      "url": "https://files.pythonhosted.org/packages/09/b5/36e2ce60fcd60d2cc20f743ad50d437380c3f9f51d9b2942b230f0c05b72/lief-1.0.0-cp311-cp311-manylinux_2_28_x86_64.whl",
+      "size": 3670339,
+      "sha256": "96277e45d58de45a33249079dac43e50db1c96da162fbe1ad02fbaa82e3bd06f"
+    },
+    "cp312": {
+      "url": "https://files.pythonhosted.org/packages/cd/d7/6e8135da80a63d8ee413f169eda8c331817bf6f1496fc5647722b105aa19/lief-1.0.0-cp312-abi3-manylinux_2_28_x86_64.whl",
+      "size": 3674893,
+      "sha256": "41ff868f5328fc8e5237a9e1f4718590e0ee9180c1422b3e4948b7116ba4517c"
+    }
+  },
+  "trees": {
+    "cp311": "bcb89cf9cfd3535a1e90fd8b6459bbc32ddbc7646795b00154308c2b642bbab2",
+    "cp312": "243dbe794621709bbd520792f5849c86cffd21b70a1d0c0032df9b20718babbe"
+  }
+}

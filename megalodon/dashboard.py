@@ -43,7 +43,7 @@ from .dashboard_action_plane import ACTION_PRESETS
 from .dashboard_commands import local_account_commands, local_companion_command, local_hud_launch, local_python_lifecycle
 from .dashboard_checks import LocalChecks, LocalCheckBusy, CHECK_CACHE_SECONDS
 from .tool_heartbeat import Heartbeat, HeartbeatBusy, HEARTBEAT_CACHE_SECONDS
-from .tool_installer import ACTIONS as INSTALL_ACTIONS, Installer, InstallBusy, InstallUnavailable, RECIPES, catalog as install_catalog
+from .tool_installer import ACTIONS as INSTALL_ACTIONS, Installer, InstallBusy, InstallUnavailable, INSTALLABLES, catalog as install_catalog
 from .support_apps import (
     SupportAppBusy,
     SupportAppLaunchFailed,
@@ -536,6 +536,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     host_telemetry: HostTelemetry | None = None
     support_startup: SupportApps | None = None
     support_config: SupportConfiguration | None = None
+    file_inspection = None
     operations = None
     defense = None
     evidence = None
@@ -712,6 +713,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 enabled = self.tool_management_enabled is True and self.install_operator_token is not None
                 self._send_json(dict(schema='megalodon-tool-session-v1',enabled=enabled,
                                      token=self.install_operator_token if enabled else None))
+            return
+        if route.path == '/api/file-inspection':
+            if (route.query or self.headers.get_all('X-Megalodon-Check', []) != ['1']
+                    or self.support_config is None or self.file_inspection is None or not _tool_management_user()):
+                self._send_json({'error': 'explicit local file inspection check required'}, status=403)
+            else:
+                value = self.file_inspection.snapshot()
+                value['token'] = self.support_config.token
+                self._send_json(value)
             return
         if route.path == "/api/support-config":
             if route.query:
@@ -1126,7 +1136,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # must be reachable while a synchronous compatibility AI request owns it.
         # Sign-in changes only login state, which its own login lock serializes,
         # so a long local operation must not turn a correct password into a 409.
-        if (self.path in {'/api/support-config', '/api/ai/cancel'}
+        if (self.path in {'/api/support-config', '/api/ai/cancel', '/api/file-inspection/run', '/api/file-inspection/cancel'}
                 or (self.path == '/sign-in' and self._sign_in_enabled())):
             self._dispatch_POST()
             return
@@ -1190,6 +1200,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/support-config":
             self._support_config_action()
+            return
+        if self.path in {'/api/file-inspection/run', '/api/file-inspection/cancel'}:
+            from .file_inspection_http import action
+            action(self)
             return
         if self.path == "/api/support-apps":
             self._open_support_app()
@@ -1681,7 +1695,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "invalid install request"}, status=400)
             return
         if (type(body) is not dict or not {"tool"} <= set(body) <= {"tool", "action"}
-                or type(body["tool"]) is not str or body["tool"] not in RECIPES
+                or type(body["tool"]) is not str or body["tool"] not in INSTALLABLES
                 or type(body.get("action", "install")) is not str
                 or body.get("action", "install") not in INSTALL_ACTIONS):
             self._send_json({"error": "unknown tool or action"}, status=400)
@@ -2190,6 +2204,8 @@ def serve(
                 )
             handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                            support_startup, capture_store_ready)
+            from .file_inspection import FileInspection
+            handler.file_inspection = FileInspection()
             if installer is not None:
                 setup = handler.support_config
                 installer.busy = lambda: (setup._job['state'] == 'running'
@@ -2247,7 +2263,7 @@ def serve(
                 support_startup.configuration = handler.support_config
         server = ThreadingHTTPServer((host, port), handler)
     except BaseException:
-        for component,method in [(handler.findings_review,'close'),(handler.intelligence,'close'),(handler.knowledge,'close'),(handler.support_config,'close'),(handler.defense,'close'),
+        for component,method in [(handler.file_inspection,'close'),(handler.findings_review,'close'),(handler.intelligence,'close'),(handler.knowledge,'close'),(handler.support_config,'close'),(handler.defense,'close'),
                 (handler.network_topology,'close'),(handler.flow_ingestor,'close'),(handler.reports,'close'),(handler.evidence,'close')]:
             if component is not None:
                 try:getattr(component,method)()
@@ -2299,6 +2315,7 @@ def serve(
     finally:
         if previous_sigterm is not None:
             signal.signal(signal.SIGTERM, previous_sigterm)
+        if handler.file_inspection is not None:handler.file_inspection.close()
         if handler.findings_review is not None:handler.findings_review.close()
         if handler.reports is not None:handler.reports.close()
         if handler.intelligence is not None:handler.intelligence.close()

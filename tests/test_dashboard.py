@@ -482,7 +482,8 @@ def test_dashboard_ui_has_accessible_read_only_states():
     assert "'X-Megalodon-Config-Token':state.token" in SUPPORT_CONFIG_JS
     assert 'method: "POST"' not in DASHBOARD_JS
     assert not re.search(r'tabindex="[1-9][0-9]*"', INDEX_HTML)
-    assert INDEX_HTML.count('type="file"') == 1
+    assert INDEX_HTML.count('type="file"') == 2
+    assert 'type="file" id="file-inspection-input"' in INDEX_HTML
     for retired in ('osquery-file', 'clamav-file', 'inventory-file'):
         assert f'id="{retired}"' not in INDEX_HTML
     assert 'id="activity-globe-file" type="file"' in INDEX_HTML

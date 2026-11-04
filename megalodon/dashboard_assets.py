@@ -18,7 +18,8 @@ from .dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, S
 from .dashboard_support_apps import SUPPORT_APPS_HTML, SUPPORT_APPS_CSS, SUPPORT_APPS_JS
 from .dashboard_host_telemetry import HOST_TELEMETRY_HTML, HOST_TELEMETRY_CSS, HOST_TELEMETRY_JS
 from .dashboard_inventory import INVENTORY_JS, INVENTORY_CSS
-from .dashboard_clamav import CLAMAV_JS, CLAMAV_CSS
+from .dashboard_clamav import CLAMAV_HTML, CLAMAV_JS, CLAMAV_CSS
+from .dashboard_file_inspection import FILE_INSPECTION_HTML, FILE_INSPECTION_CSS, FILE_INSPECTION_JS
 from .dashboard_osquery import OSQUERY_JS, OSQUERY_CSS
 from .dashboard_integrations import INTEGRATIONS_HTML, INTEGRATIONS_CSS, INTEGRATIONS_JS
 from .dashboard_snapshot import TELEMETRY_CONNECTIONS_JS
@@ -744,7 +745,7 @@ const workspaceNavigation = {active: 'live', scroll: Object.create(null), pageSc
 const workspaceTargets = {
   'knowledge-setup':'setup','knowledge-title':'setup','pattern-reviews':'findings','pattern-reviews-title':'findings',
   'live-globe-title': 'live', 'live-globe-history': 'live', 'support-config-title': 'setup', 'support-apps-title': 'live', 'pc-live-title': 'live',
-  'activity-globe-title': 'live', 'hud-export-title': 'reports', 'inventory-title': 'live', 'clamav-title': 'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
+  'activity-globe-title': 'live', 'hud-export-title': 'reports', 'inventory-title': 'live', 'clamav-title': 'live', 'file-inspection-title':'live', 'osquery-title': 'live', 'telemetry-coverage-title': 'live',
   'workspace-traffic': 'live', 'workspace-findings': 'findings',
   'storage-history-title':'setup', 'network-setup-title':'setup', 'storage-evidence-title':'analysis', 'network-title':'live', 'support-model-title':'setup', 'setup-location-title':'setup', 'support-capture-title':'setup', 'support-config-interface':'setup', 'workspace-setup':'setup', 'settings':'setup', 'operations-title':'live', 'operations-history':'live', 'workspace-reports': 'reports', 'workspace-help': 'help',
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
@@ -2213,7 +2214,12 @@ INDEX_HTML = INDEX_HTML.replace('<section class="storage-panel" id="storage-setu
 INDEX_HTML = INDEX_HTML.replace('  <section class="analysis-window"', AI_PANEL + '  <section class="analysis-window"', 1)
 INDEX_HTML = compose_polish(compose_intelligence(INDEX_HTML))
 INDEX_HTML = compose_findings(compose_settings(INDEX_HTML))
-DASHBOARD_CSS += SETTINGS_CSS + MAP_CSS + KNOWLEDGE_CSS + POLISH_CSS + FINDINGS_CSS + VISUAL_CONTROLS_CSS
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + SETTINGS_JS + VISUAL_CONTROLS_JS + CAUTION_JS + FINDINGS_JS + "\nbootstrap();\n"
+# Keep explicit single-file inspection beside the separate saved folder summary.
+INDEX_HTML = INDEX_HTML.replace(CLAMAV_HTML, CLAMAV_HTML + FILE_INSPECTION_HTML, 1)
+INDEX_HTML = INDEX_HTML.replace('<span id="ops-status"', '<a class="companion-local-link" href="#file-inspection-title">Inspect a file →</a><span id="ops-status"', 1)
+INDEX_HTML = INDEX_HTML.replace('<div class="help-more-links" aria-label="More setup help">', '<div class="help-more-links" aria-label="More setup help"><a href="#file-inspection-title">Inspect a downloaded program</a>', 1)
+INDEX_HTML = INDEX_HTML.replace('<details><summary>What stays on this computer?</summary>', '<details><summary>How do I inspect a downloaded program?</summary><p>Open <a href="#file-inspection-title">Inspect a file</a> beside the saved ClamAV folder summary. Choose a program, then select Inspect. Choosing alone sends nothing. LIEF reads executable structure; Detect It Easy identifies compiler and packing clues. Each tool reports its own completion. Packing is also used by legitimate software. Read the coverage and unknowns before deciding what to do; these clues give no safety verdict.</p><p>The program is never run or unpacked. Its bytes go to this authenticated localhost HUD only after Inspect. Only the latest normalized metadata report remains in the HUD session. Export JSON saves that report without the selected filename, file contents, hashes, or paths. Optional inspector installation uses the authorized installer in Setup.</p></details><details><summary>What stays on this computer?</summary>', 1)
+DASHBOARD_CSS += FILE_INSPECTION_CSS + SETTINGS_CSS + MAP_CSS + KNOWLEDGE_CSS + POLISH_CSS + FINDINGS_CSS + VISUAL_CONTROLS_CSS
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + SETTINGS_JS + VISUAL_CONTROLS_JS + CAUTION_JS + FINDINGS_JS + FILE_INSPECTION_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))

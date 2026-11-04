@@ -3,6 +3,18 @@
 > **Documentation orientation — 2026-10-22 / source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
 
 
+## Explicit local executable inspection — November 4, 2026
+
+The optional Linux HUD [file inspector](docs/file-inspection.md) receives one
+operator-selected executable only after **Inspect**. This is a separate,
+protected local-file capability; it does not admit packet contents to the
+telemetry model. Confined LIEF/Detect It Easy adapters project bounded static
+metadata and identification clues into one session-memory report. No sample
+contents, sample hashes, raw tool output, AI request, quarantine, unpacking,
+execution, firewall action or core-store write is added. The exact HTTP,
+resource, private dependency and approved Detect It Easy memory boundaries are
+defined by that document. Ordinary startup and GETs start no inspection.
+
 ## Current descriptive extensions — October 22, 2026
 
 At source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`, the protected Linux Setup response includes read-only

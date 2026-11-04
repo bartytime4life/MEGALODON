@@ -1,5 +1,11 @@
 # MEGALODON integration hub contract
 
+The optional [local executable inspector](file-inspection.md) is a separate
+explicit file workflow using LIEF and Detect It Easy. It does not become a
+thirteenth background collector or add automatic scanning to the twelve
+workflows below. Its protected submission, private runtime and metadata report
+are independent of the static hub plan and aggregate ClamAV summary.
+
 Status: ● **implemented static plan; this command performs no execution**.
 The twelve workflow rows describe their named interfaces. Separately configured
 HUD collectors, support setup and host-security actions are implemented outside
