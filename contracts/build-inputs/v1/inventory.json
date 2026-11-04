@@ -102,9 +102,9 @@
           "version": "2.21.0"
         },
         {
-          "declared_sha256": "sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c",
+          "declared_sha256": "sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588",
           "name": "pytest",
-          "version": "9.1.1"
+          "version": "9.2.0"
         },
         {
           "declared_sha256": "sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d",
@@ -138,7 +138,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "required test job",
-      "source_sha256": "1f8ab4b2969d7463a581bb73d1066854cb1fad0688a71fe79d444aea86c99fc8"
+      "source_sha256": "0aeab5ef7c1d2c383817090774e77a1260ccdb0bf5b311e41ab84f73c65122c3"
     },
     {
       "direct_packages": [
@@ -178,9 +178,9 @@
           "version": "2.21.0"
         },
         {
-          "declared_sha256": "sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c",
+          "declared_sha256": "sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588",
           "name": "pytest",
-          "version": "9.1.1"
+          "version": "9.2.0"
         },
         {
           "declared_sha256": "sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc",
@@ -209,7 +209,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "wheel-smoke tests",
-      "source_sha256": "6061f71e8dc998be69990294402552e403b84de12a4b1ccc7e29e1446b8bb5d9"
+      "source_sha256": "69b44fc63809131e49e175693940f9314e122190b36ef738eb748ac8397dcba7"
     },
     {
       "direct_packages": [

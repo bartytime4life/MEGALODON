@@ -575,7 +575,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | osquery | Fixed local DEB package count or completed-result watching | Optional automatic local HUD companion; no package names, arbitrary query pack, daemon, or remote enrollment |
 | Nmap | Explicit private IPv4 target scan or completed XML watching | Optional automatic local HUD companion; defaults to loopback, with at most 256 addresses when explicitly configured, and aggregate host/port-state counts only |
 | nftables | Legacy plan review and separate HUD temporary containment | Plan mode needs no privilege. Optional HUD apply requires OS authorization and affects only its managed table |
-| pytest `>=9.0.3,<10`, jsonschema `>=4.23,<5`, PyYAML `>=6.0.3,<7` | Repository tests and contract validation | Install with the `test` extra; reviewed CI currently pins pytest 9.1.1 and Pluggy 1.7.0 |
+| pytest `>=9.0.3,<10`, jsonschema `>=4.23,<5`, PyYAML `>=6.0.3,<7` | Repository tests and contract validation | Install with the `test` extra; reviewed CI currently pins pytest 9.2.0 and Pluggy 1.7.0 |
 
 The core Python package currently has no third-party runtime dependency. Git is
 needed for a source checkout; no analyzer, antivirus, capture driver, or firewall
