@@ -45,6 +45,9 @@ process.stdin.on('end', async () => {
     {...report,identification:[{kind:'packer',name:'x'.repeat(121)}]},
     {...report,unknowns:['x\nsecret']},{...report,unknowns:Array(17).fill('x')},
     {...report,structure:{...report.structure,slices:Array(17).fill(report.structure.slices[0]),slices_detected:17}},
+    {...report,structure:{...report.structure,slices_detected:2}},
+    {...report,structure:{...report.structure,slices_detected:17}},
+    {...report,structure:{...report.structure,format:'ELF',slices_detected:2,slices:Array(2).fill(report.structure.slices[0])}},
     {...report,structure:{...report.structure,slices:[{...report.structure.slices[0],bits:128}]}},
     {...report,size_bytes:67108865},{...report,state:'safe'},{...report,inspected_at:'yesterday'}]) {
     assert.equal(context.validFileInspectionReport(bad),false,JSON.stringify(bad));
@@ -72,7 +75,7 @@ process.stdin.on('end', async () => {
   assert.match(node('status').textContent,/Partial inspection/);
   assert.match(node('report-scope').textContent,/Report for the file you submitted[\s\S]*Partial coverage/);
   assert.match(text(node('tools')),/LIEF · structure: Completed[\s\S]*Detect It Easy · identification: Unsupported/);
-  assert.match(text(node('technical')),/1 of 2[\s\S]*<img src=x/);
+  assert.match(text(node('technical')),/1 of 1[\s\S]*<img src=x/);
   assert.match(text(node('clues')),/Legitimate software also uses it/);
   assert.match(text(node('clues')),/Reported packer clue[\s\S]*<img src=x/);
   assert.match(text(node('clues')),/signature matches, not a verified build history/);
@@ -136,3 +139,4 @@ process.stdin.on('end', async () => {
   console.log('file inspection UI workflow passed');
 }).on('error', error=>{console.error(error);process.exitCode=1;});
 process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});
+

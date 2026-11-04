@@ -63,7 +63,7 @@ def validate_structure(value):
         raise ValueError('Unsupported executable format.')
     count(value['slices_detected'], MAX_SLICES, 1)
     slices = value['slices']
-    if type(slices) is not list or not 1 <= len(slices) <= value['slices_detected']:
+    if type(slices) is not list or len(slices) != value['slices_detected']:
         raise ValueError('Invalid executable slice coverage.')
     if value['format'] != 'Mach-O' and value['slices_detected'] != 1:
         raise ValueError('Unexpected executable slices.')
@@ -150,3 +150,4 @@ def report(size, results):
                  clues=[dict(code=k, title=CLUES[k][0], meaning=CLUES[k][1]) for k in clues],
                  unknowns=list(UNKNOWNS), next_step=NEXT_STEP)
     return validate_report(value)
+

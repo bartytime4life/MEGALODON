@@ -17,14 +17,14 @@ def inspection_report():
     return dict(
         schema='megalodon-file-inspection-report-v1',
         inspected_at='2026-11-04T12:00:00Z', size_bytes=64, state='partial',
-        structure=dict(format='Mach-O', slices_detected=2, slices=[dict(
+        structure=dict(format='Mach-O', slices_detected=1, slices=[dict(
             architecture='arm64', bits=64, sections=4, imports=2,
             writable_executable=1)]),
         identification=[dict(kind='packer', name='<img src=x onerror=alert(1)>')],
         tools=[dict(id='lief', state='completed'), dict(id='die', state='unsupported')],
         clues=[dict(code='WRITABLE_EXECUTABLE', title='A region can be written and executed',
                     meaning='Review this clue with the publisher and intended use.')],
-        unknowns=['Only one executable slice was inspected.'],
+        unknowns=['Static inspection does not establish safety.'],
         next_step='Confirm the publisher and intended use before opening this program.',
     )
 
@@ -73,3 +73,4 @@ def test_file_inspection_explicit_workflow_and_untrusted_results():
         text=True, capture_output=True, timeout=15,
     )
     assert result.returncode == 0, result.stderr
+
