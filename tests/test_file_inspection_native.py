@@ -166,7 +166,37 @@ def test_native_output_flood_is_discarded(native_home, monkeypatch):
         os.close(fd)
 
 
-def test_native_parent_death_removes_namespace(native_home):
+def test_native_die_address_limit_and_hard_memory_cap(native_home, monkeypatch):
+    # Substitute a fixed harmless probe for diec inside the exact DIE scope
+    # launcher. The trailing entry-point marker keeps its cgroup admission and
+    # approved address-space limit active; no HTTP caller can select a probe.
+    original = sandbox.command
+    script = 'import resource; print(resource.getrlimit(resource.RLIMIT_AS)[0])'
+    def command(*args, **kwargs):
+        argv = original(*args, **kwargs)
+        argv[argv.index('--') + 1:] = [str(Path(sys.executable).resolve()), '-I', '-c',
+                                      script, '/runtime/die/diec']
+        return argv
+    monkeypatch.setattr(sandbox, 'command', command)
+    fd = sandbox.sealed_input()
+    os.write(fd, elf())
+    sandbox.seal(fd)
+    try:
+        state, raw = sandbox.run(validate(native_home), fd, 'die',
+            deadline=time.monotonic() + 5, cancelled=Event())
+        assert state == 'completed' and int(raw) == 2560 * 1024 * 1024
+        # Touch more than 512 MiB while below the 2.5 GiB address limit. The
+        # kernel must terminate it, rather than allowing the allocation to pass.
+        script = 'value=bytearray(600*1024*1024); print("memory cap missing")'
+        state, raw = sandbox.run(validate(native_home), fd, 'die',
+            deadline=time.monotonic() + 5, cancelled=Event())
+        assert state == 'failed' and raw == b''
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.parametrize('tool', ['lief', 'die'])
+def test_native_parent_death_removes_namespace(native_home, tool):
     # Crash a disposable controller without calling close(). Its worker must
     # disappear through the kernel parent-death/namespace boundary alone.
     script = '''
@@ -176,14 +206,22 @@ from threading import Event
 from megalodon import file_inspection_sandbox as s
 from megalodon.file_inspection_runtime import validate
 s.PROBE='import time; time.sleep(60)'
+tool=sys.argv[2]
+if tool=='die':
+ command=s.command
+ def scoped_probe(*a,**k):
+  argv=command(*a,**k)
+  argv[argv.index('--')+1:]=[str(Path(sys.executable).resolve()),'-I','-c',s.PROBE,'/runtime/die/diec']
+  return argv
+ s.command=scoped_probe
 original=s.subprocess.Popen
 def record(*a,**k):
  p=original(*a,**k);print(p.pid,flush=True);return p
 s.subprocess.Popen=record
 fd=s.sealed_input();os.write(fd,b'synthetic');s.seal(fd)
-s.run(validate(Path(sys.argv[1])),fd,'lief',deadline=time.monotonic()+30,cancelled=Event(),probe='confinement')
+s.run(validate(Path(sys.argv[1])),fd,tool,deadline=time.monotonic()+30,cancelled=Event(),probe='confinement' if tool=='lief' else None)
 '''
-    process = subprocess.Popen([sys.executable, '-c', script, str(native_home)],
+    process = subprocess.Popen([sys.executable, '-c', script, str(native_home), tool],
                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     try:
         import select
@@ -193,17 +231,22 @@ s.run(validate(Path(sys.argv[1])),fd,'lief',deadline=time.monotonic()+30,cancell
         deadline = time.monotonic() + 3
         descendants = []
         while time.monotonic() < deadline:
-            try:
-                descendants = Path(f'/proc/{child}/task/{child}/children').read_text().split()
-            except OSError:
-                pass
-            if descendants:
+            pending, descendants = [child], []
+            while pending:
+                pid = pending.pop()
+                try:
+                    children = [int(p) for p in Path(f'/proc/{pid}/task/{pid}/children').read_text().split()]
+                except OSError:
+                    continue
+                descendants.extend(children)
+                pending.extend(children)
+            if len(descendants) >= 3:
                 break
             time.sleep(.01)
-        assert descendants
+        assert len(descendants) >= 3, 'Observe the real namespace and its payload before the crash.'
         process.kill()
         process.wait(timeout=3)
-        for pid in [child] + [int(value) for value in descendants]:
+        for pid in [child] + descendants:
             deadline = time.monotonic() + 3
             while time.monotonic() < deadline:
                 try:
