@@ -19,8 +19,8 @@ packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb55
 pluggy==1.7.0 --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec
 # pygments-2.21.0-py3-none-any.whl — https://pypi.org/project/pygments/2.21.0/#files
 pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
-# pytest-9.1.1-py3-none-any.whl — https://pypi.org/project/pytest/9.1.1/#files
-pytest==9.1.1 --hash=sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c
+# pytest-9.2.0-py3-none-any.whl — https://pypi.org/project/pytest/9.2.0/#files (verified 2026-11-04 UTC)
+pytest==9.2.0 --hash=sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588
 # pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
 # https://pypi.org/project/PyYAML/6.0.3/#files (verified 2026-10-02 UTC)
 pyyaml==6.0.3 --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc
