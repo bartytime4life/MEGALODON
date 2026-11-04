@@ -15,6 +15,7 @@ FILE_INSPECTION_HTML = r'''
   <p id="file-inspection-limits" class="fi-note">ELF, Windows EXE/DLL or macOS Mach-O · up to 64 MiB · 30-second analysis limit.</p>
   <div class="fi-actions"><button type="button" id="file-inspection-run" disabled>Inspect</button><button type="button" id="file-inspection-cancel" hidden disabled>Cancel inspection</button><button type="button" id="file-inspection-check" disabled>Check inspector</button></div>
   <p id="file-inspection-status" class="fi-status" role="status" aria-live="polite" aria-atomic="true">File inspection is available in the authenticated local Linux HUD.</p>
+  <p id="file-inspection-sign-in" class="fi-note fi-sign-in" hidden><a href="#setup-account-title">Open Local sign-in in Setup →</a> Prepare a protected launch there, then open and sign in to that HUD. You choose when to start the protected launch.</p>
   <div id="file-inspection-runtime" class="fi-runtime"><p id="file-inspection-runtime-note">The inspector and its isolation must be available before inspection can start.</p><button type="button" id="file-inspection-install" hidden disabled>Install file inspector</button><a id="file-inspection-authorize" href="#tool-management-controls" hidden>Authorize optional installation in Setup →</a><p id="file-inspection-install-note" hidden></p></div>
   <div id="file-inspection-result" class="fi-result" hidden>
     <header class="fi-result-head"><p id="file-inspection-report-scope"></p><button type="button" id="file-inspection-export" disabled>Export JSON</button></header>
@@ -42,6 +43,7 @@ FILE_INSPECTION_CSS = r'''
 .fi-panel input[type=file]::file-selector-button{font:inherit;font-weight:650;color:#e6f4f7;background:#163b48;border:1px solid #5e8a96;border-radius:3px;padding:.6rem .8rem;margin-right:.7rem;cursor:pointer;min-height:40px}
 .fi-panel .fi-selection{font-size:.85rem;color:#e1f2f3;margin:.65rem 0 .35rem;overflow-wrap:anywhere}
 .fi-panel .fi-note,.fi-panel .fi-boundary{color:#bbced8;font-size:.78rem;line-height:1.65;margin:.35rem 0 .8rem;max-width:95ch}
+.fi-panel .fi-sign-in a{display:inline-flex;align-items:center;min-height:44px;color:#a3e8e0;margin-right:.45rem}
 .fi-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:.8rem 0}
 .fi-panel button{font:inherit;font-size:.83rem;min-height:44px;border:1px solid #658a96;border-radius:4px;background:#143440;color:#e8f7fa;padding:.6rem .85rem;cursor:pointer;font-weight:650}
 .fi-panel #file-inspection-run{background:#87e8dc;color:#07242a;border-color:#87e8dc;min-width:7rem}
@@ -87,7 +89,7 @@ function validFileInspectionStatus(p) {
 (() => {
   const el=id=>document.getElementById('file-inspection'+(id?'-'+id:'')),panel=el('');
   if(!panel||typeof localHudLaunch==='undefined')return;
-  const state={payload:null,valid:false,file:null,selection:0,ownedJob:null,ownedSelection:null,report:null,reportJob:null,uploading:false,cancelling:false,checking:false,inView:false,timer:null,upload:null,epoch:0,rendered:null};
+  const state={payload:null,valid:false,signInRequired:false,file:null,selection:0,ownedJob:null,ownedSelection:null,report:null,reportJob:null,uploading:false,cancelling:false,checking:false,inView:false,timer:null,upload:null,epoch:0,rendered:null};
   const names={lief:'LIEF · structure',die:'Detect It Easy · identification'},labels={completed:'Completed',partial:'Partial coverage',unavailable:'Unavailable',unsupported:'Unsupported',failed:'Failed',timed_out:'Time limit reached',cancelled:'Cancelled'};
   const node=(tag,text)=>{const n=document.createElement(tag);n.textContent=text;return n;};
   const active=()=>state.uploading||['receiving','running'].includes(state.payload?.state);
@@ -108,6 +110,7 @@ function validFileInspectionStatus(p) {
     el('run').textContent=state.uploading?'Sending to local inspector…':state.payload?.state==='running'?'Inspecting…':'Inspect';
     el('cancel').hidden=!busy;el('cancel').disabled=!busy||state.cancelling||!state.valid;el('cancel').textContent=state.cancelling?'Cancelling…':'Cancel inspection';
     el('check').disabled=state.checking;el('export').disabled=!state.report;
+    el('sign-in').hidden=!state.signInRequired;el('runtime').hidden=state.signInRequired;
     panel.setAttribute('aria-busy',busy?'true':'false');
     const step=busy?'inspect':state.report?'understand':selected()?'inspect':'choose';
     panel.querySelectorAll('[data-step]').forEach(n=>{if(n.dataset.step===step)n.setAttribute('aria-current','step');else n.removeAttribute('aria-current');});
@@ -140,7 +143,7 @@ function validFileInspectionStatus(p) {
     el('technical').replaceChildren(technical);
   }
   function accept(p){
-    if(!validFileInspectionStatus(p))throw Error('Invalid inspector response');state.payload=p;state.valid=true;
+    if(!validFileInspectionStatus(p))throw Error('Invalid inspector response');state.payload=p;state.valid=true;state.signInRequired=false;
     state.report=p.report;state.reportJob=p.job_id;el('runtime-note').textContent=p.runtime.message;
     if(state.cancelling)message('Cancelling the local inspection…','receiving');
     else if(state.uploading)message('Sending the selected file to this local HUD. You can cancel while it is being received.','receiving');
@@ -153,6 +156,13 @@ function validFileInspectionStatus(p) {
     else message(selected()?'Ready. Select Inspect to send this file to the local inspector.':'Ready. Choose one file, then select Inspect.');
     renderReport();controls();
   }
+  function signInError(error){
+    if(!error.signInRequired)return false;
+    state.signInRequired=true;state.valid=false;state.payload=null;state.report=null;state.reportJob=null;state.ownedJob=null;state.rendered=null;
+    state.epoch++;state.upload?.abort();state.upload=null;state.uploading=false;state.cancelling=false;
+    message('File inspection requires local HUD sign-in. Open Local sign-in in Setup to prepare a protected launch.','error');
+    renderReport();controls();schedule();return true;
+  }
   async function boundedBody(response){
     if(Number(response.headers.get('content-length'))>65536)throw Error('Inspector response too large');
     if(response.body?.getReader){const reader=response.body.getReader(),parts=[];let size=0;
@@ -163,7 +173,7 @@ function validFileInspectionStatus(p) {
   async function request(path,options={}){
     const controller=options.signal?null:new AbortController(),timer=controller?setTimeout(()=>controller.abort(),7000):null;
     try{const response=await fetch('/api/file-inspection'+path,{cache:'no-store',credentials:'same-origin',mode:'same-origin',redirect:'error',...(controller?{signal:controller.signal}:{}),...options,headers:{'Accept':'application/json','X-Megalodon-Check':'1',...(options.headers||{})}});
-      const p=await boundedBody(response);if(!response.ok){const error=Error('Inspector request failed');error.status=response.status;throw error;}return p;
+      const p=await boundedBody(response);if(!response.ok){const error=Error('Inspector request failed');error.status=response.status;error.signInRequired=response.status===403&&p?.code==='file_inspection_sign_in_required';throw error;}return p;
     }finally{if(timer!==null)clearTimeout(timer);}
   }
   function stopTimer(){if(state.timer!==null)clearTimeout(state.timer);state.timer=null;}
@@ -171,13 +181,14 @@ function validFileInspectionStatus(p) {
   async function refresh(){
     if(state.checking)return;state.checking=true;controls();const epoch=state.epoch,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),7000);
     try{const p=await request('',{signal:controller.signal});if(epoch===state.epoch)accept(p);}
-    catch(_){if(epoch===state.epoch){state.valid=false;message('Inspector status is unavailable. Check inspector to reconnect. Any displayed report is an earlier result.','error');}}
+    catch(error){if(epoch===state.epoch&&!signInError(error)){state.valid=false;message('Inspector status is unavailable. Check inspector to reconnect. Any displayed report is an earlier result.','error');}}
     finally{clearTimeout(timer);state.checking=false;controls();schedule();}
   }
   el('input').addEventListener('change',()=>{
     state.file=el('input').files?.[0]||null;state.selection++;state.report=null;state.rendered=null;el('result').hidden=true;
     el('selection').textContent=state.file?state.file.name+' · '+state.file.size.toLocaleString()+' bytes':'No file selected.';
-    if(state.file&&!selected())message(state.file.size===0?'This file is empty. Choose an executable with content.':'This file is larger than 64 MiB. Choose a smaller program.','error');
+    if(state.signInRequired)message('File inspection requires local HUD sign-in. Open Local sign-in in Setup to prepare a protected launch.','error');
+    else if(state.file&&!selected())message(state.file.size===0?'This file is empty. Choose an executable with content.':'This file is larger than 64 MiB. Choose a smaller program.','error');
     else message(state.file?'Selected only. Nothing has been sent. Select Inspect when ready.':'No file selected.');controls();
   });
   el('run').addEventListener('click',async()=>{
@@ -185,14 +196,14 @@ function validFileInspectionStatus(p) {
     state.uploading=true;state.report=null;state.rendered=null;state.ownedJob=null;state.ownedSelection=selection;el('result').hidden=true;state.upload=new AbortController();message('Sending the selected file to this local HUD. You can cancel while it is being received.','receiving');controls();schedule();
     try{const p=await request('/run',{method:'POST',signal:state.upload.signal,headers:{'Content-Type':'application/octet-stream','X-Megalodon-Config-Token':token},body:file});
       if(epoch!==state.epoch)return;if(!validFileInspectionStatus(p))throw Error('Invalid inspector response');state.ownedJob=p.job_id;state.uploading=false;accept(p);}
-    catch(error){if(epoch===state.epoch){state.uploading=false;message(error.status===409?'Another inspection is active. Check inspector to review or cancel it.':'The file could not be submitted. Check inspector before trying again.','error');}}
+    catch(error){if(epoch===state.epoch&&!signInError(error)){state.uploading=false;message(error.status===409?'Another inspection is active. Check inspector to review or cancel it.':'The file could not be submitted. Check inspector before trying again.','error');}}
     finally{if(epoch===state.epoch){state.uploading=false;state.upload=null;controls();schedule();}}
   });
   el('cancel').addEventListener('click',async()=>{
     if(el('cancel').disabled)return;state.cancelling=true;controls();message('Cancelling the local inspection…','receiving');
     try{const p=await request('/cancel',{method:'POST',headers:{'Content-Type':'application/json','X-Megalodon-Config-Token':state.payload.token},body:'{}'});
       if(!validFileInspectionStatus(p))throw Error('Invalid cancellation response');state.epoch++;state.upload?.abort();state.upload=null;state.uploading=false;state.cancelling=false;accept(p);}
-    catch(_){message('Cancellation could not be confirmed. Check inspector and retry cancellation if it is still active.','error');}
+    catch(error){if(!signInError(error))message('Cancellation could not be confirmed. Check inspector and retry cancellation if it is still active.','error');}
     finally{state.cancelling=false;controls();schedule();}
   });
   el('check').addEventListener('click',refresh);

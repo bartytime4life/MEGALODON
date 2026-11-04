@@ -13,13 +13,14 @@ process.stdin.on('end',async()=>{
     const token='A_z-9'.repeat(6)+'Z_';
     let payload={schema:'megalodon-file-inspection-status-v1',state:'idle',job_id:null,runtime:{state:'ready',message:'The synthetic inspector runtime is ready.'},max_bytes:67108864,report:null,token};
     const bytes=Buffer.from('MZ harmless synthetic UI fixture'),job='b'.repeat(32);
-    let slow=false,held=null;
+    let slow=false,held=null,denial=null,denialStatus=403;
     await page.route(origin+'/**',async route=>{
       const request=route.request(),path=new URL(request.url()).pathname;
       if(path==='/')return route.fulfill({contentType:'text/html',body:'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inspection component acceptance</title><link rel="stylesheet" href="/assets/dashboard.css"><script src="/assets/inspection.js" defer></script></head><body><main class="shell"><div class="workspace-scroll"><section class="workspace-view"><section class="companion-section"><div class="companion-grid">'+html+'</div></section></section></div></main></body></html>'});
       if(path==='/assets/dashboard.css')return route.fulfill({contentType:'text/css',body:css});
       if(path==='/assets/inspection.js')return route.fulfill({contentType:'application/javascript',body:'const localHudLaunch={};\n'+code});
       requests.push({path,method:request.method(),body:request.postDataBuffer(),headers:request.headers()});
+      if(path.startsWith('/api/file-inspection')&&denial)return route.fulfill({status:denialStatus,contentType:'application/json',body:JSON.stringify(denial)});
       if(path==='/api/file-inspection/run'){
         assert.equal(request.headers()['content-type'],'application/octet-stream');assert.equal(request.headers()['x-megalodon-config-token'],token);
         assert.deepEqual(request.postDataBuffer(),bytes);assert.ok(!Object.keys(request.headers()).some(k=>/file.?name/i.test(k)));
@@ -70,8 +71,49 @@ process.stdin.on('end',async()=>{
     if(held)try{await held.fulfill({status:202,contentType:'application/json',body:JSON.stringify({...payload,state:'running'})});}catch(error){if(!/cancel|abort|disposed|closed/i.test(error.message))throw error;}
     assert.equal(requests.filter(r=>r.path.endsWith('/cancel')).length,1);
     assert.match(await page.locator('#file-inspection-status').textContent(),/Inspection cancelled/);
+    const denied={error:'SERVER_ERROR_STRING_MUST_NOT_RENDER <img src=x>',code:'file_inspection_sign_in_required'};
+    denial=denied;await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('File inspection requires local HUD sign-in.'));
+    assert.equal(await page.getByRole('button',{name:'Inspect',exact:true}).isDisabled(),true);
+    const signIn=page.locator('#file-inspection-sign-in'),link=signIn.getByRole('link',{name:'Open Local sign-in in Setup →'});
+    assert.equal(await signIn.isVisible(),true);assert.equal(await link.getAttribute('href'),'#setup-account-title');
+    assert.doesNotMatch(await page.locator('#file-inspection-status').textContent(),/SERVER_ERROR_STRING/);
+    assert.equal(await page.locator('#file-inspection-runtime').isVisible(),false);
+    const deniedPosts=requests.filter(r=>r.method==='POST').length;
+    await input.setInputFiles({name:'selected-only.exe',mimeType:'application/octet-stream',buffer:bytes});
+    assert.match(await page.locator('#file-inspection-status').textContent(),/requires local HUD sign-in/);
+    await page.getByRole('button',{name:'Check inspector',exact:true}).focus();await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('href')),'#setup-account-title');
+    assert.notEqual(await link.evaluate(n=>getComputedStyle(n).outlineStyle),'none');
+    await page.keyboard.press('Enter');assert.ok(page.url().endsWith('#setup-account-title'));
+    assert.equal(requests.filter(r=>r.method==='POST').length,deniedPosts,'sign-in hint only navigates; it never enables sign-in or launches a HUD');
+    for(const width of [1280,390]){
+      await page.setViewportSize({width,height:844});
+      const size=await signIn.evaluate(n=>({scroll:n.scrollWidth,width:n.clientWidth,right:n.getBoundingClientRect().right}));
+      assert.ok(size.scroll<=size.width+1&&size.right<=width,'sign-in hint fits desktop and mobile');
+      if(process.env.MEGALODON_UI_SCREENSHOT_DIR){const fs=require('node:fs'),path=require('node:path');fs.mkdirSync(process.env.MEGALODON_UI_SCREENSHOT_DIR,{recursive:true});await page.locator('#file-inspection').screenshot({path:path.join(process.env.MEGALODON_UI_SCREENSHOT_DIR,'sign-in-required-'+width+'.png')});}
+    }
+    denial=null;await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-sign-in').hidden&& !document.getElementById('file-inspection-run').disabled);
+    assert.equal(requests.filter(r=>r.method==='POST').length,deniedPosts,'recovery never auto-submits the selected file');
+    for(const [body,status] of [[{...denied,code:'different_error'},403],[denied,401]]){
+      denial=body;denialStatus=status;await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+      await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('Inspector status is unavailable.'));
+      assert.equal(await signIn.isVisible(),false);assert.doesNotMatch(await page.locator('#file-inspection-status').textContent(),/SERVER_ERROR_STRING|requires local HUD sign-in/);
+      denial=null;await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+      await page.waitForFunction(()=>!document.getElementById('file-inspection-run').disabled);
+    }
+    denial=denied;denialStatus=403;await page.getByRole('button',{name:'Inspect',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('File inspection requires local HUD sign-in.'));
+    assert.equal(await signIn.isVisible(),true);assert.equal(await page.getByRole('button',{name:'Inspect',exact:true}).isDisabled(),true);
+    denial=null;await page.getByRole('button',{name:'Check inspector',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('file-inspection-run').disabled);
+    await page.getByRole('button',{name:'Inspect',exact:true}).click();await page.getByRole('button',{name:'Cancel inspection',exact:true}).waitFor();
+    denial=denied;await page.getByRole('button',{name:'Cancel inspection',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('File inspection requires local HUD sign-in.'));
+    if(held)try{await held.fulfill({status:202,contentType:'application/json',body:JSON.stringify({...payload,state:'running'})});}catch(error){if(!/cancel|abort|disposed|closed/i.test(error.message))throw error;}
+    assert.equal(await signIn.isVisible(),true);assert.doesNotMatch(await page.locator('#file-inspection-status').textContent(),/cancelled/i);
     assert.deepEqual(errors,[]);
-    console.log('PASS real Chrome: explicit File bytes, no selection upload, keyboard activation/focus, plain-text hostile labels, partial coverage, collapsed details, export, stale association, cancel and 390px fit');
+    console.log('PASS real Chrome: explicit File bytes, no selection upload, keyboard activation/focus, plain-text hostile labels, partial coverage, collapsed details, export, stale association, cancel, 390px fit, sign-in denial/recovery, setup-only navigation and generic error fallback');
   }finally{await browser.close();}
 }).on('error',error=>{console.error(error);process.exitCode=1;});
 process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});

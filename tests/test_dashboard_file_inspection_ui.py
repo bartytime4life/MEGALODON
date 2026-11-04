@@ -53,6 +53,10 @@ def test_file_inspection_is_integrated_with_a_keyboard_route_and_focused_help():
     assert 'multiple' not in page.ids['file-inspection-input'][1]
     assert page.ids['file-inspection-title'][1]['tabindex'] == '-1'
     assert page.ids['file-inspection-status'][1]['aria-live'] == 'polite'
+    assert 'hidden' in page.ids['file-inspection-sign-in'][1]
+    assert 'setup-account-title' in page.ids
+    assert '<a href="#setup-account-title">Open Local sign-in in Setup →</a>' in FILE_INSPECTION_HTML
+    assert 'Preparing the command does not launch or restart anything.' in INDEX_HTML
     assert '@media(max-width:640px)' in FILE_INSPECTION_CSS
     assert ':focus-visible' in FILE_INSPECTION_CSS
     for forbidden in ['innerHTML', 'localStorage', 'sessionStorage', 'eval(', 'FormData', 'FileReader', 'arrayBuffer(']:

@@ -183,6 +183,13 @@ session memory. A client disconnect before full receipt aborts it; after
 acceptance the bounded job may finish. No core-store or firewall authority is
 granted. [Resource, schema and persistence details](file-inspection.md).
 
+All three inspection routes require sign-in to be configured for this HUD,
+even though other read-only HUD routes permit the default sign-in-disabled
+mode. Without configured sign-in they return 403 with the fixed code
+`file_inspection_sign_in_required`, before looking up a report/nonce or reading
+the request body. A configured protected HUD still requires its existing
+password or session cookie; missing/invalid authentication returns 401.
+
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
 Origin, Host, content-type, and length checks. It writes to the separate
 private AI receipt ledger; see the [AI control plane](ai-control-plane.md).

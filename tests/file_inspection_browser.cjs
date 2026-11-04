@@ -104,6 +104,34 @@ process.stdin.on('end', async () => {
   handler=async()=>reply({...payload,token:'invalid'});await node('check').emit('click');assert.equal(node('run').disabled,true);assert.match(node('status').textContent,/status is unavailable/);
   handler=async()=>reply({...payload,state:'failed',job_id:job,report:{...report,state:'unsupported',structure:null,identification:[],clues:[],tools:report.tools.map(t=>({...t,state:'unsupported'}))}});
   await node('check').emit('click');assert.match(node('status').textContent,/not supported/);assert.match(node('what').textContent,/could not establish/);
+  const denied={error:'SERVER_ERROR_STRING_MUST_NOT_RENDER <img src=x>',code:'file_inspection_sign_in_required'};
+  const ready={...payload,state:'idle',job_id:null,report:null};
+  handler=async()=>reply(denied,403);await node('check').emit('click');
+  assert.equal(node('run').disabled,true);assert.equal(node('sign-in').hidden,false);assert.equal(node('runtime').hidden,true);
+  assert.equal(node('result').hidden,true);assert.equal(node('export').disabled,true,'sign-in denial clears earlier report from the active UI');
+  assert.match(node('status').textContent,/requires local HUD sign-in/);assert.doesNotMatch(node('status').textContent,/SERVER_ERROR_STRING/);
+  await changed(file);assert.match(node('status').textContent,/requires local HUD sign-in/);
+  const beforeDeniedClick=requests.length;await node('run').emit('click');assert.equal(requests.length,beforeDeniedClick,'disabled inspection cannot submit or launch');
+  handler=async()=>reply(ready);await node('check').emit('click');
+  assert.equal(node('sign-in').hidden,true);assert.equal(node('runtime').hidden,false);assert.equal(node('run').disabled,false,'valid status recovers without auto-submission');
+  const recovered=requests.length;await settle();assert.equal(requests.length,recovered);
+  for(const [body,status] of [[{...denied,code:'different_error'},403],[denied,401]]){
+    handler=async()=>reply(body,status);await node('check').emit('click');
+    assert.equal(node('sign-in').hidden,true);assert.equal(node('run').disabled,true);
+    assert.match(node('status').textContent,/status is unavailable/);assert.doesNotMatch(node('status').textContent,/SERVER_ERROR_STRING|requires local HUD sign-in/);
+  }
+  handler=async()=>reply(ready);await node('check').emit('click');
+  handler=async()=>reply(denied,403);await node('run').emit('click');
+  assert.equal(node('sign-in').hidden,false);assert.equal(node('run').disabled,true);assert.match(node('status').textContent,/requires local HUD sign-in/,'submission denial uses the same sign-in state');
+  handler=async()=>reply(ready);await node('check').emit('click');
+  let deniedUploadResolve;
+  handler=async path=>path.endsWith('/run')?await new Promise(resolve=>{deniedUploadResolve=resolve;}):reply(denied,403);
+  const deniedUpload=node('run').emit('click');await settle();await node('cancel').emit('click');
+  assert.equal(node('sign-in').hidden,false);assert.equal(node('cancel').hidden,true);assert.equal(node('run').disabled,true);
+  assert.match(node('status').textContent,/requires local HUD sign-in/);assert.doesNotMatch(node('status').textContent,/cancelled/i,'auth denial does not claim cancellation succeeded');
+  deniedUploadResolve(reply({...ready,state:'running',job_id:job}));await deniedUpload;
+  assert.match(node('status').textContent,/requires local HUD sign-in/,'late upload response cannot clear the denial');
+  handler=async()=>reply(ready);await node('check').emit('click');assert.equal(node('sign-in').hidden,true);assert.equal(node('run').disabled,false);
   observer([{isIntersecting:false}]);assert.equal([...timers.values()].filter(t=>[1000,15000].includes(t.delay)).length,1,'only deferred export URL revocation remains while the panel is hidden');
   console.log('file inspection UI workflow passed');
 }).on('error', error=>{console.error(error);process.exitCode=1;});

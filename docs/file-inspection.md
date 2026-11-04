@@ -12,6 +12,13 @@ signature-based lead; legitimate files can share those features. No label,
 absence of clues, or successful inspection establishes safety or malware.
 The separate ClamAV aggregate does not prove this file was scanned.
 
+File inspection requires a signed-in local HUD. In the HUD's **Local sign-in**
+section, select **Prepare protected launch**, copy and run the prepared command,
+then sign in to that HUD. Use an unused port to keep the current session open.
+Setting a saved password alone does not enable sign-in for a running HUD.
+Sessions launched without sign-in cannot read inspection reports, receive an
+inspection nonce, submit a file or request cancellation.
+
 ## Optional setup
 
 Use **Install file inspector** through the existing authorized Setup installer,

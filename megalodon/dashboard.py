@@ -715,8 +715,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                                      token=self.install_operator_token if enabled else None))
             return
         if route.path == '/api/file-inspection':
-            if (route.query or self.headers.get_all('X-Megalodon-Check', []) != ['1']
-                    or self.support_config is None or self.file_inspection is None or not _tool_management_user()):
+            if not self._file_inspection_context():
+                return
+            if route.query or self.headers.get_all('X-Megalodon-Check', []) != ['1']:
                 self._send_json({'error': 'explicit local file inspection check required'}, status=403)
             else:
                 value = self.file_inspection.snapshot()
@@ -1202,6 +1203,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._support_config_action()
             return
         if self.path in {'/api/file-inspection/run', '/api/file-inspection/cancel'}:
+            self.close_connection = True
+            if not self._file_inspection_context():
+                return
             from .file_inspection_http import action
             action(self)
             return
@@ -1805,6 +1809,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _sign_in_enabled(self) -> bool:
         return self.http_read_password is not None or self.http_password_verifier is not None
 
+    def _file_inspection_context(self) -> bool:
+        # Routing already verified credentials. Opt-out read-only HUD sessions
+        # must not acquire this separate file-submission/report capability.
+        if not self._sign_in_enabled():
+            self._send_json({'error': 'file inspection requires local HUD sign-in',
+                             'code': 'file_inspection_sign_in_required'}, status=403)
+            return False
+        if (self.support_config is None or self.file_inspection is None
+                or not _tool_management_user()):
+            self._send_json({'error': 'file inspection is unavailable in this HUD'}, status=403)
+            return False
+        return True
+
     def _has_operator_http_auth(self, *, redirect: bool = False) -> bool:
         """Require a password only when the operator opted into local sign-in."""
         password = self.http_read_password
@@ -2204,8 +2221,9 @@ def serve(
                 )
             handler.support_config = SupportConfiguration(runtime_settings, companion_automation,
                                                            support_startup, capture_store_ready)
-            from .file_inspection import FileInspection
-            handler.file_inspection = FileInspection()
+            if sign_in_enabled:
+                from .file_inspection import FileInspection
+                handler.file_inspection = FileInspection()
             if installer is not None:
                 setup = handler.support_config
                 installer.busy = lambda: (setup._job['state'] == 'running'
