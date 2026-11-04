@@ -220,4 +220,3 @@ function validFileInspectionStatus(p) {
   controls();
 })();
 '''
-

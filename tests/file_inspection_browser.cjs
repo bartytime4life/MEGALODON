@@ -139,4 +139,3 @@ process.stdin.on('end', async () => {
   console.log('file inspection UI workflow passed');
 }).on('error', error=>{console.error(error);process.exitCode=1;});
 process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});
-

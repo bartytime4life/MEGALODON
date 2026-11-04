@@ -73,4 +73,3 @@ def test_file_inspection_explicit_workflow_and_untrusted_results():
         text=True, capture_output=True, timeout=15,
     )
     assert result.returncode == 0, result.stderr
-

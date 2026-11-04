@@ -150,4 +150,3 @@ def report(size, results):
                  clues=[dict(code=k, title=CLUES[k][0], meaning=CLUES[k][1]) for k in clues],
                  unknowns=list(UNKNOWNS), next_step=NEXT_STEP)
     return validate_report(value)
-
