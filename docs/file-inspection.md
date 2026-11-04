@@ -60,6 +60,8 @@ structural coverage is refused rather than silently reporting only one slice.
 - Both adapters have no network or host sockets, no home-directory access,
   read-only runtime/input, empty environment, restricted process creation,
   disabled core dumps and a 1 MiB disposable temporary filesystem.
+  LIEF cannot create threads or processes; DIE can create only threads within
+  its independently checked 32-task cgroup limit.
 
 Each report lists `completed`, `unavailable`, `unsupported`, `failed`,
 `timed_out` or `cancelled` for each adapter. One successful adapter and one

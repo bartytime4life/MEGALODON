@@ -166,6 +166,25 @@ def test_native_output_flood_is_discarded(native_home, monkeypatch):
         os.close(fd)
 
 
+def test_native_lief_cannot_create_threads(native_home, monkeypatch):
+    monkeypatch.setattr(sandbox, 'PROBE', '''
+from threading import Thread
+try:
+    worker=Thread(target=lambda:None);worker.start();worker.join()
+except RuntimeError:
+    print('thread denied')
+''')
+    fd = sandbox.sealed_input()
+    os.write(fd, elf())
+    sandbox.seal(fd)
+    try:
+        state, raw = sandbox.run(validate(native_home), fd, 'lief',
+            deadline=time.monotonic() + 5, cancelled=Event(), probe='confinement')
+        assert state == 'completed' and raw.strip() == b'thread denied'
+    finally:
+        os.close(fd)
+
+
 def test_native_die_address_limit_and_hard_memory_cap(native_home, monkeypatch):
     # Substitute a fixed harmless probe for diec inside the exact DIE scope
     # launcher. The trailing entry-point marker keeps its cgroup admission and

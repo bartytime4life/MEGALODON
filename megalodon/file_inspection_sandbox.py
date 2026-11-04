@@ -43,7 +43,7 @@ def seal(fd):
     os.lseek(fd, 0, os.SEEK_SET)
 
 
-def _filter():
+def _filter(*, threads=False):
     """libseccomp compiles native-architecture rules, not request-supplied BPF."""
     api = ctypes.CDLL(str(SYSTEM_LIBS / 'libseccomp.so.2'), use_errno=True)
     api.seccomp_init.argtypes = [ctypes.c_uint32]
@@ -74,15 +74,18 @@ def _filter():
             number = api.seccomp_syscall_resolve_name(name.encode())
             if number < 0 or api.seccomp_rule_add(context, 0x00050000 | errno.EPERM, number, 0):
                 raise SandboxUnavailable('Inspection filter unavailable.')
-        # clone3 has an indirect argument structure; deny it with ENOSYS so
-        # libc may use clone for required Qt threads. Non-thread clone is denied.
+        # Only DIE needs Qt threads, and its scope independently caps tasks.
+        # LIEF cannot create threads or processes. clone3 has an indirect
+        # argument structure; ENOSYS permits libc's bounded Qt clone fallback.
         clone3 = api.seccomp_syscall_resolve_name(b'clone3')
         clone = api.seccomp_syscall_resolve_name(b'clone')
         cmp = Comparison(0, 7, 0x00010000, 0)  # MASKED_EQ: CLONE_THREAD absent
         if (clone3 < 0 or clone < 0
-                or api.seccomp_rule_add(context, 0x00050000 | errno.ENOSYS, clone3, 0)
-                or api.seccomp_rule_add_array(context, 0x00050000 | errno.EPERM, clone, 1, ctypes.byref(cmp))
-                or api.seccomp_export_bpf(context, fd)):
+                or api.seccomp_rule_add(context, 0x00050000 | errno.ENOSYS, clone3, 0)):
+            raise SandboxUnavailable('Inspection filter unavailable.')
+        added = (api.seccomp_rule_add_array(context, 0x00050000 | errno.EPERM, clone, 1, ctypes.byref(cmp))
+                 if threads else api.seccomp_rule_add(context, 0x00050000 | errno.EPERM, clone, 0))
+        if added or api.seccomp_export_bpf(context, fd):
             raise SandboxUnavailable('Inspection filter unavailable.')
         os.lseek(fd, 0, os.SEEK_SET)
         return fd
@@ -158,7 +161,7 @@ print(json.dumps(checks))
 
 
 def run(runtime, fd, tool, *, deadline, cancelled, probe=None):
-    filter_fd = _filter()
+    filter_fd = _filter(threads=tool == 'die' and probe is None)
     process = None
     try:
         argv = command(runtime, fd, filter_fd, tool, probe=probe)

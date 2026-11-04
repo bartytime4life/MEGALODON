@@ -15,6 +15,15 @@ from megalodon.file_inspection_sandbox import sealed_input, seal
 from megalodon.tool_installer import install_command, terminal_command, RECIPES, OPTIONAL_RECIPES, INSTALLABLES
 
 
+@pytest.fixture
+def prerequisite_files(monkeypatch):
+    # Artifact-admission unit tests do not install or execute host tools.
+    # Opt-in native tests independently exercise their actual prerequisites.
+    original = Path.is_file
+    fixed = {'/usr/bin/bwrap', '/usr/bin/dpkg-deb', '/usr/bin/systemd-run'}
+    monkeypatch.setattr(Path, 'is_file', lambda path: str(path) in fixed or original(path))
+
+
 def test_catalog_pins_artifacts_and_both_complete_file_sets():
     value = runtime.catalog()
     assert value['versions']['lief'] == '1.0.0'
@@ -91,7 +100,7 @@ def test_traversal_and_link_entries_never_leave_stage(tmp_path, monkeypatch):
     assert not (tmp_path.parent / 'escape').exists()
 
 
-def test_injected_downloader_does_not_bypass_artifact_identity(tmp_path, monkeypatch):
+def test_injected_downloader_does_not_bypass_artifact_identity(tmp_path, monkeypatch, prerequisite_files):
     tmp_path.chmod(0o700)
     monkeypatch.setattr(runtime, 'supported', lambda: True)
     def acquire(item, path):
@@ -102,14 +111,24 @@ def test_injected_downloader_does_not_bypass_artifact_identity(tmp_path, monkeyp
     assert not list(runtime.runtime_path(tmp_path).parent.glob('.prepare-*'))
 
 
-def test_modified_runtime_is_preserved_not_overwritten(tmp_path, monkeypatch):
+def test_modified_runtime_is_preserved_not_overwritten(tmp_path, monkeypatch, prerequisite_files):
     tmp_path.chmod(0o700)
     root = runtime.runtime_path(tmp_path)
-    root.mkdir(parents=True, mode=0o700)
+    runtime._owned_directory(root.parent, private=True)
+    root.mkdir(mode=0o700)
     sentinel = root / 'unfinished'
     sentinel.write_text('preserve this')
     sentinel.chmod(0o400)
     monkeypatch.setattr(runtime, 'supported', lambda: True)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='changed'):
         runtime.install(tmp_path, acquire=lambda *_: pytest.fail('No acquisition for an existing runtime.'))
     assert sentinel.read_text() == 'preserve this'
+
+
+def test_missing_prerequisite_refuses_before_acquisition(tmp_path, monkeypatch):
+    monkeypatch.setattr(runtime, 'supported', lambda: True)
+    original = Path.is_file
+    monkeypatch.setattr(Path, 'is_file', lambda path: str(path) != '/usr/bin/bwrap' and original(path))
+    with pytest.raises(ValueError, match='Install bubblewrap'):
+        runtime.install(tmp_path, acquire=lambda *_: pytest.fail('Missing prerequisites must refuse acquisition.'))
+    assert not runtime.runtime_path(tmp_path).exists()
