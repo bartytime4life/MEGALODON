@@ -63,6 +63,17 @@ RECIPES: dict[str, Recipe] = {
     "aide": Recipe("apt", "Installs the free Ubuntu AIDE checker without recommended services; baseline creation is separate.", ("aide",)),
 }
 
+# Optional on-demand runtimes are not background tools. Keep their installer
+# recipes separate from the fixed heartbeat/readiness/workflow registry.
+OPTIONAL_RECIPES = {
+    'file-inspector': Recipe('inspector', 'Downloads pinned LIEF 1.0.0, Detect It Easy 3.21 and private Qt/ICU libraries (about 29 MB). No system libraries are replaced and no file is inspected.'),
+}
+INSTALLABLES = frozenset(RECIPES) | frozenset(OPTIONAL_RECIPES)
+
+
+def _recipe(tool_id):
+    return OPTIONAL_RECIPES[tool_id] if tool_id in OPTIONAL_RECIPES else RECIPES[tool_id]
+
 
 def _apt_script(recipe: Recipe) -> str:
     # Constant text assembled only from the closed registry above.
@@ -86,7 +97,12 @@ def _authorized(which: Callable[[str], str | None], name: str) -> str | None:
 def install_command(tool_id: str, *, which: Callable[[str], str | None] = shutil.which,
                     is_root: bool | None = None) -> list[str] | None:
     """Return the fixed argv for one tool, or None when it cannot run here."""
-    recipe = RECIPES[tool_id]
+    recipe = _recipe(tool_id)
+    if recipe.kind == "inspector":
+        if runtime_platform() != 'linux':
+            return None
+        from .file_inspection_sandbox import supported
+        return [sys.executable, "-I", "-m", "megalodon.file_inspection_runtime"] if supported() else None
     if recipe.kind == "pip":
         return [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", *recipe.packages]
     if recipe.kind == "ollama":
@@ -140,7 +156,10 @@ def start_command(tool_id: str, *, which: Callable[[str], str | None] = shutil.w
 
 def terminal_command(tool_id: str, action: str = "install") -> str | None:
     """Copyable equivalent for hosts without a graphical password prompt."""
-    recipe = RECIPES[tool_id]
+    recipe = _recipe(tool_id)
+    if recipe.kind == "inspector":
+        import shlex
+        return shlex.join([sys.executable, '-I', '-m', 'megalodon.file_inspection_runtime']) if action == 'install' else None
     if action == "uninstall":
         if tool_id == "core":
             return "~/.local/bin/megalodon-manage uninstall"
@@ -169,7 +188,7 @@ def uninstall_command(tool_id: str, *, which: Callable[[str], str | None] = shut
     """Fixed argv for terminal-only removal after an exact typed confirmation."""
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         return None
-    recipe = RECIPES[tool_id]
+    recipe = _recipe(tool_id)
     if recipe.kind == "apt" and tool_id != "nftables" and runtime_platform() == "linux":
         sudo, apt = which("sudo"), which("apt-get")
         return [sudo, apt, "remove", "--no-install-recommends", *recipe.packages] if sudo and apt else None
@@ -183,7 +202,7 @@ def uninstall_command(tool_id: str, *, which: Callable[[str], str | None] = shut
 
 def catalog() -> dict[str, Any]:
     tools = []
-    for tool_id, recipe in RECIPES.items():
+    for tool_id, recipe in {**RECIPES, **OPTIONAL_RECIPES}.items():
         command = install_command(tool_id)
         tools.append({
             "id": tool_id,
@@ -248,7 +267,7 @@ class Installer:
                     "exit_code": job.exit_code, "output": output}
 
     def start(self, tool_id: str, action: str = "install") -> dict[str, Any]:
-        if tool_id not in RECIPES or action not in ACTIONS:
+        if tool_id not in INSTALLABLES or action not in ACTIONS:
             raise KeyError(tool_id)
         command = install_command(tool_id) if action == "install" else start_command(tool_id)
         if command is None:

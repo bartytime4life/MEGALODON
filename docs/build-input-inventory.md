@@ -36,6 +36,13 @@ of both the CI profile and this contract.
 
 ## What it does not prove
 
+The separate optional file-inspector runtime uses the packaged
+`megalodon/assets/file-inspection-runtime.json` artifact and exact-file-set
+catalog. It introduces no project runtime/extra dependency or core lock change.
+That catalog pins LIEF/DIE/Qt/ICU acquisitions and is tested separately; this
+core source inventory is not evidence of those optional downloaded bytes.
+See [file inspection dependency evidence](file-inspection.md#dependency-evidence).
+
 This is source metadata, not a release or acquisition receipt. It is not an
 artifact SBOM, a signed provenance statement, publisher-signature verification,
 or a reproducible-build attestation. It does not identify downloaded wheel

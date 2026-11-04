@@ -1,0 +1,77 @@
+/* Opt-in real Chrome acceptance of the shipped inspection component.
+ * Read JSON containing html/css/code/report on stdin. Requires Playwright.
+ * Synthetic HTTP replies exercise UI only; no analyzer qualification claim.
+ */
+const assert = require('node:assert/strict'), {chromium} = require('playwright');
+let input='';process.stdin.on('data',part=>input+=part);
+process.stdin.on('end',async()=>{
+  const {html,css,code,report}=JSON.parse(input),origin='http://127.0.0.1:9876';
+  const browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-sandbox']});
+  try{
+    const page=await browser.newPage({viewport:{width:1280,height:1000}}),requests=[],errors=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    const token='A_z-9'.repeat(6)+'Z_';
+    let payload={schema:'megalodon-file-inspection-status-v1',state:'idle',job_id:null,runtime:{state:'ready',message:'The synthetic inspector runtime is ready.'},max_bytes:67108864,report:null,token};
+    const bytes=Buffer.from('MZ harmless synthetic UI fixture'),job='b'.repeat(32);
+    let slow=false,held=null;
+    await page.route(origin+'/**',async route=>{
+      const request=route.request(),path=new URL(request.url()).pathname;
+      if(path==='/')return route.fulfill({contentType:'text/html',body:'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inspection component acceptance</title><link rel="stylesheet" href="/assets/dashboard.css"><script src="/assets/inspection.js" defer></script></head><body><main class="shell"><div class="workspace-scroll"><section class="workspace-view"><section class="companion-section"><div class="companion-grid">'+html+'</div></section></section></div></main></body></html>'});
+      if(path==='/assets/dashboard.css')return route.fulfill({contentType:'text/css',body:css});
+      if(path==='/assets/inspection.js')return route.fulfill({contentType:'application/javascript',body:'const localHudLaunch={};\n'+code});
+      requests.push({path,method:request.method(),body:request.postDataBuffer(),headers:request.headers()});
+      if(path==='/api/file-inspection/run'){
+        assert.equal(request.headers()['content-type'],'application/octet-stream');assert.equal(request.headers()['x-megalodon-config-token'],token);
+        assert.deepEqual(request.postDataBuffer(),bytes);assert.ok(!Object.keys(request.headers()).some(k=>/file.?name/i.test(k)));
+        if(slow){held=route;payload={...payload,state:'receiving',job_id:job,report:null};return;}
+        payload={...payload,state:'partial',job_id:job,report};
+      }
+      if(path==='/api/file-inspection/cancel'){assert.equal(request.postData(),'{}');assert.equal(request.headers()['x-megalodon-config-token'],token);payload={...payload,state:'cancelled',report:null};}
+      if(path.startsWith('/api/file-inspection'))return route.fulfill({status:request.method()==='POST'?202:200,contentType:'application/json',body:JSON.stringify(payload)});
+      throw Error('Unexpected browser request: '+path);
+    });
+    await page.goto(origin);await page.getByRole('button',{name:'Check inspector',exact:true}).waitFor();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('Ready.'));
+    const input=page.getByLabel('Choose one program to inspect');
+    await input.setInputFiles({name:'<img src=x onerror=alert(1)>.exe',mimeType:'application/octet-stream',buffer:bytes});
+    assert.equal(requests.filter(r=>r.method==='POST').length,0,'choosing a file sends no POST');
+    assert.match(await page.locator('#file-inspection-selection').textContent(),/<img src=x/);
+    await page.getByRole('button',{name:'Inspect',exact:true}).focus();assert.equal(await page.evaluate(()=>document.activeElement.id),'file-inspection-run');
+    assert.notEqual(await page.locator('#file-inspection-run').evaluate(n=>getComputedStyle(n).outlineStyle),'none');
+    await page.keyboard.press('Enter');await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('Partial inspection'));
+    assert.equal(requests.filter(r=>r.path.endsWith('/run')).length,1);
+    assert.match(await page.locator('#file-inspection-tools').textContent(),/LIEF · structure: Completed/);
+    assert.match(await page.locator('#file-inspection-tools').textContent(),/Detect It Easy · identification: Unsupported/);
+    const badges=await page.locator('#file-inspection-tools li').evaluateAll(items=>items.map(n=>n.getBoundingClientRect().top));
+    assert.ok(Math.abs(badges[0]-badges[1])<=1,'parallel analyzer badges align at desktop width');
+    assert.match(await page.locator('#file-inspection-clues').textContent(),/Reported packer clue[\s\S]*signature matches, not a verified build history/);
+    assert.equal(await page.locator('#file-inspection-details').evaluate(n=>n.open),false);
+    await page.locator('#file-inspection-details summary').click();
+    assert.match(await page.locator('#file-inspection-technical').textContent(),/1 of 2[\s\S]*<img src=x/);
+    assert.equal(await page.locator('#file-inspection img').count(),0,'hostile labels remain plain text');
+    const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Export JSON'}).click();const download=await downloadEvent;
+    assert.equal(download.suggestedFilename(),'megalodon-file-inspection.json');
+    const stream=await download.createReadStream();let output='';for await(const part of stream)output+=part;
+    assert.deepEqual(JSON.parse(output),report);assert.doesNotMatch(output,/filename|job_id|token|sha256|raw|harmless synthetic UI fixture/);
+    await page.setViewportSize({width:390,height:844});
+    const dimensions=await page.locator('#file-inspection').evaluate(n=>({left:n.getBoundingClientRect().left,right:n.getBoundingClientRect().right,scroll:n.scrollWidth,width:n.clientWidth}));
+    assert.ok(dimensions.left>=0&&dimensions.right<=390,JSON.stringify(dimensions));assert.ok(dimensions.scroll<=dimensions.width+1,'panel fits mobile without horizontal scrolling');
+    for(const selector of ['#file-inspection-run','#file-inspection-check','#file-inspection-export']){
+      const box=await page.locator(selector).boundingBox();assert.ok(box.height>=44&&box.width>=44);
+    }
+    await input.setInputFiles({name:'another.bin',mimeType:'application/octet-stream',buffer:bytes});
+    assert.equal(await page.locator('#file-inspection-result').isVisible(),false);
+    await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-report-scope').textContent.startsWith('Earlier report'));
+    slow=true;await page.getByRole('button',{name:'Inspect',exact:true}).click();
+    await page.getByRole('button',{name:'Cancel inspection',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Cancel inspection',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('Inspection cancelled'));
+    if(held)try{await held.fulfill({status:202,contentType:'application/json',body:JSON.stringify({...payload,state:'running'})});}catch(error){if(!/cancel|abort|disposed|closed/i.test(error.message))throw error;}
+    assert.equal(requests.filter(r=>r.path.endsWith('/cancel')).length,1);
+    assert.match(await page.locator('#file-inspection-status').textContent(),/Inspection cancelled/);
+    assert.deepEqual(errors,[]);
+    console.log('PASS real Chrome: explicit File bytes, no selection upload, keyboard activation/focus, plain-text hostile labels, partial coverage, collapsed details, export, stale association, cancel and 390px fit');
+  }finally{await browser.close();}
+}).on('error',error=>{console.error(error);process.exitCode=1;});
+process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});

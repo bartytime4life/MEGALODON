@@ -137,6 +137,7 @@ production service.
 | `/api/local-checks` | None; requires `X-Megalodon-Check: 1` | Explicit HUD-only read of runtime versions, selected-store readability, executable presence and process names |
 | `/api/summary` | None | Four stored counters; not a capture-health receipt |
 | `/api/traffic` | None | Newest 500 event candidates and 200 finding candidates, qualified by ingestion receipts; bounded metadata including endpoints, ports and flags, never payloads |
+| `/api/file-inspection` | None; `X-Megalodon-Check: 1`, non-root Linux HUD and existing operator authentication | Passive optional runtime file admission, job state, latest normalized report and configuration nonce; never starts a parser. [File inspection](file-inspection.md). |
 | `/api/hud-snapshot` | None | Read-only compatibility summary from the same qualified traffic projection, at most 16 KiB; no hosted-summary control in the local HUD, no upload or write |
 | `/api/traffic-history` | Required `start`, `end`; optional `before` | Same qualified projection in a UTC range of at most 31 days, with a descending event-ID cursor |
 | `/api/events` | Optional `limit` | Five-field projection of bounded recent detections |
@@ -164,6 +165,23 @@ production service.
 | `/api/defense` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed workflow state, private audit summary, active/uncertain containment and separate POST nonce; [defense contract](visual-operations-defense.md) |
 | `/api/findings` | Optional single-valued `start,end,source,severity,limit,cursor,selected`; explicit local check and non-root operator required | Bounded retained detector/sensor/pattern page with source coverage, selected facts and evidence-bound review state; at most 256 KiB. [Findings review](findings-review.md) defines the separate fixed POST actions and nonce. |
 | `/api/live-connections` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Up to 128 recent captured conversations, observed directions, approximate location context and background state; see [live connection globe](live-connection-globe.md). GET starts no action. |
+
+`POST /api/file-inspection/run` requires existing operator authentication,
+non-root Linux HUD, exact Host/Origin, exactly one configuration nonce header
+(`X-Megalodon-Config-Token`), `X-Megalodon-Check: 1`, one `Content-Length`
+between 1 and 67,108,864, and exactly `application/octet-stream`. It accepts
+bytes only, with no query, filename/path, encoding or transfer encoding.
+The one-job slot is reserved before receipt. Receipt has a ten-second total
+deadline and 0.5-second inactivity limit; a complete accepted upload starts
+the separate 30-second confined job and returns 202. Concurrent jobs return
+409; invalid envelopes/lengths fail before reservation. `POST
+/api/file-inspection/cancel` uses the same envelope with `application/json`
+and exactly `{}`; it stays reachable during uploads and parsing. The slot is
+released after receipt cleanup/worker teardown. Both return the status schema.
+Bodies are never logged or retained on disk; only a validated report stays in
+session memory. A client disconnect before full receipt aborts it; after
+acceptance the bounded job may finish. No core-store or firewall authority is
+granted. [Resource, schema and persistence details](file-inspection.md).
 
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
 Origin, Host, content-type, and length checks. It writes to the separate

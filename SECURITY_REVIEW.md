@@ -3,6 +3,30 @@
 > **Documentation orientation — 2026-10-22 / source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
 
 
+## Explicit file-inspection boundary — November 4, 2026
+
+The optional [file inspector](docs/file-inspection.md) adds authenticated,
+same-origin, nonce-protected binary submission to the non-root Linux HUD.
+Caller paths, commands, flags, filenames and URLs are not accepted. A reserved
+one-job slot bounds receipt before bytes are read; upload, CPU, memory and
+output bounds apply. Parsing occurs only in separate required namespaces with
+read-only private runtime/input, no host sockets/home/network, seccomp process
+restrictions and parent-death cleanup. Failure to establish confinement refuses
+parsing. The operator approved Detect It Easy's 2.5 GiB virtual-space allowance
+only with verified 512 MiB cgroup memory, zero swap and 32-task caps; LIEF retains
+512 MiB address space. No host protections are weakened to obtain isolation.
+
+Native parsers and signature outputs remain untrusted. Parent validation emits
+only a versioned structural/identification projection with fixed explanations;
+the browser renders text and exports that report only. No intentional sample
+disk persistence, sample digest, raw diagnostics, AI submission or telemetry
+write occurs. Anonymous memory may still be swapped outside the adapter
+cgroup; this is not forensic erasure. Kernel or operator-account compromise,
+parser vulnerability freedom, publisher trust and malware verdict accuracy
+are not established by fixture tests or byte-identity checks. The private
+dependency catalog and evidence limits are documented separately from the core
+network-metadata contracts and historical review below.
+
 ## Current descriptive extensions — October 22, 2026
 
 At source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`, the protected Linux Setup response includes read-only
