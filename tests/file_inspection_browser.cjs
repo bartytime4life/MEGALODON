@@ -42,6 +42,10 @@ process.stdin.on('end', async () => {
     {...report,structure:{...report.structure,path:'/home/private'}},
     {...report,tools:[...report.tools,{id:'other',state:'completed'}]},
     {...report,tools:[{...report.tools[0],state:'safe'},report.tools[1]]},
+    {...report,tools:[{...report.tools[0],state:'failed'},report.tools[1]]},
+    {...report,structure:null},
+    {...report,identification:[{kind:'packer',name:'UPX'}]},
+    {...report,state:'completed'},
     {...report,identification:[{kind:'packer',name:'x'.repeat(121)}]},
     {...report,unknowns:['x\nsecret']},{...report,unknowns:Array(17).fill('x')},
     {...report,structure:{...report.structure,slices:Array(17).fill(report.structure.slices[0]),slices_detected:17}},
@@ -75,16 +79,67 @@ process.stdin.on('end', async () => {
   assert.match(node('status').textContent,/Partial inspection/);
   assert.match(node('report-scope').textContent,/Report for the file you submitted[\s\S]*Partial coverage/);
   assert.match(text(node('tools')),/LIEF · structure: Completed[\s\S]*Detect It Easy · identification: Unsupported/);
-  assert.match(text(node('technical')),/1 of 1[\s\S]*<img src=x/);
-  assert.match(text(node('clues')),/Legitimate software also uses it/);
-  assert.match(text(node('clues')),/Reported packer clue[\s\S]*<img src=x/);
-  assert.match(text(node('clues')),/signature matches, not a verified build history/);
-  assert.match(text(node('technical')),/Reported packer clue/);
+  assert.match(text(node('technical')),/1 of 1/);
+  assert.match(text(node('clues')),/Slice 1 \(arm64, 64-bit\): 1 writable\/executable region\./);
+  assert.match(text(node('clues')),/Some legitimate runtimes/);
+  assert.match(text(node('clues')),/LIEF · structure: Completed/);
+  assert.match(text(node('clues')),/Detect It Easy · identification: Unsupported\. Identification clues are unavailable/);
+  assert.doesNotMatch(text(node('clues')),/Reported packer|Packing or protection identified/);
+  const walk=n=>[n,...n.children.flatMap(walk)];
+  const disclosures=()=>walk(node('clues')).filter(n=>n.tag==='details');
+  assert.equal(disclosures().length,1);
+  assert.equal(disclosures()[0].open,undefined);
+  assert.equal(disclosures()[0].children[0].attributes['aria-label'],'Why this appears: Writable and executable region');
+  for(const label of ['Observed fact','Source','Meaning','Limit'])assert.match(text(disclosures()[0]),new RegExp(label));
   assert.equal(node('details').open,undefined,'technical details remain collapsed');
   await node('export').emit('click');assert.equal(exports.length,1);
   const exported=JSON.parse(await exports[0].text());assert.deepEqual(exported,report);
   assert.doesNotMatch(JSON.stringify(exported),/SAMPLE_SECRET|onerror=alert\(1\)>\.exe|token|job_id|filename|sha256|raw/);
   assert.equal(downloads[0].download,'megalodon-file-inspection.json');
+  // Report refreshes exercise the actual renderer without running any analyzer.
+  const show=async value=>{assert.equal(context.validFileInspectionReport(value),true);payload={...payload,state:value.state==='unsupported'?'failed':value.state,report:value};await node('check').emit('click');};
+  const complete=JSON.parse(JSON.stringify(report));complete.state='completed';complete.tools[1].state='completed';
+  complete.structure.slices_detected=3;
+  complete.structure.slices.push({...complete.structure.slices[0],architecture:'x86_64',writable_executable:2},{...complete.structure.slices[0],architecture:'zero',writable_executable:0});
+  complete.identification=[{kind:'packer',name:'UPX'},{kind:'protector',name:'Example protector'},{kind:'compiler',name:'GCC'},{kind:'compiler',name:'Clang'},{kind:'linker',name:'GNU ld'}];
+  complete.clues.push({code:'packed',title:'Packing or protection identified',meaning:'Unused report wording.'});
+  const unchanged=JSON.stringify(complete);await show(complete);
+  assert.equal(disclosures().length,4,'packing and protector labels share one explanation');
+  assert.equal(node('clues').children.filter(n=>n.children[0]?.textContent==='Packing or protection identified').length,1);
+  assert.match(text(node('clues')),/Slice 2 \(x86_64, 64-bit\): 2 writable\/executable regions/);
+  assert.doesNotMatch(text(node('clues')),/Slice 3|Unused report wording/);
+  assert.match(text(node('clues')),/Reported packer label: UPX[\s\S]*Reported protector label: Example protector/);
+  assert.match(text(node('clues')),/Reported compiler label: GCC[\s\S]*Reported compiler label: Clang/);
+  assert.match(text(node('clues')),/Reported linker label: GNU ld/);
+  assert.match(text(node('clues')),/signature matches, not a verified build history/);
+  assert.equal(JSON.stringify(complete),unchanged,'explanations never mutate the report');
+  await node('export').emit('click');assert.deepEqual(JSON.parse(await exports[1].text()),complete);
+  // Untrusted strings stay text, and arbitrary supplied interpretations are unused.
+  const hostile=JSON.parse(unchanged);hostile.identification[0].name='<img src=x onerror=alert(1)>';
+  hostile.structure.slices[0].architecture='<svg onload=alert(1)>';
+  hostile.clues[0].meaning='UNTRUSTED_INTERPRETATION';await show(hostile);
+  assert.match(text(node('clues')),/<img src=x onerror=alert\(1\)>/);
+  assert.match(text(node('clues')),/<svg onload=alert\(1\)>/);
+  assert.doesNotMatch(text(node('clues')),/UNTRUSTED_INTERPRETATION/);
+  assert.ok(!walk(node('clues')).some(n=>['img','svg'].includes(n.tag)));
+  const unsupportedClues={...complete,structure:{...report.structure,slices:[{...report.structure.slices[0],writable_executable:0}]},identification:[]};
+  await show(unsupportedClues);
+  assert.equal(disclosures().length,0,'unsupported clues never invent evidence or interpretations');
+  assert.match(text(node('clues')),/Supporting metadata is missing or inconsistent/);
+  assert.doesNotMatch(text(node('clues')),/Some legitimate runtimes|Legitimate software also uses it/);
+  for(const toolState of ['unavailable','unsupported','failed','timed_out','cancelled']){
+    const partial={...report,state:toolState==='cancelled'?'cancelled':'partial',tools:[report.tools[0],{id:'die',state:toolState}]};
+    await show(partial);assert.equal(disclosures().length,1);assert.match(text(node('clues')),/Identification clues are unavailable/);
+    const onlyDie={...complete,structure:null,tools:[{id:'lief',state:toolState},complete.tools[1]],state:toolState==='cancelled'?'cancelled':'partial',clues:[complete.clues[1]]};
+    await show(onlyDie);assert.equal(disclosures().length,3);assert.match(text(node('clues')),/Structural details are unavailable/);assert.doesNotMatch(text(node('clues')),/Slice 1|Writable and executable region/);
+    const empty={...report,structure:null,identification:[],clues:[],tools:report.tools.map(t=>({...t,state:toolState})),state:toolState==='cancelled'?'cancelled':toolState==='unsupported'?'unsupported':'failed'};
+    await show(empty);assert.equal(disclosures().length,0);assert.match(text(node('clues')),/This does not establish that the file is safe/);
+  }
+  await show({...complete,structure:{...report.structure,slices:[{...report.structure.slices[0],writable_executable:0}]},identification:[],clues:[]});
+  assert.match(text(node('clues')),/No review clues were returned[\s\S]*does not establish that the file is safe/);
+  await show({...report,clues:[{code:'unknown',title:'IGNORE',meaning:'UNTRUSTED_INTERPRETATION'}]});
+  assert.match(text(node('clues')),/no reviewed explanation/);assert.doesNotMatch(text(node('clues')),/IGNORE|UNTRUSTED_INTERPRETATION/);
+  await show(report);
   await changed({name:'different.bin',size:65});assert.equal(node('result').hidden,true,'selection clears previous report');
   await node('check').emit('click');assert.match(node('report-scope').textContent,/Earlier report[\s\S]*not associated/);
   await changed({name:'too-large.bin',size:67108865});assert.equal(node('run').disabled,true);assert.match(node('status').textContent,/larger than 64 MiB/);
@@ -135,7 +190,7 @@ process.stdin.on('end', async () => {
   deniedUploadResolve(reply({...ready,state:'running',job_id:job}));await deniedUpload;
   assert.match(node('status').textContent,/requires local HUD sign-in/,'late upload response cannot clear the denial');
   handler=async()=>reply(ready);await node('check').emit('click');assert.equal(node('sign-in').hidden,true);assert.equal(node('run').disabled,false);
-  observer([{isIntersecting:false}]);assert.equal([...timers.values()].filter(t=>[1000,15000].includes(t.delay)).length,1,'only deferred export URL revocation remains while the panel is hidden');
+  observer([{isIntersecting:false}]);assert.equal([...timers.values()].filter(t=>[1000,15000].includes(t.delay)).length,2,'only deferred export URL revocations remain while the panel is hidden');
   console.log('file inspection UI workflow passed');
 }).on('error', error=>{console.error(error);process.exitCode=1;});
 process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});

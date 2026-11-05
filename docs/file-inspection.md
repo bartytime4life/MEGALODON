@@ -12,6 +12,16 @@ signature-based lead; legitimate files can share those features. No label,
 absence of clues, or successful inspection establishes safety or malware.
 The separate ClamAV aggregate does not prove this file was scanned.
 
+Expand **Why this appears** beneath a clue to see the supporting observation,
+its tool and completion state, a reviewed local explanation and its limits.
+Writable/executable clues name the affected executable slices and region counts;
+identification clues show the matching packer, protector, compiler or linker
+labels. Packing and protection share one explanation. Missing tool results stay
+visible as information gaps; a clue without supporting metadata receives no
+inferred explanation. These disclosures use only the current report already in
+the browser: opening them starts no request, analysis or AI operation. JSON export
+remains the unchanged version-1 metadata report.
+
 File inspection requires a signed-in local HUD. In the HUD's **Local sign-in**
 section, select **Prepare protected launch**, copy and run the prepared command,
 then sign in to that HUD. Use an unused port to keep the current session open.
