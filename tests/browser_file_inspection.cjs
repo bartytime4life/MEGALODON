@@ -12,7 +12,7 @@ process.stdin.on('end',async()=>{
     page.on('pageerror',error=>errors.push(error.message));
     const token='A_z-9'.repeat(6)+'Z_';
     let payload={schema:'megalodon-file-inspection-status-v1',state:'idle',job_id:null,runtime:{state:'ready',message:'The synthetic inspector runtime is ready.'},max_bytes:67108864,report:null,token};
-    const bytes=Buffer.from('MZ harmless synthetic UI fixture'),job='b'.repeat(32);
+    const bytes=Buffer.alloc(report.size_bytes),job='b'.repeat(32);bytes.write('MZ harmless synthetic UI fixture');
     let slow=false,held=null,denial=null,denialStatus=403;
     await page.route(origin+'/**',async route=>{
       const request=route.request(),path=new URL(request.url()).pathname;
@@ -45,21 +45,46 @@ process.stdin.on('end',async()=>{
     assert.match(await page.locator('#file-inspection-tools').textContent(),/Detect It Easy · identification: Unsupported/);
     const badges=await page.locator('#file-inspection-tools li').evaluateAll(items=>items.map(n=>n.getBoundingClientRect().top));
     assert.ok(Math.abs(badges[0]-badges[1])<=1,'parallel analyzer badges align at desktop width');
-    assert.match(await page.locator('#file-inspection-clues').textContent(),/Reported packer clue[\s\S]*signature matches, not a verified build history/);
+    assert.match(await page.locator('#file-inspection-clues').textContent(),/Identification clues are unavailable/);
+    const disclosure=page.locator('#file-inspection-clues details').first(),summary=disclosure.locator('summary');
+    assert.equal(await disclosure.evaluate(n=>n.open),false);
+    const beforeDisclosure=requests.length;await summary.focus();await page.keyboard.press('Enter');
+    assert.equal(await disclosure.evaluate(n=>n.open),true);
+    assert.match(await disclosure.textContent(),/Slice 1 \(arm64, 64-bit\): 1 writable\/executable region/);
+    for(const label of ['Observed fact','Source','Meaning','Limit'])assert.match(await disclosure.textContent(),new RegExp(label));
+    assert.equal(requests.length,beforeDisclosure,'opening evidence does not request more data');
+    assert.notEqual(await summary.evaluate(n=>getComputedStyle(n).outlineStyle),'none');
     assert.equal(await page.locator('#file-inspection-details').evaluate(n=>n.open),false);
     await page.locator('#file-inspection-details summary').click();
-    assert.match(await page.locator('#file-inspection-technical').textContent(),/1 of 2[\s\S]*<img src=x/);
+    assert.match(await page.locator('#file-inspection-technical').textContent(),/1 of 1/);
     assert.equal(await page.locator('#file-inspection img').count(),0,'hostile labels remain plain text');
     const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Export JSON'}).click();const download=await downloadEvent;
     assert.equal(download.suggestedFilename(),'megalodon-file-inspection.json');
     const stream=await download.createReadStream();let output='';for await(const part of stream)output+=part;
     assert.deepEqual(JSON.parse(output),report);assert.doesNotMatch(output,/filename|job_id|token|sha256|raw|harmless synthetic UI fixture/);
+    if(process.env.MEGALODON_INSPECTION_SCREENSHOTS)await page.locator('.fi-clues').screenshot({path:process.env.MEGALODON_INSPECTION_SCREENSHOTS+'/desktop.png'});
     await page.setViewportSize({width:390,height:844});
     const dimensions=await page.locator('#file-inspection').evaluate(n=>({left:n.getBoundingClientRect().left,right:n.getBoundingClientRect().right,scroll:n.scrollWidth,width:n.clientWidth}));
     assert.ok(dimensions.left>=0&&dimensions.right<=390,JSON.stringify(dimensions));assert.ok(dimensions.scroll<=dimensions.width+1,'panel fits mobile without horizontal scrolling');
     for(const selector of ['#file-inspection-run','#file-inspection-check','#file-inspection-export']){
       const box=await page.locator(selector).boundingBox();assert.ok(box.height>=44&&box.width>=44);
     }
+    if(process.env.MEGALODON_INSPECTION_SCREENSHOTS)await page.locator('#file-inspection').screenshot({path:process.env.MEGALODON_INSPECTION_SCREENSHOTS+'/mobile.png'});
+    // A complete report can carry multiple identification labels. Hostile text is
+    // injected separately to check rendering; it is not a native-parser claim.
+    const complete=JSON.parse(JSON.stringify(report));complete.state='completed';complete.tools[1].state='completed';
+    complete.structure.slices_detected=2;complete.structure.slices.push({...complete.structure.slices[0],architecture:'x86_64',writable_executable:2});
+    complete.identification=[{kind:'packer',name:'<img src=x onerror=alert(1)>'},{kind:'protector',name:'Example protector'},{kind:'compiler',name:'GCC'},{kind:'linker',name:'GNU ld'}];
+    complete.clues.push({code:'packed',title:'Packing or protection identified',meaning:'Packing can make a program harder to inspect.'});
+    payload={...payload,state:'completed',report:complete};await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('Inspection completed'));
+    assert.equal(await page.locator('#file-inspection-clues details').count(),4);
+    assert.match(await page.locator('#file-inspection-clues').textContent(),/Slice 2 \(x86_64, 64-bit\): 2 writable\/executable regions/);
+    assert.match(await page.locator('#file-inspection-clues').textContent(),/<img src=x[\s\S]*Example protector/);
+    assert.equal(await page.locator('#file-inspection img').count(),0);
+    const expanded=page.locator('#file-inspection-clues summary');
+    for(let i=0;i<await expanded.count();i++)await expanded.nth(i).click();
+    const wide=await page.locator('#file-inspection').evaluate(n=>n.scrollWidth>n.clientWidth+1);assert.equal(wide,false);
     await input.setInputFiles({name:'another.bin',mimeType:'application/octet-stream',buffer:bytes});
     assert.equal(await page.locator('#file-inspection-result').isVisible(),false);
     await page.getByRole('button',{name:'Check inspector',exact:true}).click();

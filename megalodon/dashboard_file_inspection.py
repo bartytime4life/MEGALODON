@@ -58,6 +58,7 @@ FILE_INSPECTION_CSS = r'''
 .fi-tools{display:flex;gap:.5rem;flex-wrap:wrap;list-style:none;padding:0;margin:.8rem 0 1.2rem}.fi-tools li{padding:.35rem .55rem;border:1px solid #4b6c78;color:#d6e6ed;font-size:.75rem}.fi-tools li[data-state=completed]{border-color:#498575;color:#b8f4df}.fi-tools li[data-state=failed],.fi-tools li[data-state=timed_out],.fi-tools li[data-state=unavailable]{color:#f3d69f;border-color:#88744c}
 .fi-result>section{margin:1rem 0}.fi-result h4{color:#f0f8fa;font-size:.95rem;margin:.3rem 0 .4rem}.fi-result p,.fi-result li{font-size:.83rem;line-height:1.65;overflow-wrap:anywhere}.fi-result ul:not(.fi-tools){margin:.45rem 0;padding-left:1.3rem}.fi-result li+li{margin-top:.6rem}.fi-clues,.fi-limits{padding:.4rem 0 .4rem .9rem;border-left:2px solid #6c8b97}.fi-clues{border-left-color:#edc883}.fi-limits{border-left-color:#87e8dc}.fi-result li strong{display:block;margin-bottom:.15rem;color:#e6f1f5}
 .fi-result .fi-tools li+li{margin-top:0}
+.fi-result .fi-evidence-source{margin:.4rem 0 0;color:#bdd0db;font-size:.75rem}.fi-result .fi-evidence{margin-top:.35rem}.fi-result .fi-evidence dd p{margin:0 0 .4rem;font-size:inherit}.fi-result .fi-evidence-gap{color:#f3d69f}
 .fi-result details{border-top:1px solid #345463;margin-top:1rem}.fi-result summary{min-height:44px;padding:.7rem 0;font-size:.82rem;font-weight:650;line-height:1.5;cursor:pointer}.fi-result dl{display:grid;grid-template-columns:minmax(7rem,auto) minmax(0,1fr);gap:.45rem 1rem;font-size:.8rem}.fi-result dt{color:#aec6d0}.fi-result dd{margin:0;overflow-wrap:anywhere}.fi-panel .fi-boundary{border-top:1px solid #2e4c5b;margin-top:1rem;padding-top:.8rem}
 @media(max-width:640px){.fi-panel{padding:1rem}.fi-panel .companion-head{flex-wrap:wrap}.fi-panel .fi-steps{width:100%}.fi-steps li{gap:.35rem;font-size:.75rem}.fi-steps li:not(:last-child):after{margin:0 .35rem 0 0}.fi-steps b{flex-basis:1.5rem;height:1.5rem}.fi-actions button{flex:1 1 8rem}.fi-result dl{grid-template-columns:1fr;gap:.25rem}.fi-result dd{margin-bottom:.5rem}.fi-result-head button{width:100%}}
 @media(prefers-reduced-motion:no-preference){.fi-panel button{transition:background-color .15s ease,border-color .15s ease}}
@@ -69,7 +70,7 @@ function validFileInspectionReport(p) {
   const text=(v,max=512)=>typeof v==='string'&&v.length>0&&v.length<=max&&!/[\x00-\x1f\x7f]/.test(v);
   const count=(v,max=2147483647)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
   const slice=s=>keys(s,['architecture','bits','sections','imports','writable_executable'])&&text(s.architecture,120)&&[32,64].includes(s.bits)&&count(s.sections)&&count(s.imports)&&count(s.writable_executable);
-  return keys(p,['schema','inspected_at','size_bytes','state','structure','identification','tools','clues','unknowns','next_step'])
+  const shape=keys(p,['schema','inspected_at','size_bytes','state','structure','identification','tools','clues','unknowns','next_step'])
     &&p.schema==='megalodon-file-inspection-report-v1'&&typeof p.inspected_at==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(p.inspected_at)&&Number.isFinite(Date.parse(p.inspected_at))
     &&count(p.size_bytes,67108864)&&p.size_bytes>0&&['completed','partial','failed','cancelled','unsupported'].includes(p.state)
     &&(p.structure===null||(keys(p.structure,['format','slices_detected','slices'])&&['ELF','PE','Mach-O'].includes(p.structure.format)&&count(p.structure.slices_detected,16)&&p.structure.slices_detected>0&&Array.isArray(p.structure.slices)&&p.structure.slices.length>0&&p.structure.slices.length<=16&&p.structure.slices.length===p.structure.slices_detected&&p.structure.slices.every(slice)&&(p.structure.format==='Mach-O'||p.structure.slices_detected===1)))
@@ -78,6 +79,10 @@ function validFileInspectionReport(p) {
     &&Array.isArray(p.clues)&&p.clues.length<=16&&p.clues.every(v=>keys(v,['code','title','meaning'])&&typeof v.code==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(v.code)&&text(v.title)&&text(v.meaning))
     &&Array.isArray(p.unknowns)&&p.unknowns.length<=16&&p.unknowns.every(v=>text(v))&&text(p.next_step)
     &&new TextEncoder().encode(JSON.stringify(p)).length<=65536;
+  if(!shape)return false;
+  // Match the existing server contract before using metadata as explanation evidence.
+  const states=p.tools.map(t=>t.state),expected=states.includes('cancelled')?'cancelled':states.every(s=>s==='completed')?'completed':states.includes('completed')?'partial':states.every(s=>s==='unsupported')?'unsupported':'failed';
+  return (p.structure!==null)===(states[0]==='completed')&&(states[1]==='completed'||p.identification.length===0)&&p.state===expected;
 }
 function validFileInspectionStatus(p) {
   const keys=(v,names)=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===names.slice().sort().join();
@@ -116,6 +121,40 @@ function validFileInspectionStatus(p) {
     panel.querySelectorAll('[data-step]').forEach(n=>{if(n.dataset.step===step)n.setAttribute('aria-current','step');else n.removeAttribute('aria-current');});
     installControls();
   }
+  function renderClues(report){
+    const clues=[],gaps=[],source=id=>names[id]+': '+labels[report.tools.find(t=>t.id===id).state];
+    const add=(title,meaning,id,facts,limit)=>{
+      const item=node('li',''),coverage=node('p',source(id));coverage.className='fi-evidence-source';
+      item.append(node('strong',facts.length?title:'Supporting evidence unavailable'));
+      if(!facts.length){
+        const gap=node('p','Supporting metadata is missing or inconsistent. This clue cannot be explained from this report.');gap.className='fi-evidence-gap';item.append(gap);
+      }else{
+        item.append(node('span',meaning),coverage);
+        const details=node('details',''),summary=node('summary','Why this appears'),fields=node('dl','');
+        details.className='fi-evidence';summary.setAttribute('aria-label','Why this appears: '+title);
+        const observed=node('dd','');facts.forEach(fact=>observed.append(node('p',fact)));
+        fields.append(node('dt','Observed fact'),observed,node('dt','Source'),node('dd',source(id)),node('dt','Meaning'),node('dd',meaning),node('dt','Limit'),node('dd',limit));
+        details.append(summary,fields);item.append(details);
+      }
+      if(!facts.length)item.append(coverage);clues.push(item);
+    };
+    if(report.clues.some(c=>c.code==='writable_executable')){
+      const facts=report.structure?report.structure.slices.flatMap((s,i)=>s.writable_executable>0?['Slice '+(i+1)+' ('+s.architecture+', '+s.bits+'-bit): '+s.writable_executable+' writable/executable '+(s.writable_executable===1?'region.':'regions.')]:[]):[];
+      add('Writable and executable region','A region can be both written and executed. Some legitimate runtimes need this; review the publisher and purpose.','lief',facts,'Region permissions do not establish what code runs, whether those permissions are used, or whether the program is malicious.');
+    }
+    const identified=report.identification,packed=identified.filter(i=>['packer','protector'].includes(i.kind));
+    const identificationLimit='Identification labels are signature matches, not a verified build history. Matches can be incomplete or mistaken. They do not establish publisher trust, runtime behavior or safety.';
+    if(packed.length||report.clues.some(c=>c.code==='packed'))add('Packing or protection identified','Packing can make a program harder to inspect. Legitimate software also uses it.','die',packed.map(i=>'Reported '+i.kind+' label: '+i.name),identificationLimit);
+    for(const kind of ['compiler','linker']){
+      const matches=identified.filter(i=>i.kind===kind);if(!matches.length)continue;
+      add('Reported '+kind+' clue','This label suggests a tool used to build the program. Legitimate and malicious programs can use the same build tools.','die',matches.map(i=>'Reported '+kind+' label: '+i.name),identificationLimit);
+    }
+    if(report.clues.some(c=>!['writable_executable','packed'].includes(c.code)))gaps.push('A reported clue has no reviewed explanation. No meaning has been inferred for it.');
+    if(!clues.length&&!report.clues.length)clues.push(node('li','No review clues were returned within this inspection’s coverage. This does not establish that the file is safe.'));
+    report.tools.filter(t=>t.state!=='completed').forEach(t=>gaps.push(source(t.id)+'. '+(t.id==='lief'?'Structural details are unavailable.':'Identification clues are unavailable.')));
+    gaps.forEach(text=>{const item=node('li',text);item.className='fi-evidence-gap';clues.push(item);});
+    el('clues').replaceChildren(...clues);
+  }
   function renderReport(){
     const report=state.report;el('result').hidden=!report;if(!report)return;
     const owned=state.ownedJob===state.reportJob&&state.ownedSelection===state.selection;
@@ -125,15 +164,7 @@ function validFileInspectionStatus(p) {
     const structure=report.structure;
     const formats={ELF:'Linux / Unix executable (ELF)',PE:'Windows executable or library (PE)','Mach-O':'macOS executable or library (Mach-O)'};
     el('what').textContent=structure?formats[structure.format]+'. '+[...new Set(structure.slices.map(s=>s.architecture+' · '+s.bits+'-bit'))].join('; ')+'.':'The available tools could not establish a supported executable structure.';
-    const clues=report.clues.map(c=>{const item=node('li','');item.append(node('strong',c.title),node('span',c.meaning));return item;});
-    for(const kind of ['compiler','packer','protector','linker']){
-      const matches=report.identification.filter(i=>i.kind===kind);if(!matches.length)continue;
-      const item=node('li','');item.append(node('strong','Reported '+kind+' clue'),node('span',matches.map(i=>i.name).join('; ')));clues.push(item);
-    }
-    if(report.identification.length)clues.push(node('li','Identification labels are signature matches, not a verified build history. Matches can be incomplete or mistaken.'));
-    if(!clues.length)clues.push(node('li','No review clues were returned within this inspection’s coverage. This does not establish that the file is safe.'));
-    if(report.identification.some(i=>['packer','protector'].includes(i.kind)))clues.push(node('li','Packing can make a program harder to inspect. Legitimate software also uses it.'));
-    el('clues').replaceChildren(...clues);
+    renderClues(report);
     el('unknowns').replaceChildren(...(report.unknowns.length?report.unknowns:['Static metadata cannot show what a program will do when it runs.']).map(t=>node('li',t)));
     el('next').textContent=report.next_step;
     const technical=document.createElement('dl');technical.append(node('dt','Input size'),node('dd',report.size_bytes.toLocaleString()+' bytes'));
@@ -149,7 +180,7 @@ function validFileInspectionStatus(p) {
     else if(state.uploading)message('Sending the selected file to this local HUD. You can cancel while it is being received.','receiving');
     else if(p.state==='receiving')message('The local inspector is receiving a file. You can cancel this inspection.','receiving');
     else if(p.state==='running')message('Reading structure and identification clues on this PC. Analysis stops at the time limit.','running');
-    else if(p.report)message(({completed:'Inspection completed. Read the clues and limits together.',partial:'Partial inspection. Some tool results or executable slices are unavailable.',failed:'Inspection could not finish. Review each tool’s status and the suggested next step.',cancelled:'Inspection cancelled. No safety conclusion is available.',unsupported:'This file is not supported by the available inspection tools.'})[p.report.state],p.report.state);
+    else if(p.report)message(({completed:'Inspection completed. Read the clues and limits together.',partial:'Partial inspection. One tool did not complete; review its status beside the clues.',failed:'Inspection could not finish. Review each tool’s status and the suggested next step.',cancelled:'Inspection cancelled. No safety conclusion is available.',unsupported:'This file is not supported by the available inspection tools.'})[p.report.state],p.report.state);
     else if(p.state==='cancelled')message('Inspection cancelled. Choose a file when you are ready.','cancelled');
     else if(p.runtime.state!=='ready')message('The file inspector is not ready. Read the availability message below.','error');
     else if(state.file&&!selected())message(state.file.size===0?'This file is empty. Choose an executable with content.':'This file is larger than 64 MiB. Choose a smaller program.','error');

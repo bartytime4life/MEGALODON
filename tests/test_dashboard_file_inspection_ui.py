@@ -1,5 +1,6 @@
 """Explicit selected-byte submission and bounded report presentation."""
 import json
+import os
 from html.parser import HTMLParser
 from pathlib import Path
 import shutil
@@ -11,22 +12,18 @@ from megalodon.dashboard_assets import DASHBOARD_CSS, DASHBOARD_JS, INDEX_HTML
 from megalodon.dashboard_file_inspection import (
     FILE_INSPECTION_CSS, FILE_INSPECTION_HTML, FILE_INSPECTION_JS,
 )
+from megalodon.file_inspection_contract import report as make_report
 
 
 def inspection_report():
-    return dict(
-        schema='megalodon-file-inspection-report-v1',
-        inspected_at='2026-11-04T12:00:00Z', size_bytes=64, state='partial',
-        structure=dict(format='Mach-O', slices_detected=1, slices=[dict(
+    value = make_report(64, [
+        dict(state='completed', structure=dict(format='Mach-O', slices_detected=1, slices=[dict(
             architecture='arm64', bits=64, sections=4, imports=2,
-            writable_executable=1)]),
-        identification=[dict(kind='packer', name='<img src=x onerror=alert(1)>')],
-        tools=[dict(id='lief', state='completed'), dict(id='die', state='unsupported')],
-        clues=[dict(code='WRITABLE_EXECUTABLE', title='A region can be written and executed',
-                    meaning='Review this clue with the publisher and intended use.')],
-        unknowns=['Static inspection does not establish safety.'],
-        next_step='Confirm the publisher and intended use before opening this program.',
-    )
+            writable_executable=1)])),
+        dict(state='unsupported'),
+    ])
+    value['inspected_at'] = '2026-11-04T12:00:00Z'
+    return value
 
 
 def test_file_inspection_is_integrated_with_a_keyboard_route_and_focused_help():
@@ -71,5 +68,17 @@ def test_file_inspection_explicit_workflow_and_untrusted_results():
         [node, str(Path(__file__).with_name('file_inspection_browser.cjs'))],
         input=json.dumps(dict(code=FILE_INSPECTION_JS, report=inspection_report())),
         text=True, capture_output=True, timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(os.environ.get('MEGALODON_TEST_INSPECTION_BROWSER') != '1',
+                    reason='Opt-in Chrome component acceptance')
+def test_file_inspection_in_real_chrome():
+    result = subprocess.run(
+        ['node', str(Path(__file__).with_name('browser_file_inspection.cjs'))],
+        input=json.dumps(dict(html=FILE_INSPECTION_HTML, css=DASHBOARD_CSS,
+                             code=FILE_INSPECTION_JS, report=inspection_report())),
+        text=True, capture_output=True, timeout=90,
     )
     assert result.returncode == 0, result.stderr
