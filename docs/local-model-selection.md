@@ -21,6 +21,16 @@ reads only the supplied local store, and never loads or accepts the model. Its
 default 32-GiB budget can refuse large choices even though Setup can save them;
 an explicit `large-local` profile has a fixed 96-GiB / 300-second budget.
 
+## Local AI screen guidance
+
+The existing Local AI screen shows the next useful step from its validated
+status and unsaved selections: refresh, choose, save, or explicitly test.
+It highlights an available existing button without clicking it or contacting
+Ollama. Status-read failure clears the visible connection and response-test
+result; retry is required before treating a prior result as current.
+Automatic loading preferences remain under an advanced disclosure. Selection,
+fixed response testing, and live-analysis acceptance remain separate.
+
 ## Execution behavior awaiting acceptance
 
 The following response, loaded-memory and automatic-advice flows describe dormant

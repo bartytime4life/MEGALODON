@@ -39,6 +39,8 @@ STARTUP_CSS = r'''
 #workspace-setup .model-hero h5 { font-size:1.2rem; }
 #workspace-setup #support-model-saved { font-size:1.05rem; color:#c3f3e5; overflow-wrap:anywhere; }
 #workspace-setup .model-step { padding:20px; margin:14px 0; border:1px solid #29434f; border-radius:8px; background:#0b1c27; }
+#workspace-setup .settings-model button[data-next="true"] { border-color:#9be3cb; box-shadow:inset 0 0 0 1px #9be3cb; }
+#workspace-setup #support-model-next { overflow-wrap:anywhere; }
 #workspace-setup .model-step h6 { font-size:1rem; margin:0 0 12px; }
 #workspace-setup .model-step .support-config-actions { margin-bottom:0; }
 #workspace-setup .model-step #support-model-test-status { color:#c3e8df; }
