@@ -11,6 +11,8 @@ process.stdin.on('end',async()=>{
  vm.runInNewContext(code,context);await settle();assert.equal(requests.length,0);
  await click('support-apps-configure');await settle();assert.equal(posts().length,0);
  assert.match(get('support-ollama-connection').textContent,/Ollama connected/);
+ assert.match(get('support-model-next').textContent,/Test selected model/);
+ assert.equal(get('support-model-test').dataset.next,'true');
  assert.equal(get('support-model-test').disabled,false);assert.equal(get('support-model-load').disabled,true);
  get('support-model-compute').value='cpu';get('support-model-compute').events.change();assert.equal(get('support-model-test').disabled,true,'save changed preferences before testing');
  payload={...payload,job:{...fixture.job,state:'finished',action:'model_select'}};
@@ -28,6 +30,33 @@ process.stdin.on('end',async()=>{
  payload={...clean,job:{...fixture.job,state:'finished',action:'model_test'},model:{...clean.model,response_test:{...model_test,state:'passed',message:'Local response test passed.',finished_at:'2026-11-03T04:00:02Z',duration_ms:2000}}};
  await poll(2000);assert.match(get('support-model-test-status').textContent,/Local response test passed/);assert.equal(get('support-model-load').disabled,true,'fixed probe never enables operational loading');
  const total=posts().length;await poll(10000);assert.equal(posts().length,total,'polling does not rerun a model test');
+ assert.match(get('support-model-next').textContent,/test passed/);
+ assert.match(get('support-model-next').textContent,/analysis remains paused/);
+ // A later read failure must clear all actionable success claims.
+ payload={...payload,model:{...payload.model,connection_state:'unavailable'}};
+ await poll(10000);assert.match(get('support-model-next').textContent,/could not be reached/);
+ payload={...payload,schema:'invalid'};await poll(10000);
+ assert.match(get('support-model-next').textContent,/Retry model status/);
+ assert.match(get('support-model-test-status').textContent,/status unavailable/);
+ assert.equal(get('support-model-test').disabled,true);
+ assert.equal(get('support-model-refresh').dataset.next,'true');
+ // Restart the controller with no saved selection: discovery remains explicit.
+ payload={...fixture,model:{...unbound_model,selection_state:'none',options:[],response_test:{...model_test,selection_saved:false}}};
+ nodes.clear();timers.clear();requests.length=0;vm.runInNewContext(code,context);
+ await click('support-apps-configure');await settle();
+ assert.match(get('support-model-next').textContent,/Start with Refresh installed models/);
+ assert.equal(posts().length,0);
+ payload.model.options=[{name:unbound_model.model,digest:'b'.repeat(64),size_bytes:2**30}];
+ await poll(10000);
+ get('support-model-select').value='';get('support-model-select').events.change();
+ assert.match(get('support-model-next').textContent,/choose a model before saving/);
+ get('support-model-select').value=unbound_model.model;get('support-model-select').events.change();
+ assert.match(get('support-model-next').textContent,/changes are not saved/);
+ assert.equal(get('support-model-save').dataset.next,'true');
+ assert.equal(get('support-model-test').disabled,true);
+ payload.model.drift='digest_changed';await poll(10000);
+ assert.match(get('support-model-next').textContent,/version changed/);
+ assert.equal(posts().length,0,'guidance never starts discovery, saves, or tests');
  console.log('fixed Ollama model test UI behavior passed');
 }).on('error',error=>{console.error(error);process.exitCode=1;});
 process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});

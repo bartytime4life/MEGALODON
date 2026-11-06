@@ -58,3 +58,32 @@ def test_support_config_composition():
     assert 'Other saved-file imports use their adapter commands.' in INDEX_HTML
     assert 'innerHTML' not in SUPPORT_CONFIG_JS
     assert 'localStorage' not in SUPPORT_CONFIG_JS
+
+
+def test_model_loading_is_secondary_to_explicit_selection_and_test():
+    from html.parser import HTMLParser
+
+    class ModelLayout(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.details = []
+            self.parents = {}
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "details":
+                self.details.append(attrs.get("id", ""))
+            if attrs.get("id"):
+                self.parents[attrs["id"]] = tuple(self.details)
+
+        def handle_endtag(self, tag):
+            if tag == "details":
+                self.details.pop()
+
+    layout = ModelLayout()
+    layout.feed(INDEX_HTML)
+    advanced = "support-model-loading-options"
+    assert advanced in layout.parents["support-model-load"]
+    for control in ("support-model-select", "support-model-save", "support-model-test", "support-model-next"):
+        assert advanced not in layout.parents[control]
+    assert 'id="support-model-loading-options" open' not in INDEX_HTML

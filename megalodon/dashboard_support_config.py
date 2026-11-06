@@ -33,8 +33,9 @@ SUPPORT_CONFIG_HTML = r'''
   </div></details>
   <details class="support-service-settings"><summary>Local AI and background sensors</summary><div class="support-tool-settings">
     <section aria-labelledby="support-model-title" class="settings-model">
-      <div class="model-hero"><p class="eyebrow">YOUR LOCAL MODEL</p><h5 id="support-model-title" tabindex="-1">Selected model</h5>
+      <div class="model-hero"><p class="eyebrow">YOUR LOCAL MODEL</p><h5 id="support-model-title" tabindex="-1">Your local AI</h5>
       <p id="support-model-saved" class="support-config-note">Saved model preference has not been checked.</p><p id="support-model-persistence" class="support-config-note">Your saved choice is restored when the HUD starts.</p></div>
+      <p id="support-model-next" class="support-config-feedback" role="status" aria-live="polite">Checking your saved model…</p>
       <details id="support-model-authorization" class="support-config-feedback" hidden><summary>Live-analysis AI is paused in this build</summary><p>Choosing and testing a model works independently. Automatic loading and network analysis use the release acceptance record.</p><a href="https://github.com/bartytime4life/MEGALODON/issues/446" target="_blank" rel="noopener noreferrer">View acceptance record (#446)</a></details>
       <div class="model-step"><h6><span class="support-step">1</span> Choose your model</h6><div class="settings-model-fields"><div><label for="support-model-select">Installed model</label><select id="support-model-select" disabled><option value="">Checking installed models…</option></select></div><div><label for="support-model-compute">Compute</label><select id="support-model-compute" disabled><option value="cpu">CPU · keep GPU available</option><option value="auto">Ollama automatic · may use GPU</option></select></div></div>
       <div class="support-config-actions"><button type="button" id="support-model-save" class="support-config-primary" disabled>Save model</button><button type="button" id="support-model-refresh" disabled>Refresh list</button><button type="button" id="support-model-adopt" hidden>Use installed version</button></div>
@@ -43,11 +44,12 @@ SUPPORT_CONFIG_HTML = r'''
       <div class="support-config-actions"><button type="button" id="support-model-test" disabled>Test selected model</button><button type="button" id="support-model-test-cancel" disabled>Cancel model test</button></div>
       <p id="support-model-test-status" role="status" aria-live="polite" class="support-config-note">Save an installed model, then test its response.</p>
       <p class="support-config-note">The test sends only a fixed request to reply READY to local Ollama. It may load the saved model with a 512-token context and a 60-second idle lease. No network observations or personal data are sent. A successful test does not accept the model for live analysis.</p>
-      </div><div class="model-step"><h6><span class="support-step">3</span> Loading preference</h6><div class="settings-switch-row"><label class="settings-switch-copy" for="support-model-ready"><strong>Keep model ready while HUD is running</strong><small>Load the saved model at startup and retry after a lost connection.</small></label><input id="support-model-ready" class="settings-switch" type="checkbox" role="switch" disabled></div>
+      </div><details class="settings-disclosure" id="support-model-loading-options"><summary>Advanced: automatic loading preferences</summary><div class="model-step"><h6>Loading preference</h6><div class="settings-switch-row"><label class="settings-switch-copy" for="support-model-ready"><strong>Keep model ready while HUD is running</strong><small>Load the saved model at startup and retry after a lost connection.</small></label><input id="support-model-ready" class="settings-switch" type="checkbox" role="switch" disabled></div>
       <div id="support-model-loaded-state" class="settings-model-state" role="status" aria-live="polite"><strong id="support-model-loaded">Checking loaded state…</strong><button type="button" id="support-model-load" disabled>Load now</button></div>
       <p id="support-model-lifecycle" class="support-config-note">Checking automatic loading…</p>
       <p id="support-model-status" role="status" class="support-config-note">Checking the selected model…</p>
       </div>
+      </details>
       <!-- MODEL_LIBRARY -->
       <details class="settings-disclosure"><summary>Response checks and connection options</summary>
         <label for="support-model-timeout">AI response limit (seconds)</label><input id="support-model-timeout" type="number" min="1" max="1800" step="1" value="300" disabled><p class="support-config-note">Default: 5 minutes. Up to 30 minutes for large models. Collection continues while AI works.</p>
@@ -197,6 +199,34 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   const workspaceVisible=()=>liveVisible()||setupVisible();
   const viewVisible=()=>workspaceVisible()&&(setupVisible()||typeof IntersectionObserver==='undefined'||state.globeVisible||(state.open&&state.configVisible));
   function feedback(message,kind='ready'){if(state.liveAction && el('live-action-status'))el('live-action-status').textContent=message;el('support-config-status').textContent=message;el('support-config').dataset.state=kind;}
+  // Read only the already validated snapshot and current draft. Never probe or act here.
+  function modelGuidance(){
+    const model=state.payload?.model,test=model?.response_test;
+    const draft=['model','compute_mode','timeout_seconds'].some(key=>state.dirty.has(key));
+    const selected=model?.options.some(row=>row.name===el('support-model-select').value);
+    let message,action='';
+    if(!state.valid) { message='Model status is unavailable. Retry model status before continuing.';action='refresh'; }
+    else if((state.pending&&(!state.readDone||!state.hydrated))||working()) message=test?.state==='running'?'Testing your saved model. You can cancel this test below.':'Updating local status. Wait for the current action to finish.';
+    else if(!model) message='Local AI status is unavailable in this service version.';
+    else if(test?.state==='running') message='Testing your saved model. You can cancel this test below.';
+    else if(model.drift) { message='The saved model is missing or its version changed. Refresh the list, choose the intended model and save it again.';action='refresh'; }
+    else if(['unavailable','error'].includes(model.connection_state)) {message='Ollama could not be reached. Check its local service, then refresh the installed list. No service is started here.';action='refresh';}
+    else if(draft) { message=selected?'Your changes are not saved. Save model before testing.':'Refresh the installed list and choose a model before saving.';action=selected?'save':'refresh'; }
+    else if(test?.selection_saved===true){
+      if(test.state==='passed') message='The fixed local response test passed. Your model choice is saved. Live-analysis acceptance is separate.';
+      else if(['failed','cancelled'].includes(test.state)){message='Your model choice is saved, but the response test did not pass. Review the result below before retrying.';action='test';}
+      else { message='Your model choice is saved. Test selected model when you want to check one local response.';action='test'; }
+    }
+    else if(!model.options.length){message='Start with Refresh installed models. Then choose your existing model from the list; no model details to type.';action='refresh';}
+    else if(!selected) message='Choose your existing model from the installed list. MEGALODON handles its exact version for you.';
+    else {message='Save model to remember this choice on your computer.';action='save';}
+    if(model&&modelUnbound(model))message+=' AI analysis remains paused in this build.';
+    el('support-model-next').textContent=message;
+    for(const name of ['refresh','save','test']){
+      const button=el('support-model-'+name);
+      button.dataset.next=String(action===name&&!button.disabled);
+    }
+  }
   function controls(){
     const changing=state.pending && (!state.readDone || !state.hydrated);
     const blocked=changing || !state.valid || !workspaceVisible();
@@ -222,6 +252,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     el('support-config').setAttribute('aria-busy',changing?'true':'false');
     const draft=['model','compute_mode','timeout_seconds'].some(key=>state.dirty.has(key));
     if(el('support-model-draft'))el('support-model-draft').textContent=draft?'Unsaved changes · save to use these settings after restart.':'Your saved choice stays selected across restarts. Refresh only to choose a different installed model.';
+    modelGuidance();
     startupControls(blocked);
     libraryControls(blocked);
   }
@@ -334,6 +365,8 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     const select=el('support-model-select');select.replaceChildren(placeholder);delete select.dataset.optionsKey;
     el('support-model-authorization').hidden=true;
     el('support-model-saved').textContent='Saved model preference unavailable.';
+    el('support-ollama-connection').textContent='Ollama connection status unavailable.';
+    el('support-model-test-status').textContent='Local response test status unavailable; a previous pass is not current evidence.';
     el('support-model-loaded').textContent='Loaded state unavailable';
     el('support-model-loaded-state').dataset.state='error';
     el('support-model-lifecycle').textContent='Automatic loading status unavailable.';
