@@ -55,6 +55,12 @@ python3 -m venv .venv
 .venv/bin/python -m pytest -q
 ```
 
+The suite pins umask `022` for every test through `tests/conftest.py`, matching
+the hosted runners. Ubuntu desktops with user private groups default to `0002`;
+without the pin, directories the tests create would inherit group-write and the
+owner-only ancestry checks would refuse them. Tests that need another umask set
+and restore their own.
+
 This installation can access package indexes. That setup action is distinct from
 normal application operation, which must not acquire a required vendor account,
 secret, subscription, cloud service, or outbound integration connection.
