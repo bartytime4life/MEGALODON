@@ -2,8 +2,31 @@
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import threading
 
 import pytest
+
+# Longest wait for one leftover daemon thread; measured joins stay under 0.2 s.
+STRAY_THREAD_JOIN_SECONDS = 10
+
+
+@pytest.fixture(autouse=True)
+def _quiesce_background_threads():
+    """Let each test's leftover MEGALODON daemon threads finish before the next test.
+
+    Support-configuration snapshots start short daemon review threads
+    (``megalodon-persistence-review``, ``megalodon-process-review``) that a test
+    does not wait for. Left running, they reach later tests that require a
+    single-threaded process, such as the CLI ``--max-seconds`` gate, and fail
+    them depending on scheduling. Joining here keeps the suite order-independent
+    without changing product code. A thread that outlives the bound is left
+    alone rather than failing an unrelated test.
+    """
+    yield
+    main = threading.main_thread()
+    for thread in threading.enumerate():
+        if thread is not main and thread.name.startswith('megalodon-'):
+            thread.join(STRAY_THREAD_JOIN_SECONDS)
 
 
 @pytest.fixture(autouse=True)
