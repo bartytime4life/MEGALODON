@@ -178,3 +178,46 @@ Tests use inert fixture bytes and fake HTTP responses. Native Linux tests cover
 the real private SQLite/file-lock boundary and end-to-end staged-file readback.
 No test fetches upstream weights. A real publisher/CDN download on the installed
 operator host remains an explicit operational acceptance check.
+
+## Check an installed copy without starting it
+
+The normal installer `status` command describes release/artifact health. It does
+not establish that the model-library source matches a particular merged commit.
+From a reviewed checkout, run this separate read-only observation on the actual
+operator PC:
+
+```bash
+python3 -B tools/check_model_library_install.py
+```
+
+The checker locates exactly one package under the managed `current` release,
+honoring `XDG_DATA_HOME` when configured. It refuses a selector outside the
+managed releases directory or ambiguous Python package locations. For an
+unmanaged copy, explicitly supply its actual package directory:
+
+```bash
+python3 -B tools/check_model_library_install.py --package-dir /absolute/installed/site-packages/megalodon
+```
+
+It reads at most 1 MiB per file for six named source files, refuses links and
+nonregular files, and compares SHA-256 with the recorded source from merged
+commit `ba3303eb0df043a2a6a5d6a88a89cff1970c5ba4` (#745). It checks file/directory
+identity for observed replacement. Output contains fixed filenames, hashes and
+states; personal paths and source contents are omitted. A later legitimate
+version can differ from this historical pin and requires review; there is no
+automatic update or repair.
+
+The checker never imports installed MEGALODON code, reads the private model
+catalog or weights, contacts Ollama, executes a subprocess, writes an evidence
+file, or changes services. `SOURCE_FILES_MATCH` is source parity at the check
+time, not a full installation check, running-process fingerprint, loaded-byte
+attestation or acceptance. A blocked native filesystem call can still delay
+completion. A cloud-workspace result does not establish the owner's installed
+PC state.
+
+The dedicated `tests/browser_model_library.py` rehearsal uses the real rendered
+HUD with synthetic responses and intercepted library POSTs. It covers keyboard
+reuse, failed-check invalidation, interrupted reload/polling, stale identities,
+catalog/permission consent and 390/1440-pixel reflow. Its route handler never
+passes library actions to a real backend. The main browser workflow runs it and
+retains synthetic screenshots; only an actual successful run is browser evidence.
