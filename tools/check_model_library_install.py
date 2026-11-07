@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from hashlib import sha256
-from itertools import islice
 import json
 import os
 from pathlib import Path
+import re
 import stat
 
 BASELINE = "ba3303eb0df043a2a6a5d6a88a89cff1970c5ba4"
@@ -28,18 +28,87 @@ class CheckError(ValueError):
 
 
 def managed_package(home=None, data_home=None):
-    """Locate one standard managed release, never search unrelated directories."""
+    """Discovery only; CLI observations keep managed_installation open too."""
+    with managed_installation(home, data_home) as package:
+        return package
+
+
+def selector(parent):
+    before = os.stat("current", dir_fd=parent, follow_symlinks=False)
+    if not stat.S_ISLNK(before.st_mode):
+        raise CheckError("INSTALLATION_UNAVAILABLE")
+    target = os.readlink("current", dir_fd=parent)
+    after = os.stat("current", dir_fd=parent, follow_symlinks=False)
+    if identity(before) != identity(after):
+        raise CheckError("INSTALLATION_CHANGED")
+    return identity(before), target
+
+
+@contextmanager
+def managed_installation(home=None, data_home=None):
+    """Pin real ancestry and the one permitted selector link through readback."""
     home = Path.home() if home is None else Path(home)
-    root = (Path(data_home) if data_home else home / ".local/share") / "megalodon"
+    root = (Path(data_home) if data_home is not None else home / ".local/share") / "megalodon"
     try:
-        release = (root / "current").resolve(strict=True)
-        release.relative_to((root / "releases").resolve(strict=True))
-        found = list(islice((release / "venv/lib").glob("python*/site-packages/megalodon"), 2))
-    except (OSError, ValueError, RuntimeError):
+        with ExitStack() as stack:
+            pinned = []
+            def pin(path):
+                fd = stack.enter_context(directory(path))
+                info = os.fstat(fd)
+                pinned.append((path, (info.st_dev, info.st_ino)))
+                return fd
+
+            parent = pin(root)
+            releases = root / "releases"
+            pin(releases)  # Never resolve a link masquerading as this directory.
+            selection = selector(parent)
+            target = Path(selection[1])
+            release = Path(os.path.normpath(target if target.is_absolute() else root / target))
+            if (release.parent != releases
+                    or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", release.name) is None):
+                raise CheckError("INSTALLATION_UNAVAILABLE")
+            pin(release)
+            lib = release / "venv/lib"
+            lib_fd = pin(lib)
+            library_identity = identity(os.fstat(lib_fd))
+            found = []
+            with os.scandir(lib_fd) as entries:
+                for count, entry in enumerate(entries):
+                    if count >= 256:
+                        raise CheckError("INSTALLATION_UNAVAILABLE")
+                    if re.fullmatch(r"python3\.[0-9]+", entry.name) is None:
+                        continue
+                    package = lib / entry.name / "site-packages/megalodon"
+                    try:
+                        pin(package)
+                    except FileNotFoundError:
+                        continue
+                    found.append(package)
+                    if len(found) > 1:
+                        raise CheckError("AMBIGUOUS_INSTALLATION")
+            if not found:
+                raise CheckError("INSTALLATION_UNAVAILABLE")
+
+            yield found[0]
+
+            # Discard an otherwise matching file receipt if the selected
+            # installation changed while files were being observed.
+            try:
+                for path, expected in pinned:
+                    with directory(path) as current:
+                        info = os.fstat(current)
+                        if (info.st_dev, info.st_ino) != expected:
+                            raise CheckError("INSTALLATION_CHANGED")
+                if identity(os.fstat(lib_fd)) != library_identity:
+                    raise CheckError("INSTALLATION_CHANGED")
+                # Check the selector last as well: path revalidation itself
+                # must not leave an unobserved change to the selected release.
+                if selector(parent) != selection:
+                    raise CheckError("INSTALLATION_CHANGED")
+            except (OSError, CheckError):
+                raise CheckError("INSTALLATION_CHANGED") from None
+    except OSError:
         raise CheckError("INSTALLATION_UNAVAILABLE") from None
-    if len(found) != 1:
-        raise CheckError("INSTALLATION_UNAVAILABLE" if not found else "AMBIGUOUS_INSTALLATION")
-    return found[0]
 
 
 @contextmanager
@@ -122,10 +191,13 @@ def main(argv=None):
     parser.add_argument("--package-dir", type=Path, help="explicit actual installed megalodon package directory")
     args = parser.parse_args(argv)
     try:
-        package = args.package_dir or managed_package(data_home=os.environ.get("XDG_DATA_HOME"))
-        result = observe(package)
+        if args.package_dir is not None:
+            result = observe(args.package_dir)
+        else:
+            with managed_installation(data_home=os.environ.get("XDG_DATA_HOME")) as package:
+                result = observe(package)
     except CheckError as exc:
-        result = dict(schema=SCHEMA, state="UNAVAILABLE", expected_source_commit=BASELINE, error_code=str(exc))
+        result = dict(schema=SCHEMA, state="UNAVAILABLE", expected_source_commit=BASELINE, files=[], error_code=str(exc))
     print(json.dumps(result, sort_keys=True))
     return 0 if result["state"] == "SOURCE_FILES_MATCH" else 1
 
