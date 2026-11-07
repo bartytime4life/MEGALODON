@@ -207,8 +207,11 @@ directory descriptors remain pinned during source observation. Before reporting,
 the checker rechecks their path identities and the selector's link identity and
 target. A changed selection discards all file results and reports
 `INSTALLATION_CHANGED`; it never retries against a different installation.
-The venv/lib directory metadata is also rechecked so a package-version directory
-added or removed during observation cannot leave a stale unique-package result.
+Discovery also retains descriptors and rechecks metadata for venv/lib and every
+existing Python-version and site-packages directory it considers, including
+those without a MEGALODON package. A package added below an already present
+version directory, or a version directory added or removed during observation,
+cannot leave an observed change labeled as a unique-package match.
 The final selector check follows directory revalidation.
 This detects observed replacement during the check, not changes made afterward
 or an adversary able to conceal and restore changes between observations.

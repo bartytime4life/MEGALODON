@@ -326,3 +326,45 @@ def test_managed_cli_checks_selector_after_directory_revalidation(package, tmp_p
     result = json.loads(capsys.readouterr().out)
     assert result["state"] == "UNAVAILABLE"
     assert result["error_code"] == "INSTALLATION_CHANGED"
+
+
+@pytest.mark.parametrize("existing", ["python", "site-packages"])
+@pytest.mark.parametrize("when", ["before_source_read", "after_source_read"])
+def test_managed_cli_refuses_package_added_below_existing_version_directory(
+        package, tmp_path, monkeypatch, capsys, existing, when):
+    app, release, _ = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    version = release / "venv/lib/python3.12"
+    (version if existing == "python" else version / "site-packages").mkdir(parents=True)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    original = check.observe
+
+    def observe(selected):
+        if when == "before_source_read":
+            (version / "site-packages/megalodon").mkdir(parents=True)
+        result = original(selected)
+        if when == "after_source_read":
+            (version / "site-packages/megalodon").mkdir(parents=True)
+        return result
+
+    monkeypatch.setattr(check, "observe", observe)
+    assert check.main([]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "UNAVAILABLE"
+    assert result["error_code"] == "INSTALLATION_CHANGED"
+    assert result["files"] == []
+    assert str(tmp_path) not in json.dumps(result)
+
+
+@pytest.mark.parametrize("existing", ["python", "site-packages"])
+def test_managed_cli_accepts_unchanged_empty_alternative_version_directory(
+        package, tmp_path, monkeypatch, capsys, existing):
+    app, release, _ = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    version = release / "venv/lib/python3.12"
+    (version if existing == "python" else version / "site-packages").mkdir(parents=True)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    assert check.main([]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "SOURCE_FILES_MATCH"
+    assert result["runtime_acceptance"] == "NOT_EVALUATED"

@@ -52,10 +52,13 @@ def managed_installation(home=None, data_home=None):
     try:
         with ExitStack() as stack:
             pinned = []
-            def pin(path):
+            discovery = []
+            def pin(path, *, watch_children=False):
                 fd = stack.enter_context(directory(path))
                 info = os.fstat(fd)
                 pinned.append((path, (info.st_dev, info.st_ino)))
+                if watch_children:
+                    discovery.append((fd, identity(info)))
                 return fd
 
             parent = pin(root)
@@ -69,8 +72,7 @@ def managed_installation(home=None, data_home=None):
                 raise CheckError("INSTALLATION_UNAVAILABLE")
             pin(release)
             lib = release / "venv/lib"
-            lib_fd = pin(lib)
-            library_identity = identity(os.fstat(lib_fd))
+            lib_fd = pin(lib, watch_children=True)
             found = []
             with os.scandir(lib_fd) as entries:
                 for count, entry in enumerate(entries):
@@ -78,8 +80,14 @@ def managed_installation(home=None, data_home=None):
                         raise CheckError("INSTALLATION_UNAVAILABLE")
                     if re.fullmatch(r"python3\.[0-9]+", entry.name) is None:
                         continue
-                    package = lib / entry.name / "site-packages/megalodon"
+                    version = lib / entry.name
+                    pin(version, watch_children=True)
+                    site_packages = version / "site-packages"
+                    package = site_packages / "megalodon"
                     try:
+                        # A missing package can later appear below an existing
+                        # version/site-packages directory without changing lib.
+                        pin(site_packages, watch_children=True)
                         pin(package)
                     except FileNotFoundError:
                         continue
@@ -99,8 +107,9 @@ def managed_installation(home=None, data_home=None):
                         info = os.fstat(current)
                         if (info.st_dev, info.st_ino) != expected:
                             raise CheckError("INSTALLATION_CHANGED")
-                if identity(os.fstat(lib_fd)) != library_identity:
-                    raise CheckError("INSTALLATION_CHANGED")
+                for fd, expected in discovery:
+                    if identity(os.fstat(fd)) != expected:
+                        raise CheckError("INSTALLATION_CHANGED")
                 # Check the selector last as well: path revalidation itself
                 # must not leave an unobserved change to the selected release.
                 if selector(parent) != selection:
