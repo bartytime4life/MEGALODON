@@ -141,6 +141,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh','support-model-load':'model_load','support-model-ready':'model_policy',
     'support-model-test':'model_test','support-model-test-cancel':'model_test_cancel',
     'model-library-download':'model_stage_download','model-library-check':'model_library_check','model-library-cancel':'model_stage_cancel',
+    'model-library-reuse':'model_library_reuse',
     'support-config-permissions':'capture_permissions','support-config-capture-start':'capture_start','support-config-capture-stop':'capture_stop',
     'support-config-wireshark-open':'wireshark_open','support-config-wireshark-stop':'wireshark_stop','support-config-nmap-save':'nmap_configure',
     'support-config-clamav-save':'clamav_configure','support-config-signatures':'signature_update','support-config-osquery':'osquery_configure',
@@ -148,7 +149,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     'live-background-start':'background_start','live-background-stop':'background_stop','live-geography-refresh':'geography_refresh','live-geography-disable':'geography_disable'};
   const actionNames={security_audit:'Auditing host configuration',security_baseline:'Recording initial file baseline',security_check:'Checking file changes',security_refresh:'Refreshing threat references',persistence_baseline:'Recording initial persistence baseline',tool_directory_set:'Saving tool directory',model_policy:'Saving model loading preference',model_load:'Loading the saved model',model_select:'Selecting and verifying local model',model_refresh:'Refreshing installed models',capture_permissions:'Configuring capture access',capture_start:'Starting HUD traffic',capture_stop:'Stopping HUD capture',wireshark_open:'Opening live Wireshark',wireshark_stop:'Closing managed Wireshark',nmap_configure:'Saving and collecting inventory',clamav_configure:'Saving and scanning folder',signature_update:'Updating virus signatures',osquery_configure:'Enabling package inventory',qwen_configure:'Configuring Ollama access',suricata_configure:'Configuring background Suricata',qwen_check:'Verifying selected model',zeek_check:'Preparing Zeek sampler',suricata_check:'Checking Suricata configuration',background_start:'Enabling background monitoring',background_stop:'Stopping background monitoring',geography_refresh:'Updating location data',geography_disable:'Disabling automatic location updates'};
   // Sensors owns the scanner self-check; its job can still appear in this shared status.
-  Object.assign(actionNames,{model_stage_download:'Downloading and staging model',model_library_check:'Checking staged files',model_stage_cancel:'Cancelling model staging'});
+  Object.assign(actionNames,{model_stage_download:'Downloading and staging model',model_library_check:'Checking staged files',model_stage_cancel:'Cancelling model staging',model_library_reuse:'Checking existing local model files'});
   Object.assign(actionNames,{model_test:'Testing the saved local model',model_test_cancel:'Cancelling the local model test'});
   Object.assign(actionNames,{startup_check:'Checking startup settings',startup_enable:'Enabling HUD at sign-in',startup_disable:'Turning off HUD sign-in startup',startup_services:'Enabling installed services at boot'});
   const jobActions=new Set([...Object.keys(actionNames),'clamav_self_check']);
@@ -385,6 +386,9 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
       value.nmap_target=target;
     }
     if(action==='model_policy')value.keep_ready=el('support-model-ready').checked;
+    if(action==='model_library_reuse'){
+      const m=state.payload.model;Object.assign(value,{store_id:el('model-library-store').value,model:m.model,model_digest:m.selected_digest,verification_profile:el('model-library-profile').value});
+    }
     if(action==='model_stage_download'){
       if(!el('model-library-online').checked)throw Error('Confirm the download source first.');
       value.catalog_id=el('model-library-select').value;
@@ -405,7 +409,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
     const focusedControl=document.activeElement?.id;
     cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]|| (action==='model_cancel'?'Cancelling AI request':'Saving local AI settings')}…${['capture_permissions','signature_update','qwen_configure','suricata_configure','startup_services'].includes(action)?' A system authorization prompt may appear.':''}`,'working');controls();
-    try{let value;try{value=await request(payload);}catch(error){if(error.status!==403)throw error;const refreshed=await request();accept(refreshed);value=await request(payload);}if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
+    try{let value;try{value=await request(payload);}catch(error){if(error.status!==403)throw error;const refreshed=await request();accept(refreshed);if(action==='model_stage_download'){el('model-library-online').checked=false;feedback('Setup permission changed. Review the model source and confirm the download again.','stale');return;}value=await request(payload);}if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
     catch(error){fail(error);}finally{state.pending=false;controls();schedule();if(focusedControl&&document.activeElement===document.body&&!el(focusedControl)?.disabled)el(focusedControl)?.focus({preventScroll:true});}
   }
   function open(value){state.open=value;el('support-config').hidden=setupWorkspace?false:!value;el('support-apps-configure').setAttribute('aria-expanded',value?'true':'false');
