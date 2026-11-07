@@ -199,6 +199,20 @@ unmanaged copy, explicitly supply its actual package directory:
 python3 -B tools/check_model_library_install.py --package-dir /absolute/installed/site-packages/megalodon
 ```
 
+Managed discovery requires real directory ancestry, an absolute data home and
+one direct child of the managed `releases` directory. Only the `current`
+selector may be a symlink, with either an absolute target or a relative
+`releases/<release-id>` target. Application, releases, release and package
+directory descriptors remain pinned during source observation. Before reporting,
+the checker rechecks their path identities and the selector's link identity and
+target. A changed selection discards all file results and reports
+`INSTALLATION_CHANGED`; it never retries against a different installation.
+The venv/lib directory metadata is also rechecked so a package-version directory
+added or removed during observation cannot leave a stale unique-package result.
+The final selector check follows directory revalidation.
+This detects observed replacement during the check, not changes made afterward
+or an adversary able to conceal and restore changes between observations.
+
 It reads at most 1 MiB per file for six named source files, refuses links and
 nonregular files, and compares SHA-256 with the recorded source from merged
 commit `ba3303eb0df043a2a6a5d6a88a89cff1970c5ba4` (#745). It checks file/directory

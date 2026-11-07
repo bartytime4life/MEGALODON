@@ -142,3 +142,187 @@ def test_cli_output_is_path_free_and_exit_code_does_not_claim_acceptance(package
     (package / "first.py").unlink()
     assert check.main(["--package-dir", str(package)]) == 1
     assert json.loads(capsys.readouterr().out)["state"] == "SOURCE_FILES_DO_NOT_MATCH"
+
+
+def managed_fixture(home, package, name="selected"):
+    app = home / ".local/share/megalodon"
+    release = app / "releases" / name
+    target = release / "venv/lib/python3.11/site-packages/megalodon"
+    target.parent.mkdir(parents=True)
+    import shutil
+    shutil.copytree(package, target)
+    return app, release, target
+
+
+@pytest.mark.parametrize("relative", [False, True])
+def test_managed_cli_accepts_standard_selector_without_installed_import(package, tmp_path, monkeypatch, capsys, relative):
+    app, release, target = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(Path("releases/selected") if relative else release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    assert check.main([]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "SOURCE_FILES_MATCH"
+    assert str(tmp_path) not in json.dumps(result)
+
+
+@pytest.mark.parametrize("replacement", ["different_release", "same_target_new_link"])
+def test_managed_cli_refuses_selector_change_during_observation(package, tmp_path, monkeypatch, capsys, replacement):
+    app, release, target = managed_fixture(tmp_path, package)
+    _, other_release, other = managed_fixture(tmp_path, package, "other")
+    (other / "first.py").write_bytes(b"different selected files")
+    current = app / "current"
+    current.symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    original = check.observe
+    def observe(selected):
+        current.unlink()
+        current.symlink_to(other_release if replacement == "different_release" else release)
+        return original(selected)
+    monkeypatch.setattr(check, "observe", observe)
+    assert check.main([]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "UNAVAILABLE"
+    assert result["error_code"] == "INSTALLATION_CHANGED"
+    assert result.get("files", []) == []
+    assert str(tmp_path) not in json.dumps(result)
+
+
+@pytest.mark.parametrize("linked", ["app", "releases", "release", "venv", "python"])
+def test_managed_cli_refuses_symlinked_ancestry_before_reading_sources(package, tmp_path, monkeypatch, capsys, linked):
+    app, release, target = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    selected = {"app": app, "releases": app / "releases", "release": release,
+                "venv": release / "venv", "python": release / "venv/lib/python3.11"}[linked]
+    outside = tmp_path / "outside"
+    selected.rename(outside)
+    selected.symlink_to(outside)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    def forbidden(*_a, **_kw):
+        pytest.fail("linked managed ancestry reached source-file reads")
+    monkeypatch.setattr(check, "file_observation", forbidden)
+    assert check.main([]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "UNAVAILABLE"
+    assert str(tmp_path) not in json.dumps(result)
+
+
+def test_managed_cli_refuses_replaced_releases_directory_after_source_read(package, tmp_path, monkeypatch, capsys):
+    app, release, target = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    original = check.observe
+    def observe(selected):
+        result = original(selected)
+        (app / "releases").rename(app / "previous-releases")
+        (app / "releases").mkdir()
+        return result
+    monkeypatch.setattr(check, "observe", observe)
+    assert check.main([]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "UNAVAILABLE"
+    assert result["error_code"] == "INSTALLATION_CHANGED"
+
+
+def test_managed_cli_refuses_relative_xdg_before_source_reads(package, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    app, release, target = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", ".local/share")
+    monkeypatch.setattr(check, "file_observation", lambda *_a, **_kw: pytest.fail("relative XDG reached source reads"))
+    assert check.main([]) == 1
+    assert json.loads(capsys.readouterr().out)["state"] == "UNAVAILABLE"
+
+
+def test_managed_cli_has_no_write_network_process_or_installed_import(package, tmp_path, monkeypatch, capsys):
+    app, release, target = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    def forbidden(*_a, **_kw):
+        pytest.fail("managed observation caused an unexpected effect")
+    original_open = os.open
+    def read_only(path, flags, *args, **kw):
+        assert flags & os.O_ACCMODE == os.O_RDONLY
+        assert not flags & (os.O_CREAT | os.O_TRUNC | os.O_APPEND)
+        return original_open(path, flags, *args, **kw)
+    monkeypatch.setattr(os, "open", read_only)
+    for owner, names in [(os, ["write", "mkdir", "unlink", "replace", "chmod", "system"]),
+                         (socket, ["socket", "getaddrinfo", "create_connection"]),
+                         (subprocess, ["Popen", "run"])]:
+        for name in names:
+            monkeypatch.setattr(owner, name, forbidden)
+    assert check.main([]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "SOURCE_FILES_MATCH"
+    assert not any(result["authority"].values())
+    assert str(tmp_path) not in json.dumps(result)
+
+
+def test_managed_cli_refuses_package_replacement_after_discovery(package, tmp_path, monkeypatch, capsys):
+    app, release, target = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    original = check.observe
+    def observe(selected):
+        import shutil
+        target.rename(target.with_name("previous"))
+        shutil.copytree(target.with_name("previous"), target)
+        return original(selected)
+    monkeypatch.setattr(check, "observe", observe)
+    assert check.main([]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "UNAVAILABLE"
+    assert result["error_code"] == "INSTALLATION_CHANGED"
+
+
+def test_managed_cli_refuses_nested_release_selector(package, tmp_path, monkeypatch, capsys):
+    app, release, target = managed_fixture(tmp_path, package, "nested/selected")
+    (app / "current").symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    monkeypatch.setattr(check, "file_observation", lambda *_a, **_kw: pytest.fail("nonstandard release reached source reads"))
+    assert check.main([]) == 1
+    assert json.loads(capsys.readouterr().out)["state"] == "UNAVAILABLE"
+
+
+def test_managed_cli_refuses_new_package_version_during_observation(package, tmp_path, monkeypatch, capsys):
+    app, release, target = managed_fixture(tmp_path, package)
+    (app / "current").symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    original = check.observe
+    def observe(selected):
+        result = original(selected)
+        (release / "venv/lib/python3.12/site-packages/megalodon").mkdir(parents=True)
+        return result
+    monkeypatch.setattr(check, "observe", observe)
+    assert check.main([]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "UNAVAILABLE"
+    assert result["error_code"] == "INSTALLATION_CHANGED"
+
+
+def test_managed_cli_checks_selector_after_directory_revalidation(package, tmp_path, monkeypatch, capsys):
+    from contextlib import contextmanager
+    app, release, target = managed_fixture(tmp_path, package)
+    _, other_release, _ = managed_fixture(tmp_path, package, "other")
+    current = app / "current"
+    current.symlink_to(release)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / ".local/share"))
+    original_observe, original_directory = check.observe, check.directory
+    state = dict(read_complete=False, switched=False)
+    def observe(selected):
+        result = original_observe(selected)
+        state["read_complete"] = True
+        return result
+    @contextmanager
+    def directory(path):
+        with original_directory(path) as fd:
+            if Path(path) == app and state["read_complete"] and not state["switched"]:
+                current.unlink()
+                current.symlink_to(other_release)
+                state["switched"] = True
+            yield fd
+    monkeypatch.setattr(check, "observe", observe)
+    monkeypatch.setattr(check, "directory", directory)
+    assert check.main([]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "UNAVAILABLE"
+    assert result["error_code"] == "INSTALLATION_CHANGED"
