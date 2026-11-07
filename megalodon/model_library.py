@@ -24,11 +24,20 @@ import time
 from urllib.parse import urljoin, urlsplit
 
 from . import storage
+from . import model_artifact
 
 SCHEMA = "megalodon-model-library-v1"
 CHUNK_BYTES = 64 * 1024
 RESERVE_BYTES = 256 * 1024 * 1024
 MAX_JOBS = 64
+MAX_LOCAL_MODELS = 64
+MAX_PROJECTED_LOCAL_MODELS = 16
+LOCAL_STORES = {
+    "user": "~/.ollama/models",
+    "system": "/usr/share/ollama/.ollama/models",
+    "service": "/var/lib/ollama/models",
+    "snap": "/var/snap/ollama/common/models",
+}
 MAX_DATABASE_BYTES = 1024 * 1024
 DEADLINE_SECONDS = 1800
 SOCKET_TIMEOUT = 10
@@ -51,8 +60,14 @@ ERRORS = {
     "DIGEST": "The downloaded file did not match the pinned SHA-256.",
     "CANCELLED": "Download cancelled. Partial staging bytes were removed.",
     "DEADLINE": "The model staging time limit was reached.",
-    "FILE": "A staging file is unsafe or changed. Review the private model library.",
+    "FILE": "A model file is unsafe or changed. Review the local model files.",
     "INTERRUPTED": "A previous staging job was interrupted. No download was resumed.",
+    "LOCAL_LIMIT": "The library has reached its 64 existing-model reference limit.",
+    "IDENTITY": "The local manifest differs from the saved model identity. Refresh and review the selection.",
+    "MANIFEST": "The local manifest is invalid or contains unsupported components.",
+    "FILES_UNAVAILABLE": "The selected model store, component or provider file is missing or inaccessible.",
+    "VERIFICATION": "Local files could not be verified within the selected verification profile.",
+    "CHECK_CANCELLED": "The existing-file check was stopped. No files were copied or downloaded.",
 }
 
 
@@ -190,6 +205,28 @@ _JOB_SQL = """CREATE TABLE jobs (
     job_id TEXT PRIMARY KEY, catalog_id TEXT NOT NULL, state TEXT NOT NULL,
     bytes_received INTEGER NOT NULL, error_code TEXT, started_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL)"""
+_LOCAL_SQL = """CREATE TABLE local_models (
+    store_id TEXT NOT NULL, model TEXT NOT NULL, manifest_sha256 TEXT NOT NULL,
+    provider_sha256 TEXT, verified_bytes INTEGER NOT NULL, profile TEXT NOT NULL,
+    state TEXT NOT NULL, error_code TEXT, checked_at INTEGER NOT NULL,
+    PRIMARY KEY(store_id,model))"""
+
+
+def local_request(store_id, model, digest, profile):
+    """Closed local scopes and exact identities, never URLs or browser paths."""
+    if type(store_id) is not str or store_id not in LOCAL_STORES:
+        raise LibraryError("SOURCE")
+    model_artifact._model_location(model)
+    if type(digest) is not str or model_artifact.HEX.fullmatch(digest) is None:
+        raise LibraryError("IDENTITY")
+    if type(profile) is not str or profile not in {"standard", "large-local"}:
+        raise LibraryError("VERIFICATION")
+
+
+def local_store(home, store_id):
+    if type(store_id) is not str or store_id not in LOCAL_STORES:
+        raise LibraryError("SOURCE")
+    return Path(home) / ".ollama/models" if store_id == "user" else Path(LOCAL_STORES[store_id])
 
 
 def _admit_schema(connection):
@@ -198,7 +235,8 @@ def _admit_schema(connection):
     An existing unknown schema, populated partial schema or wrong version is
     never reset or repaired. The lifetime library flock is already held.
     """
-    expected = {"jobs": _JOB_SQL, "models": _MODEL_SQL}
+    original = {"jobs": _JOB_SQL, "models": _MODEL_SQL}
+    expected = {**original, "local_models": _LOCAL_SQL}
     with connection:
         connection.execute("BEGIN IMMEDIATE")
         records = connection.execute(
@@ -207,20 +245,26 @@ def _admit_schema(connection):
         if len(objects) != len(records):
             raise LibraryError("UNAVAILABLE")
         version = connection.execute("PRAGMA user_version").fetchone()[0]
-        if objects == expected and version == 1:
+        if objects == expected and version == 2:
+            return
+        if objects == original and version == 1:
+            # One atomic additive migration; preserve every v1 model/job row.
+            connection.execute(_LOCAL_SQL)
+            connection.execute("PRAGMA user_version=2")
             return
         if (version != 0 or not objects.keys() <= expected.keys()
                 or any(sql != expected[name] for name, sql in objects.items())):
             raise LibraryError("UNAVAILABLE")
         # These identifiers are closed source constants, never database input.
-        for name in ("jobs", "models"):
-            if name in objects and connection.execute(
-                    "SELECT 1 FROM jobs LIMIT 1" if name == "jobs" else "SELECT 1 FROM models LIMIT 1").fetchone():
+        for name in ("jobs", "models", "local_models"):
+            if name in objects and connection.execute({
+                    "jobs": "SELECT 1 FROM jobs LIMIT 1", "models": "SELECT 1 FROM models LIMIT 1",
+                    "local_models": "SELECT 1 FROM local_models LIMIT 1"}[name]).fetchone():
                 raise LibraryError("UNAVAILABLE")
-        for name in ("models", "jobs"):
+        for name in ("models", "jobs", "local_models"):
             if name not in objects:
                 connection.execute(expected[name])
-        connection.execute("PRAGMA user_version=1")
+        connection.execute("PRAGMA user_version=2")
 
 
 class _Store:
@@ -309,12 +353,15 @@ def _same(a, b):
 
 class ModelLibrary:
     def __init__(self, home):
-        self.root = Path(home) / ".local/share/megalodon/model-library"
+        self.home = Path(home)
+        self.root = self.home / ".local/share/megalodon/model-library"
         self._lock = Lock()
         self._operation = Lock()
         self._stop = Event()
         self._view = dict(schema=SCHEMA, catalog=[entry.public() for entry in CATALOG],
-                          models=[], jobs=[], state="unchecked", free_bytes=None,
+                          models=[], jobs=[], local_models=[], binding_status="UNBOUND",
+                          stores=[dict(id=key, label=value) for key, value in LOCAL_STORES.items()],
+                          state="unchecked", free_bytes=None,
                           reserve_bytes=RESERVE_BYTES, message="Check staged files or choose an explicit download.")
 
     def snapshot(self):
@@ -366,14 +413,37 @@ class ModelLibrary:
                              bytes_received=received, error_code=code, started_at=started, updated_at=updated))
         if len(jobs) > MAX_JOBS:
             raise LibraryError("UNAVAILABLE")
+        local_models = []
+        for scope, model, manifest, provider, size, profile, state, code, checked in store.connection.execute(
+                "SELECT * FROM local_models ORDER BY checked_at DESC,store_id,model LIMIT 65"):
+            try:
+                local_request(scope, model, manifest, profile)
+            except ValueError:
+                raise LibraryError("UNAVAILABLE") from None
+            if (state not in {"verifying", "files_verified", "failed", "interrupted"}
+                    or (provider is not None and (type(provider) is not str or model_artifact.HEX.fullmatch(provider) is None))
+                    or type(size) is not int or not 0 <= size <= (model_artifact.MAX_TOTAL_BYTES if profile == "standard" else model_artifact.LARGE_TOTAL_BYTES)
+                    or type(checked) is not int or checked < 0
+                    or (code is not None and code not in ERRORS)
+                    or (state == "files_verified" and (provider is None or not size or code is not None))
+                    or (state != "files_verified" and (provider is not None or size != 0))):
+                raise LibraryError("UNAVAILABLE")
+            local_models.append(dict(store_id=scope, model=model, manifest_sha256=manifest,
+                                     provider_sha256=provider, verified_bytes=size, profile=profile,
+                                     state=state, error_code=code, checked_at=checked))
+        if len(local_models) > MAX_LOCAL_MODELS:
+            raise LibraryError("UNAVAILABLE")
         free = os.fstatvfs(store.directory).f_bavail * os.fstatvfs(store.directory).f_frsize
-        self._update(models=models, jobs=jobs[:16], free_bytes=free)
+        self._update(models=models, jobs=jobs[:16], local_models=local_models[:MAX_PROJECTED_LOCAL_MODELS], free_bytes=free)
 
     def _reconcile(self, store):
         # The lifetime flock proves no other cooperating staging worker is live.
+        self._readback(store)  # Validate before changing recovery records or files.
         with store.connection:
             store.connection.execute("UPDATE jobs SET state='interrupted',error_code='INTERRUPTED',updated_at=? "
                                      "WHERE state IN ('downloading','verifying')", (int(time.time()),))
+            store.connection.execute("UPDATE local_models SET state='interrupted',error_code='INTERRUPTED',checked_at=? "
+                                     "WHERE state='verifying'", (int(time.time()),))
         for entry in CATALOG:
             try:
                 info = os.stat(entry.id + ".part", dir_fd=store.directory, follow_symlinks=False)
@@ -393,6 +463,66 @@ class ModelLibrary:
             os.unlink(entry.id + ".part", dir_fd=store.directory)
             os.fsync(store.directory)
         self._readback(store)
+
+    def reuse(self, store_id, model, digest, provider, *, profile="standard"):
+        """Explicit offline reference/verification. Never copy or execute weights.
+
+        The support controller supplies its saved identity and fixed provider
+        location. Only a compact observation enters the private catalog.
+        """
+        local_request(store_id, model, digest, profile)
+        if not self._operation.acquire(blocking=False):
+            raise LibraryError("BUSY")
+        self._update(local_models=[], active=None)
+        try:
+            with _Store(self.root) as store:
+                self._reconcile(store)
+                exists = store.connection.execute("SELECT 1 FROM local_models WHERE store_id=? AND model=?",
+                                                  (store_id, model)).fetchone()
+                if not exists and store.connection.execute("SELECT count(*) FROM local_models").fetchone()[0] >= MAX_LOCAL_MODELS:
+                    raise LibraryError("LOCAL_LIMIT")
+                with store.connection:
+                    store.connection.execute("INSERT OR REPLACE INTO local_models VALUES (?,?,?,NULL,0,?,'verifying',NULL,?)",
+                                             (store_id, model, digest, profile, int(time.time())))
+                self._readback(store)
+                self._update(state="verifying", message="Checking existing local files without copying or contacting Ollama…")
+                def clock():
+                    if self._stop.is_set():
+                        raise LibraryError("CHECK_CANCELLED")
+                    return time.monotonic()
+                try:
+                    result = model_artifact.observe_artifact(local_store(self.home, store_id), model, provider,
+                        manifest_pin=digest, verification_profile=profile, clock=clock)
+                    clock()
+                    with store.connection:
+                        store.connection.execute("UPDATE local_models SET provider_sha256=?,verified_bytes=?,state='files_verified',checked_at=? "
+                            "WHERE store_id=? AND model=?",
+                            (result['provider']['executable_sha256'], result['total_bytes_read'], int(time.time()), store_id, model))
+                except (ValueError, OSError) as exc:
+                    code = exc.code if isinstance(exc, LibraryError) else {
+                        "MANIFEST_PIN_MISMATCH": "IDENTITY", "ARTIFACT_UNAVAILABLE": "FILES_UNAVAILABLE",
+                        "COMPONENT_DIGEST_MISMATCH": "DIGEST", "COMPONENT_SIZE_MISMATCH": "SIZE",
+                        "FILE_CHANGED": "FILE", "VERIFICATION_DEADLINE": "DEADLINE",
+                        "INVALID_MANIFEST": "MANIFEST", "INVALID_COMPONENT": "MANIFEST",
+                        "DUPLICATE_MANIFEST_FIELD": "MANIFEST", "INVALID_COMPONENT_CLOSURE": "MANIFEST",
+                        "EXACTLY_ONE_WEIGHT_COMPONENT_REQUIRED": "MANIFEST",
+                    }.get(str(exc), "VERIFICATION")
+                    with store.connection:
+                        store.connection.execute("UPDATE local_models SET state=?,error_code=?,checked_at=? WHERE store_id=? AND model=?",
+                                                 ("interrupted" if code == "CHECK_CANCELLED" else "failed", code, int(time.time()), store_id, model))
+                    raise LibraryError(code) from None
+                finally:
+                    self._readback(store)
+                self._update(state="checked", message="Existing files verified at this check and referenced in place. Runtime acceptance remains held (UNBOUND).")
+                return self.snapshot()["message"]
+        except (OSError, sqlite3.Error, storage.StorageSchemaError):
+            self._update(state="failed", local_models=[], message=ERRORS["UNAVAILABLE"])
+            raise LibraryError("UNAVAILABLE") from None
+        except LibraryError as exc:
+            self._update(state="failed", message=str(exc))
+            raise
+        finally:
+            self._operation.release()
 
     def _existing(self, store, entry, deadline):
         name = entry.id + ".gguf"

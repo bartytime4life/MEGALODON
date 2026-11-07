@@ -68,6 +68,7 @@ ACTION_FIELDS = {
     'model_policy': {'keep_ready'}, 'model_load': set(),
     'model_test': set(), 'model_test_cancel': set(),
     'model_library_check': set(), 'model_stage_download': {'catalog_id'}, 'model_stage_cancel': set(),
+    'model_library_reuse': {'store_id', 'model', 'model_digest', 'verification_profile'},
     'qwen_configure': set(), 'suricata_configure': {'interface'},
 }
 TOOL_NAMES = {'security':'Host security and threat context', 'persistence':'Persistence review', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
@@ -189,6 +190,9 @@ def validate_action(value):
     if action=='model_stage_download':
         from .model_library import artifact
         artifact(value['catalog_id'])
+    if action=='model_library_reuse':
+        from .model_library import local_request
+        local_request(value['store_id'], value['model'], value['model_digest'], value['verification_profile'])
     return dict(value)
 
 
@@ -511,7 +515,7 @@ class SupportConfiguration:
             self._job.update(state='running', action=request['action'], message='Applying the selected configuration…', started_at=now(), finished_at=None)
             if request['action'] in {'capture_start','background_start'}:
                 self._cancel_capture_start = False
-            if request['action'] in {'model_library_check','model_stage_download'}:
+            if request['action'] in {'model_library_check','model_stage_download','model_library_reuse'}:
                 self.model_library.prepare()
             if request['action']=='model_test':
                 self.model_test.prepare()
@@ -570,6 +574,18 @@ class SupportConfiguration:
                 self._save(settings=settings)
             if action in {'model_library_check','model_stage_download'}:
                 message = self.model_library.execute(request.get('catalog_id'))
+            elif action == 'model_library_reuse':
+                ai = self.settings.ai
+                if not ai.enabled or (request['model'], request['model_digest']) != (ai.model, ai.model_digest):
+                    raise ValueError('Save and review the exact model selection before checking existing files.')
+                from .tool_locations import trusted_executable
+                directories = load_directories(self.home)
+                candidates = (directories['qwen'],) if 'qwen' in directories else ('/usr/local/bin', '/usr/bin')
+                provider = next((Path(folder) / 'ollama' for folder in candidates if trusted_executable(folder, 'ollama')), None)
+                if provider is None:
+                    raise ValueError('Choose a trusted Ollama installation directory before checking its files.')
+                message = self.model_library.reuse(request['store_id'], ai.model, ai.model_digest, provider,
+                    profile=request['verification_profile'])
             elif action.startswith('security_'):
                 message = self.host_security.execute(action.removeprefix('security_'))
             elif action == 'persistence_baseline':

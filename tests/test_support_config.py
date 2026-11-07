@@ -307,17 +307,36 @@ def test_get_is_read_only_and_action_requires_no_installer_token(endpoint):
     assert endpoint[3].install_operator_token is None
 
 
-@pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_stage_cancel','model_test','model_test_cancel','startup_check','startup_enable','startup_disable','startup_services'])
+@pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_library_reuse','model_stage_cancel','model_test','model_test_cancel','startup_check','startup_enable','startup_disable','startup_services'])
 def test_model_library_http_actions_require_existing_operator_token_and_origin(endpoint, action):
     from megalodon.model_library import CATALOG
     value = dict(action=action)
     if action == 'model_stage_download': value['catalog_id'] = CATALOG[0].id
+    if action == 'model_library_reuse': value.update(store_id='user',model='qwen2.5:7b',model_digest='a'*64,verification_profile='standard')
     body = json.dumps(value).encode()
     assert request(endpoint,body=body,omit=('X-Megalodon-Config-Token',))[0] == 403
     assert request(endpoint,body=body,extra=(('Origin','http://evil.invalid'),),omit=('Origin',))[0] == 403
     assert endpoint[2] == []
     assert request(endpoint,body=body)[0] == 202
     assert endpoint[2] == [value]
+
+
+def test_existing_file_check_uses_saved_identity_and_never_contacts_provider(manager, monkeypatch):
+    from megalodon import ai_provider, tool_locations
+    manager.settings=replace(manager.settings, ai=AISettings(enabled=True,model='qwen2.5:7b',model_digest='b'*64))
+    before=manager.settings
+    monkeypatch.setattr(ai_provider, '_request', lambda *_a,**_kw:pytest.fail('offline check contacted provider'))
+    monkeypatch.setattr(tool_locations, 'trusted_executable', lambda folder,name:folder=='/usr/local/bin' and name=='ollama')
+    calls=[]
+    monkeypatch.setattr(manager.model_library, 'reuse', lambda *args,**kw:calls.append((args,kw)) or 'Existing-file fixture verified.')
+    request=dict(action='model_library_reuse',store_id='user',model='qwen2.5:7b',model_digest='b'*64,verification_profile='standard')
+    manager.start({**request,'model_digest':'c'*64});manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='failed' and calls==[]
+    manager.start(request);manager._thread.join(2)
+    assert manager.snapshot()['job']['state']=='finished'
+    assert calls==[(('user','qwen2.5:7b','b'*64,Path('/usr/local/bin/ollama')),{'profile':'standard'})]
+    assert manager.settings==before
+    assert manager.snapshot()['model']['binding_status']=='UNBOUND'
 
 
 def test_model_test_worker_is_explicit_and_does_not_enable_live_analysis(manager,monkeypatch):
@@ -993,8 +1012,11 @@ def test_snapshot_with_worst_case_reviews_stays_below_the_browser_bound(manager,
         state='staged_verified',bytes_received=CATALOG[0].size,error_code=None,
         started_at=1793675078,updated_at=1793675078) for i in range(16)],
         models=[dict(catalog_id=CATALOG[0].id,state='staged_verified',checked_at=1793675078)])
+    manager.model_library._update(local_models=[dict(store_id='system',model=('a'*90)+f'{i:03}:x',
+        manifest_sha256='f'*64,provider_sha256='f'*64,verified_bytes=96*1024**3,profile='large-local',
+        state='files_verified',error_code=None,checked_at=1793675078) for i in range(16)])
     size = len(json.dumps(manager.snapshot(include_token=True), sort_keys=True, separators=(',', ':')).encode())
-    assert size < 48 * 1024, size  # the browser rejects support-config responses over 64 KiB
+    assert size < 60 * 1024, size  # retain margin below the browser's 64-KiB response bound
 
 
 def worst_gateway(tmp_path):

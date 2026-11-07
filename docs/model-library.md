@@ -6,6 +6,57 @@ models** and **Save model** above them. Existing Ollama files are referenced in
 place; this feature does not move, delete, duplicate or import those files.
 An explicitly requested new GGUF download has its own staging copy.
 
+## Reuse an installed model without a transfer
+
+**Use existing files · verify saved model** checks the exact saved tag and
+manifest digest using the existing offline artifact verifier. Save the model
+selection first, select its actual store from the four fixed locations shown,
+and choose the standard (32 GiB / 120 seconds) or large-local
+(96 GiB / 300 seconds) read budget. These are cooperative bounds; a blocked
+kernel read cannot be interrupted by them. The operation hashes the provider
+executable as a file; it never executes it or contacts the daemon.
+
+The protected `model_library_reuse` action accepts only `store_id`, `model`,
+`model_digest` and `verification_profile`. The server rechecks the identity
+against its saved selection before starting. The store is one of `user`
+(`~/.ollama/models`), `system` (`/usr/share/ollama/.ollama/models`), `service`
+(`/var/lib/ollama/models`) or `snap` (`/var/snap/ollama/common/models`). There
+is no automatic store search or environment-selected fallback. Other stores
+remain accessible through the explicit offline verifier CLI. Provider discovery
+uses the already configured trusted Ollama directory, or the fixed
+`/usr/local/bin` and `/usr/bin` directories. An inaccessible store/provider
+refuses; it never changes permissions, installs tools or downloads a replacement.
+
+Private SQLite schema version 2 adds at most 64 `local_models` references,
+keyed by store scope and exact tag. It retains manifest/provider hashes,
+verified byte count (including manifest/provider), read profile, check time,
+fixed failure code and latest check state. No external file path or content is
+stored. A v1 database migrates additively in one transaction, preserving its
+model/job rows. Unknown schemas still refuse. Each check commits `verifying`
+before reading, clears previous successful evidence for that reference, and
+commits `files_verified` only after the complete closure passes. A failed
+commit cannot appear as a successful check. A crash leaves `verifying`; the
+next explicit library action records `interrupted` without restarting a check
+or transfer. Stopping an offline check records `CHECK_CANCELLED` and never
+claims that an Ollama daemon transfer was stopped.
+
+Status polling is memory-only. After restart, an explicit library check reads
+historical references; the HUD projects at most the latest 16, and their labels
+say **at last check**, never continuous
+verification. A different saved tag/digest labels older observations as a
+previous selection requiring a recheck. A changed manifest, missing file,
+corrupted component or unsupported manifest cannot receive a verified result.
+The UI keeps **Runtime acceptance: held (UNBOUND)** separate from both existing
+file verification and staged downloads. SQLite contains no accepted-model flag.
+
+The existing pinned GGUF transfer remains unchanged. A catalog source, revision,
+size, digest or license change now clears the browser's earlier download consent.
+A rejected/expired permission refresh also clears consent and never automatically
+replays a download POST; the operator must review and click again.
+No new Ollama pull transport is enabled. See the pinned
+[Ollama transfer investigation](ollama-transfer-contract.md) for its unresolved
+shared-cancellation and storage guarantees.
+
 This is Linux, non-root host maintenance through the existing protected
 `/api/support-config` action route. It requires the HUD operator session,
 same-origin checks and per-launch configuration token. Viewing Setup, polling,

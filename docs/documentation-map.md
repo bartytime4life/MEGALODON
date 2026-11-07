@@ -24,6 +24,8 @@ The dated catalog count below is retained as its original inventory checkpoint.
 
 | Document | Repository path |
 | --- | --- |
+| [Explicit model staging and existing-file verification](model-library.md) | `docs/model-library.md` |
+| [Pinned Ollama transfer contract investigation](ollama-transfer-contract.md) | `docs/ollama-transfer-contract.md` |
 | [Suricata engine-regression research packet](../contracts/suricata-eve/v1/qualification/README.md) | `contracts/suricata-eve/v1/qualification/README.md` |
 | [Suricata synthetic fixture-and-oracle packet](../contracts/suricata-eve/v1/qualification/experiment/README.md) | `contracts/suricata-eve/v1/qualification/experiment/README.md` |
 | [Offline Suricata laboratory candidate](../contracts/suricata-eve/v1/qualification/experiment/harness/README.md) | `contracts/suricata-eve/v1/qualification/experiment/harness/README.md` |

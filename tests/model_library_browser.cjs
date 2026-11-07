@@ -2,11 +2,11 @@ const assert=require('node:assert/strict'),vm=require('node:vm');
 let input='';process.stdin.on('data',chunk=>input+=chunk);
 process.stdin.on('end',async()=>{
  const {code,fixture,unbound_model,library}=JSON.parse(input),nodes=new Map(),listeners={},timers=new Map(),requests=[];
- let seq=0,payload={...fixture,model:unbound_model,model_library:library},failure=false;
+ let seq=0,payload={...fixture,model:unbound_model,model_library:library},failure=false,denyNext=false;
  function element(tag=''){return {tag,textContent:'',children:[],attributes:{},dataset:{},events:{},value:'',checked:false,hidden:false,disabled:false,setAttribute(k,v){this.attributes[k]=v;},append(...v){this.children.push(...v);},replaceChildren(...v){this.children=v;},addEventListener(k,v){this.events[k]=v;},focus(){this.focused=true;}};}
  const get=id=>{if(id==='workspace-setup')return null;if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
  const document={hidden:false,getElementById:get,createElement:element,addEventListener:(k,v)=>listeners[k]=v};
- const context={localHudLaunch:{},document,TextEncoder,TextDecoder,Uint8Array,AbortController,setTimeout(fn,ms){const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},fetch:async(path,opts)=>{requests.push({path,opts});if(failure)throw Error('offline');return {status:200,ok:true,headers:{get:()=>null},text:async()=>JSON.stringify(payload)};}};
+ const context={localHudLaunch:{},document,TextEncoder,TextDecoder,Uint8Array,AbortController,setTimeout(fn,ms){const id=++seq;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},fetch:async(path,opts)=>{requests.push({path,opts});if(failure)throw Error('offline');if(denyNext&&opts.method==='POST'){denyNext=false;return {status:403,ok:false,headers:{get:()=>null},text:async()=>JSON.stringify({})};}return {status:200,ok:true,headers:{get:()=>null},text:async()=>JSON.stringify(payload)};}};
  const settle=()=>new Promise(resolve=>setImmediate(resolve)),click=id=>get(id).events.click();
  const posts=()=>requests.filter(x=>x.opts.method==='POST');
  const poll=async delay=>{const next=[...timers.entries()].find(([,v])=>v.ms===delay);assert.ok(next);timers.delete(next[0]);await next[1].fn();await settle();};
@@ -35,6 +35,29 @@ process.stdin.on('end',async()=>{
  failure=true;await poll(10000);assert.equal(get('model-library-download').disabled,true);assert.equal(get('model-library-cancel').disabled,true);
  failure=false;payload={...payload,model_library:{...library,free_bytes:-1}};await click('support-config-retry');await settle();
  assert.equal(get('model-library-download').disabled,true,'malformed status fails closed');assert.equal(posts().length,prior);
+ // Existing-file verification remains an explicit action under UNBOUND.
+ const local={store_id:'user',model:unbound_model.model,manifest_sha256:unbound_model.selected_digest,provider_sha256:'c'.repeat(64),verified_bytes:123,profile:'standard',state:'files_verified',error_code:null,checked_at:1};
+ payload={...fixture,model:unbound_model,model_library:{...library,local_models:[local]}};
+ await click('support-config-retry');await settle();
+ get('model-library-profile').value='standard';
+ assert.equal(get('model-library-reuse').disabled,false);
+ assert.match(get('model-library-local').children[0].textContent,/Files verified at last check/);
+ await click('model-library-reuse');await settle();
+ assert.deepEqual(JSON.parse(posts().at(-1).opts.body),{action:'model_library_reuse',store_id:'user',model:unbound_model.model,model_digest:unbound_model.selected_digest,verification_profile:'standard'});
+ assert.equal(get('support-model-load').disabled,true);
+ const count=posts().length;await poll(10000);assert.equal(posts().length,count,'polling never starts an offline check');
+ payload={...payload,model:{...unbound_model,selected_digest:'d'.repeat(64)}};
+ await poll(10000);assert.match(get('model-library-local').children[0].textContent,/Previous selection/);
+ get('model-library-online').checked=true;get('model-library-online').events.change();
+ payload={...payload,model_library:{...payload.model_library,catalog:library.catalog.map(x=>({...x,sha256:'e'.repeat(64)}))}};
+ await poll(10000);assert.equal(get('model-library-online').checked,false,'changed file pins invalidate download consent');
+ assert.equal(posts().length,count);
+ get('model-library-online').checked=true;get('model-library-online').events.change();denyNext=true;
+ await click('model-library-download');await settle();
+ assert.equal(posts().length,count+1,'expired permission never automatically retries a download');
+ assert.equal(get('model-library-online').checked,false);
+ assert.equal(get('model-library-download').disabled,true);
+ assert.match(get('support-config-status').textContent,/confirm the download again/);
  console.log('explicit model staging UI behavior passed');
 }).on('error',error=>{console.error(error);process.exitCode=1;});
 process.on('unhandledRejection',error=>{console.error(error);process.exitCode=1;});

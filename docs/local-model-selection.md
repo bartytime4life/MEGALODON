@@ -121,6 +121,9 @@ Setup also offers an explicit [download-and-stage model library](model-library.m
 with a small pinned catalog, private files and a separate SQLite job journal.
 Its protected maintenance actions are `model_library_check`,
 `model_stage_download` (one closed `catalog_id`) and `model_stage_cancel`.
+`model_library_reuse` verifies the saved exact identity in one of four fixed
+local stores and records a bounded private reference without copying weights.
+It reuses the offline artifact verifier; a file check is not runtime acceptance.
 Staging does not import a model into Ollama or change the runtime binding.
 
 An explicit [fixed local response test](ollama-response-test.md) is available
