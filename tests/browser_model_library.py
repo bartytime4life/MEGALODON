@@ -89,6 +89,10 @@ async def exercise_model_library(browser, port, password, passed):
 
     context = await browser.new_context(viewport=dict(width=1440, height=1000),
                                         reduced_motion="reduce", service_workers="block")
+    # Exercise real trusted keyboard/click events while intercepting the
+    # external-open API. No publisher request is permitted by this journey.
+    await context.add_init_script("""window.__libraryReviewOpens=[];
+        window.open=(url,target,features)=>{window.__libraryReviewOpens.push([url,target,features]);return null;};""")
     await context.route("**/*", local_only)
     page = await context.new_page()
     page.set_default_timeout(10000)
@@ -105,6 +109,21 @@ async def exercise_model_library(browser, port, password, passed):
         await expect(reuse).to_be_enabled()
         assert actions == []
         await expect(page.locator("#model-library-download")).to_be_disabled()
+        assert await page.evaluate("window.__libraryReviewOpens") == []
+        source = page.locator("#model-library-review-source")
+        await expect(source).to_be_enabled()
+        await source.dispatch_event("click")
+        assert await page.evaluate("window.__libraryReviewOpens") == []
+        await source.focus()
+        await page.keyboard.press("Enter")
+        await page.locator("#model-library-review-license").click()
+        entry = value["model_library"]["catalog"][0]
+        prefix = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/blob/" + entry["revision"] + "/"
+        assert await page.evaluate("window.__libraryReviewOpens") == [
+            [prefix + entry["filename"], "_blank", "noopener,noreferrer"],
+            [prefix + "LICENSE", "_blank", "noopener,noreferrer"]]
+        await expect(page.locator("#model-library-online")).not_to_be_checked()
+        assert actions == [], "publisher review must not call the backend"
         await reuse.focus()
         await page.keyboard.press("Enter")
         await expect(page.locator("#model-library-local")).to_contain_text("Files verified at last check")
@@ -120,6 +139,7 @@ async def exercise_model_library(browser, port, password, passed):
         await expect(reuse).to_be_enabled()
         await expect(page.locator("#model-library-local")).to_contain_text("Files verified at last check")
         assert actions == [check_request], "reload must not repeat a check"
+        assert await page.evaluate("window.__libraryReviewOpens") == [], "reload must not reopen a publisher page"
 
         scenario["outcome"] = "missing"
         await reuse.click()
@@ -153,6 +173,6 @@ async def exercise_model_library(browser, port, password, passed):
         assert len(actions) == before + 1, "permission refresh must not replay a download"
         await expect(page.locator("#support-model-load")).to_be_disabled()
         assert not errors and not violations, (errors, violations)
-        passed("model library UX: explicit offline reuse, failure invalidation, interrupted reload/poll, identity drift, pin/permission consent, 390/1440px; synthetic only")
+        passed("model library UX: explicit publisher/license review, offline reuse, failure invalidation, interrupted reload/poll, identity drift, pin/permission consent, 390/1440px; synthetic only; external opens intercepted")
     finally:
         await context.close()

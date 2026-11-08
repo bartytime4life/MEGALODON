@@ -97,7 +97,8 @@ class ModelTelemetry:
             self._pending=False
 
     def invalidate(self):
-        with self._lock:self._at=0.
+        # A monotonic clock has no promised origin; zero may still be fresh.
+        with self._lock:self._at=float('-inf')
 
     def refresh_installed_models(self):
         """Read installed models only for the operator's explicit Setup action."""

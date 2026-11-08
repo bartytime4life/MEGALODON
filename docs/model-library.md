@@ -53,6 +53,20 @@ The existing pinned GGUF transfer remains unchanged. A catalog source, revision,
 size, digest or license change now clears the browser's earlier download consent.
 A rejected/expired permission refresh also clears consent and never automatically
 replays a download POST; the operator must review and click again.
+
+**Review source online** and **Read license online** open the selected catalog
+entry's pinned Hugging Face file page and `LICENSE` page in a new tab. They use
+the existing publisher, revision and filename metadata; no catalog pins or
+provider requests are duplicated. Both pages use the same exact revision.
+The controls have no passive navigation target and open a page only on a
+trusted operator click or keyboard activation, with opener/referrer access
+disabled. Rendering, polling, selection and restart never open either page.
+Opening a review page does not tick download consent, send a maintenance POST,
+stage weights or grant acceptance. Browser popup policy can still block a tab.
+Malformed publisher/revision/filename metadata disables review and download
+consent; offline existing-file reuse remains separate. New catalog entries
+require review of their pinned file and license pages as well as their bytes.
+
 No new Ollama pull transport is enabled. See the pinned
 [Ollama transfer investigation](ollama-transfer-contract.md) for its unresolved
 shared-cancellation and storage guarantees.
@@ -217,8 +231,8 @@ This detects observed replacement during the check, not changes made afterward
 or an adversary able to conceal and restore changes between observations.
 
 It reads at most 1 MiB per file for six named source files, refuses links and
-nonregular files, and compares SHA-256 with the recorded source from merged
-commit `ba3303eb0df043a2a6a5d6a88a89cff1970c5ba4` (#745). It checks file/directory
+nonregular files, and compares SHA-256 with the reviewed package source at
+checkpoint `913a6fbe260474475b441addc48d33bd6dd68c5f` (explicit publisher/license review controls). It checks file/directory
 identity for observed replacement. Output contains fixed filenames, hashes and
 states; personal paths and source contents are omitted. A later legitimate
 version can differ from this historical pin and requires review; there is no
