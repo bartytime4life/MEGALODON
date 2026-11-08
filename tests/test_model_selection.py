@@ -63,8 +63,11 @@ def test_keep_ready_policy_keeps_the_same_selected_model_after_a_reply(model_pro
     assert requests[-1][2]['model']==settings.model
 
 
-def test_fresh_metadata_clears_disconnected_state_without_claiming_a_new_reply(model_provider):
+@pytest.mark.parametrize('clock', [-10.0, 0.0, 10.0, 30.0, 1000.0])
+def test_fresh_metadata_clears_disconnected_state_without_claiming_a_new_reply(model_provider, monkeypatch, clock):
     from datetime import datetime, timezone
+    from megalodon import model_telemetry
+    monkeypatch.setattr(model_telemetry, 'monotonic', lambda: clock)
     settings,state,requests=model_provider
     telemetry=ModelTelemetry(lambda:settings)
     telemetry.snapshot();telemetry._thread.join(2)
@@ -72,7 +75,9 @@ def test_fresh_metadata_clears_disconnected_state_without_claiming_a_new_reply(m
     provider._observations[key]=dict(error_code='OLLAMA_UNAVAILABLE',
         last_attempt_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'))
     assert telemetry.snapshot()['state']=='error'
+    before_refresh = len(requests)
     telemetry.invalidate();telemetry.snapshot();telemetry._thread.join(2)
+    assert len(requests) > before_refresh, 'explicit invalidation must refresh at any clock origin'
     observed=telemetry.snapshot()
     assert observed['state']=='ready' and observed['error_code'] is None
     assert observed['last_error_code']=='OLLAMA_UNAVAILABLE'

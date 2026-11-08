@@ -140,12 +140,16 @@ def test_dashboard_question_refuses_before_body_or_receipt_store(monkeypatch, se
     assert sent[0][1] == {"status": 503}
 
 
-def test_unbound_telemetry_never_starts_thread_or_uses_stale_success(monkeypatch):
+@pytest.mark.parametrize('clock', [0.0, 10.0, 1000.0])
+def test_unbound_telemetry_never_starts_thread_or_uses_stale_success(monkeypatch, clock):
+    monkeypatch.setattr(model_telemetry, 'monotonic', lambda: clock)
     monitor = model_telemetry.ModelTelemetry(lambda: ENABLED)
     monitor._value = {"state": "model_available", "options": [{"name": ENABLED.model}]}
     monkeypatch.setattr(ai_provider, "last_observation", lambda _: (_ for _ in ()).throw(AssertionError("stale observation read")))
     with no_effects(monkeypatch):
+        monitor.invalidate()
         first = monitor.snapshot()
+        monitor.invalidate()
         assert monitor.snapshot() == first
         monitor._refresh(ENABLED, None)
     assert first["model_state"] == "unbound" and first["state"] == "needs_setup"
