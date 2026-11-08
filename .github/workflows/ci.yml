@@ -93,6 +93,43 @@ jobs:
             done
           done
 
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Install pinned ruff
+        run: |
+          set -euo pipefail
+          python - <<'LINTPROFILE'
+          import platform
+          import sys
+
+          if (sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 11)
+                  or sys.platform != "linux" or platform.machine() != "x86_64"
+                  or platform.libc_ver()[0] != "glibc"):
+              raise SystemExit("LINT_INPUT_PROFILE:UNSUPPORTED")
+          LINTPROFILE
+          mkdir "$RUNNER_TEMP/lint-cp311-wheelhouse"
+          python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
+            --dest "$RUNNER_TEMP/lint-cp311-wheelhouse" -r constraints/lint-linux-cp311.txt
+          lint_wheels=("$RUNNER_TEMP"/lint-cp311-wheelhouse/*.whl)
+          [ "${#lint_wheels[@]}" -eq 1 ]
+          sha256sum constraints/lint-linux-cp311.txt "${lint_wheels[@]}"
+          python -m pip install --no-index --find-links "$RUNNER_TEMP/lint-cp311-wheelhouse" \
+            --require-hashes --only-binary=:all: --no-cache-dir --force-reinstall \
+            -r constraints/lint-linux-cp311.txt
+          python -m pip check
+      - name: Lint application source (pyflakes-only findings)
+        run: python -m ruff check --no-cache megalodon tools
+
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

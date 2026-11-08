@@ -16,7 +16,7 @@ MAX_FILE_BYTES = 1024 * 1024
 EXPECTED = {
     "model_library.py": "c8c7ea8202009b465e2849db46ec268ffe0eb834f893bf5c3e35cef63dce57c0",
     "dashboard_model_library.py": "9fd66c7cd7d439fac3451c00ca1407188318ff459d34a5a881501f6a23cf8847",
-    "support_config.py": "4b846dae37e525113b01ce68a92b0ebc8336e857601f172bd165697488b2fe6b",
+    "support_config.py": "2f0fd8d2ffe594cb84dfb4a87b5d5afd499ced8a446c4c58563544e2ab75d1c1",
     "dashboard_support_config.py": "634415ec1418535e28b41d137dbbcb2f161be5015e9394b0d944e8184815c2f5",
     "model_artifact.py": "f02ad3756661d60548cb35c96593cbc0373f9faba64ae09a97640bc167725a9f",
     "local_model_runtime.py": "9e0bc58b0f2937cdbb19702b66f2684e3012ba8e931a449d19c67e7b12c67405",

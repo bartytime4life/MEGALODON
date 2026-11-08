@@ -143,7 +143,7 @@ def _acquire_process_invocation_lock() -> int:
         if lock is not None:
             os.close(lock)
         raise
-    except OSError as exc:
+    except OSError:
         if lock is not None:
             try:
                 os.close(lock)

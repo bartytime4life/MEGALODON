@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import re
 import secrets
-import shutil
 import socket
 import subprocess
 from threading import Event, Lock, RLock, Thread

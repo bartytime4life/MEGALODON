@@ -3,7 +3,6 @@
 One primary flow source is selected for a collection session. Suricata alerts
 remain their own evidence class, not inferred MEGALODON detector findings.
 """
-from datetime import datetime, timezone
 from ipaddress import ip_address
 import json
 import hashlib

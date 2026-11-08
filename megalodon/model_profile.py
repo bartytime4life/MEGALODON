@@ -248,13 +248,13 @@ def validate_profile(value: object) -> ValidatedProfile:
     if MODEL_ALIAS_RE.fullmatch(alias) is None:
         raise ModelProfileError("MODEL_ALIAS")
 
-    for field in (
+    for digest_field in (
         "ollama_manifest_digest",
         "artifact_sha256",
         "provenance_sha256",
         "containment_receipt_sha256",
     ):
-        _sha(profile[field], field.upper())
+        _sha(profile[digest_field], digest_field.upper())
 
     family = _text(
         profile["model_family"], minimum=5, maximum=64, code="MODEL_FAMILY"
@@ -322,16 +322,16 @@ def validate_profile(value: object) -> ValidatedProfile:
         code="SAMPLE_COUNT",
     )
     counts: dict[str, int] = {}
-    for field in (
+    for count_field in (
         "schema_valid_count",
         "citation_valid_count",
         "refusal_valid_count",
     ):
-        counts[field] = _integer(
-            evaluation[field],
+        counts[count_field] = _integer(
+            evaluation[count_field],
             minimum=0,
             maximum=sample_count,
-            code=field.upper(),
+            code=count_field.upper(),
         )
     _integer(
         evaluation["p95_latency_ms"],

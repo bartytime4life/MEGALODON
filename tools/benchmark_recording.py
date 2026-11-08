@@ -7,7 +7,6 @@ import importlib.util
 import json
 from pathlib import Path
 import resource
-import statistics
 import sys
 import tempfile
 import threading

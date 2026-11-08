@@ -1,5 +1,4 @@
 """Bounded passive IP context for the local visual operations HUD."""
-from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
 from ipaddress import ip_address

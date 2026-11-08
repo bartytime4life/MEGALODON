@@ -13,7 +13,6 @@ from pathlib import Path
 import resource
 import selectors
 import signal
-import stat
 import subprocess
 import sys
 import sysconfig

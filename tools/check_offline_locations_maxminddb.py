@@ -18,7 +18,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import maxminddb  # noqa: E402
-from megalodon import offline_locations  # noqa: E402
 from megalodon.offline_locations import OfflineLocations  # noqa: E402
 
 

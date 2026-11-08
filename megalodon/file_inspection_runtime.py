@@ -5,14 +5,12 @@ used. Downloaded dependency archives are distinct from user-selected samples.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
 import fcntl
 import hashlib
 import io
 import json
 import os
 from pathlib import Path, PurePosixPath
-import shutil
 import stat
 import subprocess
 import sys

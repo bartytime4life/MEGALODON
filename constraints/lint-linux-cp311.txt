@@ -1,0 +1,8 @@
+# Lint-tool wheel requirement, NOT a constraints file. Install with -r.
+# Profile: Linux glibc x86_64 / CPython 3.11 / required lint job only.
+# ruff ships as one dependency-free compiled wheel; no transitive closure exists.
+# One wheel per entry; no source archives, markers, extras, or alternate hashes.
+# Python/pip bootstrap, ambient runner packages, and browser setup are not locked.
+# ruff-0.17.4-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+# https://pypi.org/project/ruff/0.17.4/#files (verified 2026-11-08 UTC)
+ruff==0.17.4 --hash=sha256:2cd025509b2e15721b426fc70fd946d71f43b3db3b08e946dfec2d696d911690

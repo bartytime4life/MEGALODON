@@ -252,6 +252,9 @@
       "knowledge": [
         "PyYAML>=6.0.3,<7"
       ],
+      "lint": [
+        "ruff==0.17.4"
+      ],
       "test": [
         "pytest>=9.0.3,<10",
         "jsonschema>=4.23,<5",

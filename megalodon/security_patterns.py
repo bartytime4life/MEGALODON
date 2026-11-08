@@ -3,7 +3,7 @@
 No observations imply complete visibility or AI attribution. Thresholds and
 workflow permissions are code, never values supplied by a reference update.
 """
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 import hashlib
 import ipaddress

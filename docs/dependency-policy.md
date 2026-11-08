@@ -228,6 +228,36 @@ profiles; never broaden admitted hashes solely to silence a failed build.
 The primary hash-policy reference remains
 [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/).
 
+## Hash-verified lint profile
+
+The required `lint` job consumes `constraints/lint-linux-cp311.txt` with `-r`.
+This is a one-entry requirements lock for `ruff==0.17.4`'s single dependency-free
+Linux glibc x86_64 wheel; ruff declares no runtime dependencies, so there is no
+transitive closure to pin. After the existing Linux/CPython 3.11/x86_64/glibc
+preflight, the job downloads that one wheel into a fresh temporary wheelhouse
+with `--require-hashes --only-binary=:all:`, asserts exactly one wheel, prints
+the lock and wheel digests, then force-reinstalls it with `--no-index` and runs
+`pip check`.
+
+The job then runs `ruff check megalodon tools` with `[tool.ruff.lint] select =
+["F"]` in `pyproject.toml`: pyflakes-only findings (unused imports/variables,
+redefinitions, shadowed imports), not pycodestyle/style rules, since the
+existing source uses a deliberately dense, semicolon/inline-colon style that
+style rules would flag wholesale without indicating a defect. The scope is
+`megalodon/` and `tools/` only. `tests/` is intentionally excluded for now: its
+established convention of importing pytest fixtures across test modules
+(`from test_x import some_fixture`) systematically trips pyflakes' F401/F811
+checks as false positives, and distinguishing those from genuine findings
+across the existing test suite is separate follow-up work, not part of wiring
+the required gate.
+
+This is a lint-tool acquisition lock, not a runtime dependency, SBOM, or
+provenance receipt. `ruff` is also available as the `lint` optional-dependency
+extra (`pip install -e ".[lint]"`) for a matching local developer install.
+Maintenance follows the same rule as the other profiles: verify the exact wheel
+on its recorded PyPI page, review its changelog, and rerun lint plus full CI
+before accepting an updated pin.
+
 ## Hash-verified browser-test profile
 
 `constraints/browser-linux-cp311.txt` composes the existing twelve-wheel

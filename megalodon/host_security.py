@@ -18,7 +18,6 @@ import os
 from pathlib import Path
 import re
 import selectors
-import shutil
 import signal
 import stat
 import subprocess
