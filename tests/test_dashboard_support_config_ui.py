@@ -87,3 +87,24 @@ def test_model_loading_is_secondary_to_explicit_selection_and_test():
     for control in ("support-model-select", "support-model-save", "support-model-test", "support-model-next"):
         assert advanced not in layout.parents[control]
     assert 'id="support-model-loading-options" open' not in INDEX_HTML
+
+
+def test_publisher_review_controls_expose_no_passive_navigation_target():
+    from html.parser import HTMLParser
+
+    class ReviewControls(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.controls = {}
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if attrs.get("id") in {"model-library-review-source", "model-library-review-license"}:
+                self.controls[attrs["id"]] = (tag, attrs)
+
+    parser = ReviewControls()
+    parser.feed(INDEX_HTML)
+    assert len(parser.controls) == 2
+    for tag, attrs in parser.controls.values():
+        assert tag == "button" and attrs["type"] == "button" and "disabled" in attrs
+        assert not {"href", "src", "data-url"}.intersection(attrs)

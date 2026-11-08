@@ -53,6 +53,20 @@ The existing pinned GGUF transfer remains unchanged. A catalog source, revision,
 size, digest or license change now clears the browser's earlier download consent.
 A rejected/expired permission refresh also clears consent and never automatically
 replays a download POST; the operator must review and click again.
+
+**Review source online** and **Read license online** open the selected catalog
+entry's pinned Hugging Face file page and `LICENSE` page in a new tab. They use
+the existing publisher, revision and filename metadata; no catalog pins or
+provider requests are duplicated. Both pages use the same exact revision.
+The controls have no passive navigation target and open a page only on a
+trusted operator click or keyboard activation, with opener/referrer access
+disabled. Rendering, polling, selection and restart never open either page.
+Opening a review page does not tick download consent, send a maintenance POST,
+stage weights or grant acceptance. Browser popup policy can still block a tab.
+Malformed publisher/revision/filename metadata disables review and download
+consent; offline existing-file reuse remains separate. New catalog entries
+require review of their pinned file and license pages as well as their bytes.
+
 No new Ollama pull transport is enabled. See the pinned
 [Ollama transfer investigation](ollama-transfer-contract.md) for its unresolved
 shared-cancellation and storage guarantees.

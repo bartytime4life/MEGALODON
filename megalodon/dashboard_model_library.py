@@ -13,6 +13,8 @@ MODEL_LIBRARY_HTML = r'''
         <p>Or download a pinned GGUF file to this computer. MEGALODON keeps the file and its staging history locally. Staging does not import it into Ollama, select it, or enable responses.</p>
         <label for="model-library-select">Download catalog</label><select id="model-library-select" disabled><option value="">Loading catalog…</option></select>
         <p id="model-library-source" class="support-config-note"></p>
+        <div class="support-config-actions"><button id="model-library-review-source" type="button" disabled>Review source online</button><button id="model-library-review-license" type="button" disabled>Read license online</button></div>
+        <p id="model-library-review-note" class="support-config-note">Opens Hugging Face in a new tab. Reviewing does not confirm or start a download.</p>
         <p id="model-library-space" class="support-config-note">Available space has not been checked.</p>
         <details class="settings-disclosure"><summary>File verification details</summary><p id="model-library-pin" class="support-config-note"></p><p class="support-config-note">Files: ~/.local/share/megalodon/model-library. SHA-256 checks file identity against the catalog; it does not establish model safety, loaded identity, or acceptance.</p></details>
         <label class="model-library-consent" for="model-library-online"><input id="model-library-online" type="checkbox" disabled> Download this file from Hugging Face to this computer.</label>
@@ -40,6 +42,12 @@ MODEL_LIBRARY_JS = r'''
   const libraryStates=['unchecked','checked','downloading','verifying','staged_verified','failed','cancelled'];
   const libraryJobStates=['downloading','verifying','staged_verified','failed','cancelled','interrupted'];
   const libraryErrors=['UNAVAILABLE','BUSY','JOB_LIMIT','NO_SPACE','NETWORK','SOURCE','SIZE','DIGEST','CANCELLED','DEADLINE','FILE','INTERRUPTED','LOCAL_LIMIT','IDENTITY','MANIFEST','FILES_UNAVAILABLE','VERIFICATION','CHECK_CANCELLED'];
+  function libraryReviewPages(entry){
+    const repository=typeof entry?.source==='string'?/^Hugging Face \/ ([A-Za-z0-9][A-Za-z0-9._-]{0,95})\/([A-Za-z0-9][A-Za-z0-9._-]{0,95})$/.exec(entry.source):null;
+    if(!repository||typeof entry?.revision!=='string'||!/^[a-f0-9]{40}$/.test(entry.revision)||typeof entry?.filename!=='string'||entry.filename.length>120||!/^[A-Za-z0-9][A-Za-z0-9._-]*\.gguf$/.test(entry.filename))return null;
+    const base='https://huggingface.co/'+repository[1]+'/'+repository[2]+'/blob/'+entry.revision+'/';
+    return {source:base+entry.filename,license:base+'LICENSE'};
+  }
   function libraryChecked(v){
     if(v===undefined)return;
     const id=x=>typeof x==='string'&&/^[a-z0-9-]{1,40}$/.test(x);
@@ -53,6 +61,7 @@ MODEL_LIBRARY_JS = r'''
   function libraryDetails(){
     const v=state.payload?.model_library,entry=v?.catalog.find(x=>x.id===el('model-library-select').value);
     el('model-library-source').textContent=entry?entry.source+' · '+entry.license+' · '+(entry.size_bytes/1024**2).toFixed(1)+' MiB':'';
+    el('model-library-review-note').textContent=entry&&!libraryReviewPages(entry)?'Publisher review is unavailable. Refresh the catalog before downloading.':'Opens Hugging Face in a new tab. Reviewing does not confirm or start a download.';
     el('model-library-pin').textContent=entry?'Revision '+entry.revision+' · '+entry.filename+' · SHA-256 '+entry.sha256:'';
     el('model-library-space').textContent=v?.free_bytes===null||v?.free_bytes===undefined?'Available space has not been checked; it is checked before any transfer.':(v.free_bytes/1024**3).toFixed(1)+' GiB available at last check · '+(v.reserve_bytes/1024**2).toFixed(0)+' MiB reserve required.';
   }
@@ -74,17 +83,25 @@ MODEL_LIBRARY_JS = r'''
   }
   function libraryControls(blocked){
     const available=!!state.payload?.model_library;
+    const review=libraryReviewPages(state.payload?.model_library?.catalog.find(x=>x.id===el('model-library-select').value));
     const active=working()&&['model_stage_download','model_library_check','model_library_reuse'].includes(state.payload?.job.action);
     const model=state.payload?.model;
     el('model-library-store').disabled=blocked||!available||!!working();
     el('model-library-profile').disabled=blocked||!available||!!working();
     el('model-library-reuse').disabled=blocked||!available||!!working()||!['configured','restored','saved'].includes(model?.selection_state)||!model?.model?.includes(':')||model.model.endsWith(':latest')||state.dirty.has('model');
     el('model-library-select').disabled=blocked||!available||!!working();
-    el('model-library-online').disabled=blocked||!available||!!working();
-    el('model-library-download').disabled=blocked||!available||!!working()||!el('model-library-online').checked||!el('model-library-select').value;
+    el('model-library-review-source').disabled=blocked||!review||!!working();
+    el('model-library-review-license').disabled=blocked||!review||!!working();
+    el('model-library-online').disabled=blocked||!available||!review||!!working();
+    el('model-library-download').disabled=blocked||!available||!review||!!working()||!el('model-library-online').checked||!el('model-library-select').value;
     el('model-library-check').disabled=blocked||!available||!!working();
     el('model-library-cancel').disabled=blocked||!available||!active;
   }
   el('model-library-select').addEventListener('change',()=>{el('model-library-online').checked=false;libraryDetails();controls();});
   el('model-library-online').addEventListener('change',()=>controls());
+  for(const [id,kind] of [['model-library-review-source','source'],['model-library-review-license','license']])el(id).addEventListener('click',event=>{
+    if(event?.isTrusted!==true||el(id).disabled||document.hidden)return;
+    const pages=libraryReviewPages(state.payload?.model_library?.catalog.find(x=>x.id===el('model-library-select').value));
+    if(pages)window.open(pages[kind],'_blank','noopener,noreferrer');
+  });
 '''
