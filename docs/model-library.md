@@ -231,8 +231,8 @@ This detects observed replacement during the check, not changes made afterward
 or an adversary able to conceal and restore changes between observations.
 
 It reads at most 1 MiB per file for six named source files, refuses links and
-nonregular files, and compares SHA-256 with the recorded source from merged
-commit `ba3303eb0df043a2a6a5d6a88a89cff1970c5ba4` (#745). It checks file/directory
+nonregular files, and compares SHA-256 with the reviewed package source at
+checkpoint `913a6fbe260474475b441addc48d33bd6dd68c5f` (explicit publisher/license review controls). It checks file/directory
 identity for observed replacement. Output contains fixed filenames, hashes and
 states; personal paths and source contents are omitted. A later legitimate
 version can differ from this historical pin and requires review; there is no
