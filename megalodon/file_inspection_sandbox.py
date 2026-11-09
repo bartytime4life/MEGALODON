@@ -34,7 +34,11 @@ def sealed_input():
     # MFD_NOEXEC_SEAL / F_SEAL_EXEC require Linux 6.3+. Never downgrade this
     # admission on an older kernel. No raw bytes intentionally go to disk.
     fd = os.memfd_create('megalodon-inspection', 0x0001 | 0x0002 | 0x0008)
-    os.fchmod(fd, 0o400)
+    try:
+        os.fchmod(fd, 0o400)
+    except BaseException:
+        os.close(fd)
+        raise
     return fd
 
 
@@ -62,7 +66,7 @@ def _filter(*, threads=False):
     context = api.seccomp_init(0x7fff0000)
     if not context:
         raise SandboxUnavailable('Inspection filter unavailable.')
-    fd = os.memfd_create('megalodon-inspection-filter', os.MFD_CLOEXEC)
+    fd = None
     denied = ('socket', 'socketpair', 'connect', 'bind', 'listen', 'accept', 'accept4',
               'fork', 'vfork', 'execveat', 'setsid', 'setpgid', 'mount', 'umount2',
               'pivot_root', 'chroot', 'unshare', 'setns', 'ptrace', 'process_vm_readv',
@@ -70,6 +74,7 @@ def _filter(*, threads=False):
               'open_by_handle_at', 'userfaultfd', 'io_uring_setup', 'memfd_create',
               'mknod', 'mknodat', 'chmod', 'fchmod', 'fchmodat')
     try:
+        fd = os.memfd_create('megalodon-inspection-filter', os.MFD_CLOEXEC)
         for name in denied:
             number = api.seccomp_syscall_resolve_name(name.encode())
             if number < 0 or api.seccomp_rule_add(context, 0x00050000 | errno.EPERM, number, 0):
@@ -90,7 +95,8 @@ def _filter(*, threads=False):
         os.lseek(fd, 0, os.SEEK_SET)
         return fd
     except BaseException:
-        os.close(fd)
+        if fd is not None:
+            os.close(fd)
         raise
     finally:
         api.seccomp_release(context)
@@ -161,9 +167,12 @@ print(json.dumps(checks))
 
 
 def run(runtime, fd, tool, *, deadline, cancelled, probe=None):
-    filter_fd = _filter(threads=tool == 'die' and probe is None)
+    filter_fd = None
     process = None
     try:
+        # Filter admission can fail before a child exists. Return this adapter's
+        # unavailable state so an earlier completed adapter keeps its evidence.
+        filter_fd = _filter(threads=tool == 'die' and probe is None)
         argv = command(runtime, fd, filter_fd, tool, probe=probe)
         # Limits and parent-death supervision live in a fresh single-threaded
         # helper, never preexec_fn in the multithreaded HUD.
@@ -200,7 +209,8 @@ def run(runtime, fd, tool, *, deadline, cancelled, probe=None):
     except (OSError, ValueError, ctypes.ArgumentError):
         return 'unavailable', b''
     finally:
-        os.close(filter_fd)
+        if filter_fd is not None:
+            os.close(filter_fd)
         if process is not None:
             if process.poll() is None:
                 try:

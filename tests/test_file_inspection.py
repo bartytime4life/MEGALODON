@@ -10,6 +10,7 @@ import pytest
 
 from megalodon.file_inspection import FileInspection, InspectionBusy, normalize_die, normalize_lief
 from megalodon.file_inspection_contract import (MAX_INPUT, MAX_OUTPUT, report, validate_report, decode)
+from megalodon import file_inspection_sandbox as sandbox
 
 
 STRUCTURE = dict(format='ELF', slices_detected=1, slices=[dict(
@@ -110,6 +111,26 @@ def test_one_adapter_failure_is_partial(failed_state):
     result = finish(service(runner=failing))['report']
     assert result['state'] == 'partial'
     assert result['tools'][1]['state'] == failed_state
+
+
+def test_identification_filter_refusal_preserves_completed_structure(monkeypatch):
+    def fail_filter(**_):
+        raise sandbox.SandboxUnavailable('synthetic identification filter refusal')
+    monkeypatch.setattr(sandbox, '_filter', fail_filter)
+    def refusing(root, fd, tool, **kwargs):
+        if tool == 'die':
+            return sandbox.run(root, fd, tool, **kwargs)
+        return runner(root, fd, tool, **kwargs)
+    inspector = service(runner=refusing)
+    try:
+        result = finish(inspector)['report']
+        assert result['state'] == 'partial'
+        assert result['structure'] == STRUCTURE
+        assert result['clues'][0]['code'] == 'writable_executable'
+        assert result['tools'] == [dict(id='lief', state='completed'),
+                                   dict(id='die', state='unavailable')]
+    finally:
+        inspector.close()
 
 
 def test_failed_confinement_never_invokes_analyzers():
