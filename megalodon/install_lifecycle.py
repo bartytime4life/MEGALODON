@@ -56,6 +56,7 @@ def service_action(action):
 
 def _listener_pid(port, host):
     """Prove the managed user service owns this TCP listener, not just its URL."""
+    execution_boundary.require_effects_allowed()
     try:
         result=subprocess.run(['systemctl','--user','show','--property=MainPID','--value',
                                'megalodon-hud.service'],capture_output=True,text=True,timeout=5,check=False)

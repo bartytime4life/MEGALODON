@@ -26,6 +26,9 @@ REQUIRED_CASES = {
     ('Stage0SerializationTests', 'test_cli_rechecks_admission_after_stale_query'),
     ('Stage0InstallerTests', 'test_selected_public_apis_deny_before_preflight'),
     ('Stage0InstallerTests', 'test_cli_denies_before_parser_dispatch_or_password_prompt'),
+    ('Stage0HUDMaintenanceTests', 'test_selected_entries_refuse_before_preflight'),
+    ('Stage0HUDMaintenanceTests', 'test_cli_denies_before_parser_arguments_or_settings'),
+    ('TSharkStage0EntryTests', 'test_selected_replay_refuses_before_any_preflight'),
 }
 
 

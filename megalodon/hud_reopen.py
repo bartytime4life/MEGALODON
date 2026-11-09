@@ -7,6 +7,7 @@ import socket
 import time
 import webbrowser
 
+from . import execution_boundary
 from .config import load_settings
 from .install_lifecycle import _listener_pid, service_running
 from .local_install import InstallError, install_paths
@@ -14,6 +15,7 @@ from .local_install import InstallError, install_paths
 
 def _wait_until_listening(host: str, port: int, timeout: float = 15) -> bool:
     """A user service is active before Python has finished opening its socket."""
+    execution_boundary.require_effects_allowed()
     deadline = time.monotonic() + timeout
     while True:
         try:
@@ -26,6 +28,11 @@ def _wait_until_listening(host: str, port: int, timeout: float = 15) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        execution_boundary.require_effects_allowed()
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     args = sys.argv[1:] if argv is None else argv
     if len(args) != 1:
         return 2
@@ -55,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         if not webbrowser.open_new_tab(url):
             print(f"Open {url} in your browser.")
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     except (OSError, ValueError) as exc:
         print(f"MEGALODON could not open the local HUD: {exc}", file=sys.stderr)
         return 2

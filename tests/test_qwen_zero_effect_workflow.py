@@ -26,6 +26,8 @@ def test_qwen_zero_effect_workflow_is_bounded_and_exact_head():
     assert "tests/test_stage0_boundary.py" in raw
     assert "tests/test_stage0_serialization.py" in raw
     assert "tests/test_stage0_installer.py" in raw
+    assert "tests/test_stage0_hud_maintenance.py" in raw
+    assert "tests/test_tshark_stage0_entry.py" in raw
     assert "tests/test_stage0_ci_receipt.py" in raw
     assert '--junitxml="$RUNNER_TEMP/stage0-scoped-tests.xml"' in raw
     assert "tools/stage0_ci_receipt.py" in raw

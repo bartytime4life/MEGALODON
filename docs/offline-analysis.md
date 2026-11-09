@@ -620,8 +620,16 @@ APIs, plus the five public install-lifecycle APIs, use the same admission guard
 before preflight. Installer status and extras discovery inspect host files, so
 they are denied too; use `megalodon --stage0-offline stage0-status` for the
 in-memory boundary projection. Ordinary fresh-process installer behavior is
-unchanged. These guards cover the named public APIs, not direct invocation of
-private filesystem helpers or the separate autostart/reopen modules.
+unchanged. These guards cover the named APIs, not arbitrary direct invocation of
+private filesystem helpers.
+
+The standalone HUD startup and reopen CLIs also refuse before argument parsing,
+settings reads, service observation, socket polling or browser launch. Startup
+mutators and metadata checks, their process helpers, the socket-wait helper and
+the shared listener-ownership probe guard before preflight. Explicit-path unit
+templates and the in-memory loaded-unit projection remain available. These are
+named entry fences, not a claim that every startup-policy, uninstall-preview or
+other standalone host workflow has been fenced.
 
 This is a **partial #750 implementation**, not a universal no-effect claim.
 Trusted Python startup/imports, interpreter caches, ordinary developer/test
@@ -636,7 +644,7 @@ does not assert a fixture test pass or measured zero counters.
 entries. The exact-head Qwen workflow includes the serialization and installer
 regressions and retains their JUnit report with the in-memory status projection.
 `stage0-ci-receipt.json` records the workflow-supplied commit/tree, SHA-256 hashes
-of the binding/readiness/status/JUnit inputs, observed test-case totals and six
+of the binding/readiness/status/JUnit inputs, observed test-case totals and nine
 required passing regression cases. Invalid inputs, missing required cases or
 reported failures cannot produce a success receipt. This is a CI evidence
 summary, not an independent attestation of its inputs. It does not infer zero
