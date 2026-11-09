@@ -40,6 +40,8 @@ def fixed_argv(fd: int, limits: Limits) -> tuple[str, ...]:
 def _bounded_process(argv: tuple[str, ...], *, env: dict[str, str], cwd: str,
                      limits: Limits, pass_fds: tuple[int, ...] = ()) -> bytes:
     """Drain both pipes while enforcing caps; discard stderr, kill/reap on every exit."""
+    from ..execution_boundary import require_effects_allowed
+    require_effects_allowed()
     output = bytearray()
     stderr_size = 0
     process = None

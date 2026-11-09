@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 
+from .. import execution_boundary
+
 from . import tshark, zeek
 from .common import Limits, OfflineError, require_unprivileged_linux
 from .baseline import read_reference
@@ -17,6 +19,9 @@ class _Parser(argparse.ArgumentParser):
 
 
 def main(argv: list[str] | None = None) -> int:
+    # This command publishes reports (and may launch TShark). Pure completed-
+    # file/parser APIs remain separate; no report writer runs in Stage 0.
+    execution_boundary.require_effects_allowed()
     parser = _Parser(description='Bounded offline metadata analysis; local reports only.', allow_abbrev=False)
     parser.add_argument('--source', choices=('tshark', 'zeek-json', 'zeek-tsv'), required=True)
     parser.add_argument('--input-root', required=True, help='Absolute local directory; no symlink components.')

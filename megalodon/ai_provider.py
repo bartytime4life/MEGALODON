@@ -167,6 +167,8 @@ def _request(path: str, method: str, body: bytes | None, timeout: float,
              *, deadline: float | None = None, catalog_read: bool = False,
              model_test: _ModelTest | None = None) -> bytes:
     """Exactly one request on the compiled literal-loopback transport."""
+    from .execution_boundary import require_effects_allowed
+    require_effects_allowed()
     if model_test is not None:
         if catalog_read is not False or not _test_request_allowed(model_test,path,method,body,timeout):
             raise AIProviderError('POLICY_REJECTION')
@@ -401,6 +403,8 @@ def model_catalog() -> list[dict]:
 
 def model_choices() -> list[dict]:
     """One explicit, loopback-only tag read; this grants no inference authority."""
+    from .execution_boundary import require_effects_allowed
+    require_effects_allowed()
     deadline=time.monotonic()+3
     _listener_admitted(deadline)
     return _catalog_rows(_json(_request('/api/tags','GET',None,3,deadline=deadline,catalog_read=True)))

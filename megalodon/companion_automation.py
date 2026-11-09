@@ -20,6 +20,7 @@ from threading import Event, Lock, Thread
 import time
 import tomllib
 
+from . import execution_boundary
 from .clamav_summary import MAX_BYTES as CLAMAV_MAX, summarize_report as clamav_summary
 from .config import AISettings
 from .nmap_inventory import MAX_BYTES as NMAP_MAX, summarize_report as nmap_summary
@@ -149,6 +150,7 @@ _CLAMAV_STALE = ("ClamAV reported matches, but its report was rejected; the prio
 def _run_fixed(argv: list[str], limit: int, timeout: int,
                cancel: Event | None = None) -> tuple[bytes, int]:
     """Run a fixed argv without shell interpretation or unbounded output."""
+    execution_boundary.require_effects_allowed()
     binary = shutil.which(argv[0])
     if binary is None:
         raise ValueError("companion tool unavailable")
@@ -212,6 +214,7 @@ class CompanionAutomation:
     """One HUD-owned, bounded worker. Every successful update is counts only."""
 
     def __init__(self, config: CompanionConfig, ai: AISettings) -> None:
+        execution_boundary.require_effects_allowed()
         self.config, self.ai = config, ai
         self._stop = Event()
         self._wake = Event()
@@ -233,6 +236,7 @@ class CompanionAutomation:
         self.evidence = None
 
     def start(self) -> None:
+        execution_boundary.require_effects_allowed()
         if self._threads:
             raise ValueError("companion worker already started")
         self._threads = [
@@ -267,6 +271,7 @@ class CompanionAutomation:
 
     def request_collection(self, selected: set[str] | None = None) -> dict[str, str]:
         """Wake the existing worker; repeated requests never duplicate a scan."""
+        execution_boundary.require_effects_allowed()
         configured = {"nmap": bool(self.config.nmap_target), "clamav": bool(self.config.clamav_paths),
                       "osquery": self.config.osquery_enabled}
         executables = {"nmap": "nmap", "clamav": "clamscan", "osquery": "osqueryi"}

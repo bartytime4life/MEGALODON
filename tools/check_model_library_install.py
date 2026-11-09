@@ -10,13 +10,13 @@ from pathlib import Path
 import re
 import stat
 
-BASELINE = "913a6fbe260474475b441addc48d33bd6dd68c5f"
+BASELINE = "c9eda15a6700d46c00eeaa20852f169b79cab8a9"
 SCHEMA = "megalodon-model-library-install-observation-v1"
 MAX_FILE_BYTES = 1024 * 1024
 EXPECTED = {
-    "model_library.py": "c8c7ea8202009b465e2849db46ec268ffe0eb834f893bf5c3e35cef63dce57c0",
+    "model_library.py": "45c3611b2f67c33c02d9cd4b0bad051df1a984a38fa3092fe08da0dac7d09f31",
     "dashboard_model_library.py": "9fd66c7cd7d439fac3451c00ca1407188318ff459d34a5a881501f6a23cf8847",
-    "support_config.py": "4b846dae37e525113b01ce68a92b0ebc8336e857601f172bd165697488b2fe6b",
+    "support_config.py": "d251d355ab8d1d84593b10d452cab0744cfff77d3de565cba93f14cccf3f6b0a",
     "dashboard_support_config.py": "634415ec1418535e28b41d137dbbcb2f161be5015e9394b0d944e8184815c2f5",
     "model_artifact.py": "f02ad3756661d60548cb35c96593cbc0373f9faba64ae09a97640bc167725a9f",
     "local_model_runtime.py": "9e0bc58b0f2937cdbb19702b66f2684e3012ba8e931a449d19c67e7b12c67405",

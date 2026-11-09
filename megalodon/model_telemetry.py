@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from threading import Lock, Thread
 from time import monotonic
 
-from . import ai_provider, local_model_runtime
+from . import ai_provider, local_model_runtime, execution_boundary
 
 
 MESSAGES = {
@@ -56,6 +56,7 @@ def _recent_response(value):
 
 class ModelTelemetry:
     def __init__(self, settings, *, inspect=None, loaded=None, catalog=None, choices=None):
+        execution_boundary.require_effects_allowed()
         self.settings=settings
         self.inspect=inspect or (lambda value:ai_provider.status(value,probe=False))
         self.loaded=loaded or ai_provider.loaded_model
@@ -65,6 +66,7 @@ class ModelTelemetry:
         self._lock=Lock();self._thread=None;self._key=None;self._value=None;self._at=0.;self._pending=False
 
     def _refresh(self,settings,key):
+        execution_boundary.require_effects_allowed()
         try:
             current_enabled=self.settings().enabled
         except Exception:
@@ -102,6 +104,7 @@ class ModelTelemetry:
 
     def refresh_installed_models(self):
         """Read installed models only for the operator's explicit Setup action."""
+        execution_boundary.require_effects_allowed()
         settings=self.settings()
         if local_model_runtime.binding_failure() is not None:
             # Runtime observations remain separate from this explicit list read.
@@ -130,6 +133,7 @@ class ModelTelemetry:
             self._key=key;self._value=result;self._at=monotonic()
 
     def snapshot(self):
+        execution_boundary.require_effects_allowed()
         settings=self.settings();key=(settings.enabled,settings.model,settings.model_digest,settings.compute_mode)
         failure=local_model_runtime.binding_failure()
         if failure is not None:
