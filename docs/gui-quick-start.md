@@ -28,10 +28,14 @@ Saved monitoring settings can resume collection when the service starts.
 If background services are unavailable, keep the foreground fallback terminal
 open; **Ctrl+C** there stops the HUD.
 
-Normal launches reuse the existing background session. Explicit launcher options start a new foreground session;
-they do not update the background HUD. Use **Data and tools → Change data for
-the next launch → Local port** to prepare a command on an unused port, then open
-the address printed by the new session. See [separate-session launch options](local-pc-setup.md#open-a-separate-session-with-explicit-options).
+Normal launches reuse the existing background session. Explicit launcher options
+start a new foreground session; they do not update the background HUD. Prepare
+the command in **Data and tools → Change data for the next launch**, stop the
+current HUD, then run the command and open its printed address. A different
+port does not release the shared managed evidence store. See
+[relaunch steps](local-pc-setup.md#open-a-separate-session-with-explicit-options)
+or the [protected-launch handoff](local-pc-setup.md#optional-require-a-password-for-a-launch)
+for file inspection.
 
 To try the checkout without installing it, run `./scripts/start-local.sh` and
 open the printed local address (normally <http://127.0.0.1:8797/>).
@@ -97,6 +101,7 @@ which workflows are connected to MEGALODON and which are separate companions.
 | Understand the current data source | **Setup → Data and tools** |
 | Inspect saved traffic and change the time range | **HUD**; choose a range and apply it |
 | Review linked detections | **Findings** |
+| Inspect a downloaded program without running it | **HUD → Inspect a file**; [sign-in, setup and coverage](file-inspection.md) |
 | Find downloads or inspect an integration | **Setup → Data and tools**, or **Setup → Apps & connections** |
 | See what each background tool is doing | **Sensors** |
 | Open a companion's saved web console | **Setup → Apps & connections**; configure its explicit console link |
@@ -119,11 +124,14 @@ The one-time MEGALODON install, guided companion installs (Zeek, osquery), impor
 starting an authorized capture, and changing the server's source remain explicit
 local operations. After installation, the application-menu entry handles normal
 startup and browser opening. **Change data for the next launch** prepares and copies a
-quoted command. Run it in a terminal to start a new session, using an unused
-port if another HUD is running. Typing a path into the form does not open that
-file. Existing sessions retain their settings, including companion collection
-and sign-in choices.
+quoted command. Stop the current HUD before running it in a terminal to start
+the new session. An unused port avoids a listener conflict but does not release
+the managed evidence store. Typing a path into the form does not open that
+file. Prepared launch options do not change saved background collection or
+sign-in settings.
 
-The local HUD is the sole MEGALODON application. The former hosted reference
-console is retired. Linux is the reference platform; see the
+The local HUD is the MEGALODON host application. The former hosted reference
+console is retired; the separately documented [snapshot viewer](../site/README.md)
+imports an address-free summary and cannot operate this PC. Its dated publication
+record does not establish current availability. Linux is the reference platform; see the
 [platform baseline](platform-baseline.md) for Windows evaluation and other limits.

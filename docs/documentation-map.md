@@ -20,6 +20,16 @@ Use [current state](current-state.md) for the latest reading and
 synthetic corpus, measured limits and an authorized operational acceptance plan.
 The dated catalog count below is retained as its original inventory checkpoint.
 
+## November 9 additions
+
+These entries extend the dated inventory without changing its original count
+or source basis.
+
+| Document | Repository path |
+| --- | --- |
+| [Inspect a downloaded program](file-inspection.md) | `docs/file-inspection.md` |
+| [Practical project improvements — November 9, 2026](project-improvements-20261109.md) | `docs/project-improvements-20261109.md` |
+
 ## Newly reconciled entries
 
 | Document | Repository path |

@@ -82,8 +82,23 @@ it reports that the service is not ready and opens nothing. The background
 service requires `[dashboard] host = "127.0.0.1"`; the HUD server listens on
 IPv4 only, so `::1` is refused for background startup and reopen.
 
-To open a separate HUD with companion collection disabled, run this from any
-directory, choosing an unused port:
+HUDs for the same account share one managed evidence store, regardless of the
+port, data-source override or companion settings. **Stop the current HUD before
+starting its replacement.** A different port avoids a listener conflict; it does
+not release the evidence-store lease. For a foreground HUD, use **Ctrl+C** in
+its launch terminal. For the installed background HUD, run:
+
+```bash
+systemctl --user stop megalodon-hud.service
+```
+
+This stops the HUD and its in-process collection, leaving the login-startup
+preference unchanged. Separately managed companion services retain their own
+lifecycle. If stopping fails, preserve the error and do not delete `owner.lock`
+or change evidence-store permissions to bypass ownership.
+
+After it stops, open a replacement foreground HUD with companion collection
+disabled from any directory:
 
 ```bash
 ~/.local/bin/megalodon-hud --port 8798 --no-auto-companions
@@ -93,31 +108,52 @@ For a different data source, add `--config /absolute/private/settings.toml`.
 For local sign-in, add `--require-sign-in` and use the new launch terminal's
 password instructions. Open the address printed by that new session; an old
 browser tab still points at the old HUD. `--no-auto-companions` disables
-collection only in the new session. The background HUD keeps its original
-collection and sign-in settings.
+collection only in the new session. Saved background collection and sign-in
+settings are unchanged. Keep the foreground terminal open. Do not also open the
+normal application-menu launcher while this replacement is running: a launch
+without options starts or reuses the background service.
 
 In **Data and tools → Change data for the next launch**, the optional **Local
 port** field prepares the same bounded port option. Blank keeps the launcher's
 configured port. Preparing or copying a command does not execute it.
 
 If the selected port is occupied, launch exits with an error before opening a
-browser or starting companion collection. Choose another unused port, or stop
-a foreground HUD with Ctrl+C in its own terminal first. The launcher never
-stops, restarts, or reconfigures the existing background service.
+browser or starting companion collection. Choose another unused port if a
+different program holds it. If another HUD owns managed evidence, stop that HUD
+first even when the port is free. The launcher never stops, restarts, or
+reconfigures the existing background service for explicit options.
 
 ### Optional: require a password for a launch
 
-The normal desktop launch opens directly. To require sign-in for one launch,
-run `~/.local/bin/megalodon-hud --require-sign-in` in a terminal. If no reusable
-password is configured, that terminal shows a random password for this launch.
-Sign-in is limited to loopback and is not a remote access feature.
+The normal desktop launch opens directly. Local file inspection requires a
+signed-in HUD. To require sign-in for one launch:
+
+1. In **Setup → Local sign-in**, prepare and copy the protected command before
+   stopping the current HUD. Setting a reusable password alone does not change
+   a running session.
+2. Stop a foreground HUD with **Ctrl+C** in its terminal. For the installed
+   background HUD, run `systemctl --user stop megalodon-hud.service` in a terminal.
+   This interrupts its in-process collection; the login-startup preference and
+   separately managed companion services are unchanged.
+3. Run the copied protected command in that terminal. The installed equivalent
+   is `~/.local/bin/megalodon-hud --require-sign-in`. Keep the terminal open and
+   sign in at the new printed address. If no reusable password is configured,
+   that terminal shows a random password for this launch.
+
+Do not open the normal application-menu launcher during the protected foreground
+session; it can start the background HUD again. When finished, **Ctrl+C** stops
+the protected session. Opening the normal launcher afterward starts or reuses
+the background HUD with its original settings, including sign-in disabled by
+default. This procedure protects one launch; it does not enable sign-in for the
+background service. Sign-in is limited to loopback and is not remote access.
 
 In the HUD, **Setup → Local sign-in** provides buttons to copy this installation's
 password setup/status commands and prepare a protected relaunch with an optional
-unused port. The buttons only prepare or copy commands. Password entry stays in
-the terminal, and the running HUD is unchanged. Source launches can prepare a
-protected session with a random terminal password; reusable password buttons
-are available only for the installed desktop HUD.
+port. The buttons only prepare or copy commands. An unused port does not permit
+two HUDs to own this account's managed evidence. Password entry stays in the
+terminal. Source launches can prepare a protected session with a random terminal
+password; reusable password buttons are available only for the installed
+desktop HUD.
 
 To choose or change the password used by opt-in installed HUD launches:
 
@@ -436,7 +472,8 @@ not connect this PC, and this launcher does not publish site changes.
 | Installation needs repair | Run `~/.local/bin/megalodon-manage status`, then `repair`. Modified artifacts are refused so they can be reviewed instead of overwritten. |
 | MEGALODON is missing from the application menu | Run `status`; if ready, sign out/in or refresh the desktop application cache. The stable `~/.local/bin/megalodon-hud` launcher remains available. |
 | Capture permission required | On this computer, open **Setup → Configure local tools → Configure capture access** and complete the operating-system administrator prompt, then retry capture. Reading the message does not grant permissions. Other capture or storage failures keep their separate diagnostics. |
-| Address already in use | Another program or HUD holds that port, and the requested settings were not applied. Choose an unused port once with `--port 8798` (or another free port) on your installed or source launcher, or for every launch by setting `port` under `[dashboard]` in `settings.toml`, then open the printed URL. Existing sessions keep their settings; only a foreground HUD can be stopped with Ctrl+C in its launch terminal. |
+| Address already in use | Another program holds that port, and the requested settings were not applied. Choose another port if it belongs to a different program. If a HUD is running, follow the relaunch steps above: a different port does not release its managed evidence store. |
+| Another HUD owns managed evidence | Stop the current owner before relaunching: Ctrl+C in its foreground terminal, or `systemctl --user stop megalodon-hud.service` for the installed background HUD. Stopping interrupts its in-process collection. Do not delete the lease file or change permissions to bypass it. |
 | `DASHBOARD_STORE:UNSAFE_ANCESTOR` | Check ownership and write permissions of the path's ancestors. In a remapped development sandbox, run from a normal local terminal. Keep the ownership checks enabled. |
 | `UNSAFE_DIRECTORY` or `UNSAFE_DATABASE` | Inspect the chosen path. The database's leaf directory must be owner-private (0700), and the database must be an owner-owned, single-link regular file (0600). Do not recursively change permissions or relocate live data as a shortcut. |
 | `SCHEMA_MISMATCH` | Preserve the database and review the explicit migration/recovery workflow in the README. Startup never migrates it. |
