@@ -159,6 +159,8 @@ def parse_fields(row: str) -> PacketEvent | None:
 
 
 def replay(root: str, relative: str, limits: Limits = Limits()) -> Batch:
+    from ..execution_boundary import require_effects_allowed
+    require_effects_allowed()
     require_unprivileged_linux()
     if not relative.endswith(('.pcap', '.pcapng')):
         raise OfflineError('UNSUPPORTED_CAPTURE_FORMAT')
