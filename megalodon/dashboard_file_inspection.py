@@ -100,6 +100,7 @@ function validFileInspectionStatus(p) {
   const active=()=>state.uploading||['receiving','running'].includes(state.payload?.state);
   const visible=()=>state.inView&&!document.hidden;
   const selected=()=>state.file&&Number.isSafeInteger(state.file.size)&&state.file.size>0&&state.file.size<=67108864;
+  const currentReport=()=>!!state.report&&state.ownedJob!==null&&state.ownedJob===state.reportJob&&state.ownedSelection===state.selection;
   function message(text,kind='idle'){el('status').textContent=text;panel.dataset.state=kind;}
   function installControls(){
     const missing=state.payload&&state.payload.runtime.state!=='ready';
@@ -117,7 +118,8 @@ function validFileInspectionStatus(p) {
     el('check').disabled=state.checking;el('export').disabled=!state.report;
     el('sign-in').hidden=!state.signInRequired;el('runtime').hidden=state.signInRequired;
     panel.setAttribute('aria-busy',busy?'true':'false');
-    const step=busy?'inspect':state.report?'understand':selected()?'inspect':'choose';
+    const understood=currentReport()&&['completed','partial'].includes(state.report.state);
+    const step=busy?'inspect':understood?'understand':selected()?'inspect':'choose';
     panel.querySelectorAll('[data-step]').forEach(n=>{if(n.dataset.step===step)n.setAttribute('aria-current','step');else n.removeAttribute('aria-current');});
     installControls();
   }
@@ -157,7 +159,7 @@ function validFileInspectionStatus(p) {
   }
   function renderReport(){
     const report=state.report;el('result').hidden=!report;if(!report)return;
-    const owned=state.ownedJob===state.reportJob&&state.ownedSelection===state.selection;
+    const owned=currentReport();
     el('report-scope').textContent=(owned?'Report for the file you submitted. ':'Earlier report in this HUD session; not associated with the current file selection. ')+report.inspected_at.replace('T',' ').replace('Z',' UTC')+' · '+labels[report.state];
     const key=JSON.stringify(report);if(state.rendered===key)return;state.rendered=key;
     el('tools').replaceChildren(...report.tools.map(t=>{const item=node('li',names[t.id]+': '+labels[t.state]);item.dataset.state=t.state;return item;}));
@@ -180,10 +182,10 @@ function validFileInspectionStatus(p) {
     else if(state.uploading)message('Sending the selected file to this local HUD. You can cancel while it is being received.','receiving');
     else if(p.state==='receiving')message('The local inspector is receiving a file. You can cancel this inspection.','receiving');
     else if(p.state==='running')message('Reading structure and identification clues on this PC. Analysis stops at the time limit.','running');
-    else if(p.report)message(({completed:'Inspection completed. Read the clues and limits together.',partial:'Partial inspection. One tool did not complete; review its status beside the clues.',failed:'Inspection could not finish. Review each tool’s status and the suggested next step.',cancelled:'Inspection cancelled. No safety conclusion is available.',unsupported:'This file is not supported by the available inspection tools.'})[p.report.state],p.report.state);
+    else if(state.file&&!selected())message(state.file.size===0?'This file is empty. Choose an executable with content.':'This file is larger than 64 MiB. Choose a smaller program.','error');
+    else if(p.report)message((currentReport()?'':'Earlier report: ')+({completed:'Inspection completed. Read the clues and limits together.',partial:'Partial inspection. One tool did not complete; review its status beside the clues.',failed:'Inspection could not finish. Review each tool’s status and the suggested next step.',cancelled:'Inspection cancelled. No safety conclusion is available.',unsupported:'This file is not supported by the available inspection tools.'})[p.report.state],p.report.state);
     else if(p.state==='cancelled')message('Inspection cancelled. Choose a file when you are ready.','cancelled');
     else if(p.runtime.state!=='ready')message('The file inspector is not ready. Read the availability message below.','error');
-    else if(state.file&&!selected())message(state.file.size===0?'This file is empty. Choose an executable with content.':'This file is larger than 64 MiB. Choose a smaller program.','error');
     else message(selected()?'Ready. Select Inspect to send this file to the local inspector.':'Ready. Choose one file, then select Inspect.');
     renderReport();controls();
   }

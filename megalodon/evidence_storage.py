@@ -99,7 +99,7 @@ class EvidenceStorage:
         try:fcntl.flock(self._lease_fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except OSError:
             os.close(self._lease_fd);self._lease_fd=None
-            raise ValueError('Another HUD owns managed evidence. Use its existing window.') from None
+            raise ValueError('Another HUD owns managed evidence. Stop that HUD before relaunching; changing ports does not release the store.') from None
         try:
             self._catalog = dict(version=1,policy=None,entries=[],growth=[],last_cleanup_at=None,
                                  evicted_records=0,evicted_bytes=0,checkpoints={},audit_boundaries={},last_clock=None,started_at=utc(self.clock()))
