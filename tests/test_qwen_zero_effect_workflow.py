@@ -23,6 +23,9 @@ def test_qwen_zero_effect_workflow_is_bounded_and_exact_head():
     assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD: \"1\"" in raw
     assert "tests/test_qwen_zero_effect.py" in raw
     assert "tests/test_qwen_runtime_gate.py" in raw
+    assert "tests/test_stage0_boundary.py" in raw
+    assert "python -B -m megalodon --stage0-offline stage0-status" in raw
+    assert "stage0-entry-boundary.json" in raw
     assert "tests/test_model_lifecycle.py" in raw
     assert "tests/test_model_evaluation_manifest.py" in raw
     assert "tests/test_model_evaluation.py" in raw

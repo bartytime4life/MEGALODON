@@ -13,6 +13,8 @@ public Python API and the security boundary for every HTTP route.
 
 from __future__ import annotations
 
+from . import execution_boundary
+
 from collections import OrderedDict
 import base64
 import binascii
@@ -1587,6 +1589,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                              "error_code": getattr(exc, "code", "AI_UNAVAILABLE")}, status=503)
 
     def _support_config_action(self) -> None:
+        if execution_boundary.effects_denied():
+            self._send_json({"state": "denied", "error_code": execution_boundary.DENIAL}, status=403)
+            return
         expected_origin = f"http://{self.headers.get('Host')}"
         tokens = self.headers.get_all("X-Megalodon-Config-Token", [])
         if (self.support_config is None or not _tool_management_user()
@@ -2138,6 +2143,7 @@ def serve(
     companion_config: CompanionConfig | None = None,
     runtime_settings=None,
 ) -> None:
+    execution_boundary.require_effects_allowed()
     if not enabled:
         raise ValueError("dashboard is disabled by configuration")
     if http_password_verifier is not None and not isinstance(http_password_verifier, PasswordVerifier):

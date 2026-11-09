@@ -23,7 +23,7 @@ from threading import Event, Lock
 import time
 from urllib.parse import urljoin, urlsplit
 
-from . import storage
+from . import storage, execution_boundary
 from . import model_artifact
 
 SCHEMA = "megalodon-model-library-v1"
@@ -353,6 +353,7 @@ def _same(a, b):
 
 class ModelLibrary:
     def __init__(self, home):
+        execution_boundary.require_effects_allowed()
         self.home = Path(home)
         self.root = self.home / ".local/share/megalodon/model-library"
         self._lock = Lock()
@@ -373,9 +374,11 @@ class ModelLibrary:
             self._view.update(values)
 
     def cancel(self):
+        execution_boundary.require_effects_allowed()
         self._stop.set()
 
     def prepare(self):
+        execution_boundary.require_effects_allowed()
         # Called before publishing/scheduling the explicit support job, so a
         # cancellation arriving before its worker starts cannot be lost.
         self._stop.clear()
@@ -465,6 +468,7 @@ class ModelLibrary:
         self._readback(store)
 
     def reuse(self, store_id, model, digest, provider, *, profile="standard"):
+        execution_boundary.require_effects_allowed()
         """Explicit offline reference/verification. Never copy or execute weights.
 
         The support controller supplies its saved identity and fixed provider
@@ -617,6 +621,7 @@ class ModelLibrary:
                 pass
 
     def execute(self, identifier=None):
+        execution_boundary.require_effects_allowed()
         """None means explicit offline check; an ID means explicit online stage."""
         entry = artifact(identifier) if identifier is not None else None
         if not self._operation.acquire(blocking=False):

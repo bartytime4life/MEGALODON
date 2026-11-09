@@ -16,7 +16,7 @@ import sqlite3
 import sys
 import time
 
-from . import __version__
+from . import __version__, execution_boundary
 from .capabilities import catalog
 from .posture import local_posture
 from .capture import CaptureError, iter_jsonl, iter_sample, iter_scapy
@@ -87,8 +87,11 @@ def _bounded_cli_integer(name: str, minimum: int, maximum: int):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="megalodon", description="Local-first defensive network telemetry")
+    parser.add_argument("--stage0-offline", action="store_true",
+                        help="one-way offline fence; only stage0-status is available in this initial slice")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("stage0-status", help="print the in-memory application boundary, not acceptance")
 
     ai = sub.add_parser("ai", help="bounded local AI doctor, question and tool broker")
     ai.add_argument("operation", choices=("doctor", "ask", "tool"))
@@ -1384,11 +1387,39 @@ def _live_apply_requested(argv: list[str]) -> bool:
 
 def main(argv: list[str] | None = None) -> None:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if "--stage0-offline" in raw_argv:
+        try:
+            execution_boundary.select_stage0()
+        except execution_boundary.Stage0Denied:
+            print(execution_boundary.DENIAL, file=sys.stderr)
+            raise SystemExit(2) from None
+        # No abbreviations, repeated selectors, late selectors or extra inputs.
+        if raw_argv != ["--stage0-offline", "stage0-status"]:
+            print(execution_boundary.DENIAL, file=sys.stderr)
+            raise SystemExit(2)
+        raw_argv = ["stage0-status"]
+    if execution_boundary.effects_denied():
+        if raw_argv == ["stage0-status"]:
+            print(json.dumps(execution_boundary.status(), sort_keys=True))
+            raise SystemExit(0)
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        raise SystemExit(2)
     if _live_apply_requested(raw_argv):
         print(f"megalodon: {LIVE_APPLY_UNSUPPORTED}", file=sys.stderr)
         raise SystemExit(2)
     args = build_parser().parse_args(raw_argv)
-    if args.command == "capabilities":
+    if args.stage0_offline:
+        # argparse may recognize an abbreviated selector. It cannot dispatch.
+        try:
+            execution_boundary.select_stage0()
+        except execution_boundary.Stage0Denied:
+            pass  # The fixed refusal below also covers a poisoned/late mode.
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        raise SystemExit(2)
+    if args.command == "stage0-status":
+        print(json.dumps(execution_boundary.status(), sort_keys=True))
+        code = 0
+    elif args.command == "capabilities":
         code = _capabilities(args)
     elif args.command == "ai":
         code = _ai(args)

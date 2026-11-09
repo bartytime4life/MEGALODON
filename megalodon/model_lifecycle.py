@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from threading import Event, Lock, Thread
 from time import monotonic
 
-from . import ai_provider, local_model_runtime
+from . import ai_provider, local_model_runtime, execution_boundary
 
 
 def _key(settings):
@@ -19,6 +19,7 @@ def _key(settings):
 class ModelLifecycle:
     def __init__(self, settings, *, prepare=None, inspect=None, loaded=None,
                  clock=monotonic, poll_seconds=15, on_change=None):
+        execution_boundary.require_effects_allowed()
         self.settings = settings
         self.prepare = prepare or ai_provider.prepare_model
         self.inspect = inspect or (lambda value: ai_provider.status(value, probe=False))
@@ -58,6 +59,7 @@ class ModelLifecycle:
         return value
 
     def start(self):
+        execution_boundary.require_effects_allowed()
         if local_model_runtime.binding_failure() is not None:
             return
         with self._lock:
@@ -67,6 +69,7 @@ class ModelLifecycle:
             self._thread.start()
 
     def request(self):
+        execution_boundary.require_effects_allowed()
         if local_model_runtime.binding_failure() is not None:
             return
         # Cancellation is restricted to this worker, never an operator request.
@@ -84,6 +87,7 @@ class ModelLifecycle:
             self._thread.join(3)
 
     def _step(self, *, force=False):
+        execution_boundary.require_effects_allowed()
         if local_model_runtime.binding_failure() is not None:
             return
         settings = self.settings()

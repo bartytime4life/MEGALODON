@@ -567,3 +567,52 @@ All baseline consumers enforce adapter-specific byte totals consistent with
 small/medium/large band counts and a minute-zero origin for nonempty relative
 time distributions. See [exact limits and evidence boundaries](baseline-realizability.md).
 These checks reject impossible metadata without claiming source authenticity.
+
+## Stage 0 application entry fence — issue #750
+
+From a fresh reviewed source or installed-package process:
+
+```bash
+python -B -m megalodon --stage0-offline stage0-status
+```
+
+This initial slice latches a restrictive application mode. Only that in-memory
+status command is exposed in the fenced CLI; all other commands refuse with
+`STAGE0_OFFLINE_EFFECT_DENIED` and exit 2 before ordinary parsing, settings,
+databases or command dispatch. Duplicate, misplaced and abbreviated selectors
+cannot dispatch an installed workflow. No environment, browser request, model
+choice, saved setting or status result can lift the latch. There is no runtime
+reset API. Selecting the mode after a guarded installed workflow has already
+been entered refuses and leaves admission unavailable; it does not stop or
+certify existing activity. Always use a fresh process.
+
+The same process guard refuses HUD serving, support-manager construction and
+the complete support-action dispatcher before action validation, body reads,
+locks or worker creation. Model-library construction/execution/reuse, model
+telemetry/keep-ready entries, explicit provider tag reads and transport, fixed
+companion launch/collection, and the TShark process boundary have additional
+guards. Normal fresh-process installed workflows are unchanged. No Stage 0 HUD
+is served, so its online source/license buttons are not exposed in this lane.
+
+Pure TShark-field, Zeek-flow and Suricata-alert normalizers remain usable in
+memory. Completed-file readers are not promoted to native producer acceptance.
+The separate `megalodon.offline` report-publishing CLI refuses after the latch:
+it can create reports and launch TShark, so it is not a read-only entry point.
+No new native analyzer or model execution is authorized.
+
+This is a **partial #750 implementation**, not a universal no-effect claim.
+Trusted Python startup/imports, interpreter caches, ordinary developer/test
+setup, and test-output files are outside the invocation tripwires. The latch is
+trusted in-process code, not protection against arbitrary Python mutation,
+module reload, a compromised interpreter or native bypass. It is not an OS
+network/filesystem sandbox and does not retrofit all standalone tools, public
+APIs or helper scripts. The status projection has no acceptance authority and
+does not assert a fixture test pass or measured zero counters.
+
+`tests/test_stage0_boundary.py` exercises effect tripwires for these named
+entries. The exact-head Qwen workflow retains the in-memory status projection
+alongside its scoped tests. A combined commit/tree/fixture-digest receipt,
+source/package comparison, remaining entry inventory, independent exact-head
+review and separate owner disposition remain #750 acceptance gates. Merge,
+release, installation, deployment, operator acceptance and host authority are
+distinct; none follows from this projection.

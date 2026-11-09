@@ -17,6 +17,7 @@ import subprocess
 from threading import Event, Lock, RLock, Thread
 import time
 
+from . import execution_boundary
 from .companion_automation import _run_fixed
 from .managed_capture import ManagedCapture, now
 from .live_geography import Geography
@@ -198,6 +199,7 @@ def validate_action(value):
 
 class SupportConfiguration:
     def __init__(self, settings, companions=None, startup=None, on_ready=None, *, home=None, run=_run_fixed):
+        execution_boundary.require_effects_allowed()
         self.settings, self.companions, self.startup = settings, companions, startup
         self.home = Path.home() if home is None else Path(home)
         self.run = run
@@ -469,6 +471,7 @@ class SupportConfiguration:
             return value
 
     def start(self, request):
+        execution_boundary.require_effects_allowed()
         request = validate_action(request)
         if request['action'] in {'capture_stop','background_stop'}:
             with self._persist_lock, self._lock:
@@ -559,6 +562,7 @@ class SupportConfiguration:
         return 'Live Wireshark launch requested for the selected interface (15 minutes / 50,000 packets). Its own capture buffer is separate from HUD metadata.'
 
     def _work(self, request):
+        execution_boundary.require_effects_allowed()
         action = request['action']
         tool = 'capture' if action.startswith('capture_') else action.split('_')[0]
         tool = {'signature':'clamav','wireshark':'wireshark','model':'qwen'}.get(tool, tool)
@@ -847,6 +851,7 @@ class SupportConfiguration:
         self.geography.close()
 
     def resume(self):
+        execution_boundary.require_effects_allowed()
         self.model_lifecycle.start()
         if self._background_enabled:
             try:
@@ -863,6 +868,7 @@ class SupportConfiguration:
 
     def start_background_tools(self):
         """Shared startup action, with no desktop processes or caller commands."""
+        execution_boundary.require_effects_allowed()
         with self._lock:
             if self._job['state']=='running':
                 raise ConfigBusy('Configuration is already running.')
