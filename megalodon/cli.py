@@ -1404,6 +1404,12 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(0)
         print(execution_boundary.DENIAL, file=sys.stderr)
         raise SystemExit(2)
+    if raw_argv != ["stage0-status"]:
+        try:
+            execution_boundary.require_effects_allowed()
+        except execution_boundary.Stage0Denied:
+            print(execution_boundary.DENIAL, file=sys.stderr)
+            raise SystemExit(2) from None
     if _live_apply_requested(raw_argv):
         print(f"megalodon: {LIVE_APPLY_UNSUPPORTED}", file=sys.stderr)
         raise SystemExit(2)
