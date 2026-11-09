@@ -34,7 +34,7 @@ import tomllib
 import warnings
 from typing import Mapping
 
-from . import __version__
+from . import __version__, execution_boundary
 from .config import load_settings
 from .hud_password import PasswordVerifier, _password_bytes
 
@@ -475,6 +475,7 @@ def _validate_settings(paths: InstallPaths) -> None:
 
 def load_hud_password_verifier(paths: InstallPaths | None = None) -> PasswordVerifier | None:
     """Read a private verifier; malformed or unsafe state never enables random fallback."""
+    execution_boundary.require_effects_allowed()
     selected = install_paths() if paths is None else paths
     if os.path.lexists(selected.config):
         _owned_directory(selected.config, private=True)
@@ -492,6 +493,7 @@ def load_hud_password_verifier(paths: InstallPaths | None = None) -> PasswordVer
 
 def set_hud_password(password: str, paths: InstallPaths | None = None) -> None:
     """Persist only a salted verifier in the user's private configuration directory."""
+    execution_boundary.require_effects_allowed()
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     _owned_directory(selected.config, private=True)
@@ -503,6 +505,7 @@ def set_hud_password(password: str, paths: InstallPaths | None = None) -> None:
 
 def clear_hud_password(paths: InstallPaths | None = None) -> None:
     """Remove the reusable password for opt-in sign-in launches."""
+    execution_boundary.require_effects_allowed()
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     if load_hud_password_verifier(selected) is not None:
@@ -670,6 +673,7 @@ def _restore_active(paths: InstallPaths, old: Path | None) -> None:
 
 
 def install(source: Path, paths: InstallPaths | None = None, *, inspect_protected=False) -> dict[str, object]:
+    execution_boundary.require_effects_allowed()
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     source, pyproject = _validated_source(source)
@@ -787,6 +791,7 @@ def _artifact_health(paths: InstallPaths, manifest: dict[str, object]) -> dict[s
 
 
 def status(paths: InstallPaths | None = None) -> tuple[int, dict[str, object]]:
+    execution_boundary.require_effects_allowed()
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     manifest = _load_manifest(selected)
@@ -820,6 +825,7 @@ def status(paths: InstallPaths | None = None) -> tuple[int, dict[str, object]]:
 
 
 def repair(paths: InstallPaths | None = None) -> dict[str, object]:
+    execution_boundary.require_effects_allowed()
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     _prepare_directories(selected)
@@ -858,6 +864,7 @@ def _repair_selected(selected: InstallPaths) -> dict[str, object]:
 
 
 def uninstall(paths: InstallPaths | None = None) -> dict[str, object]:
+    execution_boundary.require_effects_allowed()
     _require_supported_user()
     selected = install_paths() if paths is None else paths
     if not os.path.lexists(selected.manifest):
@@ -934,6 +941,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        execution_boundary.require_effects_allowed()
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     args = build_parser().parse_args(argv)
     try:
         if args.command == "install":

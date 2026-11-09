@@ -609,6 +609,15 @@ The separate `megalodon.offline` report-publishing CLI refuses after the latch:
 it can create reports and launch TShark, so it is not a read-only entry point.
 No new native analyzer or model execution is authorized.
 
+The local installer CLI refuses before parsing, dispatch or password prompts.
+Its install, repair, uninstall, password read/set/clear and installation-status
+APIs, plus the five public install-lifecycle APIs, use the same admission guard
+before preflight. Installer status and extras discovery inspect host files, so
+they are denied too; use `megalodon --stage0-offline stage0-status` for the
+in-memory boundary projection. Ordinary fresh-process installer behavior is
+unchanged. These guards cover the named public APIs, not direct invocation of
+private filesystem helpers or the separate autostart/reopen modules.
+
 This is a **partial #750 implementation**, not a universal no-effect claim.
 Trusted Python startup/imports, interpreter caches, ordinary developer/test
 setup, and test-output files are outside the invocation tripwires. The latch is

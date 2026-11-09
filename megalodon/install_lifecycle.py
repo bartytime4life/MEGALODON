@@ -9,12 +9,15 @@ import sys
 import time
 import urllib.request
 
+from . import execution_boundary
+
 # /proc/net/tcp prints each network-order address word as a host-order number.
 _BYTE_ORDER = sys.byteorder
 
 
 def selected_extras(paths):
     """Carry only supported extras forward; never clone an arbitrary environment."""
+    execution_boundary.require_effects_allowed()
     extras = ['geo', 'knowledge']
     if paths.current.exists():
         if any((paths.current / 'venv/lib').glob('python*/site-packages/scapy-*.dist-info')):
@@ -23,6 +26,7 @@ def selected_extras(paths):
 
 
 def service_running(paths):
+    execution_boundary.require_effects_allowed()
     from . import hud_autostart
     from .local_install import _regular_owned_file, InstallError
     unit = hud_autostart.unit_path(paths)
@@ -40,6 +44,7 @@ def service_running(paths):
 
 
 def service_action(action):
+    execution_boundary.require_effects_allowed()
     from .local_install import InstallError
     if action not in {'start', 'stop'}:
         raise InstallError('Unsupported service transition')
@@ -74,6 +79,7 @@ def _listener_pid(port, host):
 
 
 def verify_running(paths, expected, timeout=30):
+    execution_boundary.require_effects_allowed()
     from .config import load_settings
     from .local_install import InstallError
     settings = load_settings(paths.settings).dashboard
@@ -114,6 +120,7 @@ def retire_releases(paths, manifest, *, inspect_protected=False):
     data outside releases are never candidates. Interrupted deletion remains in
     the manifest and is safe to retry.
     """
+    execution_boundary.require_effects_allowed()
     from .local_install import _expected_release, _owned_directory, _atomic_write, _current_target
     protected = {manifest['active_release'], manifest['previous_release']}
     # An owner rollback may point the selector at an older tree; never retire it.
