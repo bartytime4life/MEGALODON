@@ -90,3 +90,22 @@ start. An isolated temporary-home ownership check separately refused a second
 owner and admitted a replacement after the first closed. No installed service
 was stopped or relaunched, no settings were changed, and no private downloaded
 program was inspected for this record.
+
+## GitHub publication revalidation
+
+Before publication, the scoped change was transferred onto current
+`main@9378307d6f787803c2821fdb26f3c0e168d7cf51` on
+`codex/inspection-evidence-20261109`. The original tested branch and commit
+were retained; the newer model-library and Stage 0 changes were preserved.
+
+The complete source suite passed again on this publication candidate:
+**7,690 passed, 27 skipped, 396 subtests passed** in 252.20 seconds, using the
+same Python 3.12 interpreter, capability-free child process and a fresh private
+temporary directory. Existing documentation/Wiki checks separately passed
+36 tests. The six changed Markdown documents passed local-link and heading-
+anchor checks; remote destinations were not checked. The catalog now links
+both the inspection guide and this record without rewriting dated counts.
+
+These are local source results. Hosted exact-head checks, owner review,
+merge, installation and native analysis remain separate states. This record
+does not authorize any of them.
