@@ -232,7 +232,12 @@ or an adversary able to conceal and restore changes between observations.
 
 It reads at most 1 MiB per file for six named source files, refuses links and
 nonregular files, and compares SHA-256 with the reviewed package source at
-checkpoint `913a6fbe260474475b441addc48d33bd6dd68c5f` (explicit publisher/license review controls). It checks file/directory
+checkpoint `c9eda15a6700d46c00eeaa20852f169b79cab8a9` (Stage 0 entry guards).
+The preceding checkpoint was `913a6fbe260474475b441addc48d33bd6dd68c5f`
+(explicit publisher/license review controls). Only the library/support hashes
+changed in this pin refresh. This six-file comparison does not inspect the new
+`execution_boundary.py` dependency or prove Stage 0 enforcement.
+It checks file/directory
 identity for observed replacement. Output contains fixed filenames, hashes and
 states; personal paths and source contents are omitted. A later legitimate
 version can differ from this historical pin and requires review; there is no
