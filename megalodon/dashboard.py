@@ -1589,7 +1589,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                              "error_code": getattr(exc, "code", "AI_UNAVAILABLE")}, status=503)
 
     def _support_config_action(self) -> None:
-        if execution_boundary.effects_denied():
+        try:
+            execution_boundary.require_effects_allowed()
+        except execution_boundary.Stage0Denied:
             self._send_json({"state": "denied", "error_code": execution_boundary.DENIAL}, status=403)
             return
         expected_origin = f"http://{self.headers.get('Host')}"

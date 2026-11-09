@@ -586,6 +586,15 @@ reset API. Selecting the mode after a guarded installed workflow has already
 been entered refuses and leaves admission unavailable; it does not stop or
 certify existing activity. Always use a fresh process.
 
+Selection and check-and-mark admission share one lock created at trusted module
+import. If admission wins, late selection refuses; if selection wins, admission
+refuses. Effectful work runs outside that lock. Status fields derive from one
+state snapshot, so a concurrent transition cannot mix an old mode with a newer
+denial result. Import-time setup remains outside invocation tripwires.
+Ordinary CLI parsing/dispatch and support-action entry mark admission through
+that same guard; a status query alone cannot authorize either workflow. Exact
+`stage0-status` remains a read-only status path.
+
 The same process guard refuses HUD serving, support-manager construction and
 the complete support-action dispatcher before action validation, body reads,
 locks or worker creation. Model-library construction/execution/reuse, model
