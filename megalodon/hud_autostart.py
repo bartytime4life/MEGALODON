@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 
+from . import execution_boundary
 from .config import load_settings
 from .local_install import InstallError, InstallPaths, _atomic_write, _owned_directory, _regular_owned_file, install_paths, status
 
@@ -60,6 +61,7 @@ def unit_contents(paths: InstallPaths | None = None) -> bytes:
 
 
 def _systemctl(*args: str) -> None:
+    execution_boundary.require_effects_allowed()
     try:
         subprocess.run(["systemctl", "--user", *args], check=True, timeout=15)
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
@@ -68,6 +70,7 @@ def _systemctl(*args: str) -> None:
 
 def _service_state() -> dict[str, str] | None:
     """Ask the user manager which unit file it loaded; None when no manager answers."""
+    execution_boundary.require_effects_allowed()
     try:
         result = subprocess.run(["systemctl", "--user", "show",
                                  "--property=FragmentPath,DropInPaths,LoadState,ActiveState", UNIT],
@@ -81,6 +84,7 @@ def _service_state() -> dict[str, str] | None:
 
 
 def _vendor_type_wide(path: str) -> bool:
+    execution_boundary.require_effects_allowed()
     candidate = PurePosixPath(path)
     if candidate.parent.name != "service.d" or str(candidate.parent.parent) not in VENDOR_UNIT_DIRS:
         return False
@@ -97,6 +101,7 @@ def loaded_dropins(state: dict[str, str] | None) -> bool:
     Only a root-owned, distribution-wide `service.d/` drop-in is tolerated;
     any unit-specific, prefix, admin, runtime or user drop-in needs review.
     """
+    execution_boundary.require_effects_allowed()
     return state is not None and any(not _vendor_type_wide(path) for path in state["DropInPaths"].split())
 
 
@@ -108,6 +113,7 @@ def loaded_elsewhere(state: dict[str, str] | None, unit: Path, managed: bool) ->
 
 
 def _prepare_unit() -> None:
+    execution_boundary.require_effects_allowed()
     if status()[0] != 0:
         raise InstallError("install or repair the local HUD before enabling startup")
     # The HUD server binds IPv4 only; upgrade verification proves an IPv4 listener.
@@ -129,11 +135,13 @@ def _prepare_unit() -> None:
 
 def start() -> None:
     """Start the fixed HUD service without enabling it at login."""
+    execution_boundary.require_effects_allowed()
     _prepare_unit()
     _systemctl("start", UNIT)
 
 
 def enable(*, start: bool = False) -> None:
+    execution_boundary.require_effects_allowed()
     _prepare_unit()
     _systemctl("enable", UNIT)
     if start:
@@ -142,6 +150,7 @@ def enable(*, start: bool = False) -> None:
 
 def disable_login() -> None:
     """Disable future sign-in startup without stopping the requesting HUD."""
+    execution_boundary.require_effects_allowed()
     unit = unit_path()
     managed = validate_unit()
     state = _service_state()
@@ -153,6 +162,7 @@ def disable_login() -> None:
 
 def validate_unit(paths: InstallPaths | None = None) -> bool:
     """Read-only identity check shared by removal preview and application."""
+    execution_boundary.require_effects_allowed()
     selected = install_paths() if paths is None else paths
     unit = unit_path(selected)
     if not os.path.lexists(unit):
@@ -166,6 +176,7 @@ def validate_unit(paths: InstallPaths | None = None) -> bool:
 
 
 def disable(paths: InstallPaths | None = None) -> None:
+    execution_boundary.require_effects_allowed()
     selected = install_paths() if paths is None else paths
     unit = unit_path(selected)
     managed = validate_unit(selected)
@@ -183,6 +194,11 @@ def disable(paths: InstallPaths | None = None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        execution_boundary.require_effects_allowed()
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     parser = argparse.ArgumentParser(description="Manage local HUD startup for this Linux user")
     parser.add_argument("action", choices=("start", "enable", "disable"))
     parser.add_argument("--start", action="store_true", help="also start the enabled service now")
@@ -199,6 +215,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             disable()
             print("MEGALODON automatic startup is off.")
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     except (InstallError, ValueError, OSError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
