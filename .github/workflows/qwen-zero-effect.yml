@@ -51,10 +51,13 @@ jobs:
       - name: Prove scoped denial and UNBOUND behavior
         run: |
           set -euo pipefail
-          python -m pytest -p no:cacheprovider -q \
+          python -m pytest -p no:cacheprovider -q --junitxml="$RUNNER_TEMP/stage0-scoped-tests.xml" \
             tests/test_qwen_zero_effect.py \
             tests/test_qwen_runtime_gate.py \
             tests/test_stage0_boundary.py \
+            tests/test_stage0_serialization.py \
+            tests/test_stage0_installer.py \
+            tests/test_stage0_ci_receipt.py \
             tests/test_model_choices.py \
             tests/test_ollama_model_test.py \
             tests/test_model_artifact.py \
@@ -118,7 +121,15 @@ jobs:
           assert value["denial_code"] == "STAGE0_OFFLINE_EFFECT_DENIED"
           assert value["acceptance_authority"] is False
           PYSTAGE0
+          python -B tools/stage0_ci_receipt.py \
+            --commit "$EXPECTED_COMMIT" --tree "$(git rev-parse 'HEAD^{tree}')" \
+            --binding "$RUNNER_TEMP/qwen-unbound-binding.json" \
+            --readiness "$RUNNER_TEMP/qwen-unbound-readiness.json" \
+            --boundary "$RUNNER_TEMP/stage0-entry-boundary.json" \
+            --junit "$RUNNER_TEMP/stage0-scoped-tests.xml" \
+            > "$RUNNER_TEMP/stage0-ci-receipt.json"
       - name: Upload bounded exact-head evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: qwen-zero-effect-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -128,6 +139,8 @@ jobs:
             ${{ runner.temp }}/qwen-offline-components.json
             ${{ runner.temp }}/qwen-offline-manifest-validation.json
             ${{ runner.temp }}/stage0-entry-boundary.json
+            ${{ runner.temp }}/stage0-scoped-tests.xml
+            ${{ runner.temp }}/stage0-ci-receipt.json
             contracts/local-model-evaluation/v1/fixtures/offline-v1/*.json
           if-no-files-found: error
           retention-days: 30

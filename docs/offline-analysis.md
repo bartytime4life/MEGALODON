@@ -614,6 +614,15 @@ privilege checks, executable metadata, input access or temporary-directory
 creation. The lower process guard remains independent. Pure field parsing is
 unchanged; native replay does not become a read-only completed-field reader.
 
+The local installer CLI refuses before parsing, dispatch or password prompts.
+Its install, repair, uninstall, password read/set/clear and installation-status
+APIs, plus the five public install-lifecycle APIs, use the same admission guard
+before preflight. Installer status and extras discovery inspect host files, so
+they are denied too; use `megalodon --stage0-offline stage0-status` for the
+in-memory boundary projection. Ordinary fresh-process installer behavior is
+unchanged. These guards cover the named public APIs, not direct invocation of
+private filesystem helpers or the separate autostart/reopen modules.
+
 This is a **partial #750 implementation**, not a universal no-effect claim.
 Trusted Python startup/imports, interpreter caches, ordinary developer/test
 setup, and test-output files are outside the invocation tripwires. The latch is
@@ -624,9 +633,20 @@ APIs or helper scripts. The status projection has no acceptance authority and
 does not assert a fixture test pass or measured zero counters.
 
 `tests/test_stage0_boundary.py` exercises effect tripwires for these named
-entries. The exact-head Qwen workflow retains the in-memory status projection
-alongside its scoped tests. A combined commit/tree/fixture-digest receipt,
-source/package comparison, remaining entry inventory, independent exact-head
+entries. The exact-head Qwen workflow includes the serialization and installer
+regressions and retains their JUnit report with the in-memory status projection.
+`stage0-ci-receipt.json` records the workflow-supplied commit/tree, SHA-256 hashes
+of the binding/readiness/status/JUnit inputs, observed test-case totals and six
+required passing regression cases. Invalid inputs, missing required cases or
+reported failures cannot produce a success receipt. This is a CI evidence
+summary, not an independent attestation of its inputs. It does not infer zero
+tripwire counts from green tests: aggregate counters remain `null`, package
+parity and native lanes remain `NOT_RUN`, and every authority flag is false.
+Available partial artifacts are retained on workflow failure; a missing success
+receipt is unavailable evidence, never a pass.
+
+A complete fixture-digest/tripwire receipt, source/package comparison, remaining
+entry inventory, independent exact-head
 review and separate owner disposition remain #750 acceptance gates. Merge,
 release, installation, deployment, operator acceptance and host authority are
 distinct; none follows from this projection.
