@@ -36,6 +36,7 @@ process.stdin.on('end', async () => {
   vm.runInNewContext(code,context);
   const text = n => n.textContent+' '+n.children.map(text).join(' '),settle=()=>new Promise(resolve=>setImmediate(resolve));
   const node=id=>el('file-inspection-'+id), changed=async file=>{node('input').files=file?[file]:[];await node('input').emit('change');};
+  const currentStep=()=>steps.find(step=>step.attributes['aria-current']==='step')?.dataset.step;
   assert.equal(requests.length,0,'hidden panel does not poll or analyze');
   assert.equal(context.validFileInspectionReport(report),true);
   for(const bad of [null,{...report,raw:'SAMPLE_SECRET'},{...report,filename:'secret.exe'},
@@ -77,6 +78,7 @@ process.stdin.on('end', async () => {
   assert.equal(submission.options.credentials,'same-origin');assert.equal(submission.options.mode,'same-origin');assert.equal(submission.options.redirect,'error');
   assert.ok(!Object.keys(submission.options.headers).some(k=>/filename|path/i.test(k)));
   assert.match(node('status').textContent,/Partial inspection/);
+  assert.equal(currentStep(),'understand','a partial report submitted for this selection reaches Understand');
   assert.match(node('report-scope').textContent,/Report for the file you submitted[\s\S]*Partial coverage/);
   assert.match(text(node('tools')),/LIEF · structure: Completed[\s\S]*Detect It Easy · identification: Unsupported/);
   assert.match(text(node('technical')),/1 of 1/);
@@ -104,6 +106,7 @@ process.stdin.on('end', async () => {
   complete.identification=[{kind:'packer',name:'UPX'},{kind:'protector',name:'Example protector'},{kind:'compiler',name:'GCC'},{kind:'compiler',name:'Clang'},{kind:'linker',name:'GNU ld'}];
   complete.clues.push({code:'packed',title:'Packing or protection identified',meaning:'Unused report wording.'});
   const unchanged=JSON.stringify(complete);await show(complete);
+  assert.equal(currentStep(),'understand','a completed report submitted for this selection reaches Understand');
   assert.equal(disclosures().length,4,'packing and protector labels share one explanation');
   assert.equal(node('clues').children.filter(n=>n.children[0]?.textContent==='Packing or protection identified').length,1);
   assert.match(text(node('clues')),/Slice 2 \(x86_64, 64-bit\): 2 writable\/executable regions/);
@@ -134,6 +137,7 @@ process.stdin.on('end', async () => {
     await show(onlyDie);assert.equal(disclosures().length,3);assert.match(text(node('clues')),/Structural details are unavailable/);assert.doesNotMatch(text(node('clues')),/Slice 1|Writable and executable region/);
     const empty={...report,structure:null,identification:[],clues:[],tools:report.tools.map(t=>({...t,state:toolState})),state:toolState==='cancelled'?'cancelled':toolState==='unsupported'?'unsupported':'failed'};
     await show(empty);assert.equal(disclosures().length,0);assert.match(text(node('clues')),/This does not establish that the file is safe/);
+    assert.equal(currentStep(),'inspect','failed, unsupported and cancelled reports do not imply completed understanding');
   }
   await show({...complete,structure:{...report.structure,slices:[{...report.structure.slices[0],writable_executable:0}]},identification:[],clues:[]});
   assert.match(text(node('clues')),/No review clues were returned[\s\S]*does not establish that the file is safe/);
@@ -142,9 +146,19 @@ process.stdin.on('end', async () => {
   await show(report);
   await changed({name:'different.bin',size:65});assert.equal(node('result').hidden,true,'selection clears previous report');
   await node('check').emit('click');assert.match(node('report-scope').textContent,/Earlier report[\s\S]*not associated/);
+  assert.match(node('status').textContent,/^Earlier report: /);
+  assert.equal(node('result').hidden,false,'the earlier report remains available with its scope label');
+  assert.equal(currentStep(),'inspect','an earlier report cannot advance the current selection to Understand');
   await changed({name:'too-large.bin',size:67108865});assert.equal(node('run').disabled,true);assert.match(node('status').textContent,/larger than 64 MiB/);
   await node('check').emit('click');assert.equal(node('run').disabled,true,'refresh cannot enable oversized input');
+  assert.match(node('status').textContent,/larger than 64 MiB/,'retained report refresh cannot erase the selected file error');
+  assert.equal(currentStep(),'choose');
   await changed({name:'empty.bin',size:0});assert.equal(node('run').disabled,true);assert.match(node('status').textContent,/empty/);
+  await node('check').emit('click');assert.match(node('status').textContent,/empty/,'empty-file feedback survives retained report refresh');
+  assert.equal(currentStep(),'choose');
+  await changed(null);await node('check').emit('click');
+  assert.equal(currentStep(),'choose','clearing the selection cannot mark an earlier report as the current result');
+  assert.match(node('status').textContent,/^Earlier report: /);
   payload={...payload,state:'idle',job_id:null,report:null,runtime:{state:'unavailable',message:'The optional inspector runtime is not installed.'}};
   await changed(file);await node('check').emit('click');assert.equal(node('run').disabled,true);assert.equal(node('install').hidden,false);assert.equal(node('install').disabled,false);
   await node('install').emit('click');assert.equal(installed,1);
