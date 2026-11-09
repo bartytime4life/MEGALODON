@@ -609,6 +609,11 @@ The separate `megalodon.offline` report-publishing CLI refuses after the latch:
 it can create reports and launch TShark, so it is not a read-only entry point.
 No new native analyzer or model execution is authorized.
 
+Direct `tshark.replay()` calls also refuse at entry under Stage 0, before
+privilege checks, executable metadata, input access or temporary-directory
+creation. The lower process guard remains independent. Pure field parsing is
+unchanged; native replay does not become a read-only completed-field reader.
+
 The local installer CLI refuses before parsing, dispatch or password prompts.
 Its install, repair, uninstall, password read/set/clear and installation-status
 APIs, plus the five public install-lifecycle APIs, use the same admission guard
