@@ -72,7 +72,7 @@ or recovery capability of a particular installed PC.
 | Recovery readiness | AIDE evidence gaps; backup/test receipt hashes checked against separate operator trust | **No host-file restore; `restore_eligible` remains false** |
 | Explicit Linux workflows | Protected configuration, bounded scans and separate temporary containment workflow | Operator/OS authorization and documented scope; no automatic blocking |
 | Desktop lifecycle | Private per-user install, update/rollback and managed HUD service | Login startup is opt-in; saved monitoring has its own scope |
-| Hosted reference | Separate address-free snapshot viewer, held in tab memory | No live connection to the PC or host control |
+| Separate snapshot viewer (dated record) | Address-free summary import, held in tab memory; [publication scope](site/README.md) | No live PC connection or host control; current availability is not established here |
 
 Choose a task: [trace a finding](docs/wiki/investigation-journeys.md#1-what-does-this-finding-actually-show),
 [understand a connection](docs/wiki/investigation-journeys.md#2-where-does-the-connection-picture-come-from),

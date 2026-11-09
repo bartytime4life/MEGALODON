@@ -23,9 +23,14 @@ the browser: opening them starts no request, analysis or AI operation. JSON expo
 remains the unchanged version-1 metadata report.
 
 File inspection requires a signed-in local HUD. In the HUD's **Local sign-in**
-section, select **Prepare protected launch**, copy and run the prepared command,
-then sign in to that HUD. Use an unused port to keep the current session open.
-Setting a saved password alone does not enable sign-in for a running HUD.
+section, select **Prepare protected launch** and copy the command. **Stop the
+current HUD**, then run the copied command, keep its terminal open and sign in
+at the new printed address. HUDs for this account share one managed evidence
+store; choosing a different port does not release it. For a foreground HUD,
+use **Ctrl+C** in its launch terminal. For the installed background HUD, follow the
+[protected-launch handoff](local-pc-setup.md#optional-require-a-password-for-a-launch).
+Stopping the HUD also stops its in-process collection. Setting a saved password
+alone does not enable sign-in for a running HUD.
 Sessions launched without sign-in cannot read inspection reports, receive an
 inspection nonce, submit a file or request cancellation.
 

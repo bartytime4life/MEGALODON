@@ -40,6 +40,7 @@ process.stdin.on('end',async()=>{
     await page.getByRole('button',{name:'Inspect',exact:true}).focus();assert.equal(await page.evaluate(()=>document.activeElement.id),'file-inspection-run');
     assert.notEqual(await page.locator('#file-inspection-run').evaluate(n=>getComputedStyle(n).outlineStyle),'none');
     await page.keyboard.press('Enter');await page.waitForFunction(()=>document.getElementById('file-inspection-status').textContent.startsWith('Partial inspection'));
+    assert.equal(await page.locator('[data-step][aria-current="step"]').getAttribute('data-step'),'understand');
     assert.equal(requests.filter(r=>r.path.endsWith('/run')).length,1);
     assert.match(await page.locator('#file-inspection-tools').textContent(),/LIEF · structure: Completed/);
     assert.match(await page.locator('#file-inspection-tools').textContent(),/Detect It Easy · identification: Unsupported/);
@@ -89,6 +90,23 @@ process.stdin.on('end',async()=>{
     assert.equal(await page.locator('#file-inspection-result').isVisible(),false);
     await page.getByRole('button',{name:'Check inspector',exact:true}).click();
     await page.waitForFunction(()=>document.getElementById('file-inspection-report-scope').textContent.startsWith('Earlier report'));
+    assert.match(await page.locator('#file-inspection-status').textContent(),/^Earlier report: /);
+    assert.equal(await page.locator('[data-step][aria-current="step"]').getAttribute('data-step'),'inspect');
+    const beforeInvalidSelections=requests.filter(r=>r.method==='POST').length;
+    for(const [name,buffer,expected]of [['oversized.bin',Buffer.alloc(67108865),/larger than 64 MiB/],['empty.bin',Buffer.alloc(0),/empty/]]){
+      await input.setInputFiles({name,mimeType:'application/octet-stream',buffer});
+      await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+      await page.waitForFunction(()=>!document.getElementById('file-inspection-check').disabled);
+      assert.match(await page.locator('#file-inspection-status').textContent(),expected);
+      assert.equal(await page.locator('[data-step][aria-current="step"]').getAttribute('data-step'),'choose');
+      assert.equal(await page.getByRole('button',{name:'Inspect',exact:true}).isDisabled(),true);
+      assert.match(await page.locator('#file-inspection-report-scope').textContent(),/^Earlier report/);
+    }
+    await input.setInputFiles([]);await page.getByRole('button',{name:'Check inspector',exact:true}).click();
+    await page.waitForFunction(()=>!document.getElementById('file-inspection-check').disabled);
+    assert.equal(await page.locator('[data-step][aria-current="step"]').getAttribute('data-step'),'choose');
+    assert.equal(requests.filter(r=>r.method==='POST').length,beforeInvalidSelections,'invalid selections and refreshes never submit files');
+    await input.setInputFiles({name:'another.bin',mimeType:'application/octet-stream',buffer:bytes});
     slow=true;await page.getByRole('button',{name:'Inspect',exact:true}).click();
     await page.getByRole('button',{name:'Cancel inspection',exact:true}).waitFor();
     await page.getByRole('button',{name:'Cancel inspection',exact:true}).click();

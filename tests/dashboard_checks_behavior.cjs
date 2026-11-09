@@ -51,6 +51,7 @@ process.stdin.on('end', async () => {
     byId('account-port').value = '8798';
     byId('account-launch-build').listeners.click();
     assert.equal(byId('account-launch-command').textContent, context.localHudLaunch.command + ' --port 8798 --require-sign-in');
+    assert.match(byId('account-launch-feedback').textContent, /Stop the current HUD first/);
     await byId('account-launch-copy').listeners.click();
     assert.equal(copied.pop(), context.localHudLaunch.command + ' --port 8798 --require-sign-in');
     byId('account-port').value = '0';
@@ -87,7 +88,7 @@ process.stdin.on('end', async () => {
     assert.match(byId('setup-launch-intro').textContent, /application menu/);
     assert.match(byId('help-launch-intro').textContent, /stable launcher/);
     assert.match(byId('setup-launch-intro').textContent, /background HUD keeps its existing settings/);
-    assert.match(byId('help-launch-intro').textContent, /Explicit options start a separate foreground session/);
+    assert.match(byId('help-launch-intro').textContent, /Explicit options start a separate foreground session.*Stop the current HUD first/);
     assert.equal(byId('setup-source-launch').hidden, true);
     assert.equal(byId('help-source-launch').hidden, true);
     assert.equal(run('hudLaunchCommand({})'), context.localHudLaunch.command);

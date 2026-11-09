@@ -43,7 +43,7 @@ SETUP_HTML = """
           <summary>Authorize Install, Start and Open</summary>
           <p id="tool-management-status" role="status">Observation mode. To use Install, Start and Open, restart the HUD with --enable-tool-management as your ordinary Linux user.</p>
           <div class="tool-management-launch">
-            <p>Copy the restart command for Install/Start/Open from this exact HUD launcher. Copying does not stop, restart, install, start, or open anything. To leave an existing session running, append <code>--port 8798</code> (or another unused port) before running it in a terminal.</p>
+            <p>Copy the restart command for Install/Start/Open from this exact HUD launcher. Copying prepares the command only. Stop the current HUD before running it; a different port does not release its managed evidence store. See Reopen or stop MEGALODON below for the background-service command.</p>
             <code id="tool-management-command">Restart command for Install/Start/Open unavailable</code>
             <button id="tool-management-copy" class="setup-primary" type="button" disabled>Copy restart command for Install/Start/Open</button>
             <p id="tool-management-copy-status" role="status" aria-live="polite">Reading this HUD's launch method…</p>
@@ -72,7 +72,7 @@ SETUP_HTML = """
         <code id="account-password-command">Password command unavailable</code>
         <p id="account-password-feedback" role="status" aria-live="polite">Reading this HUD's Python environment…</p>
         <label class="field" for="account-port">Protected session port (optional)<input id="account-port" inputmode="numeric" placeholder="8798" maxlength="5" autocomplete="off"></label>
-        <p>The prepared command adds <code>--require-sign-in</code>. Choose an unused port if you want to leave this HUD running. A protected launch opens a separate session; it does not add sign-in to this one.</p>
+        <p>The prepared command adds <code>--require-sign-in</code>. Stop the current HUD first; a different port does not release its managed evidence store. A protected launch requires a new session. Setting a password alone does not protect this one.</p>
         <div class="setup-account-actions">
           <button id="account-launch-build" type="button" disabled>Prepare protected launch</button>
           <button id="account-launch-copy" type="button" disabled>Copy protected launch</button>
@@ -85,7 +85,7 @@ SETUP_HTML = """
         <p id="setup-launch-intro">Reading the launch method for this HUD…</p>
         <code id="setup-reopen-command">Launch command unavailable</code>
         <button id="setup-reopen-copy" type="button" disabled>Copy reopen command</button>
-        <p id="setup-launch-context">For a foreground HUD, keep its launch terminal open; Ctrl+C there stops that session. A HUD started automatically runs in the background and keeps its existing settings when reopened.</p>
+        <p id="setup-launch-context">For a foreground HUD, Ctrl+C in its launch terminal stops that session. For the installed background HUD, run <code>systemctl --user stop megalodon-hud.service</code> in a terminal before running the prepared command. Stopping the HUD stops its in-process collection and releases its managed evidence store; it leaves the login-startup preference unchanged. Separately managed companion services keep their own lifecycle. Keep the new launch terminal open.</p>
         <p id="setup-reopen-feedback" role="status"></p>
         <div id="setup-source-launch" hidden><p>From the reviewed repository folder, you can also check and launch the checkout:</p><code>./scripts/start-local.sh --check</code><code>./scripts/start-local.sh</code><p>The source launcher selects a compatible Python environment; it does not install packages or create sample data.</p></div>
         <p><a href="https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-pc-setup.md" target="_blank" rel="noopener noreferrer">Open the local PC setup guide ↗</a> · <a href="#room-help-title">Get help in the HUD</a></p>
@@ -99,8 +99,8 @@ SETUP_HTML = """
           <label class="field">Completed offline run<input id="setup-offline" placeholder="/absolute/private/completed-run" maxlength="512"></label>
           <label class="field">Suricata store<input id="setup-suricata" placeholder="/absolute/private/suricata.db" maxlength="512"></label>
           <label class="field">Local port (optional)<input id="setup-port" inputmode="numeric" placeholder="8798" maxlength="5" aria-describedby="setup-port-note"></label>
-          <p id="setup-port-note">Leave blank to use the configured port. Choose an unused port from 1 to 65535 to leave an existing HUD running.</p>
-          <p>Launch options affect only the new session. For example, <code>--no-auto-companions</code> disables collection only in that session; an existing background HUD keeps running with its original settings.</p>
+          <p id="setup-port-note">Leave blank to use the configured port, or choose an unused port from 1 to 65535. Stop the current HUD first; changing the port does not release its managed evidence store.</p>
+          <p>Launch options affect only the new session. For example, <code>--no-auto-companions</code> disables collection only in that session. They do not change the saved background-service settings.</p>
           <button id="setup-build" type="button">Prepare launch command</button>
           <code id="setup-command">Launch command unavailable</code><button id="setup-copy" type="button" disabled>Copy launch command</button>
           <p id="setup-feedback" role="status">Run the prepared command in your MEGALODON terminal.</p>
@@ -507,8 +507,8 @@ function renderLaunchHelp() {
     const launch = validatedHudLaunch(typeof localHudLaunch === 'undefined' ? null : localHudLaunch);
     const desktop = launch.mode === 'desktop';
     const intro = desktop
-      ? 'Reopen MEGALODON from your application menu, or use this stable launcher without options. An active background HUD keeps its existing settings. Explicit options start a separate foreground session; choose an unused port to leave the background HUD running.'
-      : 'This HUD is running from a source environment. Use this command to reopen the same environment, or use the source launcher from your reviewed checkout.';
+      ? 'Reopen MEGALODON from your application menu, or use this stable launcher without options. An active background HUD keeps its existing settings. Explicit options start a separate foreground session. Stop the current HUD first: a different port does not release its managed evidence store.'
+      : 'This HUD is running from a source environment. Stop the current HUD before starting the next one, then use this command or the source launcher from your reviewed checkout. A different port does not release the current managed evidence store.';
     ['setup-launch-intro', 'help-launch-intro'].forEach(id => { byId(id).textContent = intro; });
     ['setup-reopen-command', 'help-reopen-command', 'setup-command'].forEach(id => { byId(id).textContent = launch.command; });
     ['setup-source-launch', 'help-source-launch'].forEach(id => { byId(id).hidden = desktop; });
@@ -535,7 +535,7 @@ byId('setup-build').addEventListener('click', () => {
   try {
     byId('setup-command').textContent = hudLaunchCommand({config: byId('setup-config').value, offline: byId('setup-offline').value, suricata: byId('setup-suricata').value, port: byId('setup-port').value});
     byId('setup-copy').disabled = false;
-    byId('setup-feedback').textContent = 'Command prepared, not run. Explicit options start a new session. Use an unused port to keep an existing HUD running, or stop a foreground HUD with Ctrl+C in its terminal first. Open the address printed by the new session.';
+    byId('setup-feedback').textContent = 'Command prepared, not run. Stop the current HUD first; a different port does not release its managed evidence store. See Reopen or stop MEGALODON for the background-service command. Open the address printed by the new session.';
   } catch (error) { byId('setup-copy').disabled = true; byId('setup-feedback').textContent = error.message; }
 });
 ['setup-config', 'setup-offline', 'setup-suricata', 'setup-port'].forEach(id => byId(id).addEventListener('input', () => {
@@ -582,7 +582,7 @@ byId('account-launch-build').addEventListener('click', () => {
   try {
     byId('account-launch-command').textContent = protectedHudLaunchCommand(byId('account-port').value);
     byId('account-launch-copy').disabled = false;
-    byId('account-launch-feedback').textContent = 'Protected launch prepared, not run. Choose an unused port or stop the current foreground HUD first.';
+    byId('account-launch-feedback').textContent = 'Protected launch prepared, not run. Stop the current HUD first; a different port does not release its managed evidence store. See Reopen or stop MEGALODON for the background-service command.';
   } catch (error) {
     byId('account-launch-command').textContent = 'Protected launch unavailable';
     byId('account-launch-copy').disabled = true;
@@ -593,7 +593,7 @@ byId('account-launch-copy').addEventListener('click', async () => {
   if (byId('account-launch-copy').disabled) return;
   try {
     await navigator.clipboard.writeText(byId('account-launch-command').textContent);
-    byId('account-launch-feedback').textContent = 'Protected launch copied. Run it in your terminal; this HUD remains unchanged.';
+    byId('account-launch-feedback').textContent = 'Protected launch copied. Stop the current HUD first, then run it in your terminal. Keep that terminal open and sign in at its printed address.';
   } catch (_) {
     byId('account-launch-feedback').textContent = 'Clipboard unavailable. Select and copy the displayed command; this HUD remains unchanged.';
   }
