@@ -600,6 +600,11 @@ The separate `megalodon.offline` report-publishing CLI refuses after the latch:
 it can create reports and launch TShark, so it is not a read-only entry point.
 No new native analyzer or model execution is authorized.
 
+Direct `tshark.replay()` calls also refuse at entry under Stage 0, before
+privilege checks, executable metadata, input access or temporary-directory
+creation. The lower process guard remains independent. Pure field parsing is
+unchanged; native replay does not become a read-only completed-field reader.
+
 This is a **partial #750 implementation**, not a universal no-effect claim.
 Trusted Python startup/imports, interpreter caches, ordinary developer/test
 setup, and test-output files are outside the invocation tripwires. The latch is
