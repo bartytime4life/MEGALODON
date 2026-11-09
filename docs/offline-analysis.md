@@ -633,9 +633,20 @@ APIs or helper scripts. The status projection has no acceptance authority and
 does not assert a fixture test pass or measured zero counters.
 
 `tests/test_stage0_boundary.py` exercises effect tripwires for these named
-entries. The exact-head Qwen workflow retains the in-memory status projection
-alongside its scoped tests. A combined commit/tree/fixture-digest receipt,
-source/package comparison, remaining entry inventory, independent exact-head
+entries. The exact-head Qwen workflow includes the serialization and installer
+regressions and retains their JUnit report with the in-memory status projection.
+`stage0-ci-receipt.json` records the workflow-supplied commit/tree, SHA-256 hashes
+of the binding/readiness/status/JUnit inputs, observed test-case totals and six
+required passing regression cases. Invalid inputs, missing required cases or
+reported failures cannot produce a success receipt. This is a CI evidence
+summary, not an independent attestation of its inputs. It does not infer zero
+tripwire counts from green tests: aggregate counters remain `null`, package
+parity and native lanes remain `NOT_RUN`, and every authority flag is false.
+Available partial artifacts are retained on workflow failure; a missing success
+receipt is unavailable evidence, never a pass.
+
+A complete fixture-digest/tripwire receipt, source/package comparison, remaining
+entry inventory, independent exact-head
 review and separate owner disposition remain #750 acceptance gates. Merge,
 release, installation, deployment, operator acceptance and host authority are
 distinct; none follows from this projection.

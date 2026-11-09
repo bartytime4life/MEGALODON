@@ -24,6 +24,14 @@ def test_qwen_zero_effect_workflow_is_bounded_and_exact_head():
     assert "tests/test_qwen_zero_effect.py" in raw
     assert "tests/test_qwen_runtime_gate.py" in raw
     assert "tests/test_stage0_boundary.py" in raw
+    assert "tests/test_stage0_serialization.py" in raw
+    assert "tests/test_stage0_installer.py" in raw
+    assert "tests/test_stage0_ci_receipt.py" in raw
+    assert '--junitxml="$RUNNER_TEMP/stage0-scoped-tests.xml"' in raw
+    assert "tools/stage0_ci_receipt.py" in raw
+    assert "stage0-ci-receipt.json" in raw
+    assert "git rev-parse 'HEAD^{tree}'" in raw
+    assert job["steps"][-1]["if"] == "${{ always() }}"
     assert "python -B -m megalodon --stage0-offline stage0-status" in raw
     assert "stage0-entry-boundary.json" in raw
     assert "tests/test_model_lifecycle.py" in raw
