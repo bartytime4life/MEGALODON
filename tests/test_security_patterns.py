@@ -453,6 +453,34 @@ def test_pattern_cache_tracks_prompt_contract_and_knowledge_generation(service):
             assert service.reviews[identifier]['analysis']['explanation_contract']=='changed-contract'
 
 
+def test_live_library_fallback_invalidates_real_pattern_cache(service):
+    from megalodon.knowledge import KnowledgeLibrary
+    library=KnowledgeLibrary(service.evidence.home,downloader=lambda *a,**k:pytest.fail('Read invoked download'))
+    service.knowledge=library
+    service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in rows()])
+    service.process_hour(START);identifier=next(iter(service.reviews))
+    original=service.model
+    try:
+        with patch.object(service,'model',side_effect=original) as model:
+            service.analyze(identifier);service.worker.join(2)
+            first=service.reviews[identifier]['analysis']
+            assert first['state']=='ready' and first['knowledge_generation']==library.state['active']
+            service.analyze(identifier)
+            assert model.call_count==1
+            path=library._generation(library.state['active'])
+            with path.open('r+b') as handle:
+                handle.seek(5000);value=handle.read(1);handle.seek(5000);handle.write(bytes([value[0]^0xff]))
+            service.analyze(identifier);service.worker.join(2)
+            second=service.reviews[identifier]['analysis']
+            assert model.call_count==2 and second['state']=='ready'
+            assert second['knowledge_generation']==library.snapshot()['generation']
+            assert second['knowledge_generation'].startswith('starter:')
+            assert second['cache_identity']!=first['cache_identity']
+            service.analyze(identifier)
+            assert model.call_count==2
+    finally:library.close()
+
+
 def test_pattern_rejects_knowledge_change_during_inference(service):
     service.evidence.append_records('flows',[{k:r[k] for k in ('observed_at','source','data')} for r in rows()])
     service.process_hour(START);identifier=next(iter(service.reviews))

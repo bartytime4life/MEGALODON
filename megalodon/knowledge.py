@@ -1,6 +1,7 @@
 """Versioned offline security reference store, separate from private evidence."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from copy import deepcopy
 import hashlib
 from importlib.resources import files
@@ -24,6 +25,7 @@ from .reporting import latest_slot, local_zone
 CAP = 512 * 1024**2
 GENERATION_CAP = 160 * 1024**2
 SCHEMA = 'megalodon-knowledge-v1'
+FALLBACK_MESSAGE = 'The installed library needs review; offline starter references remain available.'
 
 
 class KnowledgeLibrary:
@@ -52,6 +54,7 @@ class KnowledgeLibrary:
         if digest(raw)!=seed_root.joinpath('starter.sha256').read_text().strip():
             raise ValueError('The offline reference pack failed its content check')
         self.seed = json.loads(raw)
+        self.seed_generation = 'starter:'+digest(raw)
         # Unknown leftover generations are never activated. Only files bearing
         # our generated identity inside this private directory can be retired.
         self._cleanup()
@@ -60,18 +63,9 @@ class KnowledgeLibrary:
             self._activate(name)
         try:
             with self._db() as db:
-                if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
-                    raise ValueError('Knowledge integrity check failed')
-                db.execute('SELECT COUNT(*) FROM documents').fetchone()
-                db.execute('SELECT COUNT(*) FROM search').fetchone()
-                db.execute('SELECT COUNT(*) FROM workflow_links').fetchone()
+                self._check_index(db)
         except (OSError, sqlite3.Error, ValueError):
-            # Preserve damaged generations for review; use packaged references
-            # in memory instead of replacing evidence or trusting damaged text.
-            self.state['error'] = 'The installed library needs review; offline starter references remain available.'
-            self.fallback = True
-        else:
-            self.fallback = False
+            self._use_starter()
 
     def _generation(self, name):
         if not isinstance(name, str) or not re.fullmatch(r'[a-f0-9]{32}\.sqlite', name):
@@ -81,6 +75,30 @@ class KnowledgeLibrary:
     def _save(self):
         _atomic_write(self.path, (json.dumps(self.state, sort_keys=True)+'\n').encode(), 0o600)
 
+    @staticmethod
+    def _identity(info):
+        return (info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns,
+                info.st_mode,info.st_uid,info.st_nlink)
+
+    def _content_digest(self,path,identity):
+        flags=os.O_RDONLY|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_NONBLOCK',0)
+        with os.fdopen(os.open(path,flags),'rb') as handle:
+            if self._identity(os.fstat(handle.fileno()))!=identity:
+                raise ValueError('Library identity changed during verification')
+            actual=hashlib.file_digest(handle,'sha256').hexdigest()
+            if (self._identity(os.fstat(handle.fileno()))!=identity
+                    or self._identity(path.lstat())!=identity):
+                raise ValueError('Library identity changed during verification')
+        return actual
+
+    @staticmethod
+    def _check_index(db):
+        if db.execute('PRAGMA quick_check').fetchone()[0]!='ok':
+            raise ValueError('Knowledge integrity check failed')
+        for table in ('documents','search','workflow_links','sources','assets'):
+            db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()
+
+    @contextmanager
     def _db(self, name=None):
         path = self._generation(name or self.state['active'])
         # Validate ownership, link count and permissions without reading a large file.
@@ -90,15 +108,40 @@ class KnowledgeLibrary:
                 or info.st_nlink != 1 or info.st_mode & 0o077 or info.st_size > GENERATION_CAP):
             raise ValueError('Unsafe library file')
         expected=self.state.get('digests',{}).get(path.name)
-        identity=(info.st_ino,info.st_size,info.st_mtime_ns)
+        identity=self._identity(info)
         if expected and self.verified.get(path.name)!=identity:
-            with path.open('rb') as handle: actual=hashlib.file_digest(handle,'sha256').hexdigest()
-            if actual!=expected:raise ValueError('Library content digest changed')
+            self.verified.pop(path.name,None)
+            if self._content_digest(path,identity)!=expected:
+                raise ValueError('Library content digest changed')
             self.verified[path.name]=identity
         db = sqlite3.connect(f'{path.as_uri()}?mode=ro&immutable=1', uri=True)
-        db.row_factory = sqlite3.Row
-        db.execute('PRAGMA trusted_schema=OFF')
-        return db
+        try:
+            db.row_factory = sqlite3.Row
+            db.execute('PRAGMA trusted_schema=OFF')
+            if self._identity(path.lstat())!=identity:
+                raise ValueError('Library identity changed before reading')
+            yield db
+            if self._identity(path.lstat())!=identity:
+                raise ValueError('Library identity changed during reading')
+        finally:
+            db.close()
+
+    def _use_starter(self):
+        # Read failure changes only process-local serving state. The damaged
+        # generation, manifest and rollback target remain untouched for review.
+        self.fallback=True
+        self.state['error']=FALLBACK_MESSAGE
+        self.verified.pop(self.state['active'],None)
+
+    def _read_active(self, read):
+        # Public callers hold the same lock across qualification and projection.
+        # Once failed, do not reopen the index or silently clear the warning.
+        if self.fallback:return None
+        try:
+            with self._db() as db:return read(db)
+        except (OSError,sqlite3.Error,ValueError,TypeError,KeyError,RecursionError):
+            self._use_starter()
+            return None
 
     def _used(self):
         total=0
@@ -164,11 +207,15 @@ class KnowledgeLibrary:
 
     def _activate(self, name):
         with self.lock:
+            # Validate and pin the staged generation before changing either
+            # serving identity or durable recovery metadata.
+            with self._db(name) as db:
+                self._check_index(db)
+                path=self._generation(name)
+                content_digest=self._content_digest(path,self._identity(path.lstat()))
             old = deepcopy(self.state)
             # A damaged active generation never displaces the last good rollback target.
             self.state.update(previous=self.state['previous'] if self.fallback else self.state['active'], active=name, error=None)
-            with self._generation(name).open('rb') as handle:
-                content_digest=hashlib.file_digest(handle,'sha256').hexdigest()
             self.state['digests']={k:v for k,v in self.state.get('digests',{}).items() if k==self.state['previous']}
             self.state['digests'][name]=content_digest
             try: self._save()
@@ -180,18 +227,17 @@ class KnowledgeLibrary:
 
     def snapshot(self, include_token=False):
         with self.lock:
-            if self.fallback:
-                sources = self.seed['sources']
-                count = len(self.seed['entries'])
-            else:
-                with self._db() as db:
-                    sources = {r['id']:json.loads(r['data']) for r in db.execute('SELECT * FROM sources')}
-                    count = db.execute('SELECT COUNT(*) FROM documents').fetchone()[0]
+            def details(db):
+                sources={r['id']:json.loads(r['data']) for r in db.execute('SELECT * FROM sources')}
+                return sources,db.execute('SELECT COUNT(*) FROM documents').fetchone()[0]
+            value=self._read_active(details)
+            sources,count=value if value is not None else (deepcopy(self.seed['sources']),len(self.seed['entries']))
             result = dict(schema=SCHEMA, state='updating' if self.busy else 'needs_review' if self.state['error'] else 'ready',
                           entries=count, sources=sources, used_bytes=self._used(), cap_bytes=CAP,
                           enabled=self.state['enabled'], update_time='08:00', timezone=str(local_zone()),
                           last_check=self.state['last_check'], error=self.state['error'],
-                          rollback_available=bool(self.state['previous']), generation=self.state['active'],
+                          rollback_available=bool(self.state['previous']),
+                          generation=self.seed_generation if self.fallback else self.state['active'],
                           iana='Bundled, verified IANA protocol and service library; port registrations are context only.')
             if include_token: result['token'] = self.token
             return result
@@ -207,24 +253,24 @@ class KnowledgeLibrary:
         words = re.findall(r'[\w.-]+', query, re.UNICODE)[:12]
         if not words: return []
         with self.lock:
-            if self.fallback:
+            expression = ' OR '.join('"'+w.replace('"','""')+'"' for w in words)
+            rows=self._read_active(lambda db:[dict(r) for r in db.execute(
+                'SELECT d.* FROM search JOIN documents d ON d.id=search.id WHERE search MATCH ? ORDER BY rank LIMIT ?',
+                (expression,limit))])
+            if rows is None:
                 rows = [r for r in self.seed['entries'] if any(w.casefold() in (r['title']+' '+r['text']).casefold() for w in words)][:limit]
-            else:
-                with self._db() as db:
-                    expression = ' OR '.join('"'+w.replace('"','""')+'"' for w in words)
-                    rows = [dict(r) for r in db.execute('SELECT d.* FROM search JOIN documents d ON d.id=search.id WHERE search MATCH ? ORDER BY rank LIMIT ?', (expression,limit))]
             return [{k:r[k] for k in ('id','source','edition','identifier','title','url')} |
                     {'excerpt':r['text'][:1000], 'context_only':True} for r in rows]
 
     def for_pattern(self,pattern):
         from .security_patterns import CONTEXT
         if pattern not in CONTEXT:raise ValueError('Unknown reviewed pattern')
-        if not self.fallback:
-            with self.lock,self._db() as db:
-                rows=[dict(r) for r in db.execute('SELECT d.* FROM workflow_links w JOIN documents d ON d.id=w.document WHERE w.pattern=? LIMIT 3',(pattern,))]
+        with self.lock:
+            rows=self._read_active(lambda db:[dict(r) for r in db.execute(
+                'SELECT d.* FROM workflow_links w JOIN documents d ON d.id=w.document WHERE w.pattern=? LIMIT 3',(pattern,))])
             if rows:
                 return [{k:r[k] for k in ('id','source','edition','identifier','title','url')}|{'excerpt':r['text'][:1000],'context_only':True} for r in rows]
-        return self.search(CONTEXT[pattern][2],3)
+            return self.search(CONTEXT[pattern][2],3)
 
     def action(self, body):
         if body == {'action':'update'}:
@@ -234,7 +280,7 @@ class KnowledgeLibrary:
             if body == {'action':'rollback'} and self.state['previous']:
                 previous = self.state['previous']
                 with self._db(previous) as db:
-                    if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok': raise ValueError('Rollback library failed validation')
+                    self._check_index(db)
                 old = deepcopy(self.state)
                 self.state.update(active=previous,previous=self.state['active'],error=None)
                 try: self._save()
@@ -320,7 +366,8 @@ class KnowledgeLibrary:
                 elif activated:
                     self.state.update(last_check=utc(self.clock()),error='The update was activated, but its status could not be saved. Check free disk space.')
                 else:
-                    self.state.update(last_check=utc(self.clock()),error='Update was not activated. The previous library is still available; check source availability, format and free disk space.')
+                    self.state.update(last_check=utc(self.clock()),error=FALLBACK_MESSAGE if self.fallback else
+                        'Update was not activated. The previous library is still available; check source availability, format and free disk space.')
                 try:self._save()
                 except OSError:pass
         finally:
