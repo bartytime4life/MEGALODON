@@ -109,3 +109,59 @@ both the inspection guide and this record without rewriting dated counts.
 These are local source results. Hosted exact-head checks, owner review,
 merge, installation and native analysis remain separate states. This record
 does not authorize any of them.
+
+## Follow-up: retained history and Setup focus
+
+This separate source pass starts at
+`main@d03bc43d13a9f030cfcff7eb8beaea5fc318abae` and is retained on
+`codex/history-setup-reliability-20261109`. The original checkout at
+`187ec95960f48e85c325e1211ad8b9bdd1f07d72` remains unchanged. Earlier results
+above keep their original scope.
+
+The history and Setup changes below are retained **runtime candidates**. This
+documentation branch contains their dated review and validation record, not
+their runtime implementation or a claim that either candidate has merged.
+
+| Candidate correction | Demonstrated behavior in the retained combined candidate |
+| --- | --- |
+| Qualify compacted history counts | A conversation crossing the selected interval previously produced a partial marker without a coverage gap, allowing the HUD to display zero packets and the end of the retained range. The API now explains the missing interval allocation; the HUD shows **Unknown** or **At least** the represented totals. Fully contained observations and genuinely empty ranges retain exact counts. |
+| Normalize compacted observation times | Compact rows inherited offset-bearing timestamps that the HUD's UTC timestamp validator refused. Every returned source now uses canonical UTC with a trailing `Z`. |
+| Preserve focus after Setup checks | A delayed success or failure respects focus moved to another field or workspace. Software links and disclosure controls retain equivalent focus after their rows are replaced; filtered or collapsed targets recover at the visible search field. Hidden sections cannot reclaim focus. |
+| Refresh source and contributor guidance | The README and current-state page identify the November 9 source, inspection/model preparation and the partial Stage 0 fence. Operational generation remains UNBOUND. Contributor instructions explain how to run capability-free test children without weakening the application gate. |
+
+The runtime candidates are retained in `715b68e` (history) and `f541bd7` (Setup).
+New history cases run real compacted API pages through the shipped HUD validator
+and renderer: start/end crossings, exact interval boundaries, offset timestamps,
+mixed lower bounds, contained totals and a genuinely empty range. Deferred
+Setup tests cover success/failure, navigation, replaced links and disclosures,
+filtered targets, and hidden/collapsed ancestors. Separate agent reviews found
+no remaining concrete issue in these scoped final diffs; this is not independent
+maintainer approval.
+
+Final local source suite on the retained **combined history/Setup candidate**:
+**7,736 passed, 27 skipped, 594 subtests passed** in 250.11 seconds on Python
+3.12.3. This is not a test result for the documentation-only branch or a
+separately rebased runtime PR. The command used a fresh private temporary
+directory, disabled ambient pytest plugin loading, and removed inherited and
+ambient capabilities from the test child:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS= PYTEST_ADDOPTS= \
+  setpriv --inh-caps=-all --ambient-caps=-all "$TEST_PYTHON" \
+  -m pytest -ra --basetemp="$PRIVATE_TEST_ROOT"
+```
+
+`TEST_PYTHON` names the prepared development interpreter; `PRIVATE_TEST_ROOT`
+names a fresh owner-private directory. The initial baseline run correctly
+refused one real capability-free triage test because this desktop session passed
+an inheritable capability. The final run removes that capability only from the
+test process; the product refusal is unchanged.
+
+The skips retain the existing opt-in ClamAV, native socket, Chrome inspection,
+native inspection, TShark and platform-specific path scopes. Node behavior tests
+are not rendered-browser or human accessibility acceptance. No new hosted CI,
+native-parser, real-model, installed-PC, release or publication result is claimed.
+The retained worktree's read-only source preflight passed with
+`data_not_configured`; it created no store and does not verify a running HUD.
+The temporary synthetic browser preview was stopped. No installed HUD, saved
+setting, model, capture or companion service was changed.

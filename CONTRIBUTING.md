@@ -174,6 +174,19 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS= PYTEST_ADDOPTS= \
   .venv/bin/python -m pytest -ra
 ```
 
+Some Linux desktop sessions pass inheritable capabilities to child processes.
+The real offline-triage acceptance test correctly refuses that process with
+`CAPABILITY_FREE_PROCESS_REQUIRED`, even when the user is not root. On Linux
+with `setpriv` available, remove those capabilities from the test child:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS= PYTEST_ADDOPTS= \
+  setpriv --inh-caps=-all --ambient-caps=-all .venv/bin/python -m pytest -ra
+```
+
+This drops capabilities for the test process and its children; it does not
+change the desktop session or weaken the application's privilege checks.
+
 The regression probes use real pytest with inert, temporary entry-point metadata.
 They show that an autoload tripwire executes without the policy, is not imported
 with it, and cannot return through inherited plugin/argument variables. They also

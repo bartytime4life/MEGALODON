@@ -12,8 +12,8 @@
 MEGALODON turns bounded network metadata and separately scoped host observations
 into a local Linux investigation workspace. Follow a finding to its recorded
 event, inspect the ingestion receipt, compare retained history, and create a
-visual report. Optional local AI helps explain the evidence; explicit operator
-workflows keep action authority separate.
+visual report. Local AI preparation remains subject to the release's model hold;
+explicit operator workflows keep action authority separate.
 
 **Linux reference · Python 3.11+ · SQLite · Apache-2.0**
 **Core use needs no subscription, cloud account, model or GPU.** Optional tools
@@ -57,7 +57,9 @@ It contains documentation-only addresses.
 
 ## What works today
 
-**Source basis: [`main@7c91232`](https://github.com/bartytime4life/MEGALODON/commit/7c912322b12fe40fbe92de79b32fdc678054a3da), October 27, 2026.**
+**Source orientation: [`main@d03bc43`](https://github.com/bartytime4life/MEGALODON/commit/d03bc43d13a9f030cfcff7eb8beaea5fc318abae), November 9, 2026.**
+[Current changes and exact boundaries](docs/current-state.md#november-9-source-orientation)
+cover file inspection, model-library maintenance and the partial Stage 0 fence.
 Code presence and hosted checks do not establish the configuration, accuracy
 or recovery capability of a particular installed PC.
 
@@ -68,7 +70,8 @@ or recovery capability of a particular installed PC.
 | History and reporting | Segmented evidence, compact summaries, local visual reports and fixed schedules | Missing intervals remain missing; packet and flow units stay separate |
 | Optional sources | TShark, closed Zeek logs, strict Suricata admission and separate background observations | Importer, installed tool and qualified producer are distinct |
 | Host review | Lynis, AIDE, hardening posture, persistence, passive gateway review and own-account program/socket review | Scoped observations; root-only and unobserved activity can be missed |
-| Local AI | Installed-model selection, bounded explanations and closed proposals | Listener posture checked before inventory; model output grants no authority |
+| File inspection | Explicit signed-in submission, bounded structural and identification clues, partial-coverage reports | Optional confined runtime; no launch, unpacking or malware/safety verdict |
+| Local AI preparation | Installed-model selection, explicit file verification, pinned staging and a separate fixed response diagnostic | Operational inference remains **UNBOUND**; maintenance or a diagnostic response does not accept a model |
 | Recovery readiness | AIDE evidence gaps; backup/test receipt hashes checked against separate operator trust | **No host-file restore; `restore_eligible` remains false** |
 | Explicit Linux workflows | Protected configuration, bounded scans and separate temporary containment workflow | Operator/OS authorization and documented scope; no automatic blocking |
 | Desktop lifecycle | Private per-user install, update/rollback and managed HUD service | Login startup is opt-in; saved monitoring has its own scope |
@@ -163,6 +166,10 @@ operator decision NOT_RECORDED**; runtime selection does not complete its
 containment and evaluation gates.
 [Local AI contracts and limits](docs/wiki/integrations-and-qwen.md).
 
+Operational generation remains [UNBOUND in this release](docs/qwen-runtime-unbound.md)
+for every model family. Discovery, file maintenance and the fixed response
+diagnostic are separate preparation workflows.
+
 ## Recovery evidence with honest limits
 
 <picture>
@@ -191,8 +198,9 @@ causality and conflicts remain unresolved. The separate
 | [Reporting](docs/efficient-recording-reports.md) · [Background tools](docs/background-tools.md) | [Technical deep dive](docs/wiki/technical-deep-dive.md) · [HTTP contract](docs/dashboard-http-contract.md) |
 | [Roadmap and limits](docs/wiki/roadmap-and-limits.md) | [Engineering case studies](docs/wiki/engineering-case-studies.md) · [Contribute](CONTRIBUTING.md) |
 
-CI, CodeQL and the Qwen zero-effect workflow succeeded at this source basis.
-Its Linux browser run was **cancelled**, so it supplies no browser-pass claim.
+At the historical **October 27 source basis**, CI, CodeQL and the Qwen zero-effect
+workflow succeeded. Its Linux browser run was **cancelled**, so it supplies no
+browser-pass claim. These results do not describe the November 9 source pin.
 [Exact run IDs and limits](docs/current-state.md#october-27-source-head-checks)
 remain separate from checks on this documentation candidate or an installed PC.
 Native platform parity, operational detection accuracy and independent model
@@ -220,8 +228,9 @@ sensor flow observations and interface rates remain separate.
 review assistance. The offline starter contains attributed ATT&CK, ATLAS,
 D3FEND, OWASP GenAI and CISA KEV references. Approved public sources are checked
 at 8 AM local time; private observations remain on this PC. Hourly baselines
-and bounded local-model explanations appear in Findings, device inspection and
-reports. Device and connection changes still require approval. See
+and saved explanation records appear in Findings, device inspection and reports;
+new operational model explanations remain held by the UNBOUND release fence.
+Device and connection changes still require approval. See
 [security knowledge and patterns](docs/security-knowledge.md) for coverage,
 storage limits, source provenance and interpretation.
 
