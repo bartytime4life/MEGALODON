@@ -76,6 +76,8 @@ class RetainedEvidenceReader:
                         finding=data.get('detection',{})
                         data=dict(kind='finding_v1',severity=finding.get('severity'),rule_id=finding.get('rule_id'),
                                   original_reference=data.get('original_reference'))
+                    elif row['category']=='packet_rollups' and data.get('kind')=='partial_interval':
+                        gaps.append('A compact conversation crossed the requested interval boundary; its packet and byte totals cannot be assigned to this range.')
                     row=dict(row,data=data)
                     size=len(json.dumps(row).encode())
                     if size>8192:
@@ -198,10 +200,9 @@ class RetainedEvidenceReader:
                             data=dict(kind='partial_interval')
                             stamp=utc(max(start,first))
                     elif not start <= epoch(stamp) < end:continue
-                if entry['kind'] in {'core', 'receipt'}:
-                    # Core rows store isoformat() with "+00:00"; the HUD history
-                    # contract requires a trailing Z, so normalize exactly here.
-                    stamp = _utc_text(stamp)
+                # Compact conversations inherit core isoformat() timestamps.
+                # The HUD history contract requires trailing Z for every source.
+                stamp = _utc_text(stamp)
                 output.append(dict(id=entry['id'] + ':' + str(row[key]), category=entry['category'], observed_at=stamp, source=source, data=data))
             last = rows[-1][key]
             self.read_cursor = last
