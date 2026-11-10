@@ -189,6 +189,7 @@ class Stage0PackageParityWorkflowTests(unittest.TestCase):
         for required in ('github.event.pull_request.head.sha || github.sha',
                          'persist-credentials: false', 'constraints/test-linux-cp311.txt',
                          '--require-hashes', '--no-build-isolation', '--no-deps', '--without-pip',
+                         'env -u PIP_BUILD_CONSTRAINT PIP_NO_INDEX=1 python -I -B -m pip wheel',
                          '--no-index', '-I -B', '--python "$RUNNER_TEMP/stage0-installed/bin/python"',
                          'tools/stage0_package_parity.py', 'if: ${{ always() }}',
                          'stage0-package-projection-parity.json'):

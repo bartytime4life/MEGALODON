@@ -6,6 +6,9 @@ wheel with the existing hash-locked CPython 3.11 test/backend environment, then
 installs that wheel without dependencies or index access into a disposable venv
 without pip or system packages. Build and installation are CI setup; they do not
 install MEGALODON on the owner's PC or authorize installation elsewhere.
+For the non-isolated wheel build only, the workflow clears `PIP_BUILD_CONSTRAINT`
+because pip rejects it alongside `--no-build-isolation`; the backend is already
+installed from the hash-locked setup and `PIP_CONSTRAINT` remains in force.
 
 `tools/stage0_package_parity.py` requires a clean, exact checkout before and after
 collection. It compares the complete relative package-file/SHA-256 maps of the
