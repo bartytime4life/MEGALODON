@@ -126,6 +126,73 @@ def test_raw_packet_history_page_passes_the_real_hud_timestamp_check(manager):
     assert result.returncode==0,result.stderr
 
 
+@pytest.mark.parametrize('start_offset,end_offset,partial,expected_count,expected_bytes',[
+    (100,250,True,'At least 1','At least 100'),
+    (-1,150,True,'Unknown','Unknown'),
+    (100,140,True,'Unknown','Unknown'),
+    (0,200,True,'At least 1','At least 100'),
+    (200,250,True,'Unknown','Unknown'),
+    (0,201,False,'202','20200'),
+    (-1,250,False,'202','20200'),
+    (250,280,False,'0','0'),
+])
+def test_compact_history_interval_counts_remain_qualified(manager,start_offset,end_offset,partial,expected_count,expected_bytes):
+    import json,shutil,subprocess
+    from datetime import datetime,timedelta,timezone
+    from megalodon.control_room_assets import ROOM_JS
+    from megalodon.dashboard_history import HISTORY_JS
+    from megalodon.models import PacketEvent
+    begin=(int(manager.clock())//300-1)*300
+    writer=manager.packet_writer();run=writer.start_ingestion_run('jsonl')
+    for index in range(201):
+        # Offset-bearing observations must reach the HUD as canonical UTC too.
+        writer.record_event_bundle(PacketEvent(datetime.fromtimestamp(begin+index,timezone(timedelta(hours=-6))),
+            '10.0.0.2','1.1.1.1','TCP',50000,443,byte_count=100),[],[],run_id=run)
+    # A distinct, wholly contained conversation remains an exact lower bound
+    # when the longer conversation crosses the requested start.
+    writer.record_event_bundle(PacketEvent(datetime.fromtimestamp(begin+150,timezone.utc),
+        '10.0.0.2','1.1.1.1','TCP',50001,443,byte_count=100),[],[],run_id=run)
+    writer.finish_ingestion_run(run,'source_exhausted');writer.close()
+    _compact(manager)
+    page=RetainedEvidenceReader(manager).history_page(utc(begin+start_offset),utc(begin+end_offset))
+    assert all(r['observed_at'].endswith('Z') for r in page['records'])
+    markers=[r for r in page['records'] if r['data'].get('kind')=='partial_interval']
+    assert bool(markers)==partial
+    assert page['truncated'] is partial
+    assert page['next_cursor'] is None
+    if partial:
+        assert any('crossed the requested interval boundary' in gap for gap in page['gaps'])
+        assert all('packet_count' not in r['data'] and 'byte_count' not in r['data'] for r in markers)
+    else:
+        assert not page['gaps']
+        assert sum(r['data'].get('packet_count',0) for r in page['records'])==int(expected_count)
+    node=shutil.which('node')
+    if not node:pytest.skip('Node required for retained history behavior')
+    stamp_check=ROOM_JS[ROOM_JS.index('function roomStamp(value)'):ROOM_JS.index('function validateTraffic')]
+    script=stamp_check+HISTORY_JS+r'''
+const assert=require('node:assert/strict'),input=JSON.parse(require('fs').readFileSync(0,'utf8'));
+const nodes=new Map();function textNode(tag,text=''){return {tag,textContent:text,children:[],append(...v){this.children.push(...v)},replaceChildren(...v){this.children=v},setAttribute(){}}}
+function byId(id){if(!nodes.has(id))nodes.set(id,textNode('div'));return nodes.get(id)}
+function roomBars(){}function roomVisual(parent,title){const p=textNode('article',title);parent.append(p);return p}
+function roomCounts(values){return values.map(x=>[x,1])}function renderRoomControls(){}function clearRoomEvidence(){}
+const roomEvidenceState={buttons:new Map()};
+const roomState={managedHistory:validateManagedHistory(input.page,input.request),history:{...input.request,previous:[]}};
+renderManagedHistory();
+assert.equal(byId('hud-records').textContent,input.expected_count);
+assert.equal(byId('hud-bytes').textContent,input.expected_bytes);
+assert.equal(byId('room-coverage').textContent,input.partial?'Partial page':'End of retained range');
+if(input.partial){
+  assert.match(byId('room-notice').textContent,/packet and byte totals cannot be assigned/);
+  const rows=byId('room-activity-table').children[0].children[2].children;
+  assert(rows.some(r=>r.children.some(c=>c.textContent==='Conversation crosses selected interval')));
+}
+'''
+    request=dict(start=(begin+start_offset)*1000,end=(begin+end_offset)*1000)
+    result=subprocess.run([node,'-e',script],input=json.dumps(dict(page=page,request=request,partial=partial,
+        expected_count=expected_count,expected_bytes=expected_bytes)),capture_output=True,text=True,timeout=10)
+    assert result.returncode==0,result.stderr
+
+
 def test_history_browser_uses_retained_data_and_clears_old_findings():
     import json,shutil,subprocess
     from megalodon.dashboard_history import HISTORY_JS

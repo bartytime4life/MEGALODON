@@ -15,6 +15,7 @@ function renderManagedHistory() {
   clearRoomEvidence('Retained history uses separate evidence references. This inspector is available for qualified findings in the latest metadata view.');
   roomEvidenceState.signature=null;roomEvidenceState.context='managed-history';roomEvidenceState.buttons=new Map();
   const page=roomState.managedHistory, h=roomState.history;
+  const partialPackets=page.records.some(r=>r.category==='packet_rollups'&&r.data.kind==='partial_interval');
   const packets=page.records.filter(r=>r.category==='packets'||(r.category==='packet_rollups'&&r.data.kind==='conversation_v1'));
   const counts=new Map(), peers=new Map(), bins=new Map(), sensors=new Map(), findings=[];
   let count=0, bytes=0;
@@ -34,13 +35,14 @@ function renderManagedHistory() {
   const note='Retained history across source segments. This page contains packet detail or verified conversation summaries, never both for one source. Use Reports for complete interval aggregation.';
   byId('room-overall').textContent=roomState.failed?'Stale history':'Retained history';
   byId('room-connection').textContent=roomState.failed?'Unavailable · preserved view':'Local history connected';
-  byId('room-coverage').textContent=page.truncated?'Partial page':'End of retained range';
+  byId('room-coverage').textContent=page.truncated||partialPackets?'Partial page':'End of retained range';
   byId('room-sources').textContent=[...new Set(page.records.map(r=>r.source))].join(', ')||'No retained source';
   byId('room-count').textContent=String(findings.length)+' findings in this page';
   byId('room-notice').textContent=note+' '+page.gaps.join(' ');
   byId('room-home-summary').textContent=note;
-  byId('hud-records').textContent=String(count);byId('hud-findings').textContent=String(findings.length);
-  byId('hud-bytes').textContent=String(bytes);byId('hud-source-count').textContent=String(new Set(page.records.map(r=>r.source)).size);
+  const packetTotal=value=>partialPackets?(value?'At least '+value:'Unknown'):String(value);
+  byId('hud-records').textContent=packetTotal(count);byId('hud-findings').textContent=String(findings.length);
+  byId('hud-bytes').textContent=packetTotal(bytes);byId('hud-source-count').textContent=String(new Set(page.records.map(r=>r.source)).size);
   const grid=byId('room-traffic-grid');grid.replaceChildren();
   const ranked=map=>[...map].sort((a,b)=>b[1]-a[1]).slice(0,12);
   for(const [title,map,unit] of [['Traffic by observation time',bins,'represented packet records'],['Protocol mix',counts,'represented packet records'],['Observed endpoints',peers,'endpoint appearances'],['Separate sensor observations',sensors,'flow updates']]){
@@ -50,7 +52,7 @@ function renderManagedHistory() {
   }
   const activity=textNode('table');activity.append(textNode('caption','Source evidence references for this page'));
   const head=textNode('thead'), headings=textNode('tr');['Time','Source','Evidence type','Reference'].forEach(v=>{const cell=textNode('th',v);cell.scope='col';headings.append(cell);});head.append(headings);activity.append(head);
-  const body=textNode('tbody');page.records.forEach(r=>{const row=textNode('tr');[r.observed_at,r.source,r.category,r.id].forEach(v=>row.append(textNode('td',String(v))));body.append(row);});activity.append(body);
+  const body=textNode('tbody');page.records.forEach(r=>{const row=textNode('tr');[r.observed_at,r.source,r.data.kind==='partial_interval'?'Conversation crosses selected interval':r.category,r.id].forEach(v=>row.append(textNode('td',String(v))));body.append(row);});activity.append(body);
   byId('room-activity-table').replaceChildren(activity);
   const root=byId('room-findings-visual');root.replaceChildren();const panel=roomVisual(root,'Retained findings',selection,findings.length+' on this page',findings.length?'data':'unavailable');
   roomBars(panel,roomCounts(findings.map(f=>f.source+' / '+f.severity)),'findings');
