@@ -1,0 +1,80 @@
+name: Stage 0 package projection parity
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PIP_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
+  PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/constraints/ci.txt
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  scoped-source-wheel-projections:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Install locked build backend and run inert collector tests
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          test "$(git rev-parse --verify HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          mkdir "$RUNNER_TEMP/stage0-test-wheelhouse"
+          python -I -B -m pip download --require-hashes --only-binary=:all: --no-cache-dir \
+            --dest "$RUNNER_TEMP/stage0-test-wheelhouse" -r constraints/test-linux-cp311.txt
+          wheels=("$RUNNER_TEMP"/stage0-test-wheelhouse/*.whl)
+          [ "${#wheels[@]}" -eq 13 ]
+          sha256sum constraints/test-linux-cp311.txt "${wheels[@]}"
+          python -I -B -m pip install --no-index --find-links "$RUNNER_TEMP/stage0-test-wheelhouse" \
+            --require-hashes --only-binary=:all: --no-cache-dir --force-reinstall \
+            -r constraints/test-linux-cp311.txt
+          python -I -B -m pip check
+          python -I -B -m unittest discover -s tests -p test_stage0_package_parity.py
+      - name: Build and install one ephemeral local wheel
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/stage0-distributions"
+          env -u PIP_BUILD_CONSTRAINT PIP_NO_INDEX=1 python -I -B -m pip wheel --no-index --no-deps --no-build-isolation \
+            --no-cache-dir --wheel-dir "$RUNNER_TEMP/stage0-distributions" .
+          wheels=("$RUNNER_TEMP"/stage0-distributions/megalodon_defense-*.whl)
+          [ "${#wheels[@]}" -eq 1 ]
+          python -I -B -m venv --without-pip "$RUNNER_TEMP/stage0-installed"
+          python -I -B -m pip --python "$RUNNER_TEMP/stage0-installed/bin/python" install \
+            --no-index --no-deps --no-cache-dir --no-compile "${wheels[0]}"
+      - name: Compare exact source and isolated installed projections
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          wheels=("$RUNNER_TEMP"/stage0-distributions/megalodon_defense-*.whl)
+          [ "${#wheels[@]}" -eq 1 ]
+          python -I -B tools/stage0_package_parity.py \
+            --checkout "$GITHUB_WORKSPACE" --commit "$EXPECTED_COMMIT" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" --wheel "${wheels[0]}" \
+            --installed-python "$RUNNER_TEMP/stage0-installed/bin/python" \
+            > "$RUNNER_TEMP/stage0-package-projection-parity.json"
+      - name: Retain scoped evidence and wheel identity
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stage0-package-projections-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/stage0-package-projection-parity.json
+            ${{ runner.temp }}/stage0-distributions/megalodon_defense-*.whl
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+          include-hidden-files: false
