@@ -339,9 +339,9 @@ function renderSoftwareShelf() {
     const actions = textNode('div', '', 'software-actions');
     if (item.id !== 'git' && item.id !== 'python') {
       const configure = textNode('a', 'Configure '+item.name+' →', 'software-download');
-      configure.href='#setup-app-'+item.id;actions.append(configure);
+      configure.id=`software-primary-${item.id}`;configure.href='#setup-app-'+item.id;actions.append(configure);
     } else {
-      const link=textNode('a',`${item.link || item.name+' downloads'} ↗`,'software-download');link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';actions.append(link);
+      const link=textNode('a',`${item.link || item.name+' downloads'} ↗`,'software-download');link.id=`software-primary-${item.id}`;link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';actions.append(link);
       if(item.id==='python'){const check=textNode('button',localCheckState.busy?'Checking…':'Check runtime','software-check');check.type='button';check.id='software-check-python';check.disabled=localCheckState.busy;check.addEventListener('click',()=>runLocalChecks('python'));actions.append(check);}
     }
     const more = textNode('details', '', 'software-details'); more.id = `software-guidance-${item.id}`;
@@ -350,9 +350,10 @@ function renderSoftwareShelf() {
       // Ignore queued events from nodes removed by a newer search or check render.
       if (generation === softwareShelfGeneration) softwareGuidanceOpen.set(item.id, more.open);
     });
-    more.append(textNode('summary', 'What to know before installing'), textNode('p', item.note));
-    if (item.id === 'qwen') { const model = textNode('a', 'Browse Ollama models ↗'); model.href = 'https://ollama.com/library'; model.target = '_blank'; model.rel = 'noopener noreferrer'; more.append(model); }
-    if (['tshark', 'zeek', 'nftables'].includes(item.id)) { const guide = textNode('a', 'MEGALODON setup guidance ↗'); guide.href = toolAcquisition[item.id].url; guide.target = '_blank'; guide.rel = 'noopener noreferrer'; more.append(guide); }
+    const summary = textNode('summary', 'What to know before installing'); summary.id = `software-summary-${item.id}`;
+    more.append(summary, textNode('p', item.note));
+    if (item.id === 'qwen') { const model = textNode('a', 'Browse Ollama models ↗'); model.id = 'software-models-qwen'; model.href = 'https://ollama.com/library'; model.target = '_blank'; model.rel = 'noopener noreferrer'; more.append(model); }
+    if (['tshark', 'zeek', 'nftables'].includes(item.id)) { const guide = textNode('a', 'MEGALODON setup guidance ↗'); guide.id = `software-guide-${item.id}`; guide.href = toolAcquisition[item.id].url; guide.target = '_blank'; guide.rel = 'noopener noreferrer'; more.append(guide); }
     row.append(presence, actions, more); return row;
   });
   byId('setup-software-list').replaceChildren(...(rows.length ? rows : [textNode('p', 'No software matches. Try a product name such as Python, Zeek, or Ollama.', 'setup-check-empty')]));
@@ -388,10 +389,21 @@ function renderLocalCheckResults() {
   // Apps & integrations deliberately does not re-render here: it stays on
   // the HUD-launch snapshot by design (see appsPresenceFreshnessNote).
 }
+function localCheckFocusTargetAvailable(control) {
+  if (!control || control.disabled || typeof control.focus !== 'function') return false;
+  let child = control;
+  for (let ancestor = control; ancestor; child = ancestor, ancestor = ancestor.parentElement) {
+    if (ancestor.hidden) return false;
+    if (ancestor.tagName === 'DETAILS' && !ancestor.open && child.tagName !== 'SUMMARY') return false;
+  }
+  return true;
+}
 async function runLocalChecks(focusTool = null) {
   if (localCheckState.busy) return {ok: false, message: 'A check is already running. Wait for it to finish.'};
   if (Date.now() < localCheckState.retryAt) { const message = 'A check is already running. Wait five seconds, then choose Check this computer.'; byId('setup-check-status').textContent = message; return {ok: false, message}; }
-  const initiatingControl = document.activeElement && document.activeElement.id;
+  const initiatingControl = document.activeElement;
+  const initiatingControlId = initiatingControl && initiatingControl.id;
+  const initiatingWorkspace = initiatingControl?.closest?.('.workspace-view');
   localCheckState.busy = true; localCheckState.focusTool = focusTool;
   byId('setup-check').disabled = true; byId('setup-check').textContent = 'Checking this computer…';
   byId('setup-check-results').setAttribute('aria-busy', 'true'); byId('setup-download-report').disabled = true;
@@ -413,14 +425,28 @@ async function runLocalChecks(focusTool = null) {
     byId('setup-check-status').textContent = message + (localCheckState.snapshot ? ' Previous results are stale.' : ' No current result is available.');
     return {ok: false, message: byId('setup-check-status').textContent};
   } finally {
+    // A check can finish after the operator has moved on. Restore focus only
+    // when disabling or replacing its initiating button left it without a
+    // usable focus target, and never bring focus back into a hidden workspace.
+    const currentFocus = document.activeElement;
+    const shelfFocusId = currentFocus?.id && byId('setup-software-list').contains(currentFocus) ? currentFocus.id : null;
+    const restoreFocus = !document.hidden && !initiatingWorkspace?.hidden
+      && (!currentFocus || currentFocus === document.body || currentFocus === initiatingControl);
     localCheckState.busy = false;
     byId('setup-check').disabled = false; byId('setup-check').textContent = localCheckState.failed ? 'Try checking again' : 'Check this computer →';
     byId('setup-check-results').setAttribute('aria-busy', 'false');
     renderLocalCheckResults(); renderSoftwareShelf();
-    if (initiatingControl && (initiatingControl === 'setup-check' || initiatingControl.startsWith('software-check-'))) {
-      const control = byId(initiatingControl) || byId('setup-check');
-      if (control && typeof control.focus === 'function') control.focus({preventScroll: true});
+    // Rendering replaces shelf controls too. Keep the operator's newer target
+    // when its equivalent remains visible; a filtered/collapsed target can use
+    // the search field, without overriding focus moved outside the shelf.
+    const focusLost = !document.activeElement || document.activeElement === document.body || document.activeElement === currentFocus;
+    let control = null;
+    if (!document.hidden && shelfFocusId && focusLost) {
+      control = [byId(shelfFocusId), byId('setup-software-search')].find(localCheckFocusTargetAvailable);
+    } else if (restoreFocus && focusLost && initiatingControlId && (initiatingControlId === 'setup-check' || initiatingControlId.startsWith('software-check-'))) {
+      control = byId(initiatingControlId) || byId('setup-check');
     }
+    if (localCheckFocusTargetAvailable(control)) control.focus({preventScroll: true});
   }
 }
 byId('setup-check').addEventListener('click', () => runLocalChecks());
