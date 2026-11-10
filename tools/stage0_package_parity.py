@@ -261,6 +261,9 @@ def probe(python, mode, checkout, wheel_hash, case, directory):
 
 def collect(checkout, commit, tree, wheel, installed_python):
     require(sys.platform == 'linux' and os.geteuid() != 0 and not sys.flags.optimize)
+    # Preserve the venv executable symlink while anchoring relative input before
+    # child probes change cwd; resolve() would escape to the base interpreter.
+    installed_python = installed_python.absolute()
     checkout = checkout.resolve(strict=True)
     wheel = wheel.resolve(strict=True)
     require(re.fullmatch(r'megalodon_defense-[A-Za-z0-9_.+-]+\.whl', wheel.name))

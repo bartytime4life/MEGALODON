@@ -48,6 +48,7 @@ class Stage0PackageParityTests(unittest.TestCase):
 
     def fake_probe(self, python, mode, checkout, wheel_hash, case, directory):
         self.calls.append((mode, case))
+        self.assertTrue(Path(python).is_absolute())
         self.assertFalse(directory.is_relative_to(checkout))
         if case == 'identity':
             value = deepcopy(self.identity)
@@ -57,12 +58,12 @@ class Stage0PackageParityTests(unittest.TestCase):
             value = {'exit_code': 2, 'stdout': '', 'stderr': parity.STATUS['denial_code'] + '\n'}
         return value, parity.digest(parity.canonical(value))
 
-    def collect(self, probe=None):
+    def collect(self, probe=None, installed_python=Path('/unused/python')):
         with patch.object(parity, 'source_identity', return_value=self.source), \
                 patch.object(parity, 'command', return_value=b'megalodon/__init__.py\0'), \
                 patch.object(parity, 'probe', side_effect=probe or self.fake_probe), \
                 patch.object(parity.os, 'geteuid', return_value=1000):
-            return parity.collect(self.checkout, 'a' * 40, 'b' * 40, self.wheel, Path('/unused/python'))
+            return parity.collect(self.checkout, 'a' * 40, 'b' * 40, self.wheel, installed_python)
 
     def test_success_is_scoped_and_never_promotes_authority(self):
         value = self.collect()
@@ -75,6 +76,10 @@ class Stage0PackageParityTests(unittest.TestCase):
         self.assertEqual(value['full_stage0_suite_package_parity'], 'NOT_RUN')
         self.assertTrue(all(status == 'NOT_RUN' for status in value['native_lanes'].values()))
         self.assertNotIn(str(self.checkout), json.dumps(value))
+
+    def test_relative_interpreter_is_anchored_before_child_cwd_changes(self):
+        value = self.collect(installed_python=Path('synthetic-venv/bin/python'))
+        self.assertEqual(value['status'], 'scoped_projection_parity')
 
     def test_missing_extra_or_changed_wheel_package_file_refuses(self):
         for files in ([('other', b'x')], [('megalodon/__init__.py', b'changed')],
@@ -156,7 +161,7 @@ class Stage0PackageParityTests(unittest.TestCase):
                                         "print('x' * 20000)")
         result = parity.subprocess.run([sys.executable, '-I', '-B', '-c', injected,
             'source', str(ROOT), '0' * 64, 'status'], cwd=self.checkout,
-            stdout=parity.subprocess.PIPE, stderr=parity.subprocess.PIPE, timeout=5)
+            stdout=parity.subprocess.PIPE, stderr=parity.subprocess.PIPE, timeout=parity.COMMAND_SECONDS)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(result.stdout, b'')
         self.assertIn(b'PROBE_OUTPUT_LIMIT', result.stderr)
