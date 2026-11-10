@@ -58,6 +58,7 @@ jobs:
             tests/test_stage0_serialization.py \
             tests/test_stage0_installer.py \
             tests/test_stage0_hud_maintenance.py \
+            tests/test_stage0_host_maintenance.py \
             tests/test_tshark_stage0_entry.py \
             tests/test_stage0_ci_receipt.py \
             tests/test_model_choices.py \

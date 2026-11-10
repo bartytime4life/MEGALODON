@@ -121,3 +121,12 @@ The companion terminal removal commands operate one tool at a time and require a
 typed confirmation. Neither command implements the proposed full removal.
 An applying full uninstaller needs the scope and provenance gates above before
 it can be offered safely.
+
+### Stage 0 refusal
+
+The standalone audit and removal-plan CLIs refuse before argument parsing when
+Stage 0 has been selected in their process, including `--help`. Their APIs and
+host observation helpers raise `STAGE0_OFFLINE_EFFECT_DENIED`; the CLIs return 2
+and print only that code. Read-only here describes the ordinary installed mode,
+not permission to inspect the host from Stage 0. Pure package-selection and
+simulation-output parsers remain available. No applying mode is added.
