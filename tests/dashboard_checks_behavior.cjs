@@ -9,17 +9,36 @@ process.stdin.on('end', async () => {
     const artifacts = [], downloads = [], revoked = [], copied = [];
     let clipboardFails = false;
     let timerId = 0;
+    const contains = (node, target) => node === target || node.children.some(child => contains(child, target));
     function element(tag = '') {
-      return {tag, children: [], textContent: '', value: '', attrs: {}, listeners: {}, disabled: false,
-        append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; },
+      return {tag, tagName: tag.toUpperCase(), children: [], textContent: '', value: '', attrs: {}, listeners: {}, disabled: false,
+        append(...items) { items.forEach(item => {item.parentElement = this;}); this.children.push(...items); },
+        contains(target) { return contains(this, target); },
+        replaceChildren(...items) {
+          if (this.children.some(child => contains(child, context.document.activeElement))) context.document.activeElement = context.document.body;
+          this.children.forEach(child => {child.parentElement = null;});
+          this.children = []; this.append(...items);
+        },
+        closest(selector) {
+          for (let node = this; node; node = node.parentElement) {
+            if (selector === '.workspace-view' && String(node.className || '').split(/\s+/).includes('workspace-view')) return node;
+          }
+          return null;
+        },
         setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(k, v) { this.listeners[k] = v; },
         focus(options) { context.document.activeElement = this; this.focusOptions = options; },
         click() { this.clicked = true; if (this.download) downloads.push(this.download); }, set innerHTML(_) { throw Error('Unsafe HTML sink'); }};
     }
-    const byId = id => { if (!nodes.has(id)) nodes.set(id, Object.assign(element(), {id})); return nodes.get(id); };
+    const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
+    const byId = id => {
+      for (const node of nodes.values()) {const found = find(node, id); if (found) return found;}
+      if (id.startsWith('software-')) return null;
+      if (!nodes.has(id)) nodes.set(id, Object.assign(element(), {id}));
+      return nodes.get(id);
+    };
     const allText = node => node.textContent + ' ' + node.children.map(allText).join(' ');
     const context = {
-      byId, document: {createElement: element}, Date, Uint8Array, TextDecoder, TextEncoder, AbortController, Blob,
+      byId, document: {createElement: element, body: element('body'), hidden: false}, Date, Uint8Array, TextDecoder, TextEncoder, AbortController, Blob,
       localHudLaunch: {mode: 'source', command: "'/tmp/reviewed checkout/.venv/bin/python' -m megalodon hud"},
       localAccountCommands: null,
       URL: {createObjectURL(blob) {artifacts.push(blob); return 'blob:local-check-test';}, revokeObjectURL(url) {revoked.push(url);}},
@@ -32,6 +51,11 @@ process.stdin.on('end', async () => {
       report,
       fetch: async () => {throw Error('PRIVATE_PATH');},
     };
+    context.document.activeElement = context.document.body;
+    const setupWorkspace = byId('workspace-setup'); setupWorkspace.className = 'workspace-view'; setupWorkspace.hidden = false;
+    const softwareDisclosure = element('details'); softwareDisclosure.open = true;
+    softwareDisclosure.append(element('summary'), byId('setup-software-search'), byId('setup-software-list'));
+    setupWorkspace.append(byId('setup-check'), softwareDisclosure);
     vm.createContext(context); vm.runInContext(code, context, {timeout: 1000});
     const run = value => vm.runInContext(value, context, {timeout: 1000});
     const response = (value, status = 200) => {
@@ -217,6 +241,104 @@ process.stdin.on('end', async () => {
     resolveRequest(response(report)); await pending;
     assert.equal(run('localCheckState.failed'), false);
     assert.equal(byId('setup-download-report').disabled, false);
+    for (const outcome of ['success', 'failure']) {
+      for (const destination of ['setup-software-search', 'workspace-tab-live']) {
+        let finish;
+        context.fetch = () => new Promise((resolve, reject) => {
+          finish = () => outcome === 'success' ? resolve(response(report)) : reject(Error('PRIVATE_PATH'));
+        });
+        byId('setup-check').focus();
+        const checking = byId('setup-check').listeners.click();
+        const nextControl = byId(destination); nextControl.focus();
+        setupWorkspace.hidden = destination === 'workspace-tab-live';
+        finish(); await checking;
+        assert.equal(context.document.activeElement, nextControl,
+          `${outcome}: a completed check must preserve the operator's focus on ${destination}`);
+        setupWorkspace.hidden = false;
+      }
+      let finish;
+      context.fetch = () => new Promise((resolve, reject) => {
+        finish = () => outcome === 'success' ? resolve(response(report)) : reject(Error('PRIVATE_PATH'));
+      });
+      byId('setup-check').focus();
+      const hiddenCheck = byId('setup-check').listeners.click();
+      setupWorkspace.hidden = true; context.document.activeElement = context.document.body;
+      finish(); await hiddenCheck;
+      assert.equal(context.document.activeElement, context.document.body,
+        `${outcome}: focus must not return to a hidden Setup workspace`);
+      setupWorkspace.hidden = false;
+
+      context.fetch = async () => {
+        if (outcome === 'failure') throw Error('PRIVATE_PATH');
+        return response(report);
+      };
+      const priorRuntimeButton = byId('software-check-python'); priorRuntimeButton.focus();
+      const runtimeCheck = priorRuntimeButton.listeners.click();
+      assert.equal(context.document.activeElement, context.document.body,
+        'The shelf render removes the initiating runtime-check button');
+      await runtimeCheck;
+      assert.notEqual(byId('software-check-python'), priorRuntimeButton);
+      assert.equal(context.document.activeElement, byId('software-check-python'),
+        `${outcome}: the replacement runtime-check button must recover otherwise lost focus`);
+      assert.equal(context.document.activeElement.focusOptions.preventScroll, true);
+
+      for (const destination of ['software-summary-python', 'software-primary-python', 'software-guide-zeek']) {
+        context.fetch = () => new Promise((resolve, reject) => {
+          finish = () => outcome === 'success' ? resolve(response(report)) : reject(Error('PRIVATE_PATH'));
+        });
+        byId('setup-check').focus();
+        const shelfCheck = byId('setup-check').listeners.click();
+        const guidance = byId(destination === 'software-guide-zeek' ? 'software-guidance-zeek' : 'software-guidance-python');
+        guidance.open = destination === 'software-guide-zeek'; guidance.listeners.toggle();
+        const previousControl = byId(destination); previousControl.focus();
+        finish(); await shelfCheck;
+        const replacementControl = byId(destination);
+        assert.notEqual(replacementControl, previousControl);
+        assert.equal(context.document.activeElement, replacementControl,
+          `${outcome}: a completed check must retain focus moved to ${destination}`);
+        assert.equal(replacementControl.focusOptions.preventScroll, true);
+      }
+
+      context.fetch = () => new Promise((resolve, reject) => {
+        finish = () => outcome === 'success' ? resolve(response(report)) : reject(Error('PRIVATE_PATH'));
+      });
+      byId('setup-check').focus();
+      const filteredCheck = byId('setup-check').listeners.click();
+      byId('software-summary-python').focus();
+      // A changed filter is applied by the completion render, so the former
+      // shelf target has no equivalent. Do not return to the initiating button.
+      byId('setup-software-search').value = 'Zeek';
+      finish(); await filteredCheck;
+      assert.equal(byId('software-summary-python'), null);
+      assert.equal(context.document.activeElement, byId('setup-software-search'),
+        `${outcome}: a filtered-away shelf target should recover focus at search`);
+      byId('setup-software-search').value = ''; run('renderSoftwareShelf()');
+
+      context.fetch = () => new Promise((resolve, reject) => {
+        finish = () => outcome === 'success' ? resolve(response(report)) : reject(Error('PRIVATE_PATH'));
+      });
+      byId('setup-check').focus();
+      const collapsedGuidanceCheck = byId('setup-check').listeners.click();
+      const zeekGuidance = byId('software-guidance-zeek');
+      zeekGuidance.open = true; zeekGuidance.listeners.toggle();
+      byId('software-guide-zeek').focus();
+      zeekGuidance.open = false; zeekGuidance.listeners.toggle();
+      finish(); await collapsedGuidanceCheck;
+      assert.equal(context.document.activeElement, byId('setup-software-search'),
+        `${outcome}: a link inside collapsed guidance must not receive focus`);
+      assert.equal(byId('software-guide-zeek').focusOptions, undefined);
+
+      context.fetch = () => new Promise((resolve, reject) => {
+        finish = () => outcome === 'success' ? resolve(response(report)) : reject(Error('PRIVATE_PATH'));
+      });
+      byId('software-check-python').focus();
+      const collapsedShelfCheck = byId('software-check-python').listeners.click();
+      softwareDisclosure.open = false; context.document.activeElement = context.document.body;
+      finish(); await collapsedShelfCheck;
+      assert.equal(context.document.activeElement, context.document.body,
+        `${outcome}: a collapsed software shelf must not recover focus inside it`);
+      softwareDisclosure.open = true;
+    }
     context.fetch = async () => response({}, 429);
     await run('runLocalChecks()');
     assert.match(byId('setup-check-status').textContent, /Wait five seconds/);
@@ -237,6 +359,6 @@ process.stdin.on('end', async () => {
     assert.match(byId('setup-check-status').textContent, /timed out/);
     assert.equal(byId('setup-check').disabled, false);
     assert.equal(timers.size, 0);
-    console.log('Explicit checks, validation, overlap, stale recovery, limits, timeout, and software filtering passed');
+    console.log('Explicit checks, validation, overlap, focus ownership, stale recovery, limits, timeout, and software filtering passed');
   } catch (error) {console.error(error); process.exitCode = 1;}
 });
