@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from megalodon.knowledge import KnowledgeLibrary, CAP
+from megalodon.knowledge import KnowledgeLibrary, CAP, FALLBACK_MESSAGE
 from megalodon.knowledge_sources import approved_url, SOURCES, parse, ATLAS, fetch
 
 
@@ -87,10 +87,177 @@ def test_scheduler_catchup_once_even_after_failure(library):
     assert library.state['last_slot']
 
 
-def test_file_symlink_rejected(library,tmp_path):
+def test_file_symlink_uses_starter_without_following_it(library,tmp_path):
     path=library._generation(library.state['active'])
     path.unlink();path.symlink_to(tmp_path/'external')
-    with pytest.raises((ValueError,FileNotFoundError)):library.search('network')
+    with patch('megalodon.knowledge.sqlite3.connect',side_effect=AssertionError('Unsafe file must not be opened')):
+        assert library.search('network')
+    assert library.snapshot()['state']=='needs_review'
+    assert path.is_symlink() and not (tmp_path/'external').exists()
+
+
+def damage_active(library):
+    good=library.state['active']
+    active=library._build(library.seed['entries'],library.seed['sources'],{})
+    library._activate(active)
+    path=library._generation(active)
+    with path.open('r+b') as handle:
+        handle.seek(5000);value=handle.read(1);handle.seek(5000);handle.write(bytes([value[0]^0xff]))
+    return good,path
+
+
+@pytest.mark.parametrize('entry_point',['snapshot','search','for_pattern'])
+def test_live_corruption_uses_verified_starter_without_effects(library,entry_point):
+    import hashlib
+    from importlib.resources import files
+    good,path=damage_active(library)
+    before={p.name:p.read_bytes() for p in library.root.iterdir()}
+    read=dict(snapshot=library.snapshot,search=lambda:library.search('prompt injection'),
+              for_pattern=lambda:library.for_pattern('OBSERVED_ACTIVITY'))[entry_point]
+    with patch.object(library,'_save') as save,patch.object(library,'downloader') as download,patch('megalodon.knowledge.Thread') as worker:
+        result=read()
+        if entry_point=='snapshot':assert result['state']=='needs_review'
+        else:assert result and all(r['context_only'] for r in result)
+        # Fallback remains latched: subsequent reads must never reopen SQLite,
+        # rewrite metadata, start a worker or contact a publisher.
+        with patch.object(library,'_db',side_effect=AssertionError('Fallback reopened a damaged index')):
+            for _ in range(2):
+                status=library.snapshot()
+                assert library.search('prompt injection') and library.for_pattern('OBSERVED_ACTIVITY')
+        save.assert_not_called();download.assert_not_called();worker.assert_not_called()
+    raw=files('megalodon.reference').joinpath('security-v1/starter.json').read_bytes()
+    assert status['generation']=='starter:'+hashlib.sha256(raw).hexdigest()
+    assert status['state']=='needs_review' and status['error']==FALLBACK_MESSAGE
+    assert status['entries']==len(library.seed['entries']) and status['sources']==library.seed['sources']
+    assert library.fallback and library.state['active']==path.name and library.state['previous']==good
+    assert before=={p.name:p.read_bytes() for p in library.root.iterdir()}
+    assert library.worker is None and library.thread is None
+
+
+@pytest.mark.parametrize('failure',[OSError('PRIVATE_READ_FAILURE'),sqlite3.DatabaseError('PRIVATE_READ_FAILURE')])
+def test_live_read_failure_never_returns_cached_health(library,failure):
+    before=library.path.read_bytes()
+    with patch('megalodon.knowledge.sqlite3.connect',side_effect=failure):
+        status=library.snapshot()
+    assert status['state']=='needs_review' and status['error']==FALLBACK_MESSAGE
+    assert 'PRIVATE_READ_FAILURE' not in json.dumps(status)
+    assert library.path.read_bytes()==before
+
+
+def test_same_size_edit_with_restored_mtime_requalifies_cached_digest(library):
+    import hashlib,os
+    row=library.search('prompt injection',limit=1)[0]
+    path=library._generation(library.state['active']);before=path.stat()
+    changed=('X' if row['title'][0]!='X' else 'Y')+row['title'][1:]
+    assert len(changed.encode())==len(row['title'].encode())
+    with sqlite3.connect(path) as db:db.execute('UPDATE documents SET title=? WHERE id=?',(changed,row['id']))
+    os.utime(path,ns=(before.st_atime_ns,before.st_mtime_ns))
+    after=path.stat()
+    assert (after.st_ino,after.st_size,after.st_mtime_ns)==(before.st_ino,before.st_size,before.st_mtime_ns)
+    assert after.st_ctime_ns!=before.st_ctime_ns
+    assert hashlib.sha256(path.read_bytes()).hexdigest()!=library.state['digests'][path.name]
+    manifest=library.path.read_bytes()
+    results=library.search('prompt injection')
+    assert results and all(r['title']!=changed for r in results)
+    assert library.snapshot()['state']=='needs_review' and library.fallback
+    assert library.path.read_bytes()==manifest
+
+
+def test_change_during_digest_verification_is_refused(library):
+    import hashlib
+    path=library._generation(library.state['active']);library.verified.clear()
+    real=hashlib.file_digest
+    def changed(handle,algorithm):
+        result=real(handle,algorithm)
+        with path.open('r+b') as writer:
+            writer.seek(5000);byte=writer.read(1);writer.seek(5000);writer.write(bytes([byte[0]^0xff]))
+        return result
+    with patch('megalodon.knowledge.hashlib.file_digest',changed),patch('megalodon.knowledge.sqlite3.connect') as connect:
+        assert library.search('network')
+        connect.assert_not_called()
+    assert library.fallback and library.snapshot()['error']==FALLBACK_MESSAGE
+
+
+def test_change_during_query_discards_projection_and_closes_connection(library):
+    path=library._generation(library.state['active']);opened=[];real=sqlite3.connect
+    class ChangedConnection(sqlite3.Connection):
+        def execute(self,sql,*args,**kwargs):
+            cursor=super().execute(sql,*args,**kwargs)
+            if sql=='SELECT * FROM sources':
+                with path.open('r+b') as writer:
+                    writer.seek(5000);byte=writer.read(1);writer.seek(5000);writer.write(bytes([byte[0]^0xff]))
+            return cursor
+    def connect(*args,**kwargs):
+        db=real(*args,**kwargs,factory=ChangedConnection);opened.append(db);return db
+    with patch('megalodon.knowledge.sqlite3.connect',connect):status=library.snapshot()
+    assert library.fallback and status['state']=='needs_review' and status['sources']==library.seed['sources']
+    assert opened
+    for db in opened:
+        with pytest.raises(sqlite3.ProgrammingError,match='closed'):db.execute('SELECT 1')
+
+
+def test_restored_bytes_do_not_silently_clear_fallback(library):
+    good=library.state['active'];path=library._generation(good);original=path.read_bytes()
+    with path.open('r+b') as handle:handle.seek(5000);handle.write(b'!')
+    status=library.snapshot();assert library.fallback
+    path.write_bytes(original)
+    with patch.object(library,'_db',side_effect=AssertionError('Read attempted implicit recovery')):
+        assert library.snapshot()['generation']==status['generation']
+        assert library.search('network') and library.for_pattern('OBSERVED_ACTIVITY')
+    assert library.fallback and library.state['active']==good
+
+
+@pytest.mark.parametrize('failure',['missing','unreadable','invalid','save'])
+def test_failed_activation_preserves_fallback_and_recovery_metadata(library,failure,monkeypatch):
+    from copy import deepcopy
+    damage_active(library);library.snapshot()
+    candidate=library._build(library.seed['entries'],library.seed['sources'],{})
+    path=library._generation(candidate)
+    if failure=='missing':path.unlink()
+    elif failure=='unreadable':
+        original=library._content_digest
+        def unreadable(target,identity):
+            if target==path:raise OSError('PRIVATE_CANDIDATE_PATH')
+            return original(target,identity)
+        monkeypatch.setattr(library,'_content_digest',unreadable)
+    elif failure=='invalid':path.write_bytes(b'not a SQLite index')
+    else:monkeypatch.setattr(library,'_save',lambda:(_ for _ in ()).throw(OSError('disk full')))
+    before=deepcopy(library.state);manifest=library.path.read_bytes()
+    with pytest.raises((OSError,ValueError,sqlite3.Error)):library._activate(candidate)
+    assert library.state==before and library.path.read_bytes()==manifest and library.fallback
+    assert library.snapshot()['error']==FALLBACK_MESSAGE
+
+
+@pytest.mark.parametrize('recovery',['rollback','update'])
+def test_explicit_validated_recovery_clears_live_fallback(library,recovery):
+    good,damaged=damage_active(library)
+    fallback=library.snapshot()['generation']
+    if recovery=='rollback':
+        status=library.action({'action':'rollback'})
+        assert library.state['active']==good and damaged.exists()
+    else:
+        with kev_only(library):library._update()
+        status=library.snapshot()
+        assert library.state['previous']==good and library._generation(good).exists() and not damaged.exists()
+    assert not library.fallback and status['state']=='ready' and status['error'] is None
+    assert status['generation']!=fallback and status['generation']==library.state['active']
+    assert library.search('network' if recovery=='rollback' else 'Vuln')
+
+
+def test_failed_rollback_and_update_keep_starter_identity_and_warning(library):
+    good,damaged=damage_active(library)
+    status=library.snapshot();manifest=library.path.read_bytes()
+    previous=library._generation(good)
+    with previous.open('r+b') as handle:handle.seek(5000);handle.write(b'!')
+    with pytest.raises(ValueError):library.action({'action':'rollback'})
+    assert library.path.read_bytes()==manifest
+    library.downloader=lambda *a,**k:(_ for _ in ()).throw(ValueError('PRIVATE_DOWNLOAD_FAILURE'))
+    library._update()
+    library.action({'action':'configure','enabled':False})
+    current=library.snapshot()
+    assert library.fallback and current['state']=='needs_review' and current['error']==FALLBACK_MESSAGE
+    assert current['generation']==status['generation']
+    assert library.state['active']==damaged.name and library.state['previous']==good
 
 
 def test_structural_limits_precede_json_materialization():

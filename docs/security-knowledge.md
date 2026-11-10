@@ -59,9 +59,22 @@ activation manifest. Each generation is capped at 160 MiB, allowing an active
 generation, its predecessor and staging. Updates need this headroom and a
 16 MiB free-disk reserve. Failed validation, interruption or insufficient
 space leaves the active version in place. Activation replaces the manifest
-atomically; **Use previous library** swaps the retained generations. Corrupt
-indexes fall back to the starter while visibly reporting the problem. The next
-successful update then keeps the last good predecessor as the rollback target
+atomically; **Use previous library** swaps the retained generations. A failed
+index read, including corruption detected after launch, switches status,
+search and pattern references to the verified packaged starter with a fixed
+review warning. These reads do not repair files, change the manifest, start an
+update or download anything. The damaged generation and last good predecessor
+remain available for explicit recovery. Restoring file bytes alone does not
+clear the warning; a validated rollback or successful activation does.
+
+Fallback exposes `starter:<SHA-256 of the packaged starter>` as its serving
+generation, so source attribution and cached explanations can distinguish it
+from the failed index. Stored active/previous identities stay unchanged during
+fallback reads. Digest-cache qualification includes device and change time,
+and file identity is checked around hashing and each index read. This detects
+observed local index changes; it is not protection against an owner who can
+rewrite the application, reference files and trust metadata together. The next
+successful update keeps the last good predecessor as the rollback target
 and retires the damaged generation. If an update activates but its final status
 cannot be saved, the status reports the activation rather than a failure.
 
