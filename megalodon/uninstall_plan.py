@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from . import hud_autostart, local_install, uninstall_audit
+from . import execution_boundary, hud_autostart, local_install, uninstall_audit
 
 SCHEMA = 'megalodon-uninstall-plan-v1'
 # Firewall removal remains a separate host-protection decision.
@@ -34,6 +34,7 @@ def _selected_packages(packages: tuple[str, ...]) -> tuple[str, ...]:
 
 def _simulate(packages: tuple[str, ...]) -> tuple[int, str]:
     """Fixed apt simulation, bounded while reading, with no inherited overrides."""
+    execution_boundary.require_effects_allowed()
     argv = ['/usr/bin/apt-get', '--simulate', '--no-download', '--no-install-recommends',
             '-o', 'APT::Get::AutomaticRemove=false', '-o', 'APT::Get::Purge=false',
             '-o', 'APT::Color=false', 'remove', '--', *packages]
@@ -90,6 +91,7 @@ def _parse_simulation(output: str) -> list[str]:
 
 
 def package_preview(packages: tuple[str, ...] = ()) -> dict[str, object]:
+    execution_boundary.require_effects_allowed()
     selected = _selected_packages(packages)
     result = {'selected': list(selected), 'state': 'not_selected', 'removals': [],
               'protected': [], 'additional': [], 'issues': []}
@@ -102,6 +104,8 @@ def package_preview(packages: tuple[str, ...] = ()) -> dict[str, object]:
         if code:
             raise ValueError('simulation returned an error')
         removed = _parse_simulation(output)
+    except execution_boundary.Stage0Denied:
+        raise
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return {**result, 'state': 'unavailable', 'issues': ['simulation_failed_or_incomplete']}
     # Every unselected dependency is held, including dependencies of Python/Git.
@@ -118,6 +122,7 @@ def package_preview(packages: tuple[str, ...] = ()) -> dict[str, object]:
 
 
 def _file_item(label: str, entry: dict[str, object], requested: bool) -> dict[str, object]:
+    execution_boundary.require_effects_allowed()
     state = entry['state']
     disposition = 'candidate' if requested else 'preserve'
     if state == 'absent':
@@ -136,6 +141,7 @@ def _file_item(label: str, entry: dict[str, object], requested: bool) -> dict[st
 def plan(*, packages: tuple[str, ...] = (), include_saved_data: bool = False,
          paths: local_install.InstallPaths | None = None, home: Path | None = None) -> dict[str, object]:
     """Collect fresh observations; no saved report can authorize an operation."""
+    execution_boundary.require_effects_allowed()
     selected_packages = _selected_packages(packages)
     if type(include_saved_data) is not bool:
         raise ValueError('include_saved_data must be a boolean')
@@ -217,6 +223,11 @@ def plan(*, packages: tuple[str, ...] = (), include_saved_data: bool = False,
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        execution_boundary.require_effects_allowed()
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     parser = argparse.ArgumentParser(description='Prepare a read-only MEGALODON removal review. Nothing is deleted.')
     parser.add_argument('--package', choices=PACKAGE_CHOICES, action='append', default=[],
                         help='include one companion in a combined apt removal simulation; repeat to select more')
@@ -226,6 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = plan(packages=tuple(args.package), include_saved_data=args.include_saved_data)
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     except (ValueError, OSError):
         print('Removal review unavailable; check the selected packages and local installation paths.', file=sys.stderr)
         return 2

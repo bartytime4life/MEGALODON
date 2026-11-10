@@ -17,6 +17,7 @@ import stat
 import subprocess
 import sys
 
+from . import execution_boundary
 from .hud_autostart import dropin_path, unit_path
 from .local_install import InstallError, InstallPaths, install_paths, status as local_status
 from .tool_locations import load_directories
@@ -27,6 +28,7 @@ OTHER_EXECUTABLES = {'zeek': 'zeek', 'ollama': 'ollama', 'osquery': 'osqueryi'}
 
 
 def _entry(path: Path) -> dict[str, object]:
+    execution_boundary.require_effects_allowed()
     try:
         info = path.lstat()
     except FileNotFoundError:
@@ -40,6 +42,7 @@ def _entry(path: Path) -> dict[str, object]:
 
 def _package_status() -> dict[str, str]:
     """Query only fixed package names; unavailable is never interpreted as absent."""
+    execution_boundary.require_effects_allowed()
     result = {name: 'unknown' for name in APT_PACKAGES}
     if sys.platform != 'linux':
         return result
@@ -72,6 +75,7 @@ def _package_status() -> dict[str, str]:
 
 def _dumpcap_state(path: Path = Path('/usr/bin/dumpcap')) -> dict[str, object]:
     """Observe current metadata only; it cannot reconstruct prior settings."""
+    execution_boundary.require_effects_allowed()
     result = _entry(path)
     result['mode'] = None
     result['capability_xattr'] = 'unknown'
@@ -93,6 +97,7 @@ def _dumpcap_state(path: Path = Path('/usr/bin/dumpcap')) -> dict[str, object]:
 
 def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dict[str, object]:
     """Inventory known surfaces without reading evidence or changing the host."""
+    execution_boundary.require_effects_allowed()
     selected = paths or install_paths()
     home = Path.home() if home is None else Path(home)
     artifacts = {name: _entry(getattr(selected, name)) for name in (
@@ -111,6 +116,8 @@ def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dic
     try:
         selected_tools = load_directories(home)
         profile_state = 'readable'
+    except execution_boundary.Stage0Denied:
+        raise
     except ValueError:
         selected_tools = {}
         profile_state = 'needs_review'
@@ -156,10 +163,19 @@ def audit(paths: InstallPaths | None = None, *, home: Path | None = None) -> dic
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        execution_boundary.require_effects_allowed()
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     parser = argparse.ArgumentParser(description='Read-only MEGALODON full-uninstall inventory; no removal is available.')
     parser.add_argument('--json', action='store_true', help='print the bounded inventory as JSON')
     args = parser.parse_args(argv)
-    result = audit()
+    try:
+        result = audit()
+    except execution_boundary.Stage0Denied:
+        print(execution_boundary.DENIAL, file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(result, sort_keys=True))
     else:

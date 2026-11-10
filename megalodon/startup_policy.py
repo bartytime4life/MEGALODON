@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
-from . import hud_autostart
+from . import execution_boundary, hud_autostart
 from .companion_automation import _run_fixed
 from .local_install import InstallError
 from .support_startup import _trusted_system_executable
@@ -18,6 +18,7 @@ SERVICES = {
 
 
 def service_observation(identifier, run=_run_fixed):
+    execution_boundary.require_effects_allowed()
     name, units = SERVICES[identifier]
     systemctl = _trusted_system_executable('systemctl')
     observed = []
@@ -31,6 +32,8 @@ def service_observation(identifier, run=_run_fixed):
                     observed.append((unit, values))
                 elif values != {'LoadState':'not-found','ActiveState':'inactive','UnitFileState':''}:
                     unknown = True
+            except execution_boundary.Stage0Denied:
+                raise
             except (OSError, ValueError, UnicodeError, RuntimeError):
                 unknown = True
     active = [item for item in observed if item[1].get('ActiveState') == 'active']
@@ -47,6 +50,7 @@ def service_observation(identifier, run=_run_fixed):
 
 class StartupPolicy:
     def __init__(self, *, run=_run_fixed):
+        execution_boundary.require_effects_allowed()
         self.run = run
         self._lock = Lock()
         self._value = dict(checked_at=None, login='unchecked', services=[],
@@ -57,6 +61,7 @@ class StartupPolicy:
             return deepcopy(self._value)
 
     def check(self):
+        execution_boundary.require_effects_allowed()
         login = 'unavailable'
         try:
             managed = hud_autostart.validate_unit()
@@ -69,6 +74,8 @@ class StartupPolicy:
                     login = 'enabled' if code == 0 and result == 'enabled' else 'disabled' if result == 'disabled' else 'unavailable'
                 elif not managed:
                     login = 'disabled'
+        except execution_boundary.Stage0Denied:
+            raise
         except (InstallError, OSError, ValueError, UnicodeError, RuntimeError):
             pass
         services = [service_observation(key, self.run) for key in SERVICES]
@@ -79,6 +86,7 @@ class StartupPolicy:
         return self.snapshot()
 
     def login(self, enabled):
+        execution_boundary.require_effects_allowed()
         try:
             if enabled:
                 hud_autostart.enable()
@@ -92,6 +100,7 @@ class StartupPolicy:
         return 'HUD startup at sign-in is '+('on.' if enabled else 'off. The current HUD keeps running.')
 
     def enable_services(self, *, clamav_configured=False):
+        execution_boundary.require_effects_allowed()
         systemctl = _trusted_system_executable('systemctl')
         pkexec = _trusted_system_executable('pkexec')
         if not systemctl or not pkexec:
