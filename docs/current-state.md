@@ -1,5 +1,27 @@
 # Current state and evidence boundaries
 
+## November 9 source orientation
+
+**Source basis:** [`main@d03bc43d13a9f030cfcff7eb8beaea5fc318abae`](https://github.com/bartytime4life/MEGALODON/commit/d03bc43d13a9f030cfcff7eb8beaea5fc318abae).
+This section describes the inspected source. It supplies no new hosted CI,
+rendered-browser, installed-PC, native-parser or real-model acceptance result.
+The October records below retain their original pins and check receipts.
+
+| Task | Implemented source behavior | Boundary / guide |
+| --- | --- | --- |
+| Inspect a downloaded program | Signed-in Linux HUD submission; bounded structural and identification adapters; completed metadata survives a later adapter's isolation-setup refusal | Optional runtime and host isolation prerequisites; partial coverage stays visible; the submitted program is never launched and receives no safety verdict. [Inspection guide](file-inspection.md) |
+| Prepare and review local model files | Explicit installed-model discovery/selection, offline file verification, pinned GGUF staging and source/license review controls | Maintenance and the separate fixed response diagnostic do not activate operational inference. The release fence remains **UNBOUND**, including for other model families. [Model library](model-library.md), [runtime hold](qwen-runtime-unbound.md) |
+| Select the Stage 0 application boundary | A one-way, process-local latch exposes the in-memory status command and refuses ordinary CLI dispatch plus named HUD, provider, companion, installer, startup/reopen and native TShark entries | Partial [#750](https://github.com/bartytime4life/MEGALODON/issues/750) implementation; trusted Python entry fences are not OS network/filesystem containment or universal helper coverage. [Exact scope](offline-analysis.md#stage-0-application-entry-fence--issue-750) |
+
+Use a fresh process for Stage 0. Selection cannot stop existing workers or undo
+earlier activity; ordinary fresh-process installed operation retains its separate
+authority. Synthetic regression coverage and boundary status do not supply
+producer qualification, model provenance, loaded-byte verification, independent
+review or owner acceptance. Historical issue closure does not lift the model
+hold. The maintained guides above describe the current operator steps; the
+[November 9 improvement record](project-improvements-20261109.md#follow-up-retained-history-and-setup-focus) preserves its
+separate local validation scope.
+
 ## October 27 reading
 
 **Source basis:** [`main@7c912322b12fe40fbe92de79b32fdc678054a3da`](https://github.com/bartytime4life/MEGALODON/commit/7c912322b12fe40fbe92de79b32fdc678054a3da);
