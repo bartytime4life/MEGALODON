@@ -36,7 +36,9 @@ def _unit_env(name: str, value: Path) -> str:
 
 
 def unit_path(paths: InstallPaths | None = None) -> Path:
-    paths = install_paths() if paths is None else paths
+    if paths is None:
+        execution_boundary.require_effects_allowed()
+        paths = install_paths()
     return paths.config.parent / "systemd" / "user" / UNIT
 
 
@@ -46,7 +48,9 @@ def dropin_path(paths: InstallPaths | None = None) -> Path:
 
 
 def unit_contents(paths: InstallPaths | None = None) -> bytes:
-    paths = install_paths() if paths is None else paths
+    if paths is None:
+        execution_boundary.require_effects_allowed()
+        paths = install_paths()
     python = paths.current / "venv" / "bin" / "python"
     return (
         "# Managed by MEGALODON hud-autostart.\n"

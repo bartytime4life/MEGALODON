@@ -28,6 +28,8 @@ REQUIRED_CASES = {
     ('Stage0InstallerTests', 'test_cli_denies_before_parser_dispatch_or_password_prompt'),
     ('Stage0HUDMaintenanceTests', 'test_selected_entries_refuse_before_preflight'),
     ('Stage0HUDMaintenanceTests', 'test_cli_denies_before_parser_arguments_or_settings'),
+    ('Stage0HostMaintenanceTests', 'test_selected_entries_refuse_before_preflight'),
+    ('Stage0HostMaintenanceTests', 'test_cli_denies_before_parser_or_arguments'),
     ('TSharkStage0EntryTests', 'test_selected_replay_refuses_before_any_preflight'),
 }
 

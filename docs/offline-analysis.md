@@ -628,8 +628,15 @@ settings reads, service observation, socket polling or browser launch. Startup
 mutators and metadata checks, their process helpers, the socket-wait helper and
 the shared listener-ownership probe guard before preflight. Explicit-path unit
 templates and the in-memory loaded-unit projection remain available. These are
-named entry fences, not a claim that every startup-policy, uninstall-preview or
-other standalone host workflow has been fenced.
+named entry fences, not a claim that every standalone host workflow has been fenced.
+
+Startup-policy construction, checks and mutations now refuse before lock creation,
+argument inspection, executable discovery or service observation. The standalone
+removal audit and plan APIs, their host-observation/process helpers and both CLIs
+also refuse before host preflight; even a read-only inventory is a host observation.
+Nested denial is propagated rather than reported as unknown, absent or an ordinary
+simulation failure. Default unit-template path discovery refuses too; explicitly
+supplied synthetic paths and pure package/simulation parsers remain available.
 
 This is a **partial #750 implementation**, not a universal no-effect claim.
 Trusted Python startup/imports, interpreter caches, ordinary developer/test
@@ -644,7 +651,7 @@ does not assert a fixture test pass or measured zero counters.
 entries. The exact-head Qwen workflow includes the serialization and installer
 regressions and retains their JUnit report with the in-memory status projection.
 `stage0-ci-receipt.json` records the workflow-supplied commit/tree, SHA-256 hashes
-of the binding/readiness/status/JUnit inputs, observed test-case totals and nine
+of the binding/readiness/status/JUnit inputs, observed test-case totals and eleven
 required passing regression cases. Invalid inputs, missing required cases or
 reported failures cannot produce a success receipt. This is a CI evidence
 summary, not an independent attestation of its inputs. It does not infer zero

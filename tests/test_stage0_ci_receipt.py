@@ -56,7 +56,7 @@ class Stage0CIReceiptTests(unittest.TestCase):
     def test_valid_receipt_is_deterministic_and_grants_no_authority(self):
         value = self.build()
         self.assertEqual(value, self.build())
-        self.assertEqual(value['junit_testcases']['passed'], 9)
+        self.assertEqual(value['junit_testcases']['passed'], 11)
         self.assertEqual(value['binding_state'], 'UNBOUND')
         self.assertTrue(all(v is False for v in value['authority'].values()))
         self.assertIsNone(value['tripwire_counts'])
