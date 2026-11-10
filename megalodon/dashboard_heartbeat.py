@@ -136,11 +136,27 @@ function paintToolManagement() {
     : heartbeatState.managementEnabled ? 'Connecting to the local installation session. Check tool presence to retry; terminal options remain available.'
     : 'Installation is disabled in this launch. Use the restart command below, or run the reviewed terminal recipe.';
 }
-function appendRemovalPlan(wrap, entry, tool, name) {
-  if (!entry.uninstall_terminal || !tool || tool.installed !== 'yes' || heartbeatStale()
+function rememberInstallControl(wrap, control, action, command = null) {
+  const key = JSON.stringify([wrap.heartbeatTool, action, command]);
+  control.heartbeatControlKey = key; wrap.heartbeatControls.set(key, control);
+  return control;
+}
+function restoreInstallControlFocus(wrap, key) {
+  const control = key && wrap.heartbeatControls.get(key);
+  if (!control || control.disabled || document.hidden || typeof control.focus !== 'function') return;
+  let child = control;
+  for (let ancestor = control; ancestor; child = ancestor, ancestor = ancestor.parentElement) {
+    if (ancestor.hidden || (ancestor.tagName === 'DETAILS' && !ancestor.open && child.tagName !== 'SUMMARY')) return;
+  }
+  control.focus({preventScroll: true});
+}
+function appendRemovalPlan(wrap, entry, tool, name, previous) {
+  if (!entry.uninstall_terminal || !tool || tool.installed !== 'yes' || heartbeatStale() || heartbeatState.catalogFailed
       || (entry.method === 'ollama' && tool.model !== 'present')) return;
   const details = document.createElement('details'); details.className = 'hb-removal';
-  details.append(textNode('summary', `Review removal of ${name}`));
+  details.heartbeatRemovalKey = JSON.stringify([wrap.heartbeatTool, entry.uninstall_terminal]);
+  details.open = Boolean(previous && previous.key === details.heartbeatRemovalKey && previous.open);
+  details.append(rememberInstallControl(wrap, textNode('summary', `Review removal of ${name}`), 'removal-review', entry.uninstall_terminal));
   details.append(textNode('p', 'This command is for the specific installed method shown below. Package removal can stop services or affect dependents. Review it in a terminal; this page does not execute removal.', 'hb-detail'));
   details.append(textNode('code', entry.uninstall_terminal));
   const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy removal command';
@@ -148,23 +164,30 @@ function appendRemovalPlan(wrap, entry, tool, name) {
     try { await navigator.clipboard.writeText(entry.uninstall_terminal); toolManagementFeedback('Removal command copied. Review the package plan in your terminal before proceeding.'); }
     catch (_) { toolManagementFeedback('Clipboard unavailable. Select and copy the displayed removal command.'); }
   });
-  details.append(copy); wrap.append(details);
+  details.append(rememberInstallControl(wrap, copy, 'removal-copy', entry.uninstall_terminal));
+  wrap.heartbeatRemoval = details; wrap.append(details);
 }
 function paintInstallControl(wrap) {
   const toolId = wrap.heartbeatTool, name = wrap.toolName;
   const entry = heartbeatState.catalog && heartbeatState.catalog.find(item => item.id === toolId);
   const tool = heartbeatState.byId.get(toolId);
   const job = heartbeatState.job;
-  const renderKey = JSON.stringify([entry,tool && [tool.installed,tool.service,tool.model,tool.expects_service,tool.selected_model?.model],job,heartbeatState.managementEnabled,Boolean(toolManagementToken()),heartbeatState.sessionFailed,heartbeatState.submitting,heartbeatStale()]);
+  const renderKey = JSON.stringify([entry,tool && [tool.installed,tool.service,tool.model,tool.expects_service,tool.selected_model?.model],job,heartbeatState.managementEnabled,Boolean(toolManagementToken()),heartbeatState.catalogFailed,heartbeatState.sessionFailed,heartbeatState.submitting,heartbeatStale()]);
   if(wrap.heartbeatRenderKey===renderKey)return;wrap.heartbeatRenderKey=renderKey;
-  const focused=typeof wrap.contains==='function'&&wrap.contains(document.activeElement),focusIndex=focused?[...wrap.querySelectorAll('button,a,summary')].indexOf(document.activeElement):-1;
+  const active = document.activeElement;
+  const focusKey = active && wrap.heartbeatControls?.get(active.heartbeatControlKey) === active ? active.heartbeatControlKey : null;
+  const previousRemoval = wrap.heartbeatRemoval ? {key: wrap.heartbeatRemoval.heartbeatRemovalKey, open: wrap.heartbeatRemoval.open} : null;
+  // State belongs to the currently visible, qualified plan only. An omitted
+  // or stale plan must not reopen automatically when observations recover.
+  wrap.heartbeatRemoval = null; wrap.heartbeatControls = new Map();
   if (typeof wrap.replaceChildren === 'function') wrap.replaceChildren();
   if (!entry || toolId === 'core') return;
   const mine = job && job.tool === toolId;
   const model = entry.method === 'ollama';
   if(model && tool?.selected_model){
     const selected=textNode('p','Selected model: '+tool.selected_model.model+'. Choose or verify installed models in Setup.','hb-detail');wrap.append(selected);
-    const link=textNode('a','Choose local AI model →','hb-detail');link.href='#support-model-title';wrap.append(link);return;
+    const link=textNode('a','Choose local AI model →','hb-detail');link.href='#support-model-title';wrap.append(rememberInstallControl(wrap, link, 'choose-model'));
+    restoreInstallControlFocus(wrap, focusKey);return;
   }
   // `ollama pull` needs the server, so Qwen offers Start first when it is stopped.
   const needsModel = model && (!tool || (tool.model !== 'present' && tool.service !== 'stopped'));
@@ -174,7 +197,7 @@ function paintInstallControl(wrap) {
     const command = starting ? entry.start_terminal : needsModel || !tool || tool.installed !== 'yes' ? entry.terminal : null;
     if (model && !entry.one_click && (!tool || tool.installed !== 'yes')) wrap.append(textNode('p', 'Install Ollama from its download page first.', 'hb-detail'));
     else if (command) wrap.append(textNode('p', `Observation mode. Run separately in a terminal: ${command}`, 'hb-detail'));
-    if (command) { const authorize = textNode('a', 'Authorize installation and service starts →', 'hb-detail'); authorize.href = '#tool-management-controls'; wrap.append(authorize); }
+    if (command) { const authorize = textNode('a', 'Authorize installation and service starts →', 'hb-detail'); authorize.href = '#tool-management-controls'; wrap.append(rememberInstallControl(wrap, authorize, 'authorize')); }
   }
   if (entry.one_click && (needsModel || (!model && (!tool || tool.installed !== 'yes')) || installing)) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'hb-install';
@@ -184,7 +207,7 @@ function paintInstallControl(wrap) {
     const reason = installDisabledReason(mine, running);
     button.title = reason || entry.summary;
     button.addEventListener('click', () => startInstall(toolId, name, entry));
-    wrap.append(button);
+    wrap.append(rememberInstallControl(wrap, button, 'install', entry.terminal));
     // A disabled button has no focus/hover a keyboard or touch user can read
     // its title from; the reason must also be visible sibling text.
     if (reason) wrap.append(textNode('p', reason, 'hb-detail'));
@@ -197,7 +220,7 @@ function paintInstallControl(wrap) {
       const reason = installDisabledReason(mine, running);
       button.title = reason || `Starts the ${name} system service. A process observation does not establish health or integration.`;
       button.addEventListener('click', () => startInstall(toolId, name, entry, 'start'));
-      wrap.append(button);
+      wrap.append(rememberInstallControl(wrap, button, 'start', entry.start_terminal));
       if (reason) wrap.append(textNode('p', reason, 'hb-detail'));
     } else if (entry.start_terminal) {
       wrap.append(textNode('p', `Start the service in a terminal: ${entry.start_terminal}`, 'hb-detail'));
@@ -217,8 +240,8 @@ function paintInstallControl(wrap) {
   const alternative = starting ? entry.start_terminal : entry.terminal;
   if (mine && job.state === 'failed') wrap.append(textNode('p', `${starting ? 'Service start' : 'Install'} failed.${alternative ? ` Terminal alternative: ${alternative}` : ''}`, 'hb-detail'));
   if (mine && job.state === 'succeeded') wrap.append(textNode('p', `${starting ? 'Service-start command' : 'Installation command'} finished. Status is checked separately.`, 'hb-detail'));
-  appendRemovalPlan(wrap, entry, tool, name);
-  if(focused){const nodes=wrap.querySelectorAll('button,a,summary');nodes[Math.max(0,focusIndex)]?.focus({preventScroll:true});}
+  appendRemovalPlan(wrap, entry, tool, name, previousRemoval);
+  restoreInstallControlFocus(wrap, focusKey);
 }
 function repaintHeartbeat() {
   paintToolManagement();
