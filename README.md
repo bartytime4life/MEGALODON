@@ -448,6 +448,7 @@ record delivery state; they do not override the checked-in contracts.
 | Platform choices and installation evidence | [`docs/platform-baseline.md`](docs/platform-baseline.md) |
 | Native Windows core acceptance matrix | [`docs/windows-core-acceptance.md`](docs/windows-core-acceptance.md) |
 | Offline analyst operation and report semantics | [`docs/offline-analysis.md`](docs/offline-analysis.md) |
+| Scoped Stage 0 source/wheel evidence; full-suite parity remains unproved | [`docs/stage0-package-parity.md`](docs/stage0-package-parity.md) |
 | Resource-informed advancement decisions | [`docs/resource-informed-advancement.md`](docs/resource-informed-advancement.md) |
 | Static integration vocabulary | [`docs/integration-hub.md`](docs/integration-hub.md) |
 | Offline reference data and synthetic detector evaluation | [`docs/reference-data.md`](docs/reference-data.md) |
