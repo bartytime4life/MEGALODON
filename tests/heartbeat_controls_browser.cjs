@@ -71,6 +71,29 @@ const plan = wrap => wrap.querySelector('details');
 const review = wrap => plan(wrap)?.querySelector('summary');
 const copy = wrap => plan(wrap)?.querySelector('button');
 
+function interruptRender(h, wrap, stage) {
+  const method = stage === 'partial-append' ? 'append' : 'replaceChildren';
+  const original = wrap[method];
+  let interrupted = false;
+  wrap[method] = function (...items) {
+    if (interrupted) return original.apply(this, items);
+    interrupted = true;
+    if (stage !== 'before-replace') original.apply(this, items);
+    throw Error('Synthetic repaint interruption');
+  };
+  try { assert.throws(() => h.repaint(), /Synthetic repaint interruption/); }
+  finally { wrap[method] = original; }
+  assert.equal(interrupted, true, 'The changed observation reaches the injected fault');
+  assert.equal(wrap.hidden, true, 'An interrupted rendering must not expose old or partial controls');
+  assert.equal(wrap.heartbeatControls.size, 0, 'Failed controls cannot supply focus identity');
+  assert.equal(wrap.heartbeatRemoval, null, 'An interrupted review requires fresh review');
+  for (const button of wrap.querySelectorAll('button')) {
+    assert.equal(button.disabled, true, 'Surviving action controls are disabled');
+    button.click();
+  }
+  assert.deepEqual(h.copied, [], 'Failure handling never copies'); h.readOnly();
+}
+
 async function exercise() {
   const h = harness(), wrap = h.wrap(scenario === 'model-focus' ? 'qwen' : 'suricata');
   if (scenario === 'removal-summary') {
@@ -158,6 +181,60 @@ async function exercise() {
       if (reason === 'hidden-page') current.context.document.hidden = true;
       current.meaningfulChange(); current.repaint();
       assert.equal(current.context.document.activeElement, current.context.document.body, reason + ': hidden controls must not recover focus');
+      assert.deepEqual(current.copied, []); current.readOnly();
+    }
+  } else if (scenario === 'interrupted-render') {
+    for (const stage of ['before-replace', 'after-replace', 'partial-append']) {
+      const current = harness(), target = current.wrap('suricata');
+      plan(target).open = true; copy(target).focus();
+      current.tools[0].service = 'running';
+      interruptRender(current, target, stage);
+      current.repaint();
+      assert.equal(target.hidden, false, 'Successful retry restores prior visibility');
+      assert.equal(target.querySelectorAll('button').some(node => node.textContent === 'Start service'), false,
+        'The identical heartbeat retries and removes the obsolete Start control');
+      assert.equal(plan(target).open, false, 'Retry does not restore interrupted review');
+      assert.equal(current.context.document.activeElement, current.context.document.body, 'Retry does not inherit failed focus');
+      const recovered = plan(target); current.repaint();
+      assert.equal(plan(target), recovered, 'Only the completed retry is cached');
+      assert.deepEqual(current.copied, []); current.readOnly();
+    }
+  } else if (scenario === 'interrupted-invalidation') {
+    for (const reason of ['changed-command', 'stale', 'catalog-failed', 'missing-tool']) {
+      const current = harness(), target = current.wrap('suricata');
+      plan(target).open = true; copy(target).focus();
+      if (reason === 'changed-command') current.catalog[0].uninstall_terminal += ' --purge';
+      if (reason === 'stale') vm.runInContext('heartbeatState.failed = true', current.context);
+      if (reason === 'catalog-failed') vm.runInContext('heartbeatState.catalogFailed = true', current.context);
+      if (reason === 'missing-tool') vm.runInContext("heartbeatState.byId.delete('suricata')", current.context);
+      interruptRender(current, target, 'before-replace');
+      current.repaint();
+      assert.equal(target.hidden, false);
+      if (reason === 'changed-command') {
+        assert.equal(plan(target).open, false);
+        assert.equal(plan(target).querySelector('code').textContent, current.catalog[0].uninstall_terminal);
+      } else {
+        assert.equal(plan(target), null, reason + ': the identical retry removes stale review');
+        vm.runInContext("heartbeatState.failed = false; heartbeatState.catalogFailed = false; heartbeatState.byId.set('suricata', tools[0])", current.context);
+        current.repaint();
+        assert.equal(plan(target).open, false, reason + ': evidence recovery still needs fresh review');
+      }
+      assert.equal(current.context.document.activeElement, current.context.document.body);
+      assert.deepEqual(current.copied, []); current.readOnly();
+    }
+  } else if (scenario === 'interrupted-branches') {
+    for (const branch of ['selected-model', 'missing-entry', 'hidden-wrap']) {
+      const current = harness(), target = current.wrap(branch === 'selected-model' ? 'qwen' : 'suricata');
+      if (branch === 'selected-model') current.tools[2].selected_model = {model: 'local-test-model'};
+      if (branch === 'missing-entry') vm.runInContext('heartbeatState.catalog = []', current.context);
+      if (branch === 'hidden-wrap') { target.hidden = true; current.meaningfulChange(); }
+      interruptRender(current, target, branch === 'selected-model' ? 'partial-append' : 'before-replace');
+      current.repaint();
+      assert.equal(target.hidden, branch === 'hidden-wrap', 'Retry preserves the original visibility');
+      const children = [...target.children]; current.repaint();
+      assert.deepEqual(target.children, children, 'Successful early branches are cached too');
+      if (branch === 'selected-model') assert.equal(target.querySelector('a').href, '#support-model-title');
+      if (branch === 'missing-entry') assert.equal(target.children.length, 0);
       assert.deepEqual(current.copied, []); current.readOnly();
     }
   } else if (scenario === 'unchanged') {

@@ -12,6 +12,7 @@ from megalodon.dashboard_heartbeat import HEARTBEAT_JS
 @pytest.mark.parametrize("scenario", [
     "removal-summary", "removal-copy", "changed-command", "availability",
     "model-focus", "action-identity", "visibility", "unchanged",
+    "interrupted-render", "interrupted-invalidation", "interrupted-branches",
 ])
 def test_heartbeat_repaint_control_state(scenario):
     node = shutil.which("node")
