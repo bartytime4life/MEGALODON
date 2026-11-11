@@ -5,6 +5,10 @@ buttons, selectors and switches; terminal commands, reference material and
 uncommon actions remain in Advanced disclosures. Existing Help and app links
 open the relevant category and focus their destination.
 
+If a configuration status refresh fails, the Overview's Traffic and Local AI
+summaries show **Unavailable** until a successful check. The saved model choice
+and the independently checked app-presence summary keep their own meanings.
+
 Short exclusive settings use radio choices, saved boolean preferences use visible
 On/Off switches, and dynamic lists use dropdowns. History and AI time limits have
 sliders beside exact numeric entry. Storage budgets and report times offer common

@@ -751,7 +751,7 @@ const workspaceTargets = {
   '': 'live', 'page-title': 'live', 'live-review-title': 'live', 'detections-title': 'analysis',
   'room-home-title': 'live', 'setup-title': 'setup', 'tool-management-controls': 'setup', 'room-traffic-title': 'live', 'room-findings-title': 'findings',
   'apps-connections-title':'setup', 'apps-connections':'setup', 'room-reports-title': 'reports', 'room-help-title': 'help', 'setup-software-title': 'setup',
-  'workspace-live': 'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
+  'workspace-live': 'live', 'ops-lens-title':'live', 'deep-analysis-title': 'analysis', 'suricata-title': 'analysis', 'suricata-provenance': 'analysis', 'ingestion-runs-title': 'analysis', 'reference-title': 'analysis',
   'offline-title': 'analysis', 'workspace-analysis': 'analysis', 'integrations-title': 'interfaces',
   'workspace-interfaces': 'interfaces', 'action-plane-title': 'setup', 'app-service-start-title': 'setup', 'app-viewer-title': 'setup', 'analysis-window-title': 'analysis',
   ...Object.fromEntries(['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'].map(id=>['setup-app-'+id,'setup'])),

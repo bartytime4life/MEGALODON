@@ -47,12 +47,13 @@ APP_RAIL_HTML = (
 )
 
 APP_TILES_HTML = (
-    '<div class="app-tiles" aria-labelledby="app-tiles-title">'
-    '<p class="app-tiles-head"><span id="app-tiles-title">Supporting apps on this PC</span>'
+    '<details class="app-tiles" id="app-tiles-details">'
+    '<summary id="app-tiles-title">Supporting apps · optional tools and status details</summary>'
+    '<p class="app-tiles-head"><span>Supporting apps on this PC</span>'
     '<span class="app-tiles-legend" aria-hidden="true"><span><i class="app-dot" data-legend="running"></i>Running</span>'
     '<span><i class="app-dot" data-legend="ready"></i>Installed</span><span><i class="app-dot" data-legend="stopped"></i>Stopped</span>'
     '<span><i class="app-dot" data-legend="missing"></i>Not installed</span></span></p>'
-    f'<ul class="app-tiles-grid">{_tile_items()}</ul></div>'
+    f'<ul class="app-tiles-grid">{_tile_items()}</ul></details>'
 )
 
 
@@ -184,6 +185,7 @@ body::after { content:""; position:fixed; inset:-20%; pointer-events:none; z-ind
 
 /* ---- Supporting-app tiles inside Background tools ---- */
 .app-tiles { margin:.8rem 0 .2rem; }
+.app-tiles > summary { min-height:44px; box-sizing:border-box; padding:.65rem 0; color:#cfe2ea; font-size:.825rem; font-weight:600; line-height:1.5; cursor:pointer; }
 .app-tiles-head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.4rem 1rem; margin:0 0 .5rem; color:#cfe2ea; font-size:.78rem; font-weight:700; letter-spacing:.02em; }
 .app-tiles-legend { display:inline-flex; flex-wrap:wrap; gap:.75rem; color:#9fb7c2; font-weight:600; font-size:.7rem; }
 .app-tiles-legend span { display:inline-flex; align-items:center; gap:.35rem; }

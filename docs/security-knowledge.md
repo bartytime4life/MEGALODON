@@ -2,11 +2,20 @@
 
 ## Using it
 
-Open **Setup → AI knowledge & patterns**. Three preferences control local
+Open **Setup → Local AI → Knowledge and automatic review**. Three preferences control local
 baseline learning, automatic explanations, and daily public-reference updates.
 The HUD's **Review activity** link opens Findings. Each review answers **What
 happened**, **Why it matters**, and **What you can do**. Measurements, source
 references, alternative explanations and missing information are under Details.
+
+Reference results belong to the submitted search. Editing the query clears its
+old results, and an older response or error cannot replace a newer search.
+Saved device reviews likewise follow the current selection, including returning
+to a previously selected address.
+
+When local learning is off, the HUD says **Local learning paused**. Saved
+baseline progress and reviews remain available; a separately running explanation
+is identified as work on saved activity.
 
 The endpoint inspector uses the same committed-evidence explanation pipeline.
 The selected Ollama model is preserved. This feature retrieves reference text;
