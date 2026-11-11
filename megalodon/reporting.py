@@ -384,9 +384,10 @@ class ReportService(RetainedEvidenceReader):
                             bucket = min(47, int((stamp-start)/(end-start)*48))
                             resource_bins.setdefault(bucket, []).append(data)
                             # Keep at most one minute's sample array per bin; fold
-                            # into running means immediately to bound memory.
+                            # into weighted means to bound memory, preserving
+                            # precision until the final report is projected.
                             if len(resource_bins[bucket]) > 16:
-                                resource_bins[bucket] = [_resource_mean(resource_bins[bucket])]
+                                resource_bins[bucket] = [_resource_mean(resource_bins[bucket], round_percentages=False)]
                         elif category == 'network':
                             result['summary']['network_samples'] += 1
                             node = data.get('node') if source == 'network-device-observation' else None
@@ -691,8 +692,12 @@ def _csv_safe(value):
     return "'"+value if re.match(r'^[\x00-\x1f]|^[\s\x00-\x1f\ufeff]*[=+@-]', value) else value
 
 
-def _resource_mean(values):
-    # Running weighted means preserve sampling counts after bounded compaction.
+def _resource_mean(values, *, round_percentages=True):
+    """Preserve metric weights; round percentages only for final report output.
+
+    Feeding rounded summaries back into the next weighted mean introduces
+    compaction-dependent drift. Intermediate summaries keep float precision.
+    """
     result = dict(samples=0, system_cpu_percent=None, suite_cpu_percent=None, suite_memory_percent=None, interfaces={}, metric_samples={})
     totals = Counter()
     counts = Counter()
@@ -721,7 +726,8 @@ def _resource_mean(values):
                     item[direction+'_total'] += number*n
                     item[direction+'_samples'] += n
     for key in totals:
-        result[key] = round(totals[key]/counts[key], 3)
+        mean = totals[key]/counts[key]
+        result[key] = round(mean, 3) if round_percentages else mean
         result['metric_samples'][key] = counts[key]
     for name, row in interfaces.items():
         result['interfaces'][name] = {direction+'_bytes_per_second': row[direction+'_total']/row[direction+'_samples'] if row[direction+'_samples'] else None for direction in ('receive','send')}
