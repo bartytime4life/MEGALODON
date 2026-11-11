@@ -96,8 +96,8 @@ truncation or read gap. This is not proof of complete capture. Unknown sensor
 health remains unknown.
 
 New ports need five observations. Protocol/service shifts need five observations
-and a 20-percentage-point difference. The existing regular-interval rule applies
-to flow observations, not packet ACK timing. Port-53 bursts count observations,
+and an exact, unrounded 20-percentage-point difference. The existing
+regular-interval rule applies to flow observations, not packet ACK timing. Port-53 bursts count observations,
 not verified DNS queries. Inventory comparisons never infer departure from
 absence. Ordinary backups, updates and scheduled tasks can produce candidates.
 
@@ -123,6 +123,53 @@ retirement reclaims dependent segments; mixed segments may expire early. Action
 ledgers keep review identifiers rather than longer-lived copies of explanations.
 Up to 256 source segments can support a comparison; larger sets report a gap.
 Hour completion is checkpointed after candidate persistence.
+
+### Exact comparison arithmetic and indexed history
+
+For a label with current count `n` out of `C` and baseline count `b` out of
+`B`, the share change in percentage points is `100 × (nB − bC) / (CB)`.
+Admission compares the integers `100 × abs(nB − bC)` and `20 × CB` before
+rounding. A 19.96-point difference therefore stays below the 20-point threshold,
+even though its one-decimal display would be 20.0. Exact 20-point changes
+remain eligible. Display values round the exact fraction to one decimal with
+ties to even. Counts may exceed floating-point precision after compaction and
+aggregation; [Python's rational arithmetic](https://docs.python.org/3.11/library/fractions.html)
+keeps this display step separate from the integer admission decision.
+
+Each hourly pass partitions retained baselines once by address, interface,
+sensor and measurement. History-key selection becomes `O(H + G)` rather than
+`O(H × G)`, for `H` historical rows and `G` current groups. Distribution
+aggregation still visits the selected historical counts. The index holds
+references for the current call only; it is not a cache that can outlive source
+expiry. Existing seven-day traffic and two-hour inventory windows, distinct-hour
+deduplication, input-order tie handling, coverage exclusions and dependencies
+remain in force. Indexing adds `O(H)` temporary references to the history already
+supplied for this call; the index is discarded when the call finishes.
+
+The [synthetic comparison measurements](benchmarks/pattern-comparison-20261111.json)
+compare complete pure hourly analysis against source revision
+`16f8d33e336173c0abd8916000bc801d7768e835`, using 1, 8, 32 and 128 groups with
+168 historical hours each. At 128 groups, history-key reads fell from 2,752,512
+to 21,504; median runtime across seven runs fell from 149.829 ms to 31.456 ms
+(about 4.8 times faster). Outputs, including two 25-point review candidates,
+matched exactly on these cases. Traced temporary peak allocation increased from
+425,804 to 613,780 bytes. Small histories pay indexing overhead; the one-group
+case rose from 0.197 ms to 0.213 ms. These finite timings describe this synthetic
+workload, not capture capacity, model performance or malware accuracy.
+
+Reproduce from a trusted Git checkout with:
+
+```bash
+python tools/benchmark_pattern_comparison.py \
+  --baseline-revision 16f8d33e336173c0abd8916000bc801d7768e835
+```
+
+The benchmark executes the selected local source snapshot and the current
+implementation against synthetic compacted metadata. It creates no evidence
+store and performs no capture, provider, model or host action. Boundary tests
+separately use exact rational expectations, large counts, display ties,
+source separation, expiry windows and duplicate hours; away-from-threshold
+benchmark parity does not cover the deliberately corrected threshold cases.
 Repeated work uses stable IDs. AI failure does not remove detector findings.
 
 ## Scheduling, feedback and reports
