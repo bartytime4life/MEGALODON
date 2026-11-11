@@ -173,10 +173,31 @@ function paintInstallControl(wrap) {
   const tool = heartbeatState.byId.get(toolId);
   const job = heartbeatState.job;
   const renderKey = JSON.stringify([entry,tool && [tool.installed,tool.service,tool.model,tool.expects_service,tool.selected_model?.model],job,heartbeatState.managementEnabled,Boolean(toolManagementToken()),heartbeatState.catalogFailed,heartbeatState.sessionFailed,heartbeatState.submitting,heartbeatStale()]);
-  if(wrap.heartbeatRenderKey===renderKey)return;wrap.heartbeatRenderKey=renderKey;
+  if(wrap.heartbeatRenderKey===renderKey)return;
   const active = document.activeElement;
   const focusKey = active && wrap.heartbeatControls?.get(active.heartbeatControlKey) === active ? active.heartbeatControlKey : null;
   const previousRemoval = wrap.heartbeatRemoval ? {key: wrap.heartbeatRemoval.heartbeatRemovalKey, open: wrap.heartbeatRemoval.open} : null;
+  const hidden = wrap.heartbeatRenderFailed ? wrap.heartbeatHiddenBeforeFailure : wrap.hidden;
+  try {
+    renderInstallControl(wrap, entry, tool, job, previousRemoval);
+    wrap.hidden = hidden;
+    wrap.heartbeatRenderFailed = false;
+    wrap.heartbeatRenderKey = renderKey;
+    restoreInstallControlFocus(wrap, focusKey);
+  } catch (error) {
+    // An interrupted render is not a cached observation. Hide and disable any
+    // surviving controls until the same evidence can be rendered successfully.
+    wrap.heartbeatRenderKey = null;
+    wrap.heartbeatHiddenBeforeFailure = hidden;
+    wrap.heartbeatRenderFailed = true;
+    wrap.hidden = true;
+    wrap.querySelectorAll('button').forEach(control => { control.disabled = true; });
+    wrap.heartbeatRemoval = null; wrap.heartbeatControls = new Map();
+    throw error;
+  }
+}
+function renderInstallControl(wrap, entry, tool, job, previousRemoval) {
+  const toolId = wrap.heartbeatTool, name = wrap.toolName;
   // State belongs to the currently visible, qualified plan only. An omitted
   // or stale plan must not reopen automatically when observations recover.
   wrap.heartbeatRemoval = null; wrap.heartbeatControls = new Map();
@@ -187,7 +208,7 @@ function paintInstallControl(wrap) {
   if(model && tool?.selected_model){
     const selected=textNode('p','Selected model: '+tool.selected_model.model+'. Choose or verify installed models in Setup.','hb-detail');wrap.append(selected);
     const link=textNode('a','Choose local AI model →','hb-detail');link.href='#support-model-title';wrap.append(rememberInstallControl(wrap, link, 'choose-model'));
-    restoreInstallControlFocus(wrap, focusKey);return;
+    return;
   }
   // `ollama pull` needs the server, so Qwen offers Start first when it is stopped.
   const needsModel = model && (!tool || (tool.model !== 'present' && tool.service !== 'stopped'));
@@ -241,7 +262,6 @@ function paintInstallControl(wrap) {
   if (mine && job.state === 'failed') wrap.append(textNode('p', `${starting ? 'Service start' : 'Install'} failed.${alternative ? ` Terminal alternative: ${alternative}` : ''}`, 'hb-detail'));
   if (mine && job.state === 'succeeded') wrap.append(textNode('p', `${starting ? 'Service-start command' : 'Installation command'} finished. Status is checked separately.`, 'hb-detail'));
   appendRemovalPlan(wrap, entry, tool, name, previousRemoval);
-  restoreInstallControlFocus(wrap, focusKey);
 }
 function repaintHeartbeat() {
   paintToolManagement();
