@@ -1,0 +1,195 @@
+{
+  "schema": "megalodon-pattern-comparison-benchmark-v1",
+  "synthetic_only": true,
+  "python": "3.12.3",
+  "platform": "Linux",
+  "architecture": "x86_64",
+  "baseline_revision": "16f8d33e336173c0abd8916000bc801d7768e835",
+  "baseline_source_sha256": "0c7673fc51cf819956a344e1bc89be868355a724858ac4d9d6e382e6448bb27c",
+  "candidate_source_sha256": "fc8857d7c1706b44e215464ab81dcb2bd208add8e376c61dee3ae093f2203276",
+  "benchmark_sha256": "b2f9b1327702ee61782ffe279d9bdac10f81a4ce34925bece0d50af149432497",
+  "repeats": 7,
+  "cases": [
+    {
+      "groups": 1,
+      "hours_per_group": 168,
+      "history_rows": 168,
+      "current_rows": 2,
+      "identical_outputs": true,
+      "candidate_rules": {
+        "PROTOCOL_SHIFT": 2
+      },
+      "input_sha256": "37fd96e0ead9725d1bbf78683bc590904b5b63fb82b40b8d0e0c874d5f67644a",
+      "output_sha256": "110578875fb83482670f961c21053b0e4dfb61f7ed947f5812b4e0737004f61d",
+      "speedup": 0.9228884620789807,
+      "reference": {
+        "median_ms": 0.197009,
+        "minimum_ms": 0.194875,
+        "maximum_ms": 0.491742,
+        "samples_ms": [
+          0.209894,
+          0.197009,
+          0.195647,
+          0.194875,
+          0.195316,
+          0.491742,
+          0.405319
+        ],
+        "history_key_reads": 168,
+        "peak_extra_traced_bytes": 10747
+      },
+      "candidate": {
+        "median_ms": 0.21347,
+        "minimum_ms": 0.206677,
+        "maximum_ms": 0.460693,
+        "samples_ms": [
+          0.219832,
+          0.21347,
+          0.208912,
+          0.206677,
+          0.210144,
+          0.460693,
+          0.225182
+        ],
+        "history_key_reads": 168,
+        "peak_extra_traced_bytes": 12459
+      }
+    },
+    {
+      "groups": 8,
+      "hours_per_group": 168,
+      "history_rows": 1344,
+      "current_rows": 16,
+      "identical_outputs": true,
+      "candidate_rules": {
+        "PROTOCOL_SHIFT": 2
+      },
+      "input_sha256": "e015b09b145da9d3068120556e0ac8a7c56f6bc97654fab29e909fb68c8fb40a",
+      "output_sha256": "50d620119c14de9b10f6caee9f28e553e9696c4d7d78d5013109cd76090cba1d",
+      "speedup": 1.078793686368223,
+      "reference": {
+        "median_ms": 1.634654,
+        "minimum_ms": 1.606141,
+        "maximum_ms": 2.850483,
+        "samples_ms": [
+          1.606141,
+          1.610458,
+          1.634654,
+          1.630957,
+          1.636487,
+          2.850483,
+          2.59294
+        ],
+        "history_key_reads": 10752,
+        "peak_extra_traced_bytes": 34262
+      },
+      "candidate": {
+        "median_ms": 1.515261,
+        "minimum_ms": 1.458103,
+        "maximum_ms": 2.52346,
+        "samples_ms": [
+          1.479143,
+          1.458103,
+          1.592435,
+          1.515261,
+          1.472369,
+          2.52346,
+          2.424234
+        ],
+        "history_key_reads": 1344,
+        "peak_extra_traced_bytes": 46062
+      }
+    },
+    {
+      "groups": 32,
+      "hours_per_group": 168,
+      "history_rows": 5376,
+      "current_rows": 64,
+      "identical_outputs": true,
+      "candidate_rules": {
+        "PROTOCOL_SHIFT": 2
+      },
+      "input_sha256": "be0d8151cfea566bb87339fc8b13f24bb52c86ba090a132a0e41691e575df668",
+      "output_sha256": "a7ebc9056e17bf8f3389545813500c8a58868c9eb6c23948ae287fe7dfb24eef",
+      "speedup": 1.69033475159097,
+      "reference": {
+        "median_ms": 10.402768,
+        "minimum_ms": 9.382756,
+        "maximum_ms": 12.346351,
+        "samples_ms": [
+          10.520709,
+          10.402768,
+          9.382756,
+          12.346351,
+          11.661187,
+          9.46974,
+          10.079062
+        ],
+        "history_key_reads": 172032,
+        "peak_extra_traced_bytes": 108798
+      },
+      "candidate": {
+        "median_ms": 6.154265,
+        "minimum_ms": 5.915798,
+        "maximum_ms": 7.473578,
+        "samples_ms": [
+          5.923202,
+          6.154265,
+          7.460904,
+          7.473578,
+          6.912146,
+          5.915798,
+          6.039109
+        ],
+        "history_key_reads": 5376,
+        "peak_extra_traced_bytes": 155782
+      }
+    },
+    {
+      "groups": 128,
+      "hours_per_group": 168,
+      "history_rows": 21504,
+      "current_rows": 256,
+      "identical_outputs": true,
+      "candidate_rules": {
+        "PROTOCOL_SHIFT": 2
+      },
+      "input_sha256": "ade59b15b19f4fd0f8b5e9c98c3db5aa518df57aca110e0c687beaa9f11939ba",
+      "output_sha256": "bf6aaa427ab7ee147e6f203b721f66234f3728a3bebb3a5b689c52a4e35ae27d",
+      "speedup": 4.7631301625900235,
+      "reference": {
+        "median_ms": 149.82897,
+        "minimum_ms": 116.664008,
+        "maximum_ms": 153.806545,
+        "samples_ms": [
+          149.305409,
+          149.82897,
+          153.806545,
+          147.822809,
+          116.664008,
+          151.534768,
+          152.225031
+        ],
+        "history_key_reads": 2752512,
+        "peak_extra_traced_bytes": 425804
+      },
+      "candidate": {
+        "median_ms": 31.455989,
+        "minimum_ms": 24.147551,
+        "maximum_ms": 36.367234,
+        "samples_ms": [
+          24.147551,
+          33.093839,
+          31.455989,
+          33.501092,
+          36.367234,
+          29.75456,
+          29.218715
+        ],
+        "history_key_reads": 21504,
+        "peak_extra_traced_bytes": 613780
+      }
+    }
+  ],
+  "scope": "Pure analyze_hour on finite synthetic compacted metadata; output parity applies to these away-from-threshold cases. Timing is descriptive, not a capture throughput or malware-accuracy claim. Memory is measured separately from timing."
+}

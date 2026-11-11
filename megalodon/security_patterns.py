@@ -5,6 +5,7 @@ workflow permissions are code, never values supplied by a reference update.
 """
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
+from fractions import Fraction
 import hashlib
 import ipaddress
 import json
@@ -19,6 +20,7 @@ MAX_GROUPS = 128
 MAX_RECORDS = 20000
 MAX_GROUP_RECORDS = 2048
 MIN_SAMPLES = 24
+SHARE_SHIFT_POINTS = 20
 MAX_DEPENDENCIES = 256
 FLOW_IDENTITY_INVALID_GAP = 'Invalid connection identities or tuples were excluded; this hour cannot train baselines.'
 FLOW_IDENTITY_CONFLICT_GAP = 'Conflicting connection identities were excluded; this hour cannot train baselines.'
@@ -73,6 +75,25 @@ CONTEXT = {
 
 def stable(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()[:32]
+
+
+def _history_by_key(previous):
+    """Partition once by exact source/interface/measurement identity.
+
+    Keep input order and references: eligibility, time windows and duplicate
+    resolution still belong to each consumer. Preserve scalar fields such as
+    an inventory interface explicitly recorded as null. Tuple or unhashable
+    keys cannot equal the list form of a current, hashable group key.
+    """
+    index = defaultdict(list)
+    for baseline in previous:
+        key = baseline.get('key')
+        if isinstance(key, list) and len(key) == 4:
+            try:
+                index[tuple(key)].append(baseline)
+            except TypeError:
+                continue
+    return index
 
 
 def candidate(rule, key, start, end, facts, references, segments, *, gaps=(), source_start=None):
@@ -220,9 +241,10 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
     hour_gaps=tuple(all_gaps)
     baselines=[];results=findings[:64]
     affected={key[0] for key,g in groups.items() if g['finding']}|{f['device'] for f in findings}
+    previous_by_key = _history_by_key(previous) if groups else {}
     for key,group in groups.items():
         key=list(key)
-        compatible=[p for p in previous if p.get('key')==key and p.get('eligible')
+        compatible=[p for p in previous_by_key.get(tuple(key), ()) if p.get('eligible')
                     and start-7*86400<=p['start']<start]
         # Deduplicate a repeated import or interrupted hourly pass.
         compatible=list({p['start']:p for p in compatible}.values())
@@ -309,8 +331,12 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             total=sum(prior.values());current=sum(group[field].values())
             if not total or not current:continue
             for label,n in group[field].items():
-                shift=round(100*(n/current-prior[label]/total),1)
-                if n>=5 and abs(shift)>=20 and len(results)<64:
+                # Compare the exact rational share delta before rounding it
+                # for display. Count products can exceed float's 53-bit range.
+                delta=n*total-prior[label]*current
+                denominator=current*total
+                if n>=5 and 100*abs(delta)>=SHARE_SHIFT_POINTS*denominator and len(results)<64:
+                    shift=float(round(Fraction(100*delta,denominator),1))
                     results.append(candidate(rule,key,start,end,dict(label=label,share_change_points=shift,observations=n,eligible_hours=samples),
                         group['refs'],segments,source_start=source_start))
     all_gaps=list(dict.fromkeys(all_gaps))[:16]
@@ -336,8 +362,9 @@ def inventory_hour(rows,start,end,previous):
         services=sorted({str(v.get('name',''))[:64] for v in node.get('services',[]) if isinstance(v,dict)})[:16]
         group['devices'][address]=dict(services=services,reference=row['id'])
         group['segments'].add(row['id'].split(':')[0])
+    previous_by_key = _history_by_key(previous) if groups else {}
     for key,group in groups.items():
-        priors=[p for p in previous if p['key']==list(key) and start-7200<=p['start']<start and 'devices' in p]
+        priors=[p for p in previous_by_key.get(key, ()) if start-7200<=p['start']<start and 'devices' in p]
         prior=max(priors,key=lambda p:p['start']) if priors else None
         if len(group['segments'])>MAX_DEPENDENCIES:continue
         segments=sorted(group['segments'])
