@@ -108,6 +108,14 @@ therefore differ slightly from the suite total when their displayed values
 are added. This is concurrent resource use, not attribution of traffic or
 proof of sensor health.
 
+Report resource bins keep weighted means at floating-point precision during
+bounded compaction, with separate known-sample counts for each metric. CPU
+and memory percentages round to three decimal places only when the final
+report is built. Missing measurements do not become zero samples. This
+avoids repeatedly rounding an intermediate mean and feeding that rounded
+value into the next calculation; it does not add measurement precision to
+the retained observations.
+
 The report's network map uses the latest retained observation in the interval. Per-device observation rows saved in the same pass are combined into one map of at most 100 devices and 256 KiB; reaching either bound is disclosed and marks the report incomplete. Every row records its pass's device count; a pass with fewer retained devices than recorded (an interrupted batch write or retention), or without a usable count, is disclosed and marks the report incomplete. Older single-row topology snapshots remain readable; the newer observation is shown.
 
 Report jobs yield between pages and can be cancelled. Work, output, finding-detail, response-detail, grouping, and source-count limits are disclosed as partial coverage when reached. The response total still counts responses past the 5,000 retained details, which cannot be de-duplicated; dropping any detail marks the report incomplete. Values past the 4,096-key endpoint, protocol, source, or severity grouping limit are combined in 'Other / grouping limit', which also marks the report incomplete. Generated report records, schedule state, and reserved working space are included in the managed budget. Reports expire according to their source observations; making a new report does not extend source retention. Existing 7–30-day policies and capacity settings are preserved.

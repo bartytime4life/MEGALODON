@@ -1,8 +1,10 @@
 """Reports use synthetic local evidence and an explicit clock, never live traffic."""
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
+import random
 import sqlite3
 import time
 from zoneinfo import ZoneInfo
@@ -105,6 +107,33 @@ def test_resource_sample_formats_match_host_sampler(report_service):
     assert sample['interfaces']['eth0']['receive_bytes_per_second']==125000
     assert sample['interfaces']['eth0']['send_bytes_per_second']==250000
     assert 'eth0' in report_service.download(value['id'],'html')[1].decode()
+
+
+@pytest.mark.parametrize('scenario', ['small_boundary', 'isolated_spike', 'varied_samples'])
+def test_report_resource_means_do_not_accumulate_compaction_rounding(report_service, scenario):
+    if scenario == 'small_boundary':
+        values = [.001] + [0] * 16 + [.001] * 16
+    elif scenario == 'isolated_spike':
+        values = [1] + [0] * 9999
+    else:
+        rng = random.Random(20261111)
+        values = [rng.randrange(100001) / 1000 for _ in range(10000)]
+    expected = round(math.fsum(values) / len(values), 3)
+    for offset in range(0, len(values), 256):
+        report_service.evidence.append_records('resources', [dict(
+            observed_at=utc(report_service.clock() - 60), source='synthetic-cpu',
+            data=dict(system={'cpu_percent': value},
+                      suite={'cpu_percent': value, 'memory_percent': value}))
+            for value in values[offset:offset + 256]])
+    report = make(report_service)
+    assert report['summary']['resource_samples'] == len(values)
+    sample, = report['resources']
+    assert sample['samples'] == len(values)
+    for metric in ('system_cpu_percent', 'suite_cpu_percent', 'suite_memory_percent'):
+        assert sample[metric] == expected
+        assert sample['metric_samples'][metric] == len(values)
+    assert set(sample) == {'bin', 'samples', 'system_cpu_percent', 'suite_cpu_percent',
+                           'suite_memory_percent', 'interfaces', 'metric_samples'}
 
 
 def test_per_device_topology_rows_form_the_latest_bounded_map(report_service,tmp_path,monkeypatch):
