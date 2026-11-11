@@ -209,24 +209,31 @@ filters apply only to the returned view, not the entire history.
 
 ## Create a bounded report
 
-Open **Reports**, confirm the shared UTC range, then select **Preview local
-report**. Review the metadata-only JSON and select **Download JSON report**.
-The visible preview label records its original range, creation time and
-freshness at creation. Automatic refresh and later range changes keep that
-preview intact; select **Preview local report** again to replace it with the
-current selection, or **Discard preview** to clear it from this tab.
+Open **Reports** and choose a **Time period**, then select **Make report now**.
+The default is the last 24 hours; custom dates use this PC's local time and
+must fall within the last 30 days. The local service reads retained source
+segments and saves a fixed report. **Cancel** stops preparation; existing
+saved reports remain available. Creating a report and saving its automatic
+schedule are protected local actions, separate from opening a saved report.
 
-A held report describes the data reviewed when it was created. It is not a
-live report, a complete detection total, or proof of capture coverage. A failed
-source refresh, an expired snapshot or a future-dated snapshot cannot establish
-freshness. If a replacement has no qualified data, the previous preview is
-cleared. A browser download error preserves the preview for retry or manual
-copying and does not imply that a file was saved.
+Choose a report under **Saved reports**. **Save report** requests a
+self-contained HTML download; **Print / save PDF** opens the browser's print
+dialog after the selected document loads. **Advanced exports** offers report
+data as JSON and finding details as CSV. A download request does not establish
+that the browser saved a file. Downloaded copies are outside managed cleanup.
 
-Reports are assembled in browser memory from validated projections already on
-screen. The controls do not query additional private fields, POST data, write
-the audit database or create a server-side report. Downloads contain the exact
-reviewed JSON; they do not silently substitute data from a later refresh.
+**Finding details & evidence references** belongs to the selected report.
+Changing reports, automatic selection of a completed report, or report expiry
+clears the previous details and pagination. Delayed responses from another
+selection cannot replace the current view. If a page fails, previously loaded
+details from the same report remain labelled, and **Next** retries that page.
+Reopen the details section to retry its current page.
+
+An open report remains fixed across status refreshes. A failed status refresh
+preserves its cached document for saving or printing; it does not establish
+freshness or sensor completeness. Reports disclose missing intervals, source
+units and aggregation limits. See [recording and reports](efficient-recording-reports.md)
+for storage, scheduling, retention and evidence boundaries.
 
 The separate **Evidence → Audit history → Create a report** builder also offers
 CSV for spreadsheet review. Its export includes the source scope, last dashboard

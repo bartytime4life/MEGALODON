@@ -17,6 +17,22 @@ def test_cached_report_workflow_behavior():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize('scenario', [
+    'automatic-selection', 'removed-selection', 'pending-success',
+    'pending-failure', 'document-reselection', 'expired-pending', 'failed-page',
+    'obsolete-completion', 'expired-document', 'manual-expired',
+])
+def test_report_selection_and_page_requests_remain_bound_to_the_current_view(scenario):
+    if not shutil.which('node'):
+        pytest.skip('Node unavailable')
+    result = subprocess.run(
+        [shutil.which('node'), str(Path(__file__).with_name('reports_selection_browser.cjs'))],
+        input=json.dumps({'code': REPORTS_JS, 'scenario': scenario}),
+        text=True, capture_output=True, timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_reports_and_configuration_are_in_their_own_workspaces():
     class Parse(HTMLParser):
         def __init__(self): super().__init__(); self.stack=[]; self.parents={}; self.ids=[]

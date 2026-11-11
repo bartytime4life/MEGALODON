@@ -56,7 +56,13 @@ forcing a successful scan. The scanner check itself performs no download.
 
 ## Everyday use
 
-Open **Reports** to read the latest saved report. **Make report now** covers the last 24 hours by default. Choose Today, Last 7 days, or custom dates when needed. **Save report** downloads a self-contained visual HTML file; **Print / save PDF** uses the browser's print dialog. Technical CSV, JSON, and the address-free hosted summary are under **Advanced exports**.
+Open **Reports** to read the latest saved report. **Make report now** covers the last 24 hours by default. Choose Today, Last 7 days, or custom dates when needed. **Save report** downloads a self-contained visual HTML file; **Print / save PDF** uses the browser's print dialog. Technical CSV and JSON are under **Advanced exports**.
+
+Finding details and page controls follow the selected saved report. Switching
+reports or expiry clears the previous details, including when a completed report
+becomes selected automatically. A failed detail page keeps the last successful
+page of that same report visible; **Next** retries the failed page. Reopen
+**Finding details & evidence references** to retry the current page.
 
 Automatic reports run in the local HUD service at **9 AM in this PC's time zone**, even with the browser closed. After downtime, the service catches up on the latest missed reporting interval once. Schedule settings allow daily or weekly reports and a different time. Reports identify missing or expired evidence; an empty interval does not prove inactivity.
 
