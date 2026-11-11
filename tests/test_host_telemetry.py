@@ -1,9 +1,11 @@
 """Counter semantics and HTTP boundary of automatic, account-free PC telemetry."""
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
+from fractions import Fraction
 import json
 import os
 from pathlib import Path
+import random
 from threading import Thread
 
 import pytest
@@ -246,6 +248,73 @@ def test_summed_process_cpu_above_the_machine_total_is_unmeasured(tmp_path):
     assert value['system']['cpu_percent'] == 100
     assert value['suite']['cpu_percent'] is None
     assert all(app['cpu_percent'] is None or app['cpu_percent'] <= 100 for app in value['apps'])
+
+
+@pytest.mark.parametrize('buckets', [(6, 0, 0), (0, 6, 0), (2, 2, 2)])
+def test_cpu_totals_round_once_after_summing_integer_ticks(tmp_path, buckets):
+    root = tmp_path / 'proc'
+    write_proc(root)
+    names = [name for name, count in zip(('python', 'nmap', 'zeek'), buckets)
+             for _ in range(count)]
+    for pid, name in enumerate(names, 50):
+        process(root, pid, name, 10)
+    sampler = HostTelemetry(root, own_pid=42)
+    sampler.sample(10)
+    write_proc(root, total=1006, idle=800)
+    for pid, name in enumerate(names, 50):
+        process(root, pid, name, 11)
+    value = sampler.sample(12)
+    apps = {app['id']: app for app in value['apps']}
+    assert value['suite']['cpu_percent'] == 100
+    for app, count in zip(('core', 'nmap', 'zeek'), buckets):
+        assert apps[app]['cpu_percent'] == round(100 * count / 6, 3)
+
+
+@pytest.mark.parametrize('names', [('nmap', 'nmap'), ('nmap', 'zeek')])
+def test_cpu_overrun_cannot_be_hidden_by_individual_rounding(tmp_path, names):
+    root = tmp_path / 'proc'
+    write_proc(root)
+    for pid, name in enumerate(names, 50):
+        process(root, pid, name, 10)
+    sampler = HostTelemetry(root, own_pid=42)
+    sampler.sample(10)
+    write_proc(root, total=251000, idle=800)
+    for pid, (name, ticks) in enumerate(zip(names, (125000, 125001)), 50):
+        process(root, pid, name, 10 + ticks)
+    value = sampler.sample(12)
+    assert value['suite']['cpu_percent'] is None
+    if names[0] == names[1]:
+        assert next(app for app in value['apps'] if app['id'] == names[0])['cpu_percent'] is None
+    else:
+        assert all(app['cpu_percent'] == 50 for app in value['apps'] if app['id'] in names)
+
+
+def test_cpu_partitioning_matches_fraction_oracle(tmp_path, monkeypatch):
+    root = tmp_path / 'proc'
+    write_proc(root)
+    rng = random.Random(20261111)
+    for case in range(48):
+        total = rng.randint(100, 1_000_000)
+        excess = (-1, 0, 1)[case % 3]
+        cuts = [0] + sorted(rng.randrange(total) for _ in range(7)) + [total + excess]
+        deltas = [right - left for left, right in zip(cuts, cuts[1:])]
+        buckets = [rng.choice(('core', 'nmap', 'zeek')) for _ in deltas]
+        processes = [{pid: dict(app=app, start=100, ticks=0, rss=0, io=(0, 0))
+                      for pid, app in enumerate(buckets, 50)}]
+        sampler = HostTelemetry(root, own_pid=42)
+        monkeypatch.setattr(sampler, '_processes', lambda: (processes[0], True))
+        write_proc(root)
+        sampler.sample(10)
+        processes[0] = {pid: dict(item, ticks=delta)
+                        for (pid, item), delta in zip(processes[0].items(), deltas)}
+        write_proc(root, total=1000 + total, idle=800)
+        value = sampler.sample(12)
+        expected = None if excess > 0 else round(float(Fraction(100 * sum(deltas), total)), 3)
+        assert value['suite']['cpu_percent'] == expected, case
+        for app in value['apps']:
+            count = sum(delta for bucket, delta in zip(buckets, deltas) if bucket == app['id'])
+            expected = None if count > total else round(float(Fraction(100 * count, total)), 3)
+            assert app['cpu_percent'] == expected, (case, app['id'])
 
 
 def test_wall_clock_step_back_restarts_ordered_history(tmp_path, monkeypatch):

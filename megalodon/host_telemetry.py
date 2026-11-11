@@ -72,9 +72,15 @@ def _sum_known(values):
     return round(sum(values), 3) if all(value is not None for value in values) else None
 
 
-def _percent(value):
-    """Process ticks are read after /proc/stat; a sum above 100 is unmeasured."""
-    return value if value is None or value <= 100 else None
+def _cpu_percent(ticks, total):
+    """Check the exact tick sum before rounding the displayed percentage.
+
+    Process ticks are read after /proc/stat; a sum above the machine's
+    measured interval is unmeasured, even if its percentage rounds to 100.
+    """
+    if ticks is None or total <= 0 or not 0 <= ticks <= total:
+        return None
+    return round(100 * ticks / total, 3)
 
 
 def _address(value: str) -> str:
@@ -248,20 +254,24 @@ class HostTelemetry:
         if not 0 <= available <= memory_total or memory_total <= 0:
             raise ValueError("memory counters unavailable")
         processes, complete = self._processes()
-        apps = []
+        apps, suite_ticks = [], []
         for key, (name, _) in APPS.items():
             matches = [(pid, item) for pid, item in processes.items() if item["app"] == key]
-            cpu_values, reads, writes = [], [], []
+            cpu_ticks, reads, writes = 0, [], []
             for pid, item in matches:
                 old = previous.get("processes", {}).get(pid, {})
                 same_process = old.get("start") == item["start"] and old.get("app") == item["app"]
                 ticks = item["ticks"] - old.get("ticks", item["ticks"])
-                cpu_values.append(round(100 * ticks / cpu_delta, 3) if same_process and valid_interval and 0 <= ticks <= cpu_delta else None)
+                if not same_process or not valid_interval or not 0 <= ticks <= cpu_delta:
+                    cpu_ticks = None
+                elif cpu_ticks is not None:
+                    cpu_ticks += ticks
                 for values, offset in ((reads, 0), (writes, 1)):
                     old_io = old.get("io")
                     values.append(_delta(item["io"][offset], old_io[offset], elapsed) if item["io"] and old_io and same_process else None)
+            suite_ticks.append(cpu_ticks)
             apps.append({"id": key, "name": name, "process_count": len(matches),
-                         "cpu_percent": _percent(_sum_known(cpu_values)) if valid_interval else None,
+                         "cpu_percent": _cpu_percent(cpu_ticks, cpu_delta) if valid_interval else None,
                          "rss_bytes": sum(item["rss"] for _, item in matches),
                          "read_bps": _sum_known(reads) if valid_interval else None,
                          "write_bps": _sum_known(writes) if valid_interval else None,
@@ -295,7 +305,8 @@ class HostTelemetry:
         except (OSError, ValueError, IndexError, UnicodeError):
             network_status, interfaces, network_raw = "unavailable", [], {}
         rss = sum(app["rss_bytes"] for app in apps)
-        suite_cpu = _percent(_sum_known(app["cpu_percent"] for app in apps))
+        suite_cpu = (_cpu_percent(sum(suite_ticks), cpu_delta)
+                     if valid_interval and all(ticks is not None for ticks in suite_ticks) else None)
         point = {"observed_at": observed_at, "system_cpu_percent": system_cpu,
                  "suite_cpu_percent": suite_cpu, "suite_rss_bytes": rss,
                  "interfaces": [{key: row[key] for key in ("name", "rx_bps", "tx_bps")} for row in interfaces]}
