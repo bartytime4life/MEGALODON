@@ -391,6 +391,16 @@ remain eligible. Empty flags can also mean unavailable capture metadata; this
 rule cannot prove a NULL scan. ACK-only scanning needs a stateful sensor and
 is not covered by this rule. Historical findings retain their original status.
 
+Detector time comparisons use exact integer UTC microseconds derived from the
+accepted datetime's days, seconds and microseconds. Windows retain events on
+their exact inclusive cutoff; cooldown reopens at exact equality; future skew
+allows exactly 60 seconds; the per-source watermark allows equality and rejects
+any earlier microsecond. Window/cooldown/skew constants are scaled from integer
+seconds before comparison. No floating epoch conversion participates in those
+decisions. Event and detection datetimes retain their existing serialized form;
+this is numerical correctness, not a claim of clock synchronization or producer
+timestamp accuracy. See the [precision correction](docs/detector-acceptance.md#exact-time-correction).
+
 Rules use bounded in-memory deques and emit at most one alert per source/rule
 within the configured cooldown. Port-scan distinctness uses an incremental,
 bounded per-source frequency index that is updated on time expiry, capacity

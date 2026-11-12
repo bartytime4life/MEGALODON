@@ -8,6 +8,78 @@ false-positive rates, independent approval, or production acceptance. No
 detector, threshold, configuration, response policy, or runtime reporting
 feature was introduced by this receipt.
 
+## Exact-time correction
+
+Source basis: `main@201fe4939cbfb160dccb80782455d106cdebaed4`. The current
+correction below is separate from the dated acceptance receipts that follow.
+It replaces process-local floating epoch values with exact integer microseconds
+in [the detector](../megalodon/detector.py), including provisional undo journals,
+cooldowns and source watermarks. It changes no database schema, detection-result
+datetime format, threshold, service transaction order or response authority.
+
+The synthetic timestamps `2004-01-10T13:36:59.000003Z` and
+`2004-01-10T13:37:09.000003Z` are exactly ten seconds apart. At the source basis,
+the two-event SYN and distinct-port windows can expire the first event; moving
+both timestamps forward by 100 seconds retains it. Floating-point spacing
+changes at the intervening epoch boundary. Separate controls reproduced exact
+cooldown/skew equality errors and adjacent-microsecond watermark aliasing.
+These are deterministic arithmetic counterexamples, not captured attacks.
+
+For a UTC datetime `d`, let `delta = d - 1970-01-01T00:00:00Z`. Compute
+
+```text
+T(d) = (delta.days * 86400 + delta.seconds) * 1000000 + delta.microseconds
+```
+
+All arithmetic is integer arithmetic. Do not compute `int(timestamp() * 1e6)`
+or multiply `total_seconds()` by a million: an earlier floating conversion can
+already discard the distinction. [Python's datetime documentation](https://docs.python.org/3.12/library/datetime.html#timedelta-objects)
+defines the normalized duration components and exact integer arithmetic;
+[Goldberg's floating-point tutorial](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html)
+explains the representation/rounding problem. The implementation applies that
+numerical reasoning to these specific counterexamples.
+
+| Decision | Exact comparison and retained policy |
+| --- | --- |
+| SYN and port windows | Remove only timestamps strictly before `now_us - window_seconds * 1000000`. Equality stays in the window. |
+| Per-rule/source cooldown | Suppress only while `now_us - last_emitted_us < cooldown_seconds * 1000000`. Equality can emit. |
+| Future time | Refuse only when `event_us > clock_us + 60000000`. Exactly 60 seconds ahead remains allowed. |
+| Source chronology | Refuse `event_us < committed_watermark_us`. Equal observations remain allowed. |
+
+The prepared result uses an explicitly named `observed_us` field. Timestamp
+state and journals are private process-local integers; detections still retain
+the original accepted datetime. There is no persisted float-state migration.
+Direct constructor timing settings now require integer seconds, with positive
+windows and nonnegative cooldown. Direct zero cooldown stays valid; the existing
+stricter TOML loader bounds are unchanged. No new configuration knob is added.
+
+[Exact datetime-oracle tests](../tests/test_detector_time.py) cover one microsecond
+below/at/above boundaries across negative, current, exponent-crossing and distant
+epochs, timezone-equivalent clocks, rollback, event rejection and source eviction.
+On the unchanged source, the 171 new tests produced 54 failures and 117 passes:
+28 failures concern temporal behavior, one concerns the new internal-unit
+assertion, and 25 concern the new direct-constructor guards. After repair, the
+focused detector/service selection passed 318 tests with no skips. Existing
+white-box state fixtures were deliberately converted to microsecond units;
+their interruption, rollback and ledger assertions remain in place.
+
+Use the reviewed environment and an existing owner-private temporary parent:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS='' PYTEST_ADDOPTS='' \
+setpriv --inh-caps=-all --ambient-caps=-all python -m pytest -o addopts= -ra \
+  tests/test_detector_time.py tests/test_detector.py tests/test_detector_acceptance.py \
+  tests/test_service_acceptance.py tests/test_service.py \
+  --basetemp=/absolute/owner-private/test-output
+```
+
+The independent review also matched 2,800 finite mixed-event attempts against a
+datetime state-machine oracle, including injected rollback, stale/skew refusals
+and LRU eviction. These checks establish arithmetic and state-transition
+properties of supplied timestamps. They do not measure sensor clock accuracy,
+network visibility, malicious intent, operational false-positive rates or
+installed-machine acceptance.
+
 ## Detector-only source and fixture identity
 
 Inspection base: `a177c13ade3b4a727a0514afac21575fd0f10e08`.

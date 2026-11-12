@@ -19,7 +19,18 @@ from .validation import ValidationError
 _NAT64_WELL_KNOWN = ipaddress.ip_network("64:ff9b::/96")
 SEVERITY_RANK = {"LOW": 10, "MEDIUM": 20, "HIGH": 30, "CRITICAL": 40}
 MAX_FUTURE_SKEW_SECONDS = 60
+_MICROSECONDS_PER_SECOND = 1_000_000
+_UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _MISSING = object()
+
+
+def _datetime_microseconds(value: datetime) -> int:
+    """Exact UTC microseconds; float timestamps lose ordering and cutoffs."""
+    delta = value.astimezone(timezone.utc) - _UNIX_EPOCH
+    return (
+        (delta.days * 86_400 + delta.seconds) * _MICROSECONDS_PER_SECOND
+        + delta.microseconds
+    )
 
 
 def _decrement_port_count(counts: Counter[int], port: int) -> None:
@@ -38,7 +49,7 @@ class _WindowUndo:
     source: str
     window: Deque
     original_length: int
-    removed: list[tuple[float, object]]
+    removed: list[tuple[int, object]]
     created: bool
     appended: bool = False
 
@@ -55,15 +66,15 @@ class _WindowUndo:
 
 @dataclass
 class _PortWindowUndo:
-    window_mapping: dict[str, Deque[tuple[float, int]]]
+    window_mapping: dict[str, Deque[tuple[int, int]]]
     count_mapping: dict[str, Counter[int]]
     source: str
-    window: Deque[tuple[float, int]]
+    window: Deque[tuple[int, int]]
     counts: Counter[int]
-    appended_item: tuple[float, int]
+    appended_item: tuple[int, int]
     original_length: int
     original_counts: dict[int, object]
-    removed: list[tuple[float, int]]
+    removed: list[tuple[int, int]]
     window_created: bool = False
     counts_created: bool = False
     appended: bool = False
@@ -100,7 +111,7 @@ class PreparedDetection:
     detector: "Detector"
     token: object
     source: str
-    observed: float
+    observed_us: int
     results: tuple[DetectionResult, ...]
     window_undos: tuple[_WindowUndo | _PortWindowUndo, ...]
     emission_undos: tuple[tuple[tuple[str, str], object], ...]
@@ -120,7 +131,7 @@ class PreparedDetection:
         ):
             raise RuntimeError("detector preparation token mismatch")
         detector._touch_source(self.source)
-        detector.source_high_watermarks[self.source] = self.observed
+        detector.source_high_watermarks[self.source] = self.observed_us
         detector._pending = None
         self._resolved = True
 
@@ -173,17 +184,29 @@ class Detector:
         self.settings = settings
         self.allowlist = allowlist
         self.clock = clock or (lambda: datetime.now(timezone.utc))
-        self.syn_windows: dict[str, Deque[tuple[float, str]]] = defaultdict(deque)
-        self.port_windows: dict[str, Deque[tuple[float, int]]] = defaultdict(deque)
+        # Every process-local timestamp, including undo journals, is an exact
+        # integer number of UTC microseconds since the Unix epoch. Results keep
+        # the original event datetime; no stored report or database shape changes.
+        self.syn_windows: dict[str, Deque[tuple[int, str]]] = defaultdict(deque)
+        self.port_windows: dict[str, Deque[tuple[int, int]]] = defaultdict(deque)
         self.port_counts: dict[str, Counter[int]] = defaultdict(Counter)
-        self.last_emitted: dict[tuple[str, str], float] = {}
-        self.source_high_watermarks: dict[str, float] = {}
+        self.last_emitted: dict[tuple[str, str], int] = {}
+        self.source_high_watermarks: dict[str, int] = {}
         self.source_order: OrderedDict[str, None] = OrderedDict()
         self._pending: tuple[object, PreparedDetection | None] | None = None
+        for field in (
+            "syn_flood_window_seconds", "port_scan_window_seconds",
+            "alert_cooldown_seconds",
+        ):
+            value = getattr(settings, field)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"{field} must be an integer")
         if settings.syn_flood_window_seconds < 1:
             raise ValueError("syn_flood_window_seconds must be positive")
         if settings.port_scan_window_seconds < 1:
             raise ValueError("port_scan_window_seconds must be positive")
+        if settings.alert_cooldown_seconds < 0:
+            raise ValueError("alert_cooldown_seconds must be nonnegative")
         if settings.max_tracked_sources < 1:
             raise ValueError("max_tracked_sources must be positive")
         if settings.max_events_per_source_window < 1:
@@ -211,7 +234,7 @@ class Detector:
         emission_undos: list[tuple[tuple[str, str], object]] = []
         results: list[DetectionResult] = []
         source = _source_key(event.src_ip)
-        now = event.observed_at.timestamp()
+        now_us = _datetime_microseconds(event.observed_at)
 
         def can_emit(rule_id: str) -> bool:
             if rule_id not in EMITTING_RULES:
@@ -220,11 +243,12 @@ class Detector:
             previous = self.last_emitted.get(key, _MISSING)
             if (
                 previous is not _MISSING
-                and now - previous < self.settings.alert_cooldown_seconds
+                and now_us - previous
+                < self.settings.alert_cooldown_seconds * _MICROSECONDS_PER_SECOND
             ):
                 return False
             emission_undos.append((key, previous))
-            self.last_emitted[key] = now
+            self.last_emitted[key] = now_us
             return True
 
         try:
@@ -238,8 +262,10 @@ class Detector:
                 syn_window = self._stage_window(
                     self.syn_windows,
                     source,
-                    (now, event.dst_ip),
-                    now - self.settings.syn_flood_window_seconds,
+                    (now_us, event.dst_ip),
+                    now_us - (
+                        self.settings.syn_flood_window_seconds * _MICROSECONDS_PER_SECOND
+                    ),
                     window_undos,
                 )
                 if len(syn_window) >= self.settings.syn_flood_threshold and can_emit(
@@ -256,7 +282,6 @@ class Detector:
                                 "threshold": self.settings.syn_flood_threshold,
                                 "window_seconds": self.settings.syn_flood_window_seconds,
                             },
-                            now,
                         )
                     )
 
@@ -268,8 +293,10 @@ class Detector:
                     and not event.tcp_flags.intersection({"ACK", "RST"})):
                 _, port_counts = self._stage_port_window(
                     source,
-                    (now, event.dst_port),
-                    now - self.settings.port_scan_window_seconds,
+                    (now_us, event.dst_port),
+                    now_us - (
+                        self.settings.port_scan_window_seconds * _MICROSECONDS_PER_SECOND
+                    ),
                     window_undos,
                 )
                 distinct_port_count = len(port_counts)
@@ -288,7 +315,6 @@ class Detector:
                                 "threshold": self.settings.port_scan_distinct_ports,
                                 "window_seconds": self.settings.port_scan_window_seconds,
                             },
-                            now,
                         )
                     )
 
@@ -308,7 +334,6 @@ class Detector:
                             "dns_query_length": event.dns_query_length,
                             "threshold": self.settings.dns_query_length,
                         },
-                        now,
                     )
                 )
 
@@ -316,7 +341,7 @@ class Detector:
                 detector=self,
                 token=token,
                 source=source,
-                observed=now,
+                observed_us=now_us,
                 results=tuple(results),
                 window_undos=tuple(window_undos),
                 emission_undos=tuple(emission_undos),
@@ -355,8 +380,8 @@ class Detector:
         self,
         mapping: dict[str, Deque],
         source: str,
-        item: tuple[float, object],
-        cutoff: float,
+        item: tuple[int, object],
+        cutoff_us: int,
         undo_log: list[_WindowUndo | _PortWindowUndo],
     ) -> Deque:
         created = source not in mapping
@@ -376,7 +401,8 @@ class Detector:
         if created:
             mapping[source] = window
         self._stage_append(undo, item)
-        while window and window[0][0] < cutoff:
+        # Keep an event exactly on the inclusive cutoff.
+        while window and window[0][0] < cutoff_us:
             self._stage_deque_removal(undo)
         while len(window) > self.settings.max_events_per_source_window:
             self._stage_deque_removal(undo)
@@ -384,7 +410,7 @@ class Detector:
 
     @staticmethod
     def _stage_append(
-        undo: _WindowUndo | _PortWindowUndo, item: tuple[float, object]
+        undo: _WindowUndo | _PortWindowUndo, item: tuple[int, object]
     ) -> None:
         before = len(undo.window)
         try:
@@ -420,10 +446,10 @@ class Detector:
     def _stage_port_window(
         self,
         source: str,
-        item: tuple[float, int],
-        cutoff: float,
+        item: tuple[int, int],
+        cutoff_us: int,
         undo_log: list[_WindowUndo | _PortWindowUndo],
-    ) -> tuple[Deque[tuple[float, int]], Counter[int]]:
+    ) -> tuple[Deque[tuple[int, int]], Counter[int]]:
         window_missing = source not in self.port_windows
         counts_missing = source not in self.port_counts
         window = deque() if window_missing else self.port_windows[source]
@@ -455,7 +481,8 @@ class Detector:
         self._stage_append(undo, item)
         self._remember_port_count(undo, item[1])
         counts[item[1]] += 1
-        while window and window[0][0] < cutoff:
+        # Match the SYN window's inclusive cutoff.
+        while window and window[0][0] < cutoff_us:
             self._stage_port_removal(undo)
         while len(window) > self.settings.max_events_per_source_window:
             self._stage_port_removal(undo)
@@ -477,14 +504,17 @@ class Detector:
 
     def validate_event_time(self, event: PacketEvent) -> None:
         """Reject future and per-source reordered records before state changes."""
-        observed = event.observed_at.timestamp()
+        observed_us = _datetime_microseconds(event.observed_at)
         current = self.clock()
         if current.tzinfo is None or current.utcoffset() is None:
             raise RuntimeError("detector clock must be timezone-aware")
-        if observed > current.astimezone(timezone.utc).timestamp() + MAX_FUTURE_SKEW_SECONDS:
+        current_us = _datetime_microseconds(current)
+        if observed_us > (
+            current_us + MAX_FUTURE_SKEW_SECONDS * _MICROSECONDS_PER_SECOND
+        ):
             raise ValidationError("event timestamp exceeds allowed future skew")
         previous = self.source_high_watermarks.get(_source_key(event.src_ip))
-        if previous is not None and observed < previous:
+        if previous is not None and observed_us < previous:
             raise ValidationError("event timestamp precedes source high watermark")
 
     def _result(
@@ -494,7 +524,6 @@ class Detector:
         severity: str,
         message: str,
         evidence: dict[str, int | str],
-        now: float,
     ) -> DetectionResult:
         suppressed_reason = None
         source = ipaddress.ip_address(event.src_ip)

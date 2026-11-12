@@ -14,6 +14,8 @@ from megalodon.validation import ValidationError
 
 
 BASE = datetime(2026, 9, 6, tzinfo=timezone.utc)
+# White-box journals/windows use integer UTC microseconds, not float seconds.
+BASE_US = (BASE - datetime(1970, 1, 1, tzinfo=timezone.utc)) // timedelta(microseconds=1)
 
 
 def event(index: int, **overrides) -> PacketEvent:
@@ -317,8 +319,8 @@ class DetectorTests(unittest.TestCase):
             DetectionSettings(), clock=lambda: BASE + timedelta(days=1)
         )
         source = "8.8.8.8"
-        syn_window = NonIterableDeque([(BASE.timestamp(), "192.0.2.10")])
-        port_window = NonIterableDeque([(BASE.timestamp(), 22)])
+        syn_window = NonIterableDeque([(BASE_US, "192.0.2.10")])
+        port_window = NonIterableDeque([(BASE_US, 22)])
         detector.syn_windows[source] = syn_window
         detector.port_windows[source] = port_window
 
@@ -419,10 +421,10 @@ class DetectorTests(unittest.TestCase):
                     clock=lambda: BASE + timedelta(days=1),
                 )
                 source = "8.8.8.8"
-                original = [(BASE.timestamp(), "192.0.2.10")]
+                original = [(BASE_US, "192.0.2.10")]
                 window = InterruptAfterDequeMutation(original, operation)
                 detector.syn_windows[source] = window
-                detector.source_high_watermarks[source] = BASE.timestamp()
+                detector.source_high_watermarks[source] = BASE_US
                 detector.source_order[source] = None
                 observed = BASE if operation == "append" else BASE + timedelta(seconds=2)
 
@@ -437,7 +439,7 @@ class DetectorTests(unittest.TestCase):
                     )
 
                 self.assertEqual(list(window), original)
-                self.assertEqual(detector.source_high_watermarks[source], BASE.timestamp())
+                self.assertEqual(detector.source_high_watermarks[source], BASE_US)
                 self.assertEqual(tuple(detector.source_order), (source,))
                 self.assertIsNone(detector._pending_token)
 
@@ -450,9 +452,9 @@ class DetectorTests(unittest.TestCase):
             clock=lambda: BASE + timedelta(days=1),
         )
         source = "8.8.8.8"
-        original = [(BASE.timestamp(), "192.0.2.10")]
+        original = [(BASE_US, "192.0.2.10")]
         detector.syn_windows[source] = deque(original)
-        detector.source_high_watermarks[source] = BASE.timestamp()
+        detector.source_high_watermarks[source] = BASE_US
         detector.source_order[source] = None
         lines, first_line = inspect.getsourcelines(Detector._stage_deque_removal)
         target_line = first_line + next(
@@ -522,12 +524,12 @@ class DetectorTests(unittest.TestCase):
                     clock=lambda: BASE + timedelta(days=1),
                 )
                 source = "8.8.8.8"
-                original = [(BASE.timestamp(), 21)]
+                original = [(BASE_US, 21)]
                 window = InterruptAfterDequeMutation(original, operation)
                 counts = Counter({21: 1})
                 detector.port_windows[source] = window
                 detector.port_counts[source] = counts
-                detector.source_high_watermarks[source] = BASE.timestamp()
+                detector.source_high_watermarks[source] = BASE_US
                 detector.source_order[source] = None
                 observed = BASE if operation == "append" else BASE + timedelta(seconds=2)
 
@@ -556,11 +558,11 @@ class DetectorTests(unittest.TestCase):
             clock=lambda: BASE + timedelta(days=1),
         )
         source = "8.8.8.8"
-        original = [(BASE.timestamp(), 21)]
+        original = [(BASE_US, 21)]
         counts = Counter({21: 1})
         detector.port_windows[source] = deque(original)
         detector.port_counts[source] = counts
-        detector.source_high_watermarks[source] = BASE.timestamp()
+        detector.source_high_watermarks[source] = BASE_US
         detector.source_order[source] = None
         lines, first_line = inspect.getsourcelines(Detector._stage_deque_removal)
         target_line = first_line + next(
@@ -632,7 +634,7 @@ class DetectorTests(unittest.TestCase):
             ("increment", (), {}, BASE, "set", 22),
             (
                 "decrement",
-                ((BASE.timestamp(), 21),),
+                ((BASE_US, 21),),
                 {21: 1},
                 BASE + timedelta(seconds=2),
                 "delete",

@@ -60,6 +60,11 @@ TABLES = ("events", "detections", "actions")
 ATOMIC_TABLES = (*TABLES, "detection_actions")
 
 
+def _detector_time_us(at):
+    """Independent exact units for white-box detector state fixtures only."""
+    return (at - datetime(1970, 1, 1, tzinfo=timezone.utc)) // timedelta(microseconds=1)
+
+
 class AuditClock(datetime):
     @classmethod
     def now(cls, tz=None):
@@ -374,7 +379,7 @@ def test_port_counter_journal_restores_failed_service_bundle_then_retries(
         detector = service.detector
         if prior:
             window = deque(
-                (OBSERVED_AT.timestamp() + seconds, prior_port)
+                (_detector_time_us(OBSERVED_AT + timedelta(seconds=seconds)), prior_port)
                 for seconds, prior_port in prior
             )
             counts = Counter(prior_port for _, prior_port in prior)
@@ -433,7 +438,7 @@ def test_port_counter_journal_restores_failed_service_bundle_then_retries(
         assert [item.rule_id for item in service.process(candidate)] == ["PORT_SCAN"]
 
         expected_window = tuple(
-            (OBSERVED_AT.timestamp() + seconds, expected_port)
+            (_detector_time_us(OBSERVED_AT + timedelta(seconds=seconds)), expected_port)
             for seconds, expected_port in expected
         )
         assert tuple(detector.port_windows[source]) == expected_window
@@ -445,7 +450,7 @@ def test_port_counter_journal_restores_failed_service_bundle_then_retries(
         assert sum(detector.port_counts[source].values()) == len(
             detector.port_windows[source]
         )
-        assert detector.source_high_watermarks[source] == candidate.observed_at.timestamp()
+        assert detector.source_high_watermarks[source] == _detector_time_us(candidate.observed_at)
         assert tuple(detector.source_order) == (source,)
         assert detector._pending_token is None
         assert store.summary() == {
@@ -623,10 +628,10 @@ def test_interleaved_service_calls_serialize_prepare_through_resolution(tmp_path
 
     assert store.committed == [second]
     assert tuple(service.detector.port_windows["8.8.8.8"]) == (
-        (second.observed_at.timestamp(), 22),
+        (_detector_time_us(second.observed_at), 22),
     )
     assert service.detector.port_counts["8.8.8.8"] == Counter({22: 1})
     assert service.detector.source_high_watermarks["8.8.8.8"] == (
-        second.observed_at.timestamp()
+        _detector_time_us(second.observed_at)
     )
     assert service.detector._pending_token is None
