@@ -1,5 +1,25 @@
 # MEGALODON architecture security review
 
+> **Current source orientation — merged source `418fa54474f3f77d0758e94aab5735a516d8c43b` (2026-11-12 UTC):** The [current-state guide](docs/current-state.md) distinguishes legacy CLI refusal surfaces, protected Linux HUD actions and the partial Stage 0 application entry fence. [PR #774](https://github.com/bartytime4life/MEGALODON/pull/774) adds read-only HUD guidance and current-query/selection binding; it grants no new action endpoint or runtime authority. The dated reviews below retain their original interfaces and evidence scope. This documentation refresh does not rerun installed-host, native containment or independent acceptance checks.
+
+The current HUD labels returned Suricata context as **Sensor observations** and
+keeps it separate from the retained Findings queue. Guidance links only navigate;
+refresh reads the existing observations and resume changes display polling.
+Sensor-summary recording can remain populated while packet capture is stopped.
+Reference search and device-review completions, including errors, are bound to
+the current query/selection revision. A failed Setup status read marks capture
+and AI summaries unavailable without reclassifying the independent app heartbeat.
+
+Stage 0 is selected by trusted launch code before effectful entry. The one-way
+application latch rejects named entries and unknown state; selection cannot undo
+already admitted effects or stop existing workers. It is not OS containment or
+proof that every helper is fenced. See the [exact #750 scope](docs/offline-analysis.md#stage-0-application-entry-fence--issue-750).
+The release's operational local-model analysis remains `UNBOUND`; saved
+preferences, model inventory and staged-file checks are not accepted inference
+or loaded-runtime proof. The separate [fixed READY diagnostic](docs/ollama-response-test.md)
+is explicitly allowed and may load the selected model; it grants no operational
+analysis, keep-ready or acceptance authority.
+
 > **Documentation orientation — 2026-10-22 / source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
 
 
@@ -99,7 +119,7 @@ An operator-supplied JSONL source is not authenticated capture evidence.
 
 The `hud` launch alias inspects bounded executable metadata once before listening,
 using the existing readiness contract. `/api/setup` returns that cached snapshot.
-An explicit **Check this computer** click uses the separate fixed
+An explicit **Setup → Overview → This computer → Check now** click uses the separate fixed
 `/api/local-checks` route, requiring `X-Megalodon-Check: 1` and no query arguments.
 It reads the selected store, reports the running Python/SQLite versions, and
 refreshes the same metadata-only executable and process-name observations.
@@ -116,11 +136,15 @@ connection resource use; a process that continually sends slow partial headers
 can still occupy the finite slots, so this is not an availability guarantee
 against a hostile local process.
 The separate heartbeat and recipe-catalog GETs stay observational. Companion
-tool management is disabled by default and requires `hud --enable-tool-management`
-on Linux with nonzero real/effective UIDs. An independent random per-launch
-operator token is printed only in the launch terminal and entered into a browser
-password field; it is never served, persisted, put in a URL, or shared with AI
-authorization. `/api/install` and `/api/support-apps` authenticate exactly one
+tool management is disabled in a fresh source launch unless its settings or
+`hud --enable-tool-management` enable it. Installer-generated desktop settings
+enable that separate session. Linux nonzero real/effective UIDs remain required. An independent random per-launch
+operator token is printed in the launch terminal; the current HUD also obtains
+that same launch's nonce through guarded `GET /api/install/token`. It stays in
+page memory, never a URL or browser storage, and is separate from AI authorization.
+Enabled launch state, normal Host/session admission, the explicit check header,
+non-root local identity and Origin check still apply. `/api/install` and
+`/api/support-apps` authenticate exactly one
 token header and check current non-root identity before selecting a fixed
 installation, service-start recipe or closed-list desktop GUI launch action. Desktop launches
 never accept an executable or arguments from the request and do not start scans,
@@ -174,9 +198,11 @@ but its example implementation is not safe to deploy. The highest-risk defects
 are command injection, unrestricted automatic blocking, lack of rollback, and
 an unauthenticated remote-capable dashboard. The MVP in this folder retains the
 capture → analysis → policy → audit → dashboard shape while making observation
-the default. For the evaluation-release candidate, firewall response is
-plan-only and every retained live-apply route fails closed before it can inspect
-or change the host.
+the default. For the legacy CLI evaluation surface covered here, firewall
+response is plan-only and retained CLI live-apply routes fail closed before they
+can inspect or change the host. The separately protected Linux HUD Defense
+workflow has its own confirmation, OS authorization, expiry and readback contract;
+it is not authorized by this historical review.
 
 This review separates three evidence levels: implemented safeguards in the
 current code, adopted but inert contracts, and controls still required before
@@ -193,16 +219,19 @@ explicitly enabled Qwen provider entry point. Application-level refusal and
 literal-loopback transport do not establish containment of the separately
 operated provider, its shared services or its own outbound connections.
 
-The opt-in [AI control plane](docs/ai-control-plane.md) is a separate draft
-interface. It gates inference on an observed loopback-only listener and exact
-local manifest digest, uses fixed metadata tools, and records AI tool events
+The opt-in [AI control plane](docs/ai-control-plane.md) is a separately protected
+interface. Its admitted-runtime path requires an observed loopback-only listener
+and exact local manifest digest, uses fixed metadata tools, and records AI tool events
 in a private SQLite ledger. A model-selected request cannot authorize itself,
 invoke a command, access arbitrary files or network destinations, or apply a
 firewall rule. The HUD's question POST requires a per-launch operator token,
-exact Origin and bound Host. Model-process egress, artifact authenticity,
-GPU compatibility and independent review remain open under #261. The observed
-operator host currently exposes Ollama on `0.0.0.0:11434`, so the new adapter
-refuses inference until the operator corrects the systemd override.
+exact Origin and bound Host. In the current UNBOUND release, admitted question
+requests refuse before broker dispatch, body reads or audit-store creation;
+the admitted-runtime description does not lift that fence. Model-process egress, artifact authenticity,
+GPU compatibility and independent review remain open under #261. The host
+observation recorded for that draft found Ollama on `0.0.0.0:11434`, which the
+adapter refused. This is historical host evidence; the documentation refresh
+did not recheck listener posture or authorize a change.
 
 The offline reference and synthetic evaluation commands are documented in
 [docs/reference-data.md](docs/reference-data.md). They do not start ingestion
@@ -489,6 +518,11 @@ not follow from either the older closures or the later implementation.
 
 ## Windows/Linux extension: proposed controls, not completed validation
 
+This section preserves the original standalone offline and legacy-CLI baseline.
+Its table is not an inventory of the later protected Linux HUD's installation,
+capture, file-scan, inventory or Defense workflows. Use the current-state guide
+and each capability's contract for those separate interfaces and acceptance limits.
+
 The [platform baseline](docs/platform-baseline.md) is the canonical proposed
 configuration and installation guide. The review above concerns the Linux MVP
 and original design findings; it is not independent Windows security approval.
@@ -497,8 +531,8 @@ descriptor-based file access, `/proc`, process groups, and a fixed
 `/usr/bin/tshark`. Retained firewall apply routes are refusal surfaces only:
 they stop with the fixed evaluation-release diagnostic before configuration,
 platform/host, executable, privilege, or process work. There is no live Linux or
-Windows firewall-apply backend in the evaluation-release candidate. Native Windows parity
-is unproven; existing Linux checks must not be removed to advertise it.
+Windows firewall-apply backend behind those legacy CLI routes. Native Windows
+parity is unproven; existing Linux checks must not be removed to advertise it.
 
 | Boundary | Required Windows/guest control | Current status |
 | --- | --- | --- |
@@ -538,10 +572,14 @@ jobs, and SOAR mutation remain unimplemented and unauthorized.
 
 The core demonstration needs neither root nor Administrator. Windows evaluation
 must use synthetic inputs until native compatibility and privacy gates pass.
-The core telemetry dashboard remains read-only and loopback-bound; the optional
-AI question route is separately token-gated and writes only its private ledger.
-The default-disabled companion-maintenance route requires its own launch opt-in
-and token and can change the host through fixed recipes as described above.
+The core telemetry dashboard remains read-only and loopback-bound. The retained
+AI question route has its separate token gate; current UNBOUND requests refuse
+before body reads or audit-store creation. Explicit tools and the fixed READY
+diagnostic retain their separately documented scopes.
+The companion-maintenance route requires its own enabled launch and token and
+can change the host through fixed recipes as described above. Fresh source
+launches default to observation; installer-generated desktop settings enable
+that separate management session.
 No remote exposure exception
 is created. External application installation is not evidence that MEGALODON
 has gained that application's protection or detection capability.
@@ -556,6 +594,7 @@ are recorded in the baseline; do not silently bundle restricted components.
 
 Acceptance requires Linux regression evidence, native Windows tests and ACL/UI
 readback, installed-tool compatibility where applicable, and independent human
-review. Issue #3's review-control gate remains separate from green CI. Nothing
+review. [CONTRIBUTING](CONTRIBUTING.md) records issue #3's historical disposition
+and the explicit owner-decision workflow; green CI is not independent approval. Nothing
 here authorizes a firewall operation, driver installation, scheduled task,
 remote listener, autonomous response, merge, release, or deployment.

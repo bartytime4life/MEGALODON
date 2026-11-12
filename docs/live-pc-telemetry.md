@@ -39,6 +39,22 @@ include recognized instances started outside MEGALODON. Browsers opened by the
 HUD are excluded because they can contain unrelated tabs. A process-name match is
 an observation, not proof of software identity or health.
 
+For CPU percentages, the sampler sums integer process ticks within each app
+and across the recognized suite before validating them against the machine's
+measured tick interval. Each displayed percentage is then rounded once to three
+decimal places. A sum above the interval remains unavailable, even if rounding
+would display 100%; missing process measurements also remain unavailable.
+Adding individually displayed app percentages can differ slightly from the
+suite's independently rounded total. This is the arithmetic contract from
+[PR #772](https://github.com/bartytime4life/MEGALODON/pull/772), implemented in
+[`host_telemetry.py`](../megalodon/host_telemetry.py) and covered by
+[`test_host_telemetry.py`](../tests/test_host_telemetry.py). It adds no traffic
+attribution, sensor-health claim or measurement precision.
+
+Saved reports separately preserve weighted means and known-sample counts
+through intermediate compaction, rounding percentages only at final report
+output; see [report evidence and limits](efficient-recording-reports.md#report-evidence-and-limits).
+
 History is held in memory for this HUD session, up to 300 points (ten minutes at
 two-second intervals). The browser pauses its requests when hidden; the shared
 sampler continues so reopening the tab retains recent history. Pausing the view
@@ -66,7 +82,7 @@ vendor account. Their license terms remain those of their publishers.
 | [Nmap](https://nmap.org/download.html) | Host and port-state inventory | Automatic bounded loopback scan and completed-report watcher |
 | [ClamAV](https://www.clamav.net/) | Scanned files and signature matches | Automatic Downloads scan and completed-report watcher |
 | [osquery](https://osquery.io/downloads) | Package inventory | Automatic bounded package count and result watcher |
-| [Ollama with local Qwen](https://github.com/ollama/ollama) | Optional explanation of supported observations | Existing opt-in, loopback-only, pinned-model provider |
+| [Ollama with local Qwen](https://github.com/ollama/ollama) | Explicit installed-model preparation and fixed no-telemetry response diagnostic | Operational generation remains [UNBOUND](qwen-runtime-unbound.md) across model families |
 
 The catalog also retains local Python/SQLite, Scapy and nftables. A running
 tool does not automatically supply packet evidence. Missing packet capture or a

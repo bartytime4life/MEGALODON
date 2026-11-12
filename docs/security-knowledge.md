@@ -2,6 +2,13 @@
 
 ## Using it
 
+Operational model generation remains blocked by the [UNBOUND release fence](qwen-runtime-unbound.md)
+for every model family. Explicit catalog/selection and the separate fixed READY
+diagnostic do not lift that hold. The explanation contracts below describe the
+implemented review pipeline and retained results, not authority to activate
+operational inference in this release; facts and coverage remain readable
+without a model.
+
 Open **Setup → Local AI → Knowledge and automatic review**. Three preferences control local
 baseline learning, automatic explanations, and daily public-reference updates.
 The HUD's **Review activity** link opens Findings. Each review answers **What
@@ -180,6 +187,12 @@ separately use exact rational expectations, large counts, display ties,
 source separation, expiry windows and duplicate hours; away-from-threshold
 benchmark parity does not cover the deliberately corrected threshold cases.
 Repeated work uses stable IDs. AI failure does not remove detector findings.
+
+[PR #771](https://github.com/bartytime4life/MEGALODON/pull/771) and
+[the arithmetic regression tests](../tests/test_pattern_comparison_math.py)
+define this change. The [November source reading and validation record](documentation-refresh-2026-11-11.md)
+keeps the saved benchmark, candidate checks and merged source distinct from
+new measurements or installed/model acceptance.
 
 ## Scheduling, feedback and reports
 

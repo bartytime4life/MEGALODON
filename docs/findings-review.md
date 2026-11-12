@@ -6,6 +6,11 @@ search box filters the returned page; Previous and Next browse additional pages.
 Coverage labels describe the actual bounded read. An empty page is not proof of
 a quiet or safe network, and recorded severity is not an AI risk score.
 
+The HUD's **Sensor observations** count is returned passive Suricata connection
+context. Its guidance opens the connection inspector; those labels do not prove
+the same records are retained in this Findings queue. In connection-summary
+mode, current sensor data can be available while packet capture is stopped.
+
 Select an observation to see its recorded source, destination and measurements.
 The activity ribbon groups the returned observations over their occupied span;
 its counts sum to that page and zero-count groups have zero height. Selecting a
@@ -38,6 +43,11 @@ Opening a finding reads saved evidence. It never uses today's running programs
 to fill a gap in yesterday's alert.
 
 ## Ask for another perspective
+
+The current evaluation release keeps local-model execution `UNBOUND`. Saved
+model choices, model-list reachability and staged-file checks remain separate
+from permission to generate an explanation. Recorded Findings facts and coverage
+remain useful without AI; the workflow below requires an admitted runtime.
 
 **Ask local AI** submits the selected displayed fact packet to the saved local
 model. The result separates an evidence interpretation, another possibility and

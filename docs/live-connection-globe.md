@@ -1,9 +1,17 @@
 # Live connection atlas
 
 The local HUD's **Live connection atlas** plots recent accepted packet metadata.
-Choose an interface and **Enable background monitoring**. This saves the choice
-and resumes collection when the local HUD starts again. **Stop monitoring** (or
-**Stop HUD capture** in Configure apps) clears automatic resumption.
+Choose the interface and capture access under **Setup → Traffic → Network
+capture**, then use **Start background tools** in the HUD for background
+monitoring. This saves the choice and resumes collection when the local HUD
+starts again. **Stop monitoring** beside the atlas, or **Stop HUD capture** in
+**Setup → Traffic**, clears automatic resumption and retains accepted metadata.
+
+The HUD's **Your next step** links only navigate or refresh observations; they
+do not start collection. **Explore connections** opens the connection lens and
+roster. Its returned sensor context is separate from both the packet atlas and
+the saved Findings queue; sensor summaries can remain useful while packet
+capture is stopped.
 
 ## What supplies the view
 
@@ -19,13 +27,14 @@ and resumes collection when the local HUD starts again. **Stop monitoring** (or
 
 Each capture session stops after 15 minutes or 50,000 frames. Background mode
 starts a new session after a brief gap. Each session has its own ingestion receipt.
-A capture error stops automatic retries; the operator can choose **Retry
-monitoring** after addressing permissions, the interface or storage. The existing
+A capture error stops automatic retries; after addressing permissions, the
+interface or storage, retry **Start background tools**. The existing
 database size limit remains enforced. Stored observations are not silently deleted.
 
 ## Geographic context
 
-**Set up IP locations** is a separate saved opt-in. It downloads the account-free
+Use the atlas's **Location setup** link, or **Setup → Traffic → IP location
+data**, for the separate saved location opt-in. Its setup/update action downloads the account-free
 [DB-IP City Lite MMDB database](https://db-ip.com/db/download/ip-to-city-lite) from
 `download.db-ip.com` and discovers this computer's public internet address through
 `api64.ipify.org`. Both services see the connection's public address. Peer addresses,
@@ -80,12 +89,13 @@ The atlas uses stable animation phases, separate land/traffic canvases, bounded
 rendering, great-circle interpolation and hidden-hemisphere clipping. Pausing,
 reduced motion, hidden workspaces, stale data and stopped capture suppress moving
 traffic. Unmapped traffic remains visible in the connection details and counts.
-The older stored globe/time sweep is available under **History**.
+The older stored globe/time sweep is inside the HUD's **Stored evidence, history
+and computer observations** disclosure.
 
 ## Camera and workspace
 
 The atlas occupies the full HUD width; the local-network directory has its own
-workspace underneath it. **Follow activity** gently frames recent mapped
+section underneath it. **Follow activity** gently frames recent mapped
 exchanges and visits different regions when activity spans the world.
 **World rotation** provides a geographic overview. Dragging, arrow keys or
 manual zoom gives the user control of the camera; choose Follow activity to

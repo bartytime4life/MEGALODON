@@ -1,8 +1,29 @@
 # Technical Deep Dive
 
-**Source basis:** [`2cb706039724d9ea0bda09cbd3c17698b15ba55c`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c), October 22, 2026.
-These are implemented source boundaries. Their regression tests and hosted
-results have narrower scope than installed-host or operational acceptance.
+**Current source reading:** [`418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026 (America/Chicago).
+These are implemented source boundaries. Regression tests and hosted results
+have narrower scope than installed-host or operational acceptance. Older pinned
+links and diagrams below retain their October 22 source basis; they are not new
+measurements of this revision.
+
+## Current arithmetic and view identity
+
+The later repairs preserve the distinction between a measurement, its display
+and the evidence that permits a user action:
+
+| Contract | Implementation and tests | Practical effect |
+| --- | --- | --- |
+| Exact hourly share admission; one history index per call | [Pattern engine](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/megalodon/security_patterns.py), [arithmetic tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_pattern_comparison_math.py), [#771](https://github.com/bartytime4life/MEGALODON/pull/771) | Compare `100 × abs(nB − bC)` with `20 × CB` before rounding. History-key selection becomes `O(H + G)`; selected-distribution aggregation still costs work. |
+| Aggregate CPU ticks before validation; round report percentages only at final output | [Host telemetry](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/megalodon/host_telemetry.py), [telemetry tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_host_telemetry.py), [report tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_reporting.py), [#772](https://github.com/bartytime4life/MEGALODON/pull/772)/[#773](https://github.com/bartytime4life/MEGALODON/pull/773) | Avoid per-process/intermediate rounding drift. Impossible tick sums and missing samples remain unavailable; known-sample weights remain metric-specific. |
+| Bind asynchronous views to identity and revision | [Reports client/tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_dashboard_reports_ui.py), [intelligence client/tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_dashboard_intelligence_ui.py), [#769](https://github.com/bartytime4life/MEGALODON/pull/769)/[#774](https://github.com/bartytime4life/MEGALODON/pull/774) | A late success or failure cannot replace the current report, reference search or selected device view, including A→B→A selection. Failed report pagination retries the same page. |
+| Guide inspection without granting execution authority | [Guidance source](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/megalodon/dashboard_operations.py), [state/focus tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_dashboard_guided_overview.py), [#774](https://github.com/bartytime4life/MEGALODON/pull/774) | Current source mode determines the next view. Sensor context stays separate from admitted Findings; summaries remain usable without packet capture; AI remains optional. |
+
+The [pattern benchmark](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/benchmarks/pattern-comparison-20261111.json)
+records finite synthetic timings, output equality and temporary-memory cost,
+not production throughput or detection accuracy. The
+[November documentation record](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-refresh-2026-11-11.md)
+separates candidate tests, merged source identity and later verification. It does
+not recast older workflow results as post-merge runs.
 
 ## The evidence path
 
@@ -62,6 +83,13 @@ connections to the same endpoint. This description is not an instruction or
 authorization to operate it. [Defense contract](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/visual-operations-defense.md).
 
 ## AI admission before explanation
+
+At the current November source, the [UNBOUND release fence](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/qwen-runtime-unbound.md)
+refuses operational generation for every model family. Explicit bounded catalog
+discovery/selection and the separate fixed no-telemetry READY diagnostic are
+named exceptions; a saved model or passing diagnostic cannot lift the hold.
+The older diagram and advisory boundaries below describe their recorded design
+and history, not an enabled operational model path in this release.
 
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="https://raw.githubusercontent.com/bartytime4life/MEGALODON/b24c1d38e1d30b108a021a9ef1d78ef5afdd120c/assets/docs/model-authority.png">
@@ -129,7 +157,7 @@ profile and the browser assertion suite remain separate layers.
 [Dependency policy](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/dependency-policy.md).
 
 Core CI `39878396530`, Linux browser `39878396547` and CodeQL `39878396556`
-succeeded at the source basis. These are observed workflow results, not a fresh
+succeeded at the October 22 source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`. These are historical workflow results, not a fresh
 run of this documentation or an independent security certification. Exact Zeek
 producer acceptance (#445), canonical Qwen acceptance (#446), native platform
 parity and installed-host recovery evidence remain separate.

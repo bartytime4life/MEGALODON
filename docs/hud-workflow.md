@@ -5,19 +5,37 @@ traffic globe, local topology and endpoint details. **Findings** and retained
 history provide evidence tables. **Setup** contains installation, permissions
 and configuration; **Start background tools** remains in the HUD.
 
+Begin with **Your next step**. The recommendation reads the current snapshot;
+the fixed **Review findings**, **Explore connections** and **Open reports**
+links open their existing views. **Refresh observations** reads status and
+**Resume view** resumes display polling. Neither starts collection. The optional
+app tiles are inside **Supporting apps · optional tools and status details**,
+while Start and its result stay visible outside it.
+
+**Review sensor observations** opens returned sensor context in the connection
+lens, separate from the saved Findings queue. Sensor connection summaries can
+remain useful while packet capture is stopped. Empty windows and the absence of
+returned alert labels do not establish safety. AI is optional for reading facts
+and coverage.
+
 Live packet views are bounded recent observations. Historical dates use
 `/api/traffic-history-v2` across retained segments and verified compact summaries,
 with segment-qualified paging and explicit gaps. The original read interfaces
 remain compatible. The globe uses its own recent observed connections; unknown
 locations remain unmapped. Opening a view does not itself start a sensor.
 
-**Findings** shows each severity as a coloured pill that also spells out the
-level, and high or critical rows carry an accent edge, so the level never
-depends on colour alone. Detector names, levels and IDs stay whole. On phones
-each finding becomes a compact card with detector and severity on the first
-line; on wider screens the table scrolls sideways with a shaded edge when
-columns do not fit. A severity outside the fixed four levels is shown as
-**UNKNOWN** styling with its original text.
+**Findings** opens an observation feed and the selected source-bound evidence.
+Use **Refine view** for time, source and recorded severity; search narrows the
+returned page. **Previous** and **Next** reach other pages. Severity badges carry
+text as well as color, and coverage remains visible when results are empty or
+unavailable. The optional local-AI explanation, your assessment and a separate
+response preview remain distinct from the recorded facts.
+
+Setup has **Overview**, **Traffic**, **Local AI**, **Apps**, **Storage** and
+**Advanced** categories. Start at **Overview → This computer → Check now**;
+expand **Observation details** for the source and tool observations. Installed
+tool controls are in **Apps → Installed apps**. Manual IANA context lookup is
+under **Evidence → Reference Library**.
 
 ## Visual reports and advanced exports
 
@@ -65,15 +83,19 @@ the separate `heartbeat` field with its `observed_at` timestamp. All 12 cards
 offer the same copyable commands.
 
 The local HUD can prepare the exact command needed to reopen that HUD with its
-existing fixed Install/Start/Open controls enabled. Expand **Authorize Install,
-Start and Open** in Setup and copy the displayed command. Copying does not stop or restart
-the HUD, and it does not install, start or open a companion. After running the command
-in a terminal, the separate per-launch token and confirmation controls remain
-required.
+existing fixed Install/Start/Open controls enabled. Expand **Setup → Apps →
+Installation session and terminal options** and copy the displayed command.
+Copying does not stop or restart the HUD, and it does not install, start or open
+a companion. After running the command
+in a terminal, the enabled local page obtains its per-launch action token through
+the existing guarded same-origin channel. The manual token field is an advanced
+fallback; it is not a required paste step for the normal enabled HUD. Each fixed
+action retains its separate confirmation and system authorization where required.
 
 | IDs | Installation path |
 | --- | --- |
 | tshark, suricata, nftables, clamav, nmap | Existing fixed Ubuntu apt recipes; OS privilege prompt through pkexec when needed |
+| lynis, aide | Fixed Ubuntu apt recipes; Lynis includes a separate native daily audit timer, while AIDE baseline creation remains explicit |
 | scapy | Existing bounded-version pip recipe in the active Python environment |
 | qwen | Existing example qwen2.5:7b download through an installed Ollama provider |
 | core | Existing reviewed `scripts/install-local.sh` user installer |

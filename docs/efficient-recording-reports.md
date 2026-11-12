@@ -66,7 +66,7 @@ page of that same report visible; **Next** retries the failed page. Reopen
 
 Automatic reports run in the local HUD service at **9 AM in this PC's time zone**, even with the browser closed. After downtime, the service catches up on the latest missed reporting interval once. Schedule settings allow daily or weekly reports and a different time. Reports identify missing or expired evidence; an empty interval does not prove inactivity.
 
-**Setup → Apps & connections** holds console addresses, downloads, availability checks, installation, configuration, verification, and removal guidance. Sensor views keep observed status and a Configure shortcut. **Start background tools** remains in the HUD.
+**Setup → Apps → Installed apps** holds console addresses, downloads, availability checks, installation, configuration, verification, and removal guidance. Sensor views keep observed status and a Configure shortcut. **Start background tools** remains in the HUD; its supporting-app inventory is an optional closed disclosure. The HUD's next-step links open existing views and do not start collection or AI.
 
 Reports and telemetry remain local. Downloaded copies belong to the user and are outside managed cleanup. The private hosted Site remains a separate reference and manual aggregate-summary viewer; it does not gain access to this PC.
 
@@ -122,7 +122,13 @@ Report jobs yield between pages and can be cancelled. Work, output, finding-deta
 
 HTML escapes source text and carries no executable report scripts or remote assets. Downloads use server-generated identifiers. Local report mutations use the existing Host, Origin, request-type, and per-launch token checks. CSV cells are protected against spreadsheet formula interpretation.
 
-Automated checks cover batching and failed-write rollback, persistent-WAL recovery, concurrent-reader pressure, multi-segment report totals, source separation, scheduling and daylight-saving transitions, cancellation, expiry, and export/request safety. Browser automation was administratively unavailable; source/DOM checks do not establish rendered appearance or printed pagination.
+Automated checks cover batching and failed-write rollback, persistent-WAL recovery, concurrent-reader pressure, multi-segment report totals, source separation, scheduling and daylight-saving transitions, cancellation, expiry, and export/request safety. Later regression protection includes [report selection/retry](../tests/test_dashboard_reports_ui.py), [integer CPU tick aggregation](../tests/test_host_telemetry.py), and [weighted compaction without intermediate rounding](../tests/test_reporting.py), introduced by [#769](https://github.com/bartytime4life/MEGALODON/pull/769), [#772](https://github.com/bartytime4life/MEGALODON/pull/772) and [#773](https://github.com/bartytime4life/MEGALODON/pull/773).
+
+Browser automation was administratively unavailable for the October 1 delivery
+record below. Later candidate tests and rendered synthetic HUD checks are
+identified separately in the [November refresh record](documentation-refresh-2026-11-11.md);
+they do not rerun that historical delivery or establish printed pagination or
+the state of an installed application.
 
 
 ## Delivery checks — October 1, 2026 UTC

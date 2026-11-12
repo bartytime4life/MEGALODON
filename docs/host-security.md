@@ -1,8 +1,8 @@
 # Local host security and dated threat context
 
 Lynis and AIDE are free Ubuntu packages, without a trial or vendor account.
-Setup → Apps & connections contains their installation controls. Setup → Host
-security and threat context contains four explicit, fixed actions. Existing
+**Setup → Apps → Installed apps** contains their installation controls.
+**Setup → Apps → Host security and threat context** contains four explicit, fixed actions. Existing
 loopback sign-in, Origin, configuration nonce and serialized job checks apply.
 No new listener, model permission or privileged response path is added.
 

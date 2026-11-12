@@ -1,5 +1,11 @@
 # Repository currentness v1
 
+For the latest maintained source orientation, read
+[current state](current-state.md#november-11-source-orientation) and the
+[November 11 refresh](documentation-refresh-2026-11-11.md). The dated
+dispositions below remain frozen observations; this prose refresh is not a new
+validated v1 currentness manifest or an installed-state receipt.
+
 Issue #254, M01. This development-only tool formats and validates explicitly
 captured GitHub evidence after the #253 truth repair. It imports no MEGALODON
 runtime code and performs no network, subprocess, Git write, host mutation,

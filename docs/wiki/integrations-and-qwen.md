@@ -1,6 +1,6 @@
 # Integrations and Local AI
 
-> Source orientation: `main@2cb706039724d9ea0bda09cbd3c17698b15ba55c` (October 22, 2026). Source presence is OBSERVED; native producer/model acceptance remains separate.
+> Current source orientation: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). Older immutable links below retain their historical source snapshots. Source presence, runtime observations and native producer/model acceptance remain separate; see the [current reading](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation).
 
 ## Distinguish planning, presence and data
 
@@ -14,19 +14,42 @@ See [Background tools](https://github.com/bartytime4life/MEGALODON/blob/2cb70603
 
 Saved-capture TShark analysis, closed Zeek JSON/TSV import, the strict Suricata alert publication chain and the HUD’s separate background observations have different schemas and acceptance boundaries. An offline importer does not start its producer. A background sensor summary does not become a core fixed-rule finding or establish offline producer qualification.
 
-[#445](https://github.com/bartytime4life/MEGALODON/issues/445) remains open for exact Zeek offline producer acceptance. [The IP inspector](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/visual-operations-defense.md) can read bounded recent EVE context without making it part of the strict admitted-detection chain. Packet, flow and alert counts are different units.
+[#445](https://github.com/bartytime4life/MEGALODON/issues/445) tracks exact Zeek offline producer acceptance. [The IP inspector](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/visual-operations-defense.md) can read bounded recent EVE context without making it part of the strict admitted-detection chain. Packet, flow and alert counts are different units.
+
+The current HUD guide makes this distinction visible: **Review sensor
+observations** opens connection context; **Review findings** separately opens
+the admitted Findings workspace. Sensor connection-summary mode can contain
+usable metadata while packet capture is stopped, so its guidance does not
+require packet capture. Refresh and navigation read observations or open views;
+they do not start a producer. [Guidance source and tests](technical-deep-dive.md#current-arithmetic-and-view-identity).
 
 ## Installed local models in the HUD
 
-Setup selects an installed local completion model with an exact digest. Provider checks, prompt/output bounds, explicit cancellation and separate last-response/last-attempt status constrain analysis. No model-generated executable path, shell command, destination or scan scope is accepted. Closed proposals require an operator-selected workflow.
+Explicit Setup discovery can read the bounded installed-model catalog and save
+a freshly matched tag/digest and compute preferences. The separate fixed READY
+response diagnostic can load/test that saved model after deliberate operator
+action; it takes no caller prompt, sends no telemetry and grants no operational
+readiness. Operational generation remains blocked by this release's UNBOUND
+fence for every model family. No model-generated executable path, shell command,
+destination or scan scope is accepted.
+
+AI is optional for reading facts, coverage and reports. **Setup → Local AI →
+Knowledge and automatic review** holds learning, explanation and reference-update
+preferences. Disabled learning says **Local learning paused**; saved progress
+and reviews remain readable. Reference results belong to the current submitted
+query and revision, and saved device reviews belong to the current selection
+revision. A late success or failure cannot replace a newer view. Failed support
+status reads clear current capture/model summary claims rather than retaining a
+previous pass as current evidence. [Intelligence regression tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_dashboard_intelligence_ui.py)
+and [support-status tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_dashboard_support_config_ui.py) cover these presentation contracts.
 
 The provider uses literal loopback. Local model code does not sandbox the separately operated Ollama service, prove its provenance, or grant response authority. Read [model selection](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/local-model-selection.md) and [the original Qwen advisory contract](../local-model-advisory-contract.md).
 
 ## Canonical Qwen Airlock is still held
 
-[The canonical record](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/config/model-bindings/qwen.unbound.json) remains **UNBOUND / NOT_RECORDED**. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) is open. The HUD’s saved runtime model selection is distinct from that owner binding and does not complete native containment or representative evaluation. Disabled/UNBOUND claims must be made per entrypoint; canonical UNBOUND is not a universal runtime gate.
+[The canonical record](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/config/model-bindings/qwen.unbound.json) remains **UNBOUND / NOT_RECORDED**. The [current release fence](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/qwen-runtime-unbound.md) has no BOUND path or operator override: enabling AI, selecting another family/tag/digest, or editing binding JSON cannot activate operational generation. Explicit catalog/selection and the fixed response diagnostic are named exceptions, not operational inference acceptance. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) tracks the remaining acceptance evidence.
 
-[Scoped sentinel tests](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/tests/test_qwen_zero_effect.py) and [the dated reconciliation](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/qwen-446-zero-effect-reconciliation-2026-10-07.md) make those differences inspectable. Working application AI and pending canonical acceptance can coexist; neither should be described as the other.
+[Current runtime-gate tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_qwen_runtime_gate.py) and [diagnostic tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_ollama_model_test.py) distinguish these entrypoints. The [October reconciliation](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/qwen-446-zero-effect-reconciliation-2026-10-07.md) and its original sentinel results remain historical; they do not lift the current release fence.
 
 ## Local host security and dated reference context
 

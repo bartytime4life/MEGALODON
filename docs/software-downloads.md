@@ -3,8 +3,9 @@
 Start with Python and a reviewed MEGALODON checkout. Install the local desktop
 application with `./scripts/install-local.sh`. Add other software only when your
 chosen workflow needs it. The local HUD offers these publisher links as buttons
-under **Setup → Data and tools** and **Setup → Apps & connections**; search or
-choose a workflow to narrow the list.
+under **Setup → Apps → Installed apps**. The separate publisher directory is
+under **Setup → Advanced → Software reference and publisher guides**; search or
+choose a workflow to narrow that directory.
 
 Original download-directory links were checked against publisher pages on
 2026-09-20. Lynis/AIDE links match the current repository catalog. This October
@@ -71,9 +72,9 @@ follow the guide for the exact product and role you choose.
 | osquery | Host inventory and SQL-based endpoint queries | [Download osquery](https://github.com/osquery/osquery/releases/latest) |
 | Nmap | Fixed scoped private-target inventory in the local HUD; standalone completed-XML importer never scans | [Download Nmap](https://nmap.org/download) |
 
-After installing something, return to **Check this computer**. Local Setup
+After installing something, choose **Setup → Overview → Check now**. Local Setup
 checks the running server's PATH, bounded known locations, and directories you
-select under **Configure apps → Installed tool directories**. If an installation
+select under **Setup → Advanced → Installed tool directories**. If an installation
 changes only PATH, restart the HUD from the updated environment or select its
 executable directory in Setup. A detected program still needs its own documented
 configuration and data handoff; selecting a directory does not start it.

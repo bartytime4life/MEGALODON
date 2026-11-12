@@ -1,6 +1,6 @@
 # Security Boundaries
 
-> Current source orientation: `main@2cb706039724d9ea0bda09cbd3c17698b15ba55c` (October 22, 2026). This documents existing interfaces; it authorizes no model, sensor, service or firewall operation.
+> Current source orientation: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). Earlier pinned links retain their historical source scope. This documents existing interfaces; it authorizes no model, sensor, service or firewall operation.
 
 The local HUD has real, scoped operator actions. Its safety depends on keeping evidence reads, model advice, configuration, privileged execution and acceptance distinct.
 
@@ -11,6 +11,15 @@ The local HUD has real, scoped operator actions. Its safety depends on keeping e
 - **Private storage:** ownership/path/identity admission, transactional writes and bounded managed capacity. Telemetry-reader APIs do not migrate or create the core audit database.
 - **Fixed workflows:** untrusted events, browser fields, filenames, prompts and model text cannot select arbitrary executable paths, shell code, SQL, targets or provider endpoints.
 - **Visible failure:** unavailable, unknown, stale and ambiguous outcomes remain explicit. A source alert, model explanation or app badge is not proof of compromise or protection.
+- **Current view identity:** report documents/pages, reference search results and saved device reviews follow their entity/query plus view revision. Stale successes and failures cannot replace a newer selection. A failed support-status read clears current capture/model summary claims; learning paused is not active monitoring.
+
+The guided HUD opens existing views or refreshes current observations. It starts
+no collector, model or host action. Its sensor-observation route points to
+connection context, not the separate admitted Findings queue; connection-summary
+evidence does not require packet capture. AI stays optional. The
+[source-bound guidance tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_dashboard_guided_overview.py)
+and [asynchronous-view tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_dashboard_intelligence_ui.py)
+cover these UI boundaries; they do not establish installed-host acceptance.
 
 ## Defaults and enabled workflows
 
@@ -30,9 +39,9 @@ Backup/restore uses explicit commands and new destinations. Restoring does not a
 
 There is no core telemetry cloud-analytics/SIEM/SOAR upload path. Separately opted-in location requests, support downloads and externally opened companion consoles have their own network behavior. Location providers see this PC’s connection address; peer locations are looked up locally.
 
-The model receives bounded evidence through the literal loopback provider. It can explain and return closed proposals; it cannot turn generated code into execution. The canonical Qwen record remains UNBOUND and [#446](https://github.com/bartytime4life/MEGALODON/issues/446) remains open. Runtime selection is not canonical acceptance.
+The canonical [Qwen record at the current source](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/config/model-bindings/qwen.unbound.json) remains UNBOUND with no recorded owner decision. The [release fence](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/qwen-runtime-unbound.md) refuses operational generation for every model family before provider access. Explicit bounded catalog/selection and the fixed no-telemetry READY diagnostic are separate exceptions; neither enables operational explanations or accepts a model. Historical advisory code constrains evidence and proposal vocabulary but does not override this fence. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) tracks its acceptance evidence; model text grants no execution authority.
 
-Read [the full security review](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/SECURITY_REVIEW.md) and [the specification](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/SPECIFICATION.md) for the complete contracts and open controls. This Wiki renovation is documentation and graphics work; it does not operate a model, collector, service or firewall, and is not a security certification.
+Read [the security review](https://github.com/bartytime4life/MEGALODON/blob/main/SECURITY_REVIEW.md), [the maintained specification](https://github.com/bartytime4life/MEGALODON/blob/main/SPECIFICATION.md) and [the current validation record](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-refresh-2026-11-11.md) for contracts and remaining gates. Documentation updates do not operate a model, collector, service or firewall and are not a security certification.
 
 ## Host references and publication
 

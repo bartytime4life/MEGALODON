@@ -1,8 +1,9 @@
 # Three investigation journeys
 
 Start with a question, then follow the recorded evidence. These journeys use
-implemented interfaces at [source `7c91232`](https://github.com/bartytime4life/MEGALODON/commit/7c912322b12fe40fbe92de79b32fdc678054a3da),
-October 27, 2026. They are operator reading paths, not demonstrations that a
+implemented interfaces, with navigation reviewed at [source `418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),
+November 11, 2026 (America/Chicago). Historical contract links retain their own
+revisions. These are operator reading paths, not demonstrations that a
 particular installed PC has collected data or detected a real incident.
 
 ## 1. What does this finding actually show?
@@ -30,10 +31,18 @@ they do not disable a rule or authorize a restriction.
 
 ## 2. Where does the connection picture come from?
 
-Start in **HUD** with source status, the selected interface and the connection
-details. If collection is stopped, stale or unavailable, treat that as missing
-coverage. Enabling collection is a separate operator choice with its own
-permissions and scope; opening this guide does not start it.
+Start in **HUD → Your next step**, read source status and choose **Explore
+connections**. **Refresh observations** updates the current status read;
+**Resume view** resumes display polling. If packet capture is stopped, saved
+metadata remains readable and sensor summaries may still be available. Stale or
+unavailable status leaves current coverage unknown. Enabling new collection is
+a separate operator choice in **Setup → Traffic**, with its own permissions and scope.
+
+When the next step says **Review sensor observations**, inspect that returned
+context in the connection lens. Suricata context labels do not guarantee a
+matching record in the separate saved Findings queue. Use **Review findings**
+for that queue. An empty live window or absence of returned labels does not
+establish safety.
 
 The atlas places observed endpoints at approximate IP locations. Directional
 motion represents recorded send/receive activity. It does not measure a
@@ -54,6 +63,10 @@ flowchart TD
 Packet records, sensor flow observations and interface rates answer different
 questions. Do not add them into a single traffic total. A geolocation opt-in
 has its own public download and internet-exit lookup scope.
+
+For manual protocol, port or service context, open **Evidence → Reference
+Library**. This installed IANA snapshot supplies context without classifying
+traffic. Optional AI is unnecessary for reading the recorded facts.
 
 [Atlas sources, limits and controls](https://github.com/bartytime4life/MEGALODON/blob/7c912322b12fe40fbe92de79b32fdc678054a3da/docs/live-connection-globe.md)
 · [Recording and reports](https://github.com/bartytime4life/MEGALODON/blob/7c912322b12fe40fbe92de79b32fdc678054a3da/docs/efficient-recording-reports.md)

@@ -27,6 +27,13 @@ useful for investigating connections, understanding recorded findings, reviewing
 host changes and preparing evidence-led reports. Optional local AI explains
 bounded context; it cannot turn its own proposal into permission.
 
+The current HUD starts with **Your next step** and three read-only routes:
+**Review findings**, **Explore connections** and **Open reports**. Sensor alert
+context opens in the connection lens, separate from saved Findings. Setup's six
+categories keep capture, optional local AI, apps, storage and advanced launch
+controls discoverable. The app inventory is a closed optional disclosure;
+starting tools remains a separate explicit action. [Current operator navigation](operator-guide.md).
+
 **Linux reference · Python 3.11+ · Apache-2.0 · No core subscription or cloud account**
 
 | Start here | Go deeper |
@@ -68,12 +75,13 @@ visible. [Architecture and exact thresholds](technical-deep-dive.md).
 
 | Area | Available in source | Keep this distinction |
 | --- | --- | --- |
-| Network investigation | Atlas, own-account program/socket context, finding inspector, managed history | Approximate geography and bounded observations are not whole-network visibility |
+| Network investigation | Guided HUD, connection context, atlas, own-account program/socket context, finding inspector and managed history | Sensor context is separate from admitted Findings; geography and observations are bounded |
 | Host review | Lynis/AIDE, hardening, persistence and passive gateway review | Differences and suggestions need operator interpretation |
 | Local AI | Installed-model selection, listener posture admission, bounded advice | Canonical Qwen acceptance remains UNBOUND |
 | Recovery evidence | Read-only readiness plus pinned backup/isolated-test receipts | No host restore, backup probing or malware causality |
 | Explicit defense | Separate protected Linux workflows and temporary containment | No automatic or permanent blocking; legacy CLI apply still refuses |
-| Hosted reference | Address-free snapshot viewer in tab memory | No live PC connection |
+| Reference Library | Manual IANA protocol, port and service lookup under Evidence | Context does not classify traffic or change stored records |
+| PC Snapshot Console | Address-free snapshot viewer in tab memory | No live PC connection |
 
 ## Keep ambition and evidence together
 
@@ -89,11 +97,11 @@ The historical October 1 benchmark recorded **98.1% fewer OS-written bytes** for
 27.06 ms. [Both result and cost](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff)
 remain visible.
 
-**Source basis:** [`main@2cb706039724d9ea0bda09cbd3c17698b15ba55c`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c), October 22, 2026
+**Current navigation basis:** [`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026
 (America/Chicago). [Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) records
-the source map, passing source-head CI/browser/CodeQL runs, open #445/#446 and
-remaining host/platform gates. Historical captures and benchmarks keep their
-own revisions. This Wiki is generated from `docs/wiki/` after review and merge.
+the source map and remaining host/platform gates. Historical captures and
+benchmarks keep their own revisions. This Wiki is generated from `docs/wiki/`
+after review and merge.
 
 [Local AI](integrations-and-qwen.md) · [Roadmap and limits](roadmap-and-limits.md) ·
 [Development](development-and-validation.md) · [Every document](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-map.md)

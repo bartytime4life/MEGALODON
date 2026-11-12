@@ -4,6 +4,13 @@ These assets are public documentation material, with no live PC records,
 credentials, private paths or payloads. Image meaning is repeated in adjacent
 Markdown text. No external font, analytics script or live data request is used.
 
+These assets retain their original UI revisions. The November 11 guided HUD
+and six-category Setup at source
+[`418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b)
+are described in the [current operator guide](../../docs/gui-quick-start.md);
+they are not depicted by the older captures below. This refresh preserves
+all image/provenance bytes and adds no new browser-acceptance claim.
+
 | Asset | Origin | Meaning and scope |
 | --- | --- | --- |
 | `field-guide-cover.png` | Composition using the existing `assets/megalodon-github-hero-compact.png` identity and local DejaVu Sans type | Editorial cover, not a product screenshot, certification badge or status display |

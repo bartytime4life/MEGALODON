@@ -1,5 +1,52 @@
 # Current state and evidence boundaries
 
+## November 11 source orientation
+
+**Source basis:** [`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),
+tree `f0e47918ed0f6715197e944e6cb18e221ea498d5`. PR [#774](https://github.com/bartytime4life/MEGALODON/pull/774)
+merged at `2026-11-12T00:03:54Z` (November 11 in America/Chicago). This is the
+current reading for maintained guides; the November 9 and October sections below
+remain historical at their own pins.
+
+| Task | Implemented behavior | Meaning / guide |
+| --- | --- | --- |
+| Choose the next evidence task | Guided HUD recommendation, direct Findings/connections/Reports routes, closed optional-app inventory | Uses a validated current snapshot; unavailable, stale, paused, stopped capture and empty sensor windows remain distinct. Navigation and refresh do not start tools. [HUD guide](dashboard-operations.md#read-the-interface-in-evidence-order) |
+| Inspect sensor context | Connection-summary guidance works independently of packet-capture state; alert context routes to the connection lens | Sensor observations are separate from the saved Findings queue and from unique incidents. [Source and coverage](background-tools.md) |
+| Search and change selection | Query and selection revisions reject obsolete successes and failures; reports retain only the current selection's document and findings | A→B→A and browser-history restoration are covered. [Knowledge](security-knowledge.md), [Reports](efficient-recording-reports.md), [Setup](setup-console.md) |
+| Read local learning and setup status | Paused learning is labeled explicitly; failed configuration reads mark Traffic and Local AI unavailable without erasing the saved model | Saved baseline, explanation activity, app heartbeat and model readiness remain separate observations. [Setup](setup-console.md), [learning](security-knowledge.md) |
+| Compare historical patterns | Indexed eligible history and exact count-based protocol-share comparisons | No rounded threshold decision, new risk score or field-accuracy claim. [Comparison arithmetic](security-knowledge.md#exact-comparison-arithmetic-and-indexed-history) |
+| Read resource percentages and reports | CPU tick deltas aggregate before conversion; intermediate resource means retain precision until final output | Counts, denominators and missing values keep their own meaning. [Recording and reports](efficient-recording-reports.md) |
+
+These changes follow [#769](https://github.com/bartytime4life/MEGALODON/pull/769),
+[#771](https://github.com/bartytime4life/MEGALODON/pull/771),
+[#772](https://github.com/bartytime4life/MEGALODON/pull/772),
+[#773](https://github.com/bartytime4life/MEGALODON/pull/773) and
+[#774](https://github.com/bartytime4life/MEGALODON/pull/774). The code paths and
+regression selections are indexed in the [refresh record](documentation-refresh-2026-11-11.md).
+
+### Verification and remaining gates
+
+The merged tree is byte-identical to PR #774's tested candidate
+`316ece33fe5067eeabf49a9ef5e7fd80ba563e34`. Its recorded local full suite passed
+**7,843 tests and 743 subtests**, with **27 explicit native/platform skips**.
+The candidate also passed **18 hosted technical checks**, including
+[CI](https://github.com/bartytime4life/MEGALODON/actions/runs/43120825489),
+[browser acceptance](https://github.com/bartytime4life/MEGALODON/actions/runs/43120825538)
+and [CodeQL](https://github.com/bartytime4life/MEGALODON/actions/runs/43120825649).
+These remain candidate receipts, not newly executed post-merge or documentation
+checks. Synthetic desktop, tablet and phone checks and package verification
+have their own [recorded limits](documentation-refresh-2026-11-11.md#application-evidence-carried-forward).
+
+Fresh issue readback found [#750](https://github.com/bartytime4life/MEGALODON/issues/750)
+(partial Stage 0 no-effect boundary), [#732](https://github.com/bartytime4life/MEGALODON/issues/732)
+(model staging/library follow-up) and [#445](https://github.com/bartytime4life/MEGALODON/issues/445)
+(exact Zeek producer qualification) open. This is a dated issue observation,
+not permission to operate or a claim that these are the only remaining gates.
+Operational model generation remains [UNBOUND](qwen-runtime-unbound.md);
+source delivery, owner merge authorization, installation, real sensor/model
+acceptance, release and deployment remain separate. The documentation refresh
+does not change an installed PC or publish a Site.
+
 ## November 9 source orientation
 
 **Source basis:** [`main@d03bc43d13a9f030cfcff7eb8beaea5fc318abae`](https://github.com/bartytime4life/MEGALODON/commit/d03bc43d13a9f030cfcff7eb8beaea5fc318abae).

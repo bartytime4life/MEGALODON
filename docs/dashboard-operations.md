@@ -21,12 +21,16 @@ default. For an optional password-only sign-in page, launch with
 `--require-sign-in` and enter the password shown in the terminal, or the
 reusable password configured for the installed HUD.
 
-These default launches observe tools and provide guides. Fixed Install/Start/Open
-actions require a deliberate non-root Linux launch with
-`hud --enable-tool-management` and that launch's separate operator token from
-the terminal. Enter it under **Home → Data and tools → Authorize Install, Start
-and Open**; see [tool-management authorization](tool-heartbeat.md#authorize-tool-management-for-one-launch).
-This host-maintenance opt-in does not change telemetry or firewall authority.
+Installer-generated desktop settings enable the fixed tool-management session;
+source launches retain observation mode unless explicitly enabled with
+`hud --enable-tool-management`. The non-root Linux HUD obtains that launch's
+separate action nonce through its guarded same-origin check; ordinary use needs
+no terminal token paste. **Setup → Apps → Installation session and terminal
+options** keeps restart guidance and a manual-token fallback. Each fixed
+Install/Start/Open action still requires confirmation and any applicable OS
+authorization. See [tool-management authorization](tool-heartbeat.md#authorize-tool-management-for-one-launch).
+This host-maintenance capability does not grant arbitrary commands, model
+inference or firewall authority.
 
 The desktop installer selects its owner-private XDG settings and data path.
 Other launches use `data/megalodon.db` relative to the launch directory unless
@@ -36,7 +40,7 @@ or sample data. The source notice explains the missing input; measurements
 remain unavailable. Unsafe or invalid existing data is still refused.
 
 Tool presence is checked once at launch, with no executable run, version probe
-or service connection. Use **Home → Data and tools → Check this computer** for
+or service connection. Use **Setup → Overview → Check now** for
 an explicit fresh metadata check, including the running Python/SQLite versions
 and selected-store readability. Checks within five seconds share a result.
 Readiness describes the dashboard
@@ -50,25 +54,30 @@ integration; standalone tools show **Runtime not applicable**. The receipt omits
 process IDs, command lines, paths, users, and host identity. Restart the HUD to
 refresh this snapshot.
 
-Use **Setup → Data and tools** to search official publisher downloads and run a
-fresh availability check. Use **Setup → Apps & connections** to inspect
-copy-only verification/maintenance commands, or save an app's existing web-console
+Use **Setup → Apps → Installed apps** to find a tool's installation and
+configuration controls. **Setup → Advanced → Software reference and publisher
+guides** contains the separate searchable publisher directory. App disclosures
+also expose copy-only verification/maintenance commands, or let you save an existing web-console
 address once. Saved console links open the companion app in another tab, where
 that app retains its own authentication and controls. Desktop-only tools still
 use their normal application launcher or the displayed terminal commands.
-MEGALODON does not install or start tools. Its local **View in HUD** control
+Viewing or saving a console does not install or start tools. The separate
+authorized tool controls retain their fixed actions. The local **View in HUD** control
 can open an explicitly selected console in a sandboxed frame; use the external
 fallback when the companion refuses embedding.
 Addresses persist only in this browser and origin; the hosted Site and local HUD
 have separate bookmarks. Remove a link from its editor. No credentials belong
 in a saved address. No background connection test is performed.
 
-When the HUD is in observation mode, expand **Authorize Install, Start and Open** on
-Home to copy the exact current launch command with
+When the HUD is in observation mode, expand **Installation session and terminal
+options** under **Setup → Apps** to copy the exact current launch command with
 `--enable-tool-management`. Stop the current HUD yourself, review the visible
 command, and run it in the terminal. The page does not execute the copied
-command. The restarted HUD still requires its per-launch terminal token and an
-explicit confirmation before an existing fixed Install, Start or Open action.
+command. The restarted HUD obtains its per-launch nonce through the guarded
+local session check and still requires explicit confirmation before a fixed
+Install, Start or Open action. A known 403 rejection may refresh that session and
+retry the same confirmed install/start once; ambiguous transport failures are
+not automatically replayed.
 
 On the local Linux dashboard, the Python/SQLite and Scapy maintenance cards
 use the absolute Python executable running that dashboard. Copied commands work
@@ -80,7 +89,7 @@ reviewed package source to reinstall. These command paths are captured at startu
 and displayed only in the local command cards. The hosted Site keeps generic
 examples, which require activating the intended environment in each terminal.
 
-The Home **Change data for the next launch** form starts with the exact launcher
+The **Setup → Advanced → Change data for the next launch** form starts with the exact launcher
 or Python interpreter serving this HUD. It prepares a command
 for optional settings, completed offline evidence and a Suricata store. Fields
 remain in page memory; editing invalidates the previous copy action until the
@@ -101,6 +110,9 @@ independently of packet capture; an empty summary window points to Sensors.
 Sensor observations count returned alert context, separately from the saved
 Findings queue. **Refresh observations** reads the existing local snapshot;
 **Resume view** resumes dashboard refresh. Capture has separate controls.
+The Refresh button keeps its native focus and label during routine polling;
+while a request is pending, it reports its disabled state to assistive technology
+and refuses duplicate requests without removing the button from keyboard focus.
 
 **Review findings**, **Explore connections** and **Open reports** open existing
 views. Saved findings and reports remain accessible when capture is stopped.
@@ -132,7 +144,7 @@ the target computer.
 
 Seven persistent tabs organize the interface without reloading the page:
 **HUD** shows live network status, background tools and qualified traffic
-visuals; **Findings** shows linked detector results; **Sensors** shows what each
+visuals; **Findings** shows retained detector, sensor and pattern observations; **Sensors** shows what each
 background tool is doing; **Setup** holds local checks, downloads, integrations
 and saved console links; **Reports** builds local reports; **Evidence** holds
 the reference library, offline snapshot, optional Suricata view, ingestion
@@ -142,8 +154,8 @@ Switching tabs preserves local filters and never starts an analysis or fetches
 external evidence.
 
 Existing fragment links continue to select the workspace that owns their target.
-This includes live-review/detection, deep-analysis/reference/offline, and
-integration-map fragments; browser back/forward fragment changes use the same
+This includes the connection lens, live-review/detection, deep-analysis/reference/offline,
+and integration-map fragments; browser back/forward fragment changes use the same
 closed mapping and never choose an arbitrary selector or route.
 
 The Evidence workspace shows one **Qwen advisory receipt** card. An embedding
@@ -153,9 +165,10 @@ it once. If none is supplied, or the response is invalid, the card says
 unavailable and shows no partial model output. This is a display boundary, not
 a button, file loader, provider-health claim, or model invocation path. The
 separate library-only adapter can still make only one explicitly enabled,
-Airlock-admitted request to literal IPv4 loopback. The dashboard cannot start
-that call, poll Qwen, inspect raw traffic, run analysis in the background, or
-apply a response.
+Airlock-admitted request to literal IPv4 loopback. That display-only receipt
+cannot start the call, poll Qwen, inspect raw traffic, run background analysis or
+apply a response. Separate protected local-model workflows retain their own
+contracts and the current `UNBOUND` execution hold.
 
 There are eight distinct surfaces. Do not combine their meanings:
 
