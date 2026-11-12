@@ -9,6 +9,23 @@ This is **synthetic evaluation, not operational detection acceptance**. The
 25 cases contain ten ordinary, ten useful-to-investigate and five indeterminate
 case-hours. A review is a request to investigate, not a malicious verdict.
 
+The current [science and mathematics update](science-and-math.md) corrects
+retained port-53 burst selection with exact rolling windows. It also adds an
+`input_identifiability` audit: the unchanged corpus contains three exact-input
+groups with conflicting ordinary/useful labels. Any deterministic binary
+decision restricted to these exact inputs must disagree with at least three
+of the twenty determinate labels. The maximum conditional fixture agreement
+is therefore 17/20. This is a finite counting bound, not operational accuracy,
+a probability or an estimate of population error. Row order, all analyzer
+arguments and declared gaps participate in input identity; labels and case IDs
+do not. Indeterminate labels remain excluded.
+
+Rolling burst support is checked by an independent quadratic datetime oracle,
+including full support beyond the displayed reference page, exclusive window
+ends and clipping to the completed hour. The corpus and label bytes are
+unchanged. The historical result tables below retain their original source
+bases and fixed-bin counts; they do not describe the updated rolling result.
+
 ## Reproduce
 
 From a reviewed clean checkout with its test environment:
@@ -20,7 +37,7 @@ python -m megalodon.evaluation layered-report \
   --repeats 5 --benchmark > /tmp/layered-evaluation.json
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS= PYTEST_ADDOPTS= \
   python -m pytest -ra tests/test_layered_evaluation.py tests/test_layered_review.py \
-  tests/test_pattern_provenance.py tests/test_host_fanout.py tests/test_flow_identity_review.py
+  tests/test_rolling_bursts.py tests/test_pattern_provenance.py tests/test_host_fanout.py tests/test_flow_identity_review.py
 python tools/replay_security_patterns.py
 python tools/replay_layered_review.py
 python tools/replay_pattern_provenance.py
@@ -290,7 +307,7 @@ agreement with this synthetic oracle; it cannot authenticate a producer.
 | --- | --- |
 | Authorized activity | Discovery, scheduled health checks, scheduled DNS, ordinary background traffic |
 | Useful synthetic sequences | Unauthorized discovery plus callbacks, unusual port-53 activity plus discovery/callbacks, a callback without a second family |
-| Timing limitations | Jittered callbacks; a burst split by a bin boundary; the matching no-anchor control |
+| Timing checks and limitations | Jittered callbacks; the historical bin-boundary miss and matching no-anchor control, now both detected by rolling windows |
 | Identity ambiguity | Same-hour address reuse; different-interface control; overlapping declared sensors |
 | Provenance | Simultaneous starts; late fanout after unrelated noise; 30 supporting records beyond the 24-reference page |
 | Incomplete evidence | Missing interface/start, conflicting flow identity, declared source loss, empty hour |
@@ -303,10 +320,42 @@ are excluded, even if they produce candidates. Counts of all individual and
 layered candidates, including excluded cases, are reported separately.
 A false alert here means investigation workload in an ordinary case. A missed
 case means no layered candidate in a useful case; an individual finding may
-still exist. The 796 checked reference occurrences include references repeated
-across individual and combined reviews; they are not 796 independent samples.
+still exist. The historical 796-reference receipts below include references
+repeated across individual and combined reviews; those occurrences are not
+independent samples.
 
-## Measured synthetic results and bounded fixes
+## Current rolling-window comparison
+
+Comparison base: `main@201fe4939cbfb160dccb80782455d106cdebaed4`.
+The same 25 immutable cases and separate labels were replayed against that
+source and the rolling-window candidate. Measurements remain pre-admission
+case-hour workload, not malicious-traffic accuracy:
+
+| Measurement | Fixed-bin source basis | Rolling retained reviews |
+| --- | ---: | ---: |
+| Individual candidates | 38 | 39 |
+| Layered reviews, including indeterminate cases | 12 | 13 |
+| Useful cases with / without a layered review | 7 / 3 | 8 / 2 |
+| Ordinary cases with / without a layered review | 4 / 6 | 4 / 6 |
+| Indeterminate cases excluded from confusion counts | 5 | 5 |
+| Checked reference occurrences | 796 | 841 |
+| Evidence errors / permutation-sensitive cases | 0 / 0 | 0 / 0 |
+
+`dns_bin_boundary_miss` now produces a review with its actual support, matching
+the no-anchor control. Its historical case ID is retained. The earlier fixed-bin
+oracle declared no burst support in that case; the new independent oracle
+derives complete port-53 windows from the fixture observations rather than
+copying either that declaration or a candidate's claimed measurements. All
+other rule support declarations remain separate from predictions.
+
+The improvement recovers one stipulated useful case in this corpus. It does
+not measure deployment recall or establish that ordinary resolver traffic will
+produce no additional workload in other populations. All three conflicting
+exact-input label pairs remain; the conditional 17/20 agreement bound does not
+justify tuning away ordinary cases by reading withheld labels. The existing
+hourly cap, cooldown and storage admission remain outside this evaluation.
+
+## Historical synthetic results and bounded fixes
 
 Baseline: `main@c86ca0d4e4421233f3c7fc2cc15ed0b1bbf3a285`, after PRs #709–#711.
 The new evaluation harness was overlaid on that baseline without changing its
@@ -344,9 +393,10 @@ improve the confusion counts.** In particular:
   approved schedules and independently supported identity are absent.
 - One family alone cannot create a layered review, even if investigation is useful.
 - The fixed cadence spread tolerance misses the stipulated jittered callback.
-- Port-53 burst bins remain anchored to the first observation: adding unrelated
-  early traffic can split a qualifying burst. A future sliding-window change
-  needs its own workload/cooldown and evidence tests, rather than silent tuning.
+- At that source basis, port-53 bins were anchored to the first observation:
+  unrelated early traffic could split a qualifying burst. The current rolling
+  correction and its separate workload/evidence checks are described above;
+  admission and cooldown still require their own evidence.
 - Same-hour address reuse joins unrelated machines. Overlapping sensors do not
   establish independence. Neither should be 'fixed' by inferring identity.
 - Five cases remain indeterminate because incomplete observation is not a clean
