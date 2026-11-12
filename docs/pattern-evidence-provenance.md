@@ -6,6 +6,11 @@ inherits the first 24 records for the address, which may concern unrelated ports
 or destinations. These evidence links carry through the existing SQLite history,
 Findings projection and optional admitted local explanation path.
 
+The current [science and mathematics update](science-and-math.md) also removes
+the relative-bin anchor defect from retained burst reviews. The source pin
+below describes the original evidence-link repair; saved reviews retain their
+original measurements.
+
 The change is based on `main@3ac8c26dae990fbbc5d7ae237cc3b3327448ae15`.
 Synthetic regression checks at that base reproduced unrelated evidence links
 and reviews of old connection starts whose periodic updates arrived this hour.
@@ -17,7 +22,7 @@ false-positive rates.
 | Review | Measured observations | Linked support |
 | --- | --- | --- |
 | `REGULAR_INTERVAL` | At least five distinct connection-start times for one source, destination, transport and destination port; existing median/spread thresholds | One representative per distinct time, in time order |
-| `PORT_53_BURST` | At least 20 transport-qualified port-53 observations in an existing 60-second bin | Every contributing observation, subject to the reference-page cap |
+| `PORT_53_BURST` | At least 20 transport-qualified port-53 observations in a rolling, half-open interval of at most 60 seconds | Full support for the earliest qualifying window, then subsequent disjoint windows; subject to the reference-page cap |
 | `HOST_FANOUT` | Existing connection-start sweep | Existing 16 distinct-destination representatives |
 
 All retained timing checks use only observations in `[hour start, hour end)`.
@@ -29,8 +34,12 @@ become a connection-cadence review.
 
 Cadence and burst facts now include absolute `first_seen` and `last_seen`.
 Burst facts replace an ambiguous relative minute with absolute `window_start`
-and `window_end`. Bins remain anchored to the earliest in-hour observation in
-the source group; this change does not implement a sliding burst detector.
+and `window_end`. Retained reviews now use exact integer-microsecond rolling
+windows. A record at the exclusive sixty-second endpoint cannot complete a
+burst. The displayed end is clipped to the completed-hour horizon. Unrelated
+earlier traffic cannot move the qualifying port-53 observations across a bin
+boundary. Windows are selected in time order and consumed in full so that one
+observation cannot inflate two burst reviews.
 These are bounded measurements of the supplied metadata, not claims of complete
 traffic visibility, confirmed DNS queries, malware or successful connections.
 
@@ -41,11 +50,13 @@ unrelated early segments no longer become cadence/burst dependencies. Existing
 hourly retention and retirement rules remain in force. The Findings UI may show
 a smaller reference preview than the stored page.
 
-An internal opt-in on the pure offline analysis function carries record numbers
-to the retained-hour adapter. That path refuses over 20,000 records; the retained
-adapter's existing per-group limit is 2,048. Default offline report shapes and
-their strict reader remain unchanged. No database migration, new data input,
-model call, detector threshold, response permission or host operation is added.
+Explicit `timing_provenance=True` and `rolling_bursts=True` options on the pure
+offline analysis function provide the retained-hour adapter's measurements and
+record numbers. Rolling analysis refuses over 20,000 records; the retained
+adapter's existing per-group limit is 2,048. Version-1 offline reports continue
+to use their documented fixed-bin measurements, closed shape and strict reader.
+The rolling change corrects retained timing selection; it adds no database
+migration, data input, model call, response permission or host operation.
 
 ## Safe reproduction
 
@@ -54,7 +65,7 @@ From the reviewed MEGALODON checkout with its existing Python test environment:
 ```bash
 python -m compileall -q megalodon tests tools/replay_pattern_provenance.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTEST_PLUGINS= PYTEST_ADDOPTS= \
-  python -m pytest -ra tests/test_pattern_provenance.py tests/test_host_fanout.py \
+  python -m pytest -ra tests/test_rolling_bursts.py tests/test_pattern_provenance.py tests/test_host_fanout.py \
   tests/test_flow_identity_review.py tests/test_layered_review.py tests/test_security_patterns.py
 python tools/replay_pattern_provenance.py
 ```

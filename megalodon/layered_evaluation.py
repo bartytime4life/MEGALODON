@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections import Counter
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 import hashlib
 from importlib.resources import files
 import json
@@ -30,6 +31,55 @@ RULES = {'HOST_FANOUT', 'REGULAR_INTERVAL', 'PORT_53_BURST'}
 
 def _digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _analyzer_inputs(rows, start, gaps):
+    """One explicit input envelope, shared by execution and the fixture audit."""
+    return dict(rows=rows, start=start, end=start + 3600, previous=[], gaps=gaps)
+
+
+def _input_identifiability(cases):
+    """A conditional agreement ceiling for stipulated labels, never accuracy.
+
+    Cases contain (display ID, complete analyzer inputs, separate label). The
+    canonical JSON preserves every list's order. Full input strings are the
+    grouping key; SHA-256 identifies a group but cannot merge a hash collision.
+    Labels, display IDs and the support oracle never enter input identity.
+    """
+    groups = {}
+    for case_id, inputs, label in cases:
+        key = json.dumps(inputs, sort_keys=True, separators=(',', ':'))
+        group = groups.setdefault(key, [])
+        group.append((case_id, label))
+    determinate = excluded = minimum = 0
+    conflicts = []
+    for key, members in groups.items():
+        counts = Counter(label for _, label in members)
+        ordinary, useful = counts['ordinary'], counts['useful']
+        determinate += ordinary + useful
+        excluded += counts['indeterminate']
+        disagreements = min(ordinary, useful)
+        minimum += disagreements
+        if disagreements:
+            conflicts.append(dict(input_sha256=hashlib.sha256(key.encode()).hexdigest(),
+                                  cases=sorted(case_id for case_id, _ in members),
+                                  ordinary=ordinary, useful=useful,
+                                  indeterminate_excluded=counts['indeterminate'],
+                                  minimum_binary_disagreements=disagreements))
+    return dict(scope='Exact ordered analyzer inputs in this synthetic fixture set only.',
+                input_fields=['rows', 'start', 'end', 'previous', 'gaps'],
+                row_order='preserved', labels_in_input_identity=False,
+                total_cases=len(cases), unique_inputs=len(groups),
+                determinate_cases=determinate, indeterminate_excluded=excluded,
+                conflicting_input_groups=len(conflicts),
+                conflicts=sorted(conflicts, key=lambda value: value['input_sha256']),
+                conditional_binary_agreement_bound=dict(
+                    status='defined' if determinate else 'undefined_no_determinate_cases',
+                    minimum_disagreements=minimum, maximum_agreements=determinate - minimum,
+                    denominator=determinate,
+                    maximum_agreement_ratio=(dict(numerator=determinate - minimum,
+                                                  denominator=determinate) if determinate else None)),
+                interpretation='Any deterministic binary decision from exactly these inputs must disagree with at least the stated number of stipulated labels. This is not operational accuracy, a probability, calibration or a universal error bound.')
 
 
 def source_digests():
@@ -90,7 +140,7 @@ def observations(case, start):
 
 
 def _run(rows, start, gaps):
-    _, individual, coverage = analyze_hour(rows, start, start + 3600, [], gaps=gaps)
+    _, individual, coverage = analyze_hour(**_analyzer_inputs(rows, start, gaps))
     layered, layer_gaps = layered_reviews(individual, start, start + 3600)
     # Same priority rule as process_hour; admission/cooldown/storage are NOT
     # reproduced here and are deliberately not described as measured alerts.
@@ -108,6 +158,46 @@ def _canonical(result):
     for name in ('individual', 'layered'):
         value[name].sort(key=lambda c: (c['id'], _digest(c)))
     return value
+
+
+def _port53_support_windows(oracle, start, candidate):
+    """Enumerate full fixture support independently, with exact UTC arithmetic.
+
+    This intentionally simple quadratic oracle tries every eligible start. It
+    uses the bounded fixture observations, not candidate counts, references or
+    window claims, and shares no rolling-window implementation with analysis.
+    """
+    beginning = datetime.fromtimestamp(start, timezone.utc)
+    horizon = beginning + timedelta(hours=1)
+    ordered = []
+    for reference, entry in oracle.items():
+        row = entry['row']; data = row['data']
+        if (row['source'] != candidate['sensor'] or data['src_ip'] != candidate['device']
+                or (data['interface'] or 'unreported') != candidate['interface']
+                or data.get('protocol') not in {'TCP', 'UDP'} or data.get('dst_port') != 53
+                or not data.get('first_seen')):
+            continue
+        stamp = datetime.fromisoformat(data['first_seen'].replace('Z', '+00:00'))
+        if beginning <= stamp < horizon:
+            ordered.append((stamp, reference))
+    ordered.sort()
+    windows = []
+    consumed_until = beginning
+    for left in sorted({stamp for stamp, _ in ordered}):
+        if left < consumed_until:
+            continue
+        right = min(left + timedelta(seconds=60), horizon)
+        support = [(stamp, ref) for stamp, ref in ordered if left <= stamp < right]
+        if len(support) < 20:
+            continue
+        stamp_text = lambda value: value.isoformat(timespec='microseconds').replace('+00:00', 'Z')
+        windows.append(dict(references={ref for _, ref in support},
+                            records=len(support), window_start=stamp_text(left),
+                            window_end=stamp_text(right), first_seen=stamp_text(support[0][0]),
+                            last_seen=stamp_text(support[-1][0]),
+                            references_omitted=max(0, len(support) - 24)))
+        consumed_until = right
+    return windows
 
 
 def evidence_errors(result, oracle, start):
@@ -130,7 +220,10 @@ def evidence_errors(result, oracle, start):
                 errors.append('unresolved_reference')
                 continue
             row = entry['row']; data = row['data']
-            if (rule not in entry['supports'] or row['source'] != candidate['sensor']
+            # Legacy fixture support tags describe fixed-bin PORT53 behavior.
+            # Rolling PORT53 support is instead proved from full input below.
+            if ((rule != 'PORT_53_BURST' and rule not in entry['supports'])
+                    or row['source'] != candidate['sensor']
                     or data['src_ip'] != candidate['device']
                     or (data['interface'] or 'unreported') != candidate['interface']
                     or not start <= epoch(data.get('first_seen', row['observed_at'])) < start + 3600):
@@ -149,6 +242,20 @@ def evidence_errors(result, oracle, start):
             for ref in sorted(expected, key=lambda ref: (ref.split(':')[0], len(ref), ref)):
                 by_time.setdefault(oracle[ref]['row']['data']['first_seen'], ref)
             expected = set(by_time.values())
+        elif rule == 'PORT_53_BURST':
+            windows = _port53_support_windows(oracle, start, candidate)
+            matches = [window for window in windows if refs and set(refs) <= window['references']]
+            if len(matches) != 1:
+                expected = set()
+                errors.append('incorrect_port53_window_support')
+            else:
+                window, = matches
+                expected = window['references']
+                if (any(candidate['facts'].get(key) != window[key] for key in
+                        ('records', 'window_start', 'window_end', 'first_seen', 'last_seen', 'references_omitted'))
+                        or any(type(candidate['facts'].get(key)) is not int
+                               for key in ('records', 'references_omitted'))):
+                    errors.append('incorrect_port53_window_facts')
         if rule in RULES:
             if rule == 'HOST_FANOUT':
                 expected = set(sorted(expected)[:16])
@@ -182,17 +289,25 @@ def evidence_errors(result, oracle, start):
         # observations omitted from a candidate's displayed reference page.
         extents = []
         for component in components:
-            times = [epoch(entry['row']['data']['first_seen']) for entry in oracle.values()
-                     if component['rule'] in entry['supports']
-                     and entry['row']['source'] == component['sensor']
-                     and entry['row']['data']['interface'] == component['interface']
-                     and (component['rule'] != 'REGULAR_INTERVAL'
-                          or entry['row']['data']['dst_port'] == component['facts']['port'])]
-            extents.append((min(times), max(times)))
-        gap = round(max(0, max(v[0] for v in extents) - min(v[1] for v in extents)), 6)
+            if component['rule'] == 'PORT_53_BURST':
+                windows = _port53_support_windows(oracle, start, component)
+                refs = component['evidence_refs']
+                matching = [window for window in windows if refs and set(refs) <= window['references']]
+                extents.append((epoch(matching[0]['first_seen']), epoch(matching[0]['last_seen']))
+                               if len(matching) == 1 else None)
+            else:
+                times = [epoch(entry['row']['data']['first_seen']) for entry in oracle.values()
+                         if component['rule'] in entry['supports']
+                         and entry['row']['source'] == component['sensor']
+                         and entry['row']['data']['interface'] == component['interface']
+                         and (component['rule'] != 'REGULAR_INTERVAL'
+                              or entry['row']['data']['dst_port'] == component['facts']['port'])]
+                extents.append((min(times), max(times)) if times else None)
+        gap = (round(max(0, max(v[0] for v in extents) - min(v[1] for v in extents)), 6)
+               if all(value is not None for value in extents) else None)
         expected_qualification = dict(reference_scope='selected_reference_pages',
             shared_reference_count=len(set(components[0]['evidence_refs']) & set(components[1]['evidence_refs'])),
-            support_time_relation='separated' if gap > 0 else 'overlapping_extents',
+            support_time_relation='unavailable' if gap is None else 'separated' if gap > 0 else 'overlapping_extents',
             support_time_gap_seconds=gap, authorization_context='unavailable')
         actual = review['facts'].get('evidence_qualification')
         if (actual != expected_qualification or type(actual.get('shared_reference_count')) is not int
@@ -213,12 +328,13 @@ def evaluate_layered(*, source_commit, source_tree, repeats=3, benchmark=False):
             or type(benchmark) is not bool):
         raise ReferenceDataError('INVALID_LAYERED_EVALUATION_ARGUMENTS')
     corpus, labels = load_corpus()
-    start = corpus['start']; results = []; wall = []; cpu = []
+    start = corpus['start']; results = []; wall = []; cpu = []; input_cases = []
     confusion = Counter(tp=0, fp=0, fn=0, tn=0)
     peaks = []
     for case in corpus['cases']:
         rows, oracle = observations(case, start)
         original = deepcopy(rows)
+        inputs = deepcopy(_analyzer_inputs(rows, start, case.get('gaps', [])))
         digests, permutations = [], []
         result = None
         for iteration in range(repeats):
@@ -242,6 +358,7 @@ def evaluate_layered(*, source_commit, source_tree, repeats=3, benchmark=False):
             finally:
                 tracemalloc.stop()
         truth = labels['labels'][case['id']]
+        input_cases.append((case['id'], inputs, truth['label']))
         prediction = bool(result['layered'])
         if truth['label'] != 'indeterminate':
             confusion[('tp' if prediction else 'fn') if truth['label'] == 'useful'
@@ -270,6 +387,7 @@ def evaluate_layered(*, source_commit, source_tree, repeats=3, benchmark=False):
                   evaluation_boundary='Pre-admission retained-flow candidates and layered hourly cap; no database, cooldown, packet detector or live collection.',
                   denominators=dict(total=len(results), ordinary=counts['ordinary'], useful=counts['useful'],
                                     indeterminate_excluded=counts['indeterminate']),
+                  input_identifiability=_input_identifiability(input_cases),
                   synthetic_workload=dict(confusion, false_alert_definition='Ordinary case with a layered candidate, not a malicious verdict.',
                                           missed_case_definition='Useful case without a layered candidate; individual findings can still exist.'),
                   qualification_basis='Selected reference-page overlap and full component support extents; no ranking, suppression, identity or authorization inference.',

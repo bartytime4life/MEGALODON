@@ -64,7 +64,7 @@ CONTEXT = {
     'PROTOCOL_SHIFT': ('The share of an observed protocol changed.', 'Backups, streaming and upgrades can change the traffic mix.', 'network traffic analysis', 'device_changes'),
     'SERVICE_SHIFT': ('The share of a sensor-reported service changed.', 'A sensor label is an observation, not proof of the installed application.', 'network traffic analysis service', 'device_changes'),
     'REGULAR_INTERVAL': ('Connections recur at similar intervals.', 'Scheduled tasks, health checks and updates commonly do this; timing alone does not establish a beacon.', 'command control application layer protocol', 'device_changes'),
-    'PORT_53_BURST': ('Many observations used destination port 53 in one minute.', 'This counts observations, not confirmed DNS queries. Streaming, updates and retries can cause bursts.', 'DNS traffic analysis', 'evidence_summary'),
+    'PORT_53_BURST': ('Many observations used destination port 53 within sixty seconds.', 'This counts observations, not confirmed DNS queries. Streaming, updates and retries can cause bursts.', 'DNS traffic analysis', 'evidence_summary'),
     'INVENTORY_CHANGE': ('A device or reported service changed in the observed inventory.', 'Discovery can miss sleeping or inaccessible devices; absence is not proof that a device left.', 'asset inventory network discovery', 'device_changes'),
     'AI_MODEL_CHANGE': ('The configured local model identity changed.', 'A deliberate model selection may explain the change.', 'AI model supply chain integrity', 'ai_readiness'),
     'AI_EXPOSURE': ('The local AI admission check could not verify local-only operation.', 'Review which processes and devices can reach the AI service.', 'excessive agency access control', 'ai_readiness'),
@@ -273,7 +273,7 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
         batch=Batch('retained-'+key[3],key[3],tuple(record for record,_ in scoped),count,0,0,'v1','committed evidence')
         record_refs=[ref for _,ref in scoped]
         try:checks=[] if group.get('timing_limited') else offline_candidates(batch,
-            timing_provenance=True)
+            timing_provenance=True,rolling_bursts=True)
         except OfflineError:
             checks=[];all_gaps.append('Heuristic candidate limit reached; existing findings remain available.')
             baseline['eligible']=False;baseline['exclusion']='Heuristic work limit'
@@ -310,9 +310,15 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
                 if omitted:
                     check_gaps = [f'{omitted} supporting observations are outside this review\'s 24-reference page.'] + all_gaps
                 if check['rule']=='PORT_53_BURST':
-                    origin = min(record.observed_at.timestamp() for record in batch.records)
-                    window_start = origin + facts.pop('relative_minute')*60
-                    facts.update(window_start=utc(window_start),window_end=utc(window_start+60))
+                    # Relative offsets are exact integer microseconds. Preserve
+                    # that precision when projecting the selected half-open
+                    # window; the completed hour remains the input horizon.
+                    origin = min(record.observed_at for record in batch.records)
+                    window_start = origin + timedelta(microseconds=facts.pop('start_offset_us'))
+                    window_end = min(origin + timedelta(microseconds=facts.pop('end_offset_us')),
+                                     datetime.fromtimestamp(end,timezone.utc))
+                    facts.update(window_start=window_start.isoformat(timespec='microseconds').replace('+00:00','Z'),
+                                 window_end=window_end.isoformat(timespec='microseconds').replace('+00:00','Z'))
             results.append(candidate(check['rule'],key,start,end,facts,references,segments,gaps=check_gaps))
         if samples<MIN_SAMPLES or not baseline['eligible']:continue
         known={port for sample in compatible for port in sample['ports']}

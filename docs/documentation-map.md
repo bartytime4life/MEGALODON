@@ -1,8 +1,8 @@
 # Complete documentation catalog
 
-**190 Markdown documents accounted for.** Current inventory basis:
-[`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b)
-(November 11, 2026, America/Chicago), plus this documentation candidate.
+**191 Markdown documents accounted for.** Current inventory basis:
+[`main@201fe4939cbfb160dccb80782455d106cdebaed4`](https://github.com/bartytime4life/MEGALODON/commit/201fe4939cbfb160dccb80782455d106cdebaed4)
+(November 11, 2026, America/Chicago), plus this science and mathematics candidate.
 Every tracked or non-ignored new Markdown path is listed below, including
 maintained guides, versioned contracts, proposals, templates and dated records.
 See [current state](current-state.md#november-11-source-orientation) and the
@@ -15,6 +15,7 @@ does not change the acceptance state or dates of their contents.
 
 | Document | Repository path |
 | --- | --- |
+| [Science and mathematics behind the next improvements](science-and-math.md) | `docs/science-and-math.md` |
 | [Documentation refresh — November 11, 2026](documentation-refresh-2026-11-11.md) | `docs/documentation-refresh-2026-11-11.md` |
 | [Exact Zeek producer qualification](../contracts/zeek-conn-log/v1/qualification/README.md) | `contracts/zeek-conn-log/v1/qualification/README.md` |
 | [Independent file-inspection review — November 4, 2026](file-inspection-independent-review-2026-11-04.md) | `docs/file-inspection-independent-review-2026-11-04.md` |

@@ -15,6 +15,37 @@ FANOUT_DESTINATIONS = 16
 FANOUT_WINDOW_US = 60_000_000
 MAX_FANOUT_RECORDS = 20_000
 MAX_PROVENANCE_RECORDS = 20_000
+MAX_ROLLING_BURST_RECORDS = 20_000
+BURST_WINDOW_US = 60_000_000
+BURST_RECORDS = 20
+
+
+def _rolling_burst_windows(groups, timing_provenance):
+    """Greedy nonoverlapping, complete half-open windows per source.
+
+    The caller bounds the complete batch before collecting these observations.
+    Each pointer advances once after sorting; every cited observation belongs
+    to one window. A failed left endpoint cannot qualify with later records,
+    because its exclusive end has already been exhausted.
+    """
+    for source, observations in sorted(groups.items()):
+        ordered = sorted(observations)
+        left = right = 0
+        while left < len(ordered):
+            start = ordered[left][0]
+            end = start + BURST_WINDOW_US
+            while right < len(ordered) and ordered[right][0] < end:
+                right += 1
+            if right - left >= BURST_RECORDS:
+                yield source, {
+                    'start_offset_us': start, 'end_offset_us': end,
+                    'records': right - left,
+                    **({'record_numbers': [number for _, number in ordered[left:right]]}
+                       if timing_provenance else {}),
+                }
+                left = right
+            else:
+                left += 1
 
 
 def _fanout_windows(batch: Batch, interval: tuple[datetime, datetime] | None):
@@ -108,12 +139,18 @@ def validate_reference(value: dict, batch: Batch) -> set[tuple[str, int]]:
 
 def candidates(batch: Batch, reference: dict | None = None, *,
                fanout_interval: tuple[datetime, datetime] | None = None,
-               timing_provenance: bool = False) -> list[dict]:
+               timing_provenance: bool = False,
+               rolling_bursts: bool = False) -> list[dict]:
     """No severity escalation, fixed-rule changes, or response authorization.
 
     The retained-hour adapter opts into bounded record numbers for timing
-    checks. Default offline reports keep their existing closed evidence shape.
+    checks. Rolling bursts are a separate explicit mode; legacy offline reports
+    retain their relative-minute bins and existing closed evidence shape.
     """
+    if type(rolling_bursts) is not bool:
+        raise OfflineError('INVALID_ROLLING_BURST_MODE')
+    if rolling_bursts and len(batch.records) > MAX_ROLLING_BURST_RECORDS:
+        raise OfflineError('ROLLING_BURST_RECORD_LIMIT')
     if timing_provenance and len(batch.records) > MAX_PROVENANCE_RECORDS:
         raise OfflineError('TIMING_PROVENANCE_RECORD_LIMIT')
     result = []
@@ -134,15 +171,19 @@ def candidates(batch: Batch, reference: dict | None = None, *,
     groups = defaultdict(dict)
     bursts = Counter()
     burst_refs = defaultdict(list)
+    rolling = defaultdict(list)
     for number, (record, offset) in enumerate(zip(batch.records, offsets(batch)), 1):
         if record.protocol in {'TCP', 'UDP'} and record.dst_port is not None:
             # One representative per distinct time; simultaneous connection
             # starts cannot inflate the cadence's unique-observation count.
             groups[(record.src_ip, record.dst_ip, record.protocol, record.dst_port)].setdefault(offset, number)
             if record.dst_port == 53:
-                bursts[(record.src_ip, offset // 60_000_000)] += 1
-                if timing_provenance:
-                    burst_refs[(record.src_ip, offset // 60_000_000)].append(number)
+                if rolling_bursts:
+                    rolling[record.src_ip].append((offset, number))
+                else:
+                    bursts[(record.src_ip, offset // 60_000_000)] += 1
+                    if timing_provenance:
+                        burst_refs[(record.src_ip, offset // 60_000_000)].append(number)
     for (src, dst, protocol, port), times in sorted(groups.items()):
         ordered = sorted(times)
         if len(ordered) < 5:
@@ -156,10 +197,14 @@ def candidates(batch: Batch, reference: dict | None = None, *,
                                     'unique_observations': len(ordered), 'median_interval_us': mid,
                                     'interval_spread_us': spread,
                                     **({'record_numbers': [times[t] for t in ordered]} if timing_provenance else {})})
-    for (src, minute), count in sorted(bursts.items()):
-        if count >= 20:
-            add('PORT_53_BURST', {'src': labels[src], 'relative_minute': minute, 'records': count,
-                                **({'record_numbers': burst_refs[(src, minute)]} if timing_provenance else {})})
+    if rolling_bursts:
+        for src, evidence in _rolling_burst_windows(rolling, timing_provenance):
+            add('PORT_53_BURST', {'src': labels[src], **evidence})
+    else:
+        for (src, minute), count in sorted(bursts.items()):
+            if count >= 20:
+                add('PORT_53_BURST', {'src': labels[src], 'relative_minute': minute, 'records': count,
+                                    **({'record_numbers': burst_refs[(src, minute)]} if timing_provenance else {})})
     for (src, protocol, port), evidence in _fanout_windows(batch, fanout_interval):
         add('HOST_FANOUT', {'src': labels[src], 'protocol': protocol, 'port': port, **evidence})
     return result
