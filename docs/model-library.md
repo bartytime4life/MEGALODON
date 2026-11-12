@@ -232,11 +232,13 @@ or an adversary able to conceal and restore changes between observations.
 
 It reads at most 1 MiB per file for six named source files, refuses links and
 nonregular files, and compares SHA-256 with the reviewed package source at
-checkpoint `c9eda15a6700d46c00eeaa20852f169b79cab8a9` (Stage 0 entry guards).
-The preceding checkpoint was `913a6fbe260474475b441addc48d33bd6dd68c5f`
-(explicit publisher/license review controls). Only the library/support hashes
-changed in this pin refresh. This six-file comparison does not inspect the new
-`execution_boundary.py` dependency or prove Stage 0 enforcement.
+checkpoint `41aac8cdcd25837857f6651e8d046cb70b21e8f5` (Setup status failure
+propagation). This checkpoint identifies source bytes; its merge or installation
+status must be checked separately. The preceding checkpoint was
+`c9eda15a6700d46c00eeaa20852f169b79cab8a9` (Stage 0 entry guards). Only the
+dashboard support-configuration hash changed in this refresh. This six-file
+comparison does not inspect `execution_boundary.py`, the complete dashboard,
+or prove Stage 0 enforcement.
 It checks file/directory
 identity for observed replacement. Output contains fixed filenames, hashes and
 states; personal paths and source contents are omitted. A later legitimate

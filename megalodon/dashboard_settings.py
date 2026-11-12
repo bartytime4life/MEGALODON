@@ -277,6 +277,7 @@ SETTINGS_JS = r'''
  window.addEventListener('hashchange',()=>fromHash(true));window.addEventListener('popstate',()=>fromHash(true));fromHash();
  window.addEventListener('megalodon-support-state',event=>{
   const value=event.detail;if(!value)return;
+  if(value.status==='unavailable'){document.getElementById('settings-traffic-summary').textContent='Unavailable';document.getElementById('settings-model-summary').textContent='Unavailable';return;}
   document.getElementById('settings-traffic-summary').textContent={idle:'Not capturing',stopped:'Stopped',starting:'Starting',running:'Capturing',failed:'Needs attention'}[value.capture?.state]||'Unavailable';
   const model=value.model,lifecycle=model?.lifecycle;
   document.getElementById('settings-model-summary').textContent=model?.selection_state==='none'?'No model saved':model?.selection_state==='invalid'?'Saved profile needs attention':model?.response_test?.state==='passed'?'Local test passed':model?.model_state==='unbound'||lifecycle?.state==='unbound'?'Choice saved · analysis paused':lifecycle?.state==='ready'&&model.loaded===true?'Loaded':lifecycle?.state==='retrying'?'Reconnecting':model?.loaded===true?'Loaded':model?.loaded===false?'Not loaded':'Not checked';

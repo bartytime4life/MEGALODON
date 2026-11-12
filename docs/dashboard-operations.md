@@ -92,8 +92,24 @@ and sensor operation remain explicit separate workflows.
 
 ### Read live connections through the connection lens
 
-The **Live network** workspace leads with a passive connection lens and keeps
-the roster and endpoint inspector beside it. The lens draws retained endpoint
+The HUD's **Live network** view starts with **Your next step**. Its recommendation
+uses the current validated snapshot: refresh an unavailable or older view,
+review capture settings when packet capture is stopped, wait for observations
+when a running collector has returned no metadata, or inspect returned sensor
+context and connections. Connection-summary mode can show current sensor data
+independently of packet capture; an empty summary window points to Sensors.
+Sensor observations count returned alert context, separately from the saved
+Findings queue. **Refresh observations** reads the existing local snapshot;
+**Resume view** resumes dashboard refresh. Capture has separate controls.
+
+**Review findings**, **Explore connections** and **Open reports** open existing
+views. Saved findings and reports remain accessible when capture is stopped.
+AI is optional for inspecting facts and coverage. Expand **Supporting apps ·
+optional tools and status details** to inspect the tool inventory; startup
+controls and their feedback remain outside that disclosure.
+
+The passive connection lens keeps the roster and endpoint inspector beside it.
+The lens draws retained endpoint
 relationships around **This device**; it is a visualization of accepted
 metadata, not a network scan or proof of complete traffic coverage. Its
 **Observed**, **Unknown**, **Needs review**, and **Unavailable** states describe

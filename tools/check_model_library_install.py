@@ -10,14 +10,14 @@ from pathlib import Path
 import re
 import stat
 
-BASELINE = "c9eda15a6700d46c00eeaa20852f169b79cab8a9"
+BASELINE = "41aac8cdcd25837857f6651e8d046cb70b21e8f5"
 SCHEMA = "megalodon-model-library-install-observation-v1"
 MAX_FILE_BYTES = 1024 * 1024
 EXPECTED = {
     "model_library.py": "45c3611b2f67c33c02d9cd4b0bad051df1a984a38fa3092fe08da0dac7d09f31",
     "dashboard_model_library.py": "9fd66c7cd7d439fac3451c00ca1407188318ff459d34a5a881501f6a23cf8847",
     "support_config.py": "d251d355ab8d1d84593b10d452cab0744cfff77d3de565cba93f14cccf3f6b0a",
-    "dashboard_support_config.py": "634415ec1418535e28b41d137dbbcb2f161be5015e9394b0d944e8184815c2f5",
+    "dashboard_support_config.py": "2f70b61c691f35140d06d91fba696e88c8a9f0681a3824c86b83a45124e0210a",
     "model_artifact.py": "f02ad3756661d60548cb35c96593cbc0373f9faba64ae09a97640bc167725a9f",
     "local_model_runtime.py": "9e0bc58b0f2937cdbb19702b66f2684e3012ba8e931a449d19c67e7b12c67405",
 }

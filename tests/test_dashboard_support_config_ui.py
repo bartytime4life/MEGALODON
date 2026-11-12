@@ -8,9 +8,10 @@ import pytest
 
 from megalodon.dashboard_assets import INDEX_HTML, DASHBOARD_CSS, DASHBOARD_JS
 from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONFIG_CSS, SUPPORT_CONFIG_JS
+from megalodon.dashboard_settings import SETTINGS_JS
 
 
-@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs", "startup_preferences_browser.cjs"])
+@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs", "startup_preferences_browser.cjs", "support_status_browser.cjs"])
 def test_support_config_behavior(script):
     node = shutil.which("node")
     if node is None:
@@ -37,7 +38,7 @@ def test_support_config_behavior(script):
     from megalodon.model_test import ModelTest
     model_test = ModelTest(lambda:settings).snapshot()
     result = subprocess.run([node, str(Path(__file__).with_name(script))],
-                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, fixture=fixture, unbound_model=unbound_model, library=library, model_test=model_test)),
+                            input=json.dumps(dict(code=SUPPORT_CONFIG_JS, settings_code=SETTINGS_JS, fixture=fixture, unbound_model=unbound_model, library=library, model_test=model_test)),
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
 

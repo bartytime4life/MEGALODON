@@ -273,6 +273,7 @@ process.stdin.on('end', async () => {
     assert.equal(run("workspaceFromHash('#integrations-title')"), 'interfaces');
     assert.equal(run("workspaceFromHash('#setup-title')"), 'setup');
     assert.equal(run("workspaceFromHash('#pc-live-title')"), 'live');
+    assert.equal(run("workspaceFromHash('#ops-lens-title')"), 'live');
     assert.equal(run("workspaceFromHash('#unknown')"), null);
     context.window.location.hash = '#detections-title'; run('restoreWorkspaceFromHash()');
     assert.equal(nodeFor('workspace-live').hidden, true);
@@ -285,6 +286,17 @@ process.stdin.on('end', async () => {
         assert.equal(selector, 'a[href^="#"]'); return link;
       }}, preventDefault() { throw new Error('native link behavior must be retained'); }, ...options});
     }
+    // Cold fragment, repeated activation, and Back restoration all own the HUD.
+    context.window.location.hash = '#ops-lens-title'; run('restoreWorkspaceFromHash()');
+    assert.equal(nodeFor('workspace-live').hidden, false);
+    clickFragment('#setup-title');
+    assert.equal(nodeFor('workspace-setup').hidden, false);
+    context.window.location.hash = '#ops-lens-title'; run('restoreWorkspaceFromHash()');
+    assert.equal(nodeFor('workspace-live').hidden, false, 'Back restores connection context to its owning workspace');
+    assert.equal(nodeFor('workspace-setup').hidden, true);
+    run("activateWorkspace('setup')"); clickFragment('#ops-lens-title');
+    assert.equal(nodeFor('workspace-live').hidden, false);
+    assert.equal(document.activeElement, nodeFor('ops-lens-title'));
     for (const target of ['offline-title', 'suricata-title', 'analysis-window-title']) {
       context.window.location.hash = '#' + target;
       run('restoreWorkspaceFromHash()');
