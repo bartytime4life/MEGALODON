@@ -113,6 +113,13 @@ status. Flow counts are not packet counts; registrations are not observations;
 detection counters are not incident identities; API reachability is not sensor
 health. Never turn a display label into an authorization decision.
 
+The [Stage 0 application entry fence](docs/offline-analysis.md#stage-0-application-entry-fence--issue-750)
+is a partial process-local implementation of issue #750. Trusted Python launch
+code must select it in a fresh process before effectful construction. Its named
+entry-point refusals do not establish OS network/filesystem containment, stop
+existing workers, or prove universal helper coverage. Ordinary installed-runtime
+mode and its explicit action permissions remain separate.
+
 Synthetic fixtures and redistributable public reference material belong in the
 repository only with their existing schema, provenance, integrity, size, and
 packaging rules. Real captures, private paths, credentials, personal telemetry,
@@ -147,6 +154,17 @@ unavailable dependencies, stale preservation, timeout, retry, and refusal before
 side effects. Prefer tests against stable public behavior to matching source text.
 Keep one final dashboard bootstrap call so behavior harnesses can disable startup
 without altering the code under test.
+
+For changing selections or searches, bind every completion and error to both
+the requested entity/query and a monotonic view revision. Cover A-to-B-to-A
+navigation, edits during a request, failure after a newer success, deselection
+and retry. Polling must preserve focused controls, unsaved choices and disclosure
+state; a failed read must invalidate current status without erasing independently
+observed sources. The focused guidance, intelligence and Setup behavior suites
+are `tests/test_dashboard_guided_overview.py`,
+`tests/test_dashboard_intelligence_ui.py` and
+`tests/test_dashboard_support_config_ui.py`. These complement the dashboard and
+boundary tests above; they do not replace the full suite or rendered-browser work.
 
 The [operator runbook](docs/dashboard-operations.md) defines rendered-browser
 checks. Node mocks do not measure layout, contrast, screen-reader output, platform

@@ -8,6 +8,17 @@ operator read authentication when enabled, a non-root local management user,
 and exactly one `X-Megalodon-Check: 1`. Search returns at most six references;
 pattern status returns at most 64 reviews and explicitly states truncation.
 
+In the HUD, open **Setup → Local AI → Knowledge and automatic review** for this
+public-reference search. Each response and failure is bound to the submitted
+query and a monotonic search revision; editing the field invalidates the old
+display request, including repeated A-to-B-to-A queries. Device pattern-review
+responses likewise require the current address and selection revision, and
+deselection clears their view. These are client freshness controls, not new API
+permissions. Disabled learning is labeled **Local learning paused**; saved
+baseline hours, saved reviews and an already-running explanation retain their
+separate meanings. The bundled IANA registration lookup remains under
+**Evidence → Reference Library** with its own three `/api/reference/*` routes.
+
 `GET /api/intelligence/context?device=<IP>` uses the same read controls and
 accepts exactly one unscoped IPv4/IPv6 address, with no other query fields.
 It returns the existing qualified endpoint packet (at most 3,072 bytes), not
@@ -41,6 +52,12 @@ No request accepts an executable, path, source URL, threshold or permission.
 
 Status/search do not start inference. The service's separately configured daily
 update and background review workers continue when the browser is closed.
+The current evaluation release's operational local-model runtime remains `UNBOUND`;
+status, inventory, staging or this UI cannot admit ordinary analysis through that
+hold. The separate [fixed READY diagnostic](ollama-response-test.md) is explicitly
+allowed and may load the saved model, without admitting operational analysis. The
+separately selected Stage 0 application fence rejects named effectful entries;
+it is not an OS containment claim for the complete installed HUD.
 Storage status adds `reference_storage` with a separate 512-MiB budget. See
 [knowledge and patterns](security-knowledge.md) for retention and work limits.
 
@@ -155,6 +172,7 @@ production service.
 | `/api/heartbeat` | None; requires `X-Megalodon-Check: 1`, HUD mode | Cached per-tool installed/running/uptime light; see [tool heartbeat](tool-heartbeat.md) |
 | `/api/host-telemetry` | None; requires `X-Megalodon-Check: 1`, HUD mode | Automatic two-second CPU, RAM, per-interface rates and socket observations; see [live PC telemetry](live-pc-telemetry.md). Bounded in-memory history; no captures or writes. |
 | `/api/install` | None; requires `X-Megalodon-Check: 1`, HUD mode | Fixed install-recipe catalog and the current job status |
+| `/api/install/token` | None; exactly one `X-Megalodon-Check: 1`, non-root local HUD with Setup; Origin absent or exact bound-host origin | `megalodon-tool-session-v1` with enabled state and this launch's action nonce, or `token: null` when management is disabled; no process starts |
 | `/api/support-apps` | None; requires `X-Megalodon-Check: 1`, HUD mode | Availability of the fixed Linux desktop-app list in the current session |
 | `/api/support-start` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed support-start job, command and separate same-origin action nonce; GET never starts a process |
 | `/api/support-config` | None; requires `X-Megalodon-Check: 1`, non-root Linux HUD | Fixed tool settings, interface choices, setup/capture state, the cached read-only hardening review, the cached bounded persistence summary, the passive local gateway review, this account's programs holding network sockets, read-only recovery readiness from the same saved host-security snapshot, separately pinned external backup-evidence summary and separate configuration nonce; see [support configuration](support-configuration.md) for its explicit POST actions |
@@ -197,15 +215,18 @@ private AI receipt ledger; see the [AI control plane](ai-control-plane.md).
 body, writes nothing, and only interrupts this HUD operator's own model
 request; it stays reachable while a question holds the maintenance lock.
 
-`POST /api/install` requires a non-root Linux HUD explicitly launched with
-`--enable-tool-management`, exactly one matching per-launch
+`POST /api/install` requires a non-root Linux HUD with management explicitly
+enabled by its settings or `--enable-tool-management`, exactly one matching per-launch
 `X-Megalodon-Install-Token`, exact same-site `Origin`,
 `Content-Type: application/json`, `X-Megalodon-Install: 1`, and a body of
 1–96 bytes naming one string tool id and an optional string `action` (`install`
 or `start`). Repeated keys, extra fields, ambiguous lengths and content/transfer
-encodings are refused. The token is printed only in the launch terminal; the
-default HUD still serves heartbeat and catalog GETs, whose `management` object
-reports enabled/disabled state without a secret. It starts one recipe or one fixed systemd unit from the closed
+encodings are refused. The token is printed in the launch terminal and is also
+available to the local HUD through guarded `/api/install/token`; it stays in page
+memory. Heartbeat and recipe-catalog responses themselves contain no token.
+The browser can refresh an explicitly rejected (403) session and retry the same
+already-confirmed fixed action once. Ambiguous transport failures are not
+automatically replayed. It starts one recipe or one fixed systemd unit from the closed
 registries in `megalodon/tool_installer.py`; privileged steps go through the OS
 `pkexec` password prompt. See [tool heartbeat and one-click install](tool-heartbeat.md).
 
@@ -253,10 +274,10 @@ Standalone tools report `not_applicable`. Query arguments and POST are refused.
 Repeated GETs and browser refresh never repeat either startup observation. The
 client validates both receipts; no report import is needed locally.
 The source status describes the startup selection, not present readability or
-capture health. Setup directs the operator to **Check this computer** for current
+capture health. Setup directs the operator to **Overview → This computer → Check now** for current
 access; traffic and capture retain their separate status checks.
 
-**Check this computer** uses a separate `/api/local-checks` endpoint. It is
+**Setup → Overview → This computer → Check now** uses a separate `/api/local-checks` endpoint. It is
 enabled only for `serve(..., inspect_tools=True)` (the `hud` command), accepts no
 query options, and requires exactly one `X-Megalodon-Check: 1` header. The browser
 calls it only on an explicit check click, using its five-second abort budget;

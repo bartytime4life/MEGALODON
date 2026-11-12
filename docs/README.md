@@ -10,6 +10,7 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 
 | I want to… | Start here | Then inspect |
 | --- | --- | --- |
+| Choose the next evidence task | [Guided HUD](dashboard-operations.md#read-the-interface-in-evidence-order) | [Findings](findings-review.md), connection context or [Reports](efficient-recording-reports.md) |
 | Manage background startup | [Installed service and login startup](local-pc-setup.md#optional-start-the-installed-hud-at-login) | [Collector scope and saved preferences](background-tools.md) |
 | Open MEGALODON on Linux | [Visual quick start](gui-quick-start.md) | [Install, update, troubleshoot](local-pc-setup.md) |
 | Prepare Suricata offline configuration | [Installing Suricata and configuration script](installing-suricata.md) | [Pinned alert-only producer boundary](../contracts/suricata-eve/v1/producer/README.md) |
@@ -42,6 +43,9 @@ flowchart TD
 ```
 
 The diagram describes separate interfaces; it does not authorize operation.
+Its advice path describes the bounded advisory contract. Operational generation
+currently remains [UNBOUND](qwen-runtime-unbound.md); explicit catalog/selection
+and the fixed no-telemetry READY diagnostic retain their separate preparation scope.
 The metadata reader is read-only. Current Linux HUD controls include separately
 protected configuration and host workflows. Advice does not authorize them.
 An imported alert, cached reference match, or model explanation is not proof of
@@ -49,8 +53,11 @@ compromise. See [security boundaries](wiki/security-boundaries.md).
 
 ## Know which document governs
 
-[Current state and limits](current-state.md) leads with the October 27 source
-and GitHub checks, preserving the October 22 orientation as history. The [reconciliation record](documentation-refresh-2026-10-22.md)
+[Current state and limits](current-state.md#november-11-source-orientation) leads
+with merged `main@418fa54` and the November 11 guided-console and numerical
+reliability changes. [The current refresh record](documentation-refresh-2026-11-11.md)
+separates source, candidate checks and publication. Earlier November 9 and October
+orientations retain their dates. The [reconciliation record](documentation-refresh-2026-10-22.md)
 explains how the supplied September architecture/research plans relate to it. [The complete documentation catalog](documentation-map.md)
 accounts for every tracked Markdown document, including versioned contracts,
 proposals, templates, and preserved history. Catalog inclusion is not technical

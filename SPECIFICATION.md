@@ -1,6 +1,36 @@
 # MEGALODON MVP specification and proposed platform extension
 
-> **Documentation orientation — 2026-10-22 / source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** Start with [current state and evidence boundaries](docs/current-state.md) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+> **Documentation orientation — November 11, 2026 (America/Chicago) / source `418fa54474f3f77d0758e94aab5735a516d8c43b`:** Start with [current state and evidence boundaries](docs/current-state.md#november-11-source-orientation) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+
+## Current correctness and guided review — November 11, 2026
+
+The merged source includes the following refinements. Their source/test links
+describe regression contracts; the [documentation refresh record](docs/documentation-refresh-2026-11-11.md)
+keeps candidate validation, merge identity and later checks separate.
+
+| Area | Implemented behavior | Source and regression contract |
+| --- | --- | --- |
+| Saved reports | Documents and finding pages belong to the selected report and a monotonic view revision. Selection, replacement or expiry invalidates old requests; failed pagination retries the same offset. | [PR #769](https://github.com/bartytime4life/MEGALODON/pull/769), [client](megalodon/dashboard_reports.py), [selection tests](tests/test_dashboard_reports_ui.py) |
+| Hourly comparisons | Baseline histories are indexed once per call. Protocol/service-share admission uses exact integer cross multiplication before rational display rounding; 19.96 percentage points does not meet the 20-point cutoff. Source windows, exclusions and dependencies remain unchanged. | [PR #771](https://github.com/bartytime4life/MEGALODON/pull/771), [pattern engine](megalodon/security_patterns.py), [arithmetic tests](tests/test_pattern_comparison_math.py) |
+| Resource measurements | Per-app and suite CPU ticks are summed as integers before interval validation and one display rounding. Report compaction retains unrounded weighted means and metric-specific known counts until final output. Missing values remain unavailable. | [PR #772](https://github.com/bartytime4life/MEGALODON/pull/772), [PR #773](https://github.com/bartytime4life/MEGALODON/pull/773), [telemetry](megalodon/host_telemetry.py), [reporting](megalodon/reporting.py), [telemetry tests](tests/test_host_telemetry.py), [report tests](tests/test_reporting.py) |
+| Guided HUD | A current-state recommendation opens existing evidence or configuration views. Sensor-context observations route to connection context, separately from admitted Findings. Connection-summary mode does not require packet capture. Stale, paused and empty states remain explicit; AI is optional. | [PR #774](https://github.com/bartytime4life/MEGALODON/pull/774), [operations presentation](megalodon/dashboard_operations.py), [guidance tests](tests/test_dashboard_guided_overview.py) |
+| Asynchronous status | Reference searches and device reviews use query/selection revisions, including A→B→A reselection. Failed support-status reads clear current capture/model summary claims. Disabled learning is labeled paused; polling preserves the guide's focusable Refresh control. | [intelligence client](megalodon/dashboard_intelligence.py), [support client](megalodon/dashboard_support_config.py), [intelligence tests](tests/test_dashboard_intelligence_ui.py), [support UI tests](tests/test_dashboard_support_config_ui.py), [navigation tests](tests/test_dashboard_boundaries.py) |
+
+Guide links and observation refreshes do not start capture, a sensor, a model,
+inference or a host action. Existing protected controls retain their own
+authorization. Sensor labels, returned findings and resource measurements are
+different evidence units; none is a risk score or proof of protection. See
+[recording/report arithmetic](docs/efficient-recording-reports.md#report-evidence-and-limits),
+[exact comparison method](docs/security-knowledge.md#exact-comparison-arithmetic-and-indexed-history)
+and the [HUD operator checks](docs/dashboard-operations.md).
+
+The canonical Qwen record remains `UNBOUND / NOT_RECORDED`; the
+[release fence](docs/qwen-runtime-unbound.md) refuses operational generation for
+every model family. Explicit bounded catalog/selection and the fixed response
+diagnostic are separate exceptions, not operational inference. Source improvements,
+candidate tests, rendered synthetic fixtures and a merged PR do not complete
+native producer/model qualification, installed-host acceptance or operator
+approval.
 
 
 ## Explicit local executable inspection — November 4, 2026
@@ -580,7 +610,10 @@ server is bound to `127.0.0.1`. Missing, repeated, foreign, non-canonical, and
 wrong-port values fail with a fixed `400` response before route handling or
 SQLite access. This is a DNS-rebinding defense, not remote authentication.
 
-The dashboard exposes only:
+The stored-telemetry reader and selected HUD extensions expose the fixed routes
+below. The [complete current HTTP inventory](docs/dashboard-http-contract.md)
+also defines the separately protected HUD configuration, inspection, model
+maintenance and response routes; the original reader is not a host-action API.
 
 - `GET /` — static local dashboard;
 - `GET /assets/dashboard.css` and `GET /assets/dashboard.js` — same-origin,
@@ -606,6 +639,13 @@ The dashboard exposes only:
   explicit `management.enabled` and `management.authorization` metadata; no
   secret. It uses the same explicit-check header and remains available without
   tool-management opt-in;
+- `GET /api/install/token` — guarded HUD session check with no query, exactly
+  one `X-Megalodon-Check: 1`, and Origin absent or exactly matching the admitted
+  HTTP Host. Existing Host/sign-in checks, a configured support service and
+  non-root Linux management identity precede the response. Returns
+  `megalodon-tool-session-v1`, `enabled`, and the per-launch token only when tool
+  management is enabled; otherwise the token is null. Invalid checks return
+  403. This read starts no install/start job and grants no new capability;
 - `POST /api/install` — explicit tool-management opt-in, non-root Linux identity,
   exactly one matching `X-Megalodon-Install-Token` and `X-Megalodon-Install: 1`,
   exact Origin/Host, JSON content type, no transfer/content encoding, and one

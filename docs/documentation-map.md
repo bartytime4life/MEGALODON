@@ -1,5 +1,35 @@
 # Complete documentation catalog
 
+**190 Markdown documents accounted for.** Current inventory basis:
+[`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b)
+(November 11, 2026, America/Chicago), plus this documentation candidate.
+Every tracked or non-ignored new Markdown path is listed below, including
+maintained guides, versioned contracts, proposals, templates and dated records.
+See [current state](current-state.md#november-11-source-orientation) and the
+[refresh scope and validation](documentation-refresh-2026-11-11.md).
+
+## November 11 reconciliation
+
+These entries complete the current inventory. Their presence in this catalog
+does not change the acceptance state or dates of their contents.
+
+| Document | Repository path |
+| --- | --- |
+| [Documentation refresh — November 11, 2026](documentation-refresh-2026-11-11.md) | `docs/documentation-refresh-2026-11-11.md` |
+| [Exact Zeek producer qualification](../contracts/zeek-conn-log/v1/qualification/README.md) | `contracts/zeek-conn-log/v1/qualification/README.md` |
+| [Independent file-inspection review — November 4, 2026](file-inspection-independent-review-2026-11-04.md) | `docs/file-inspection-independent-review-2026-11-04.md` |
+| [Layered activity review](layered-activity-review.md) | `docs/layered-activity-review.md` |
+| [Offline layered evaluation](layered-evaluation.md) | `docs/layered-evaluation.md` |
+| [Explicit Ollama response diagnostic](ollama-response-test.md) | `docs/ollama-response-test.md` |
+| [Pattern evidence provenance](pattern-evidence-provenance.md) | `docs/pattern-evidence-provenance.md` |
+| [Qwen offline corpus](qwen-offline-corpus.md) | `docs/qwen-offline-corpus.md` |
+| [UNBOUND operational generation fence](qwen-runtime-unbound.md) | `docs/qwen-runtime-unbound.md` |
+| [Stage 0 package projection parity](stage0-package-parity.md) | `docs/stage0-package-parity.md` |
+| [Startup and saved model preferences](startup-and-model-preferences.md) | `docs/startup-and-model-preferences.md` |
+| [Suricata netmask example](../examples/suricata-netmask/README.md) | `examples/suricata-netmask/README.md` |
+
+## Historical October 27 catalog basis
+
 **174 Markdown documents accounted for.** Basis: source
 `main@7c912322b12fe40fbe92de79b32fdc678054a3da` (October 27, 2026,
 America/Chicago), plus this documentation candidate. The inventory includes
@@ -9,7 +39,7 @@ fixture notes and visual provenance; generated caches are excluded.
 The October 22 count and checks remain in their dated records. This catalog
 is an inventory, not a manual audit or operational acceptance of every claim.
 Use [current state](current-state.md) for the latest reading and
-[validation scope](documentation-refresh-2026-10-27.md) for this pass.
+[validation scope](documentation-refresh-2026-10-27.md) for that pass.
 
 [Field guide](README.md) · [Visual Wiki](wiki/README.md) ·
 [Three investigation journeys](wiki/investigation-journeys.md)

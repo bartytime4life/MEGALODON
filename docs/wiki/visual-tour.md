@@ -17,6 +17,26 @@ or [review host changes](investigation-journeys.md#3-did-a-host-change-make-reco
 The [current source reading](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md)
 separates this pass from the historical evidence below.
 
+## Current navigation beyond these captures
+
+At source [`418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),
+the HUD's **Your next step** panel precedes tool inventory, metrics and the
+atlas. It suggests a read-only destination from current observations while
+keeping **Review findings**, **Explore connections** and **Open reports**
+available. Sensor alert context opens in the connection lens; it is separate
+from the saved Findings queue. **Refresh observations** reads status and
+**Resume view** resumes display polling. Neither starts capture.
+
+Supporting-app tiles are closed under **Supporting apps · optional tools and
+status details**; Start and its feedback remain visible. Setup groups controls
+into **Overview**, **Traffic**, **Local AI**, **Apps**, **Storage** and **Advanced**.
+IANA lookups remain under **Evidence → Reference Library**. AI is optional,
+and **Local learning paused** stays distinct from saved reviews or a current
+model response. [Operator navigation](operator-guide.md).
+
+The images below retain their original bytes and older UI. This documentation
+update adds no current-head screenshots or new browser-acceptance claim.
+
 ## Understand the signal. Inspect the evidence.
 
 Deep blue surfaces, cyan highlights and restrained amber accents connect the
@@ -77,8 +97,8 @@ source and test assertions; their existence is not an exact-head test result.
 
 | Surface | What the operator reads | What remains separate |
 | --- | --- | --- |
-| HUD | Atlas, resources, source status and network directory | Geographic approximation and collection completeness |
-| Findings | Fixed-rule findings and their event/run inspector | Advice, contextual reference hits and host observations |
+| HUD | Guided next step, connection context, atlas, resources and retained history | Sensor alert context, admitted Findings, geography and collection completeness |
+| Findings | Source-labelled saved findings and their evidence | Advice, raw sensor context, contextual reference hits and host observations |
 | Setup / Sensors | Installed tools, configured scope and workflow status | Presence, health and admitted data |
 | Host security | Lynis audit, AIDE changes and dated reference matches | Confirmed vulnerability, malware verdict or permission to act |
 | Reports / Evidence | Local reports and bounded retained records | Missing intervals and incompatible packet/flow units |

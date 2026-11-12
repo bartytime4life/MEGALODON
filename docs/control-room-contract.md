@@ -4,9 +4,40 @@
 
 OBSERVED initial main: `4971d85a2c56d932fda9053873a42985b4233371`, tree
 `efcb8f4e2d1d857196da8976503765f861e463b5` (2026-09-17).
-The current mission authorizes read-only HUD improvements, draft branches and
-the existing private reference Site. It does not authorize a merge or runtime
-release. Attached roadmaps are planning inputs, never runtime authority.
+The initial mission authorized read-only HUD improvements, draft branches and
+the existing private reference Site. That historical scope did not authorize a
+merge or runtime release. Attached roadmaps remain planning inputs, never runtime
+authority. The slices below preserve their original contracts and evidence pins.
+
+## Current guided HUD and review ownership
+
+At merged source `418fa54474f3f77d0758e94aab5735a516d8c43b`, the HUD begins with
+**Your next step**. Recommendations use the validated operations snapshot and
+its freshness, capture state and recording mode. Sensor-summary observations
+can be current independently of packet capture; raw returned sensor context is
+not promoted into the retained Findings queue. Guidance reads existing local
+observations or navigates to an existing view, without adding an endpoint or
+starting capture, a sensor or model inference.
+
+Routine reads preserve the Refresh control's native focus and stable label.
+While a read is pending, `aria-disabled` communicates the wait and the existing
+guard prevents a duplicate request. **Resume view** resumes display refresh only.
+**Explore connections** fragments, repeated activation and browser history use
+the same closed workspace mapping as the other navigation links.
+
+Setup groups controls under Overview, Traffic, Local AI, Apps, Storage and
+Advanced. Public knowledge search lives under Local AI; the separate bundled
+IANA registration lookup remains in Evidence. Search and device-review responses
+and failures are bound to the current query/address plus a view revision.
+An unavailable Setup read clears current capture/AI summaries while preserving
+the saved model label and independently sourced app-presence state.
+
+The current [Findings workbench](findings-review.md) reads retained detector,
+sensor and measured-pattern observations. The traffic-v1 evidence inspector and
+automatic case view documented below remain legacy projection contracts; their
+existence does not describe the primary Findings workbench or admit sensor
+context from the live connection lens. Source, synthetic browser, installed-host
+and independent acceptance evidence remain distinct.
 
 ## Traffic projection v1
 
@@ -129,9 +160,9 @@ WCAG conformance or installed-host acceptance is implied.
 
 ## App capability truth matrix (third reviewed slice)
 
-The Apps view keeps four different claims separate for every supported tool.
+This capability-matrix contract keeps four different claims separate for every supported tool.
 **Presence** in the Apps matrix is the startup PATH observation returned by the
-bounded readiness snapshot. Home's **Check this computer** and software list
+bounded readiness snapshot. **Setup → Overview → Check now** and the software list
 show separately timestamped, explicitly refreshed observations. In the matrix,
 green means an executable candidate was found, red means
 none was found on the checked PATH, and gray means presence was not checked.

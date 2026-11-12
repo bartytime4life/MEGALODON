@@ -2,18 +2,26 @@
 
 MEGALODON is useful when a person needs to understand a local observation and
 retain the evidence behind a decision. These walkthroughs use implemented
-features at [`2cb7060`](https://github.com/bartytime4life/MEGALODON/commit/2cb706039724d9ea0bda09cbd3c17698b15ba55c); they are illustrative tasks,
+features, with navigation reviewed at [`418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b).
+Older linked contracts retain their source pins. These are illustrative tasks,
 not claims about customers, incident outcomes or production accuracy.
 
 ## Investigate an unexpected connection
 
-1. Inspect the selected source, interface, time window and collection state.
-2. Use the atlas and its text roster for observed peers. Unmapped peers remain
+1. Start with **HUD → Your next step** and inspect source, interface, time window
+   and collection state. Refresh reads status; it does not start collection.
+2. Select **Explore connections** for the connection lens and text roster. Unmapped peers remain
    visible; IP geography is approximate and does not show a physical route.
 3. Review own-account **Programs on the network** for available executable and
    socket context. Other accounts, privileges and read limits create gaps.
 4. If a qualified finding exists, open its linked event and ingestion receipt.
    Read all three clocks and the source qualification before making a report.
+
+**Review sensor observations** opens returned sensor alert context in the
+connection lens. That context is separate from the saved Findings queue.
+Packet capture can be stopped while sensor connection summaries remain useful;
+an absence of returned alert labels establishes neither safety nor complete
+coverage.
 
 An executable hash identifies bytes, not reputation. A temporary/deleted program
 or unfamiliar destination can come from legitimate updates or applications.
@@ -52,6 +60,8 @@ Reports combine retained evidence within their source-specific windows. Check
 gaps, exclusions, units and timestamps before saving or printing. Keep model
 commentary visibly separate from deterministic findings. A report can explain
 what was observed and what needs review; it cannot make missing evidence appear.
+Use **HUD → Open reports** to read existing reports; generating a report remains
+the separate **Make report now** action.
 
 Exports can contain private operational information. Inspect the finished export
 before sharing, and never commit real reports, captures, host paths or tokens
@@ -74,12 +84,16 @@ separately authorized recovery process—not an automatic rollback recommendatio
 
 ## Explore local AI without delegating authority
 
-Choose a reviewed installed model through Setup, inspect provider/response
+Choose a reviewed installed model through **Setup → Local AI**, inspect provider/response
 status and ask for an explanation of the bounded selected evidence. Treat the
 answer as advice. Verify important claims against the linked records and use
 the existing operator workflow only after its separate authorization steps.
 Model availability does not complete canonical Qwen binding, provenance,
 containment or representative evaluation. [Local AI](integrations-and-qwen.md).
+
+Recorded facts remain available without a model. **Local learning paused** means
+no new observations are being learned; saved reviews remain distinct from that
+state. **Knowledge and automatic review** holds the related settings.
 
 [Quick start](quick-start.md) · [Technical deep dive](technical-deep-dive.md) ·
 [Roadmap and limits](roadmap-and-limits.md)

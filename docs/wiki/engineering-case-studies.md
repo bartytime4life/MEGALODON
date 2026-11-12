@@ -1,6 +1,6 @@
 # Engineering Case Studies
 
-> **Historical case studies:** The four studies retain their October 11 source revision and recorded measurement scope. [Current documentation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) and [the new visual tour](visual-tour.md) cover later additions without rewriting these results.
+> **Historical case studies:** The first four studies retain their October 11 source revision and recorded measurement scope. The November update below describes later source repairs separately. [Current documentation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation) and [the visual tour](visual-tour.md) provide the current orientation without rewriting historical results.
 
 Four examples show how MEGALODON connects product choices to implementation and evidence. Source links below are pinned to `4da7fae0d8df2d8cd6b3ff93964055f7e14972bb`. Linked tests describe regression protection; their existence alone is not a claim that every check passed or that a host was accepted.
 
@@ -66,5 +66,16 @@ Temporary HUD containment requires an observed public endpoint, preview, separat
 **Acceptance boundary:** `config/model-bindings/qwen.unbound.json` remains **UNBOUND** with no recorded owner model decision. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) is open. HUD runtime model selection and working provider code do not establish canonical Airlock acceptance, native containment, or representative model quality. [#530–#532](https://github.com/bartytime4life/MEGALODON/pull/530) add privacy-minimized evaluation and outcome-consistency contracts; they do not supply an executed production corpus.
 
 **Inspect:** [Model selection](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/local-model-selection.md) · [Advisory adapter](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/megalodon/qwen_advisory.py) · [Canonical binding](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/config/model-bindings/qwen.unbound.json) · [Evaluation contract](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/qwen-adversarial-evaluation.md)
+
+## November update: arithmetic and guidance that preserve evidence meaning
+
+At source [`418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), later changes address errors that can make an otherwise useful interface misleading:
+
+- [#771](https://github.com/bartytime4life/MEGALODON/pull/771) separates exact share-threshold admission from rounded display and indexes historical groups once per hourly call. The saved largest synthetic case ran about 4.8 times faster, with increased temporary allocation and a small-history overhead; it is not a production-capacity result.
+- [#772](https://github.com/bartytime4life/MEGALODON/pull/772) sums integer CPU ticks before interval validation and rounding. [#773](https://github.com/bartytime4life/MEGALODON/pull/773) retains unrounded weighted report means through compaction. Missing measurements remain unavailable.
+- [#769](https://github.com/bartytime4life/MEGALODON/pull/769) and [#774](https://github.com/bartytime4life/MEGALODON/pull/774) bind asynchronous results to the current view revision. Late report, search or device responses cannot substitute earlier evidence after the user changes context.
+- [#774](https://github.com/bartytime4life/MEGALODON/pull/774) adds a mode-aware next step, keeps optional tools behind a disclosure, distinguishes sensor context from admitted Findings, and preserves keyboard focus during polling. Its navigation opens existing views; it does not authorize capture or AI.
+
+**Inspect:** [Current technical contracts and regression links](technical-deep-dive.md#current-arithmetic-and-view-identity) · [Benchmark bytes](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/benchmarks/pattern-comparison-20261111.json) · [Validation scope](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-refresh-2026-11-11.md). Candidate checks, merged source, installed behavior and native/model acceptance remain separate proof lanes.
 
 [Builder profile](builder-profile.md) · [Visual tour](visual-tour.md) · [Evidence index](evidence-index.md)

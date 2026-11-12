@@ -9,7 +9,9 @@ Use **Start background tools** in the local HUD, or:
 The script can start the installed HUD user service, then invokes the same
 fixed background workflow as the button. `--check` reads the latest startup
 result. Normal startup never opens Wireshark, Zenmap or ClamTk windows. Those
-remain explicit optional controls under Advanced in Setup. Sensors shows current
+remain explicit optional controls under **Setup → Advanced**. The HUD's **Your
+next step** links only open evidence/settings views; **Refresh observations**
+reads status without starting tools. Sensors shows current
 workflow status; a saved inventory result is distinct from an active feed.
 
 Sensors opens with an activity overview: **All tools**, **Needs review**,
@@ -58,8 +60,10 @@ install a service or timer, as described in [host security](host-security.md).
 
 ## Status dots
 
-A slim **Apps** rail under the HUD title bar and the **Supporting apps on this
-PC** tiles inside Background tools show one dot per tool above. They repaint from
+A slim **Apps** rail under the HUD title bar and the tiles inside the closed
+**Supporting apps · optional tools and status details** disclosure show one dot
+per tool above. Expand the disclosure when needed; **Start background tools**
+and its result remain visible outside it. The dots repaint from
 the same local tool heartbeat as Setup (once a minute while the page is visible,
 or immediately with the ↻ button) and never start, stop or query a tool
 themselves.
@@ -76,12 +80,12 @@ A dot reports presence, not health or accepted data. Zeek's process can be
 absent between its short samples even while the background sampler is scheduled;
 use Sensors for the latest sample state and time. Select a dot or tile to open
 that tool's card
-in **Setup → Apps & connections**, where the same dots appear beside each name
+in **Setup → Apps → Installed apps**, where the same dots appear beside each name
 and filter buttons narrow the list to running, stopped, or missing tools.
 
 ## Tools installed in another directory
 
-In **Setup → Configure apps → Installed tool directories**, choose a fixed tool
+In **Setup → Advanced → Installed tool directories**, choose a fixed tool
 and enter the absolute directory containing its executable. The saved directory
 is checked instead of automatic locations for that tool. Clearing the field
 restores automatic search. This setting verifies presence only; it does not
@@ -92,8 +96,9 @@ and fixed adapter paths retain their separate setup requirements.
 
 ## First-time service configuration
 
-Configure apps offers **Configure local Qwen**, **Configure Suricata**, capture
-permissions and interface selection. Equivalent fixed commands:
+Use **Setup → Local AI** for the saved model and Ollama configuration. **Setup →
+Traffic** holds capture permissions, interface selection and **Background sensors ·
+Zeek and Suricata**. Equivalent fixed commands:
 
 ```bash
 ./scripts/configure-support-apps.sh qwen_configure
@@ -133,6 +138,10 @@ include timestamps no older than two minutes. Partial rows, stale/future records
 and symlink logs are excluded. Consecutive windows overlap: do not sum them.
 Zero alert records in this window does not establish no threats. This live
 context is separate from the strict completed-file alert admission workflow.
+The HUD labels these returned records **Sensor observations** and routes their
+review to connection context. The separate **Review findings** link opens the
+saved Findings queue; the two views need not contain the same records. Current
+sensor connection summaries can be inspected while packet capture is stopped.
 Stopping HUD monitoring stops its summary reader, not the system Suricata service.
 A stop always disables and persists the background opt-in, even when the
 current capture session reports that its shutdown has not yet completed; that
@@ -145,7 +154,7 @@ capture processes. The resource gauge includes recognized sensor/model processes
 its coverage limits remain visible.
 
 `GET /api/support-workflows` requires the local Host/sign-in boundary and one
-`X-Megalodon-Check: 1` header. It returns ten fixed tool rows with state, source
+`X-Megalodon-Check: 1` header. It returns twelve fixed tool rows with state, source
 time and at most six metrics each, and performs no actions or model requests.
 User-triggered fixed POST actions retain their existing Origin and nonce checks.
 No new signup, remote telemetry upload, or automatic geography opt-in is added.

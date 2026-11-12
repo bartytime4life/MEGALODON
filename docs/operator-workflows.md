@@ -16,6 +16,18 @@ temporary reviewed-checkout launch uses `./scripts/start-local.sh`. The local
 loopback HUD can open before evidence exists and reads configured stores through
 bounded, read-only projections.
 
+The HUD's **Your next step** recommends an inspection path from current local
+observations. **Review findings**, **Explore connections** and **Open reports**
+open existing views; status refresh/resume controls affect display polling.
+Returned sensor alert context routes to the connection lens, separate from the
+saved Findings queue. Sensor summaries need not require packet capture to be
+running. Unknown, stale and empty states retain their coverage limits.
+
+Setup groups controls into **Overview**, **Traffic**, **Local AI**, **Apps**,
+**Storage** and **Advanced**. Read the [GUI quick start](gui-quick-start.md) for
+current category paths, optional tool disclosure and manual **Evidence →
+Reference Library** lookup. AI is optional for inspecting facts and reports.
+
 Opening a browser view does not authorize collection. A running installed HUD
 can resume collectors from saved monitoring settings, and its fixed companion
 worker has separate local defaults. Inspect [background workflows](background-tools.md)
@@ -60,6 +72,10 @@ write the core audit store, or grant authority to analyze a capture. Installed
 tool compatibility and operational containment remain separate evidence.
 
 ## Suricata review
+
+This section describes the separately selected startup snapshot, not the HUD's
+recent live sensor context or managed alert-intake workflow. See
+[background tools](background-tools.md) for those current source distinctions.
 
 **Authority:** [dashboard operations](dashboard-operations.md#inspect-separately-stored-suricata-evidence)
 and the [Suricata evidence projection](suricata-evidence-projection.md).

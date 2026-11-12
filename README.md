@@ -57,17 +57,18 @@ It contains documentation-only addresses.
 
 ## What works today
 
-**Source orientation: [`main@d03bc43`](https://github.com/bartytime4life/MEGALODON/commit/d03bc43d13a9f030cfcff7eb8beaea5fc318abae), November 9, 2026.**
-[Current changes and exact boundaries](docs/current-state.md#november-9-source-orientation)
-cover file inspection, model-library maintenance and the partial Stage 0 fence.
+**Source orientation: [`main@418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026 (America/Chicago).**
+[Current changes and exact boundaries](docs/current-state.md#november-11-source-orientation)
+cover the guided HUD, reliable searches and report selection, exact comparison
+arithmetic, file inspection, model maintenance and the partial Stage 0 fence.
 Code presence and hosted checks do not establish the configuration, accuracy
 or recovery capability of a particular installed PC.
 
 | Capability | Implemented behavior | Meaningful boundary |
 | --- | --- | --- |
 | Metadata analysis | Typed admission, three fixed heuristics, private SQLite audit | Patterns for review; no payload inspection or malware verdict |
-| Visual investigation | HUD, Findings, Sensors, Setup, Reports, Evidence, Help | Source and time windows limit what can be concluded |
-| History and reporting | Segmented evidence, compact summaries, local visual reports and fixed schedules | Missing intervals remain missing; packet and flow units stay separate |
+| Visual investigation | Guided HUD next step, direct evidence routes, optional app disclosure; Findings, Sensors, Setup, Reports, Evidence and Help | Sensor alert context is separate from saved Findings; source and time windows limit conclusions |
+| History and reporting | Segmented evidence, indexed baseline comparisons, selection-bound visual reports and fixed schedules | Missing intervals remain missing; packet and flow units stay separate; resource averages round at the final display step |
 | Optional sources | TShark, closed Zeek logs, strict Suricata admission and separate background observations | Importer, installed tool and qualified producer are distinct |
 | Host review | Lynis, AIDE, hardening posture, persistence, passive gateway review and own-account program/socket review | Scoped observations; root-only and unobserved activity can be missed |
 | File inspection | Explicit signed-in submission, bounded structural and identification clues, partial-coverage reports | Optional confined runtime; no launch, unpacking or malware/safety verdict |
@@ -85,6 +86,14 @@ explain the newer controls.
 
 Read [the source-linked capability map](docs/current-state.md) for exact paths,
 check identities and open producer/model/platform gates.
+
+Start in **HUD → Your next step**. It recommends a read-only route from the
+current validated snapshot: refresh unavailable observations, review packet
+capture settings, inspect sensor summaries, or explore connection context.
+Saved Findings and Reports remain accessible when capture is stopped. **Refresh
+observations** reads the local snapshot; **Resume view** resumes dashboard refresh.
+Neither starts a collector. Expand **Supporting apps · optional tools and status
+details** when you need the inventory. [Guided workflow](docs/dashboard-operations.md#read-the-interface-in-evidence-order).
 
 ## Open it on Linux
 
@@ -200,7 +209,7 @@ causality and conflicts remain unresolved. The separate
 
 At the historical **October 27 source basis**, CI, CodeQL and the Qwen zero-effect
 workflow succeeded. Its Linux browser run was **cancelled**, so it supplies no
-browser-pass claim. These results do not describe the November 9 source pin.
+browser-pass claim. These results do not describe the November 11 source pin.
 [Exact run IDs and limits](docs/current-state.md#october-27-source-head-checks)
 remain separate from checks on this documentation candidate or an installed PC.
 Native platform parity, operational detection accuracy and independent model
@@ -210,8 +219,9 @@ it is not a promise of comprehensive malware elimination.
 Visuals contain public source constants and a historical synthetic capture.
 [Still images and provenance](assets/docs/README.md) are available for every animation.
 No private coordination content or workstation observations are used as public
-examples. [This pass: scope and validation](docs/documentation-refresh-2026-10-27.md).
-The [October 22 record](docs/documentation-polish-2026-10-22.md) retains its dated meaning.
+examples. [Current documentation scope and validation](docs/documentation-refresh-2026-11-11.md).
+The [October 27](docs/documentation-refresh-2026-10-27.md) and
+[October 22](docs/documentation-polish-2026-10-22.md) records retain their dated meaning.
 
 <details>
 <summary><strong>Detailed operator and CLI reference</strong> — installation, safety defaults, recipes, contracts and platform notes</summary>
@@ -224,7 +234,7 @@ local time; storage defaults to 14 days / 20 GiB. Historical chart pages and
 reports span retained segments and verified compact summaries. Packet counts,
 sensor flow observations and interface rates remain separate.
 
-**Setup → AI knowledge & patterns** controls the local security library and
+**Setup → Local AI → Knowledge and automatic review** controls the local security library and
 review assistance. The offline starter contains attributed ATT&CK, ATLAS,
 D3FEND, OWASP GenAI and CISA KEV references. Approved public sources are checked
 at 8 AM local time; private observations remain on this PC. Hourly baselines
@@ -298,9 +308,10 @@ Nmap, ClamAV and osquery use the current HUD's existing collection scope.
 Missing tools are skipped and each result is shown. See
 [support startup](docs/local-pc-setup.md#start-support-apps).
 
-The **Setup** tab (also reached through **Configure apps**) provides capture permissions,
-interface selection, live HUD traffic and managed Wireshark start/stop controls,
-saved Nmap and ClamAV scope, signature updates and companion checks. The same
+**Setup → Traffic** provides capture permissions, interface selection and
+managed Wireshark start/stop controls. **Setup → Apps** holds installed-tool
+controls, saved Nmap/ClamAV scope, signature updates and companion checks; model
+preparation is in **Local AI**. The HUD's **Setup** button opens this workspace. The same
 actions are available through `./scripts/configure-support-apps.sh --help`.
 See [local support configuration](docs/support-configuration.md) for the fixed
 actions, per-user permissions and capture limits.
@@ -347,18 +358,19 @@ For a temporary source launch, run:
 ./scripts/start-local.sh
 ```
 
-Open the printed localhost address and go to **Setup → Data and tools**. Each
+Open the printed localhost address and go to **Setup → Apps → Installed apps**. Each
 optional tool has a status light next to its name: green means presence observed,
 amber means setup incomplete, red means not found, and grey means unknown or
 stale. These observations do not prove health, a data connection, or configured
 AI readiness. The lights refresh in the background while
 the tab is visible. Observation is the default; guides and terminal commands
 remain available. On Linux, deliberately launch `hud --enable-tool-management`
-as your ordinary user and paste the launch token from its terminal into
-**Authorize Install, Start and Open** to enable fixed **Install**, **Start service**
-and **Open desktop app** actions. Each action needs confirmation; system package
+as your ordinary user to enable fixed **Install**, **Start service** and
+**Open desktop app** actions. The enabled HUD obtains its per-launch session
+token through a guarded same-origin request; manual token entry is an advanced
+fallback. Each action needs confirmation; system package
 installs and service starts also use the computer's password prompt
-([details](docs/tool-heartbeat.md)). **Check this computer** also reports the
+([details](docs/tool-heartbeat.md)). **Setup → Overview → This computer** reports the
 running environment and selected data file. Use **Help** to find the next step.
 Keep the
 terminal open; **Ctrl+C** stops the HUD. The launcher selects an available
@@ -367,13 +379,13 @@ packages, create sample data, start capture, or enable automatic startup.
 
 **Apps → Start installed services** shows the fixed local service-start controls
 for Suricata and Ollama when the HUD observes them as
-installed. The same launch opt-in, token and confirmation apply there. Other
+installed. The same enabled session and confirmation apply there. Other
 app cards retain their setup guidance or explicit web-console navigation;
 opening a console does not start its service or connect its data.
 
 **Apps → Open desktop support apps** offers fixed Wireshark, Zenmap and ClamTk
 launch buttons when those Linux GUI apps and a desktop session are available.
-The same per-launch opt-in, token and confirmation apply. These buttons open
+The same enabled session and confirmation apply. These buttons open
 the GUI only; they do not start a scan, capture, sensor or service, and MEGALODON
 does not verify that a window appeared.
 
@@ -389,34 +401,39 @@ environment selection, data choices and the optional terminal preflight
 
 ## Safety defaults
 
-The [offline anomaly pipeline](docs/anomaly-pipeline.md) is available with
-optional, explicitly enabled Qwen explanations. Its [result-integrity checks](docs/advisory-result-integrity.md)
+The [offline anomaly pipeline](docs/anomaly-pipeline.md) preserves deterministic
+evidence; operational model explanations remain subject to the
+[UNBOUND release fence](docs/qwen-runtime-unbound.md). Its [result-integrity checks](docs/advisory-result-integrity.md)
 reject non-normal completions and misleading text controls, while preserving
 deterministic evidence on malformed AI results. Anomaly dashboard display,
 installed-model acceptance and measured detection accuracy remain separate gates.
 
-Choose an installed Ollama model in **Setup → Local AI** for HUD analysis and
-background collector advice. See [model selection](docs/local-model-selection.md)
+Choose an installed Ollama model in **Setup → Local AI** for saved preparation
+and the separate fixed response diagnostic. Selection does not activate
+operational generation. See [model selection](docs/local-model-selection.md)
 for verification, compute options and local-only limits.
 
-The opt-in [local AI control plane](docs/ai-control-plane.md) adds fixed
-metadata tools, explicit model health, a bounded report action and auditable
-firewall proposals. It is disabled by default and does not enable live
-firewall application. The [2026-09-21 host observation](docs/ai-host-observation-2026-09-21.md)
-records the operator's current Ollama exposure and GPU uncertainty.
+The retained [local AI control plane](docs/ai-control-plane.md) defines fixed
+metadata tools, bounded reports and auditable proposals. Explicit tools retain
+their separately documented scope; ordinary AI questions and operational
+generation refuse under the UNBOUND fence before broker dispatch or inference
+receipts. Opting in does not lift that fence or enable firewall application.
+The [2026-09-21 host observation](docs/ai-host-observation-2026-09-21.md)
+records only that dated host's Ollama exposure and GPU uncertainty.
 
 - observe only: a fresh configuration does not mutate the firewall;
 - metadata only: packet payloads and payload-derived hashes are not represented;
 - closed event extensions: `PacketEvent.metadata` is limited to reviewed adapter
   provenance and cannot carry arbitrary payload-like fields;
-- local only: the dashboard defaults to `127.0.0.1:8797`; its optional AI
-  question POST requires an ephemeral operator token and can write only the
-  separate AI receipt ledger and bounded report snapshots;
+- local only: the dashboard defaults to `127.0.0.1:8797`; authorized AI-question
+  requests currently return 503 under UNBOUND before reading the body or creating
+  the audit store. Existing HTTP authentication runs before that refusal;
 - isolated dashboard storage: on POSIX, reading telemetry requires an existing compatible private
   database opened with SQLite `mode=ro`, `query_only`, and a deny-by-default SQL
   authorizer; it cannot create or migrate the audit database;
 - separate tool management: disabled by default, Linux/non-root only, and gated
-  by explicit launch opt-in plus a separate per-launch operator token. Fixed
+  by an enabled launch plus a separate per-launch session token obtained through
+  the guarded local page. Fixed
   package/model downloads and service starts can change the host; package
   installation can start services. These actions do not expand telemetry or
   firewall authority;
@@ -565,9 +582,9 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Suricata durable evidence | Closed transaction/replay/receipt and reconciliation contracts; strict immutable-publication validation; fixed 512 MiB capacity policy with no freelist credit; explicit create-only exact-schema store; atomic run/alert/receipt commit; exact commit readback; and explicit read-only unknown-commit classification. No existing-store migration, reconciliation command, automatic consumer startup, watcher, or retention; the read-only view below is separate |
 | Suricata evidence view | Explicit `dashboard --suricata-db /absolute/private/store.sqlite3` loads a separate bounded read-only startup snapshot. Shows source-qualified recent runs and external alerts; unavailable stays distinct from empty. No polling of this store, consumer invocation, sensor health inference, or response control. See [projection contract](docs/suricata-evidence-projection.md) |
 | Automation design | Stage 0 normative-draft JSON Schema, accepted/rejected fixtures, and deterministic schema tests, plus a bounded read-only RRULE parser and `automation-preview` CLI with explicit DST classification. The separate [local companion worker](docs/companion-automation.md) runs three fixed, host-scoped inventory jobs by default in `hud` mode; the general automation contract has no scheduler, ledger, persistence, model call, or executor |
-| Local Qwen advisory | The original run-count policy is a manual Python API. The [offline anomaly command](docs/anomaly-triage.md), [companion worker](docs/companion-automation.md), and [HUD IP inspector](docs/visual-operations-defense.md) request bounded explanations through the digest-pinned local provider. Qwen has no command, target, detector, or response authority; the operator selects fixed local workflows |
+| Local Qwen advisory | Original run-count, [offline anomaly](docs/anomaly-triage.md), [companion](docs/companion-automation.md) and [IP-inspector](docs/visual-operations-defense.md) explanation policies remain in source. The current [UNBOUND fence](docs/qwen-runtime-unbound.md) refuses operational generation for every model family; deterministic evidence remains available. Saved selection and the explicit fixed READY diagnostic are separate preparation workflows and grant no response authority |
 | Qwen provider posture (read-only) | `megalodon.provider_containment.qwen_provider_posture()` observes, via `/proc` only, whether the fixed loopback destination is bound, whether it is also reachable beyond loopback, and (permission-gated, best-effort) its owning UID/PID/cgroup/net-namespace; never contacts the provider, never gates or feeds back into an advisory request, and reports denial/uncertainty honestly rather than guessing |
-| Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Qwen is off by default; evidence survives model denial/failure. Descriptive, uncalibrated candidates only |
+| Anomaly evidence | [One-shot baseline triage](docs/anomaly-pipeline.md) reports supported new ports and distribution shifts, abstaining on stale, incomplete or incompatible windows. Operational Qwen explanations remain UNBOUND; deterministic evidence does not require inference. Descriptive, uncalibrated candidates only |
 | Alert lifecycle contract | Draft projection, transition, outbox-intent, and receipt shapes with deterministic fixtures, plus a bounded in-memory decision engine (`megalodon/alert_lifecycle.py`) validated against those fixtures; no persistence, notifier, delivery adapter, credential path, or wiring into detection ingestion, storage, the dashboard, or the CLI |
 | SQLite backup/restore | A standalone contract engine plus explicit `database-backup` / `database-restore` commands using SQLite's online-backup API only, descriptor-safe admission, new destinations, bounded manifests, full integrity/foreign-key verification, and one closed terminal receipt; focused Linux tests cover real lock, SIGINT, destination-race, and per-file-limit failures, without adding dashboard/scheduler wiring, retention, activation, or operational acceptance |
 | SIEM export projection | Pure ECS 9.5.0 / OCSF 1.9.0 record projection plus a bounded new-file-only writer (`megalodon/siem_export.py`), each non-standard value carried in that standard's own vendor-extension mechanism; no `event.original`, network delivery, credential, dashboard, or storage wiring |
@@ -582,7 +599,7 @@ Windows live capture; manual saved-capture analysis is a different workflow.
 | Python `venv` and `pip` | Isolated editable installation | Recommended |
 | SQLite (`sqlite3`) | Local audit database | Included in the Python standard library; the dashboard refuses SQLite older than 3.22.0 because read-only WAL support is required |
 | Scapy `>=2.5,<3` | Optional Linux live metadata capture | Install with the `capture` extra only for that workflow |
-| Qwen through a local Ollama provider | Optional original advisory plus separate opt-in broker | Operator-installed and separately run. The original advisory and anomaly policies remain closed; the draft [AI control plane](docs/ai-control-plane.md) adds fixed tools and private receipts but no arbitrary command or firewall apply. [`docs/qwen-provider-hardening.md`](docs/qwen-provider-hardening.md) remains an operator-applied host recipe. |
+| Qwen through a local Ollama provider | Optional preparation and the explicit fixed READY diagnostic | Operator-installed and separately run. Operational generation and AI questions remain [UNBOUND](docs/qwen-runtime-unbound.md) across model families. The fixed diagnostic may load the saved model but sends no telemetry and does not accept it. [`docs/qwen-provider-hardening.md`](docs/qwen-provider-hardening.md) remains an operator-applied host recipe. |
 | TShark at `/usr/bin/tshark` | Optional Linux offline `.pcap`/`.pcapng` adapter | Reviewed system package; not a Python dependency or a portable executable-path setting |
 | Zeek | Optional offline `conn.log` producer and separate bounded background samples | The offline adapter never invokes Zeek. When background monitoring is enabled, the local HUD can run unprivileged, finite Zeek CLI samples; installation presence alone is not a live feed. |
 | Suricata | Optional external producer for the closed alert envelope | The Linux file reader and durable consumer never invoke or require the Suricata binary; they accept only the separately prepared contract envelope/publication |
@@ -1005,8 +1022,9 @@ local entry points and authority limits, and
 [visual HUD, summary export and uniform tool setup](docs/hud-workflow.md) for
 the local summary and `python -m megalodon.tool_setup` workflows.
 
-**Setup → Apps & connections** shows the startup executable-presence snapshot, official setup links,
-saved companion-console addresses and copy-only maintenance controls. The local
+**Setup → Apps → Installed apps** shows current presence observations, official setup links,
+saved companion-console addresses and explicit app actions. **Setup → Advanced →
+Software reference and publisher guides** retains the supporting reference material.
 Choose
 **View in HUD** on any app card to use its configured web console in the App
 viewer. Nothing loads until you choose it. If the app refuses embedding or needs
@@ -1460,12 +1478,20 @@ HUD's local HTTP page and API while it is running. AI and companion actions reta
 their separate operator tokens. Local password authentication is not a remote
 service security design; do not expose the server through proxies, tunnels or port
 forwarding. Firewall allowlist changes,
-and public-target policy changes require separate review. Live application is
-unsupported; any future restoration must satisfy the gate below.
+and public-target policy changes require separate review. Legacy CLI firewall
+application remains unsupported; the separately protected Linux HUD workflows
+have their own [operator and authorization boundary](docs/visual-operations-defense.md).
 
 ## Dashboard UI and API
 
-The current UI is a responsive dark-theme status view with:
+The current responsive dark-theme HUD starts with a state-derived next step,
+three read-only evidence routes and an expandable optional-app inventory.
+**Setup** uses Overview, Traffic, Local AI, Apps, Storage and Advanced categories.
+Reference results follow the submitted query; device reviews and report
+documents follow the current selection. Failed status reads show unavailable
+summaries, and disabled learning is labeled **Local learning paused**.
+
+The separate bounded stored-telemetry projection retains:
 
 - summary cards for stored events, detections, action records, and high/critical
   counts, with action records explicitly distinguished from live application;
@@ -1497,10 +1523,14 @@ Key read routes (the complete list is in the dashboard contract in SPECIFICATION
 
 Responses use `Cache-Control: no-store`, self-only scripts and data requests, an
 HTTP(S) frame allowance for explicitly selected app consoles, opener/resource isolation headers,
-`X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`. The UI cannot
-start capture, run analysis, apply firewall actions, edit settings, choose a
-filesystem path, or browse local files. [Issue #7](https://github.com/bartytime4life/MEGALODON/issues/7)
-preserves the implementation and validation handoff.
+`X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`. These telemetry
+GET routes cannot perform host actions. The current Linux HUD separately offers
+protected configuration, explicit file inspection, model maintenance, bounded
+scans and temporary containment workflows. Each retains its own input,
+confirmation and authorization checks; navigation and refresh grant no action
+authority. See the [complete HTTP contract](docs/dashboard-http-contract.md).
+[Issue #7](https://github.com/bartytime4life/MEGALODON/issues/7) preserves the
+original stored-dashboard implementation handoff.
 
 ## Linux firewall boundary
 

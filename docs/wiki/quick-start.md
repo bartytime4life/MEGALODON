@@ -24,7 +24,24 @@ Use `./Start-MEGALODON.sh --check` for installation checks. A reviewed newer che
 
 Use the printed localhost address on the same PC. Follow the launch output for the service/foreground mode and stop instructions. Do not expose the HUD through a tunnel or remote listener.
 
-Start with **Setup** to inspect data/tool configuration and **Sensors** for observed tool status. **Start background tools** is an explicit collection/service workflow. It can start configured tools or ask for OS authorization; opening the HUD or viewing an installed-tool badge does not prove capture is running.
+Start with **HUD → Your next step**. **Refresh observations** reads the current
+local snapshot; it does not start capture. The fixed **Review findings**,
+**Explore connections** and **Open reports** links keep saved evidence within
+reach. **Review sensor observations** opens returned connection context, separate
+from the saved Findings queue. No returned labels and empty windows do not
+establish safety or complete coverage. AI is optional.
+
+**Setup** groups controls into **Overview**, **Traffic**, **Local AI**, **Apps**,
+**Storage** and **Advanced**. Use **Overview → This computer → Check now** for
+the environment/data check, **Traffic** to choose new collection scope, and
+**Apps → Installed apps** for installation/configuration controls. Manual IANA
+lookups live in **Evidence → Reference Library**.
+
+The HUD's optional app tiles are in **Supporting apps · optional tools and
+status details**. **Start background tools** remains visible outside that
+disclosure and is an explicit collection/service workflow. It can start
+configured tools or ask for OS authorization; opening the HUD or viewing an
+installed-tool badge does not prove capture is running.
 
 ## Learn with synthetic data
 

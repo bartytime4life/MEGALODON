@@ -20,6 +20,12 @@ cannot operate this PC. OSSEC and Zabbix are retired from current support.
 The static catalog contains twelve entries including the core, Lynis and AIDE.
 See [current state](current-state.md) for the documentation basis and open gates.
 
+Once the HUD opens, begin with **Your next step**. Its status read and evidence
+links do not start tools. Saved Findings and Reports remain available when
+capture is stopped. Returned **Sensor observations** open connection context;
+they are separate from the saved Findings queue. See the
+[GUI quick start](gui-quick-start.md) for current navigation and Setup categories.
+
 ## Recommended: install for this user
 
 Double-click **Start-MEGALODON.sh** in the repository folder and choose
@@ -113,7 +119,7 @@ settings are unchanged. Keep the foreground terminal open. Do not also open the
 normal application-menu launcher while this replacement is running: a launch
 without options starts or reuses the background service.
 
-In **Data and tools → Change data for the next launch**, the optional **Local
+In **Setup → Advanced → Change data for the next launch**, the optional **Local
 port** field prepares the same bounded port option. Blank keeps the launcher's
 configured port. Preparing or copying a command does not execute it.
 
@@ -128,7 +134,7 @@ reconfigures the existing background service for explicit options.
 The normal desktop launch opens directly. Local file inspection requires a
 signed-in HUD. To require sign-in for one launch:
 
-1. In **Setup → Local sign-in**, prepare and copy the protected command before
+1. In **Setup → Advanced → Local sign-in**, prepare and copy the protected command before
    stopping the current HUD. Setting a reusable password alone does not change
    a running session.
 2. Stop a foreground HUD with **Ctrl+C** in its terminal. For the installed
@@ -147,7 +153,7 @@ the background HUD with its original settings, including sign-in disabled by
 default. This procedure protects one launch; it does not enable sign-in for the
 background service. Sign-in is limited to loopback and is not remote access.
 
-In the HUD, **Setup → Local sign-in** provides buttons to copy this installation's
+In the HUD, **Setup → Advanced → Local sign-in** provides buttons to copy this installation's
 password setup/status commands and prepare a protected relaunch with an optional
 port. The buttons only prepare or copy commands. An unused port does not permit
 two HUDs to own this account's managed evidence. Password entry stays in the
@@ -394,13 +400,14 @@ local filesystem for the selected configuration and store.
 
 ## Start support apps
 
-For actual capture permissions and tool configuration, use **Configure apps**
-beside the Start button. See [support configuration](support-configuration.md)
+For capture permissions, use **Setup → Traffic**. Installed tool controls are in
+**Setup → Apps**, with saved model controls in **Setup → Local AI**.
+See [support configuration](support-configuration.md)
 for the live packet feed, Wireshark controls and saved collection scope.
 
-Open the local HUD and choose **Start background tools** at the top of **HUD**,
-directly above the resource strip. **Copy command** copies the equivalent
-installed launcher. From this checkout, run:
+Open the local HUD and choose **Start background tools** below **Your next step**.
+The optional app-status tiles are inside their closed disclosure; they do not
+need to be expanded to use Start. From this checkout, run:
 
 ```bash
 ./scripts/start-support-apps.sh
@@ -416,7 +423,8 @@ reply that is not the HUD's startup status is refused as unexpected.
 - TShark supplies continuous metadata; Zeek supplies separate bounded CLI samples.
   Wireshark, Zenmap and ClamTk windows are optional Advanced actions only.
 - Configured Suricata and Ollama services start if inactive. First-time setup uses
-  Configure apps; a system authorization prompt may appear.
+  **Setup → Local AI** or **Setup → Traffic → Background sensors · Zeek and
+  Suricata**; a system authorization prompt may appear.
 - Nmap, ClamAV and osquery refresh their configured jobs without duplicating
   running work. Reports continue to be watched.
 - Scapy remains an alternative capture engine. Optional nftables containment
@@ -434,14 +442,15 @@ also protects this action. On a signed-in HUD, use the button in the browser.
 
 ## Use your data
 
-Home → **Data and tools** shows the selected source and a live status light for
-each optional tool, with **Install** and **Start service** buttons where a fixed
-package or service unit exists (see [tool heartbeat](tool-heartbeat.md)).
-Choose **Check this computer** for a fresh, explicit metadata check. Home then
-shows current results; Apps keeps its startup observations until the HUD is
-reopened. **Unable to check** is a neutral result when executable discovery
+**Setup → Overview → This computer** contains **Check now** for a fresh,
+explicit metadata check. Expand **Observation details** for the selected source
+and tool observations. **Setup → Apps → Installed apps** has the supported
+installation/configuration controls and tool heartbeat (see
+[tool heartbeat](tool-heartbeat.md)). The older capability reference under
+**Setup → Advanced** keeps its startup observations until the HUD is reopened.
+**Unable to check** is a neutral result when executable discovery
 could not assess the eligible tools; it is never presented as success.
-Open **Change data for the next launch** to prepare a command for an existing
+Open **Setup → Advanced → Change data for the next launch** to prepare a command for an existing
 configuration or completed offline report. These controls prepare text; they do
 not change the running server's sources. Stop and relaunch with the selected
 options. The launcher also passes HUD options through:
@@ -459,8 +468,10 @@ To learn the authorized JSONL import options, run the chosen interpreter with
 `-m megalodon run --help`; use the [README](../README.md) for the input contract.
 After the first import into a previously missing store, restart the HUD.
 
-The hosted Defense Console is a disconnected reference site. Opening it does
-not connect this PC, and this launcher does not publish site changes.
+For a manual IANA protocol, port or service lookup, open **Evidence → Reference
+Library**. It supplies context without classifying traffic. The separate
+[PC Snapshot Console](../site/README.md) imports an address-free summary and
+cannot connect to or operate this PC; the local launcher does not publish it.
 
 ## Troubleshooting
 
@@ -471,13 +482,13 @@ not connect this PC, and this launcher does not publish site changes.
 | Build or package installation failed | Preserve the terminal output. Check Python venv support, network/package-source access, and declared build requirements; the selected release is unchanged. |
 | Installation needs repair | Run `~/.local/bin/megalodon-manage status`, then `repair`. Modified artifacts are refused so they can be reviewed instead of overwritten. |
 | MEGALODON is missing from the application menu | Run `status`; if ready, sign out/in or refresh the desktop application cache. The stable `~/.local/bin/megalodon-hud` launcher remains available. |
-| Capture permission required | On this computer, open **Setup → Configure local tools → Configure capture access** and complete the operating-system administrator prompt, then retry capture. Reading the message does not grant permissions. Other capture or storage failures keep their separate diagnostics. |
+| Capture permission required | On this computer, open **Setup → Traffic → Network capture** and use **Configure capture access**. Complete the operating-system administrator prompt, then retry capture. Reading the message does not grant permissions. Other capture or storage failures keep their separate diagnostics. |
 | Address already in use | Another program holds that port, and the requested settings were not applied. Choose another port if it belongs to a different program. If a HUD is running, follow the relaunch steps above: a different port does not release its managed evidence store. |
 | Another HUD owns managed evidence | Stop the current owner before relaunching: Ctrl+C in its foreground terminal, or `systemctl --user stop megalodon-hud.service` for the installed background HUD. Stopping interrupts its in-process collection. Do not delete the lease file or change permissions to bypass it. |
 | `DASHBOARD_STORE:UNSAFE_ANCESTOR` | Check ownership and write permissions of the path's ancestors. In a remapped development sandbox, run from a normal local terminal. Keep the ownership checks enabled. |
 | `UNSAFE_DIRECTORY` or `UNSAFE_DATABASE` | Inspect the chosen path. The database's leaf directory must be owner-private (0700), and the database must be an owner-owned, single-link regular file (0600). Do not recursively change permissions or relocate live data as a shortcut. |
 | `SCHEMA_MISMATCH` | Preserve the database and review the explicit migration/recovery workflow in the README. Startup never migrates it. |
-| No qualified data | Inspect Home's source status and Evidence's audit history; sample or unlinked rows do not count as qualified observations. |
+| No qualified data | Inspect the evidence status and **Setup → Overview → This computer → Observation details**, then Evidence's audit history; sample or unlinked rows do not count as qualified observations. |
 
 ## Developer verification
 

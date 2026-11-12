@@ -3,16 +3,37 @@
 Open MEGALODON, check what is available, then choose the task you need. You can
 read saved data and make reports without installing every companion tool.
 
+## Read your next step in the HUD
+
+The **Your next step** panel uses the current local snapshot to suggest what to
+inspect. **Refresh observations** reads status; **Resume view** resumes a paused
+display. Neither starts capture. To collect new packet observations, use
+**Review capture settings** and make that separate choice in Setup.
+
+**Review sensor observations** opens connection context, where returned sensor
+alert labels can be inspected. They are separate from the saved **Findings**
+queue. **Explore sensor summaries** can be useful even when packet capture is
+stopped. **Waiting for observations**, stale status and no returned alert labels
+do not establish safety or complete coverage.
+
+The fixed **Review findings**, **Explore connections** and **Open reports** links
+remain available. AI is optional: recorded facts and coverage can be inspected
+without a model. The supporting-app inventory is closed under **Supporting apps ·
+optional tools and status details**; expand it when needed. **Start background
+tools** remains a separate explicit action.
+
 ## App installation and configuration
 
-Open **Setup → Apps & connections**. Each app has its current presence status,
-its publisher link, an installation option where supported, and **Configure for
-MEGALODON** for tools with a built-in configuration workflow. This shortcut opens
+Open **Setup → Apps → Installed apps**. Each app has its current presence status,
+its publisher link, an installation option where supported, and **Configure**
+for tools with a built-in configuration workflow. This shortcut opens
 the real settings controls without starting an action.
 
-Supported Install buttons remain visible when locked. **Authorize installation
-and service starts** explains the per-launch token requirement. Zeek and osquery
-use publisher-guided installation. Ollama must be installed before downloading
+Supported Install buttons remain visible when locked. **Installation session
+and terminal options** prepares the explicit enabled relaunch. The enabled local
+page obtains its per-launch action token through the guarded channel; manual
+token entry is an advanced fallback. Confirm each fixed action separately.
+Zeek and osquery use publisher-guided installation. Ollama must be installed before downloading
 the Qwen model. Installed packages are not reinstalled by opening this page.
 The advanced copied commands use the serving MEGALODON environment and can run
 from any terminal folder. Removal still requires explicit terminal confirmation.
@@ -30,7 +51,7 @@ open; **Ctrl+C** there stops the HUD.
 
 Normal launches reuse the existing background session. Explicit launcher options
 start a new foreground session; they do not update the background HUD. Prepare
-the command in **Data and tools → Change data for the next launch**, stop the
+the command in **Setup → Advanced → Change data for the next launch**, stop the
 current HUD, then run the command and open its printed address. A different
 port does not release the shared managed evidence store. See
 [relaunch steps](local-pc-setup.md#open-a-separate-session-with-explicit-options)
@@ -46,8 +67,9 @@ interface becomes available after the local server starts.
 
 ## 2. Check this computer
 
-Open **Setup**, then **Data and tools**. Every optional tool has a status light
-next to its name, refreshed in the background while the tab is visible:
+Open **Setup → Overview → This computer**, then select **Check now**. Expand
+**Observation details** for the selected source and tool observations. The
+**Apps** rail and **Setup → Apps** also show tool heartbeat status:
 
 | Displayed state | Meaning | Next step |
 | --- | --- | --- |
@@ -61,7 +83,7 @@ word MEGALODON shows, anywhere in the HUD, open **Help → Full status
 glossary**.
 
 See [tool heartbeat and one-click install](tool-heartbeat.md) for what each
-button runs. For the environment and data file, select **Check this computer**:
+button runs. The explicit **Check now** result covers the environment and data file:
 
 | Result | What it tells you | Next step |
 | --- | --- | --- |
@@ -82,8 +104,9 @@ or traffic. It differs from the standalone readiness-only JSON import format.
 
 ## 3. Get only the software you need
 
-The software list starts with essentials. Choose a workflow or search for a
-program to see its purpose, status light and buttons. **Install** installs the
+Use **Setup → Apps → Installed apps** to search by name or purpose and inspect
+each tool's controls. **Setup → Advanced → Software reference and publisher
+guides** keeps the longer workflow catalog. **Install** installs the
 fixed Ubuntu package, or the Python package for this HUD, after your computer's
 password prompt; MEGALODON never sees the password. Zeek and osquery need a private build or vendor repository, so
 they link to their official guides instead. Download links open the publisher's
@@ -98,15 +121,16 @@ which workflows are connected to MEGALODON and which are separate companions.
 
 | I want to… | Go here |
 | --- | --- |
-| Understand the current data source | **Setup → Data and tools** |
-| Inspect saved traffic and change the time range | **HUD**; choose a range and apply it |
+| Understand the current data source | **Setup → Overview → This computer → Observation details** |
+| Inspect saved traffic and change the time range | **HUD → Stored evidence, history and computer observations**; use **Stored evidence time range** above the workspace tabs |
 | Review linked detections | **Findings** |
 | Inspect a downloaded program without running it | **HUD → Inspect a file**; [sign-in, setup and coverage](file-inspection.md) |
-| Find downloads or inspect an integration | **Setup → Data and tools**, or **Setup → Apps & connections** |
+| Find downloads or inspect an integration | **Setup → Apps → Installed apps**; publisher and maintenance options are inside each app |
 | See what each background tool is doing | **Sensors** |
-| Open a companion's saved web console | **Setup → Apps & connections**; configure its explicit console link |
+| Open a companion's saved web console | **Setup → Apps → Installed apps**; configure its explicit console link |
 | Preview and download a local report | **Reports** |
 | Inspect sample/unlinked audit history or offline evidence | **Evidence** |
+| Look up an IANA protocol, port or service | **Evidence → Reference Library** |
 | Understand a status or recover from a problem | **Help** |
 
 **No qualified data** is a useful result: the current selection has no admitted
@@ -123,7 +147,7 @@ pages. These actions do not require copying diagnostic commands.
 The one-time MEGALODON install, guided companion installs (Zeek, osquery), importing data,
 starting an authorized capture, and changing the server's source remain explicit
 local operations. After installation, the application-menu entry handles normal
-startup and browser opening. **Change data for the next launch** prepares and copies a
+startup and browser opening. **Setup → Advanced → Change data for the next launch** prepares and copies a
 quoted command. Stop the current HUD before running it in a terminal to start
 the new session. An unused port avoids a listener conflict but does not release
 the managed evidence store. Typing a path into the form does not open that

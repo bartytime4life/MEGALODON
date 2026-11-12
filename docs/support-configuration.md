@@ -1,7 +1,10 @@
 # Configure support apps from the local HUD
 
-Choose the **Setup** tab, or **Configure apps** beside **Start background tools** in the HUD.
-The panel contains actual configuration and control actions. They are available
+Choose the **Setup** tab or **Setup** beside **Start background tools**
+in the HUD. **Traffic** contains packet capture and background sensors; **Apps**
+contains collector scopes, tool controls and host security; **Local AI** contains
+the saved model and public-reference preferences. Installed-tool directories and
+launch commands are under **Advanced**. These are actual configuration and control actions, available
 in a normal non-root Linux HUD, with the same optional sign-in as the dashboard.
 The hosted Site cannot operate these controls.
 
@@ -13,6 +16,10 @@ traffic capture.
 
 ## Network capture
 
+Open **Setup → Traffic → Network capture**. Packet capture and sensor-summary
+recording are separate sources; stopped packet capture does not invalidate a
+current connection-summary observation. Opening the view never starts either.
+
 1. Select the interface to observe. The current default-route interface is
    suggested; virtual adapters, VPNs and loopback remain separately selectable.
 2. Choose **Configure capture access**. The operating system may ask for your
@@ -23,7 +30,9 @@ traffic capture.
    setup. Stopping capture does not remove these permissions.
 3. Choose **Start HUD traffic** to feed packet metadata to the existing traffic
    and detection charts. The session stops after 15 minutes or 50,000 frames.
-   **Stop HUD capture** stops only that session and retains accepted metadata.
+   **Stop HUD capture** stops background monitoring and managed sensors as well
+   as HUD capture, and clears the saved automatic-resumption choice. Accepted
+   metadata remains available; capture permissions are not revoked by stopping.
 4. Optionally choose **Open live Wireshark** for a separate managed GUI window.
    It uses a dedicated MEGALODON profile, selected interface, no name resolution,
    no promiscuous mode, a 256-byte capture snapshot, and the same session bounds.
@@ -53,7 +62,7 @@ requests bounded capture cleanup and finalizes its ingestion receipt.
 | Nmap / Zenmap | Save a private IPv4 target/range of at most 256 addresses and queue the existing inventory worker. Default is loopback. Zenmap remains an optional Advanced desktop action. |
 | ClamAV / ClamTk | Select this user's Downloads or Documents folder, save the scanner scope and queue collection. A separate button starts the installed FreshClam signature updater through system authorization. |
 | osquery | Enable and queue the existing fixed DEB package count. No arbitrary SQL or enrollment. |
-| Local AI / Ollama | Configure PC-only listening, choose any installed local text-completion model, and verify its response. The saved exact digest is shared by HUD analysis and collector advice. See [model selection](local-model-selection.md). |
+| Local AI / Ollama | Refresh the fixed local model list and save an exact installed-model preference. Ordinary operational analysis and keep-ready loading remain `UNBOUND`. The separately clicked [Test selected model](ollama-response-test.md) can load the saved model only for the fixed READY diagnostic; a pass does not admit live analysis. Inventory or staged-file success is not a verified reply. Fixed PC-only listener setup is a separate OS-authorized host change, described below. See [model selection](local-model-selection.md). |
 | Zeek | Verify the CLI and prepare automatic 10-second / 2,000-frame samples while background monitoring is enabled. Completed qualified conn.log intake remains separate. |
 | Suricata | Configure the passive system service for the selected interface, one worker, its runtime directory, and EVE read access. Existing rules are retained. Recent log summaries are separate from admitted alert evidence. |
 
@@ -66,6 +75,16 @@ preserved and cause a clear setup error instead of being overwritten.
 
 Each setup result shows its own time. A completed check or requested GUI launch
 is not continuous proof that the program is running or delivering data.
+The fixed `qwen_configure` setup action can apply its OS-authorized local-listener
+configuration before later saved-model checks fail. An `UNBOUND` model result
+does not prove that this separately invoked host setup made no change. The HUD
+disables that action while its model binding is held; direct setup entry points
+retain their own action scope. Stage 0 is a separate application entry fence,
+not a model-readiness label.
+A failed configuration read marks the Overview's Traffic and Local AI summaries
+**Unavailable**, disables controls that require the current configuration nonce,
+and retains the saved model label. The independent app heartbeat is not erased.
+Pending refresh, failed refresh and successful recovery remain separate states.
 
 ## Terminal scripts
 

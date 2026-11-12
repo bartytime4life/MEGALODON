@@ -1,6 +1,6 @@
 # Operator Guide
 
-> Documentation basis: `main@2cb706039724d9ea0bda09cbd3c17698b15ba55c` (October 22, 2026). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance.
+> Operator navigation basis: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance. Historical evidence retains its own source pins.
 
 The HUD combines evidence views with separately authorized local workflows. Read source, time, scope and action state before interpreting any display.
 
@@ -8,13 +8,41 @@ The HUD combines evidence views with separately authorized local workflows. Read
 
 | Workspace | Task | Interpretation limit |
 | --- | --- | --- |
-| HUD | Inspect live atlas, resources, network directory and history; start configured background tools | Captured observations are not whole-network visibility or physical routes |
-| Findings | Review deterministic findings and separately identified advice | Severity and model text are not attribution or action authority |
-| Sensors | See background workflow status and admitted source observations | Installed, running, supported and connected are distinct |
+| HUD | Follow **Your next step**, inspect connections, atlas, resources and history; separately start configured background tools | Sensor context is separate from saved Findings; captured observations are not whole-network visibility or physical routes |
+| Findings | Review source-labelled packet-detector results, admitted sensor alerts and pattern candidates; request separate advice | Severity and model text are not attribution or action authority |
+| Sensors | See background workflow status and bounded source summaries | Installed, running, supported and admitted data are distinct |
 | Setup | Configure capture scope, storage, discovery, installed local models, apps and local sign-in | Saving settings and starting a workflow are different actions |
 | Reports | Make, schedule, save and print local visual reports; use Advanced exports | Missing intervals remain missing; sensor and packet units remain separate |
 | Evidence | Inspect audit, offline, reference and separately admitted sensor/model receipts | Sources need not share one snapshot or acquisition clock |
 | Help | Read status vocabulary and safe next steps | Help text does not establish operational acceptance |
+
+## Start with one useful task
+
+**Your next step** uses the current validated local snapshot. Refresh when status
+is unavailable or stale; **Resume view** resumes display polling. To collect new
+packet observations, review capture settings and make that separate choice.
+Saved evidence remains readable when capture is stopped. Current sensor
+connection summaries can also be inspected without running packet capture.
+
+**Review sensor observations** opens the connection lens for returned alert
+context. **Review findings** opens the separate saved Findings queue. An empty
+sensor window or no returned labels establishes neither safety nor complete
+coverage. **Open reports** reads saved reports without creating one.
+
+Expand **Supporting apps · optional tools and status details** only when you
+need the duplicate app inventory. Start and its feedback stay outside that
+disclosure. Use Tab to reach links and native disclosures, Enter to activate,
+and the arrow keys within workspace tabs. The connection shortcut restores its
+HUD workspace when returning through browser history after visiting Setup.
+
+## Find a setting
+
+Setup has six categories: **Overview**, **Traffic**, **Local AI**, **Apps**,
+**Storage** and **Advanced**. **Overview → This computer → Check now** checks the
+environment; **Observation details** holds the source and tool observations.
+**Apps → Installed apps** keeps tool configuration together. Local sign-in,
+installed tool directories and **Change data for the next launch** are in
+**Advanced**. Manual IANA context lookup is in **Evidence → Reference Library**.
 
 ## Monitoring and geographic context
 
@@ -28,7 +56,15 @@ History views are bounded pages; selected ranges and exclusions matter. Reports 
 
 ## Local AI and actions
 
-Choose an installed local model through Setup. Availability, loaded allocation, a verified response and a failed latest attempt are distinct. An explanation or closed proposal does not execute. Fixed inventory/scan workflows use configured scopes. Containment has an expiring preview, a separate operator action, OS authorization and a five-minute kernel timeout; affected unrelated connections can also be interrupted.
+AI is optional; recorded facts and coverage remain inspectable without a model.
+Choose an installed model through **Setup → Local AI**. Availability, loaded
+allocation, a verified response and a failed latest attempt are distinct.
+**Local learning paused** means no new observations are being learned; saved
+reviews and a separately running explanation can remain available. Its controls
+are under **Knowledge and automatic review**. An explanation or closed proposal
+does not execute. Fixed inventory/scan workflows use configured scopes.
+Containment has an expiring preview, a separate operator action, OS authorization
+and a five-minute kernel timeout; affected unrelated connections can also be interrupted.
 
 See [visual operations and defense](https://github.com/bartytime4life/MEGALODON/blob/main/docs/visual-operations-defense.md), [model selection](https://github.com/bartytime4life/MEGALODON/blob/main/docs/local-model-selection.md), and [security boundaries](security-boundaries.md) before operating those controls.
 
@@ -43,7 +79,7 @@ Read event time, detection time and projection time separately; a completed run
 does not establish a live sensor. The inspector is bounded to linked records
 in the returned page.
 
-Setup’s **Host security and threat context** offers explicit Lynis/AIDE and
+**Setup → Apps → Host security and threat context** offers explicit Lynis/AIDE and
 reference-refresh workflows. Audit suggestions, changed files, baseline state
 and cached indicator matches remain separate from qualified network findings.
 See [the current host-security guide](https://github.com/bartytime4life/MEGALODON/blob/main/docs/host-security.md).

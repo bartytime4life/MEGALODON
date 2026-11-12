@@ -1,8 +1,8 @@
 # Tool heartbeat and one-click install
 
 Start the local HUD with `python -m megalodon hud`. Every companion tool shows
-a **status light** next to its name, both in **Home → Data and tools** and in
-**Apps**:
+a **status light** in the top app rail, **Setup → Apps → Installed apps**, and
+the HUD's collapsed **Supporting apps · optional tools and status details**:
 
 | Light | Meaning |
 |-------|---------|
@@ -78,8 +78,10 @@ configured model is loaded, safe, or authorized for inference.
 
 ## Authorize tool management for one launch
 
-The default HUD observes tools and offers official guides and terminal commands.
-To enable its fixed Install, Download, Start and desktop-app open actions,
+Source HUD launches observe tools and offer official guides and terminal commands
+unless management is enabled. Installer-generated desktop settings enable the
+fixed management session; an existing launch still reports its own enabled state.
+To enable fixed Install, Download, Start and desktop-app open actions in a source launch,
 deliberately launch it from your existing MEGALODON environment as your
 ordinary Linux user:
 
@@ -92,18 +94,22 @@ The installed launcher accepts the same option:
 The ordinary `dashboard` command, root real/effective IDs, and other platforms
 refuse this opt-in. Do not use `sudo` to run the HUD.
 
-Copy the **tool management operator token** printed in that launch's terminal
-into **Home → Data and tools → Authorize Install, Start and Open**. It is separate
-from the AI token and the operating system password. The token remains only in
-page memory, is sent only in a local action request header, and is not stored
-in browser storage or exposed by any GET route. Reload or **Forget token** clears
-it; restarting the HUD generates a new token. Keep it private. Every launch or
-maintenance action still requires a confirmation dialog. Stale tool observations
-disable the related install and service-start actions.
+The enabled HUD obtains its launch's action nonce through guarded
+`GET /api/install/token`; normal use needs no terminal token paste. The nonce is
+separate from the AI token and OS password. It stays in page memory and is sent
+only in the local action header, never a URL or browser storage. Reload obtains
+the same server launch's session again; restarting the HUD generates a new nonce.
+**Setup → Apps → Installation session and terminal options** retains restart
+guidance and a manual-token fallback. **Forget token** clears and dismisses the
+page's session until it is deliberately supplied again or the page reloads.
+Each install, service start or desktop launch still requires confirmation;
+stale tool observations disable the related actions. A known 403 rejection may
+refresh the session and retry the already-confirmed install/start once.
+Ambiguous transport failures are not automatically replayed.
 
 ## Install button
 
-After enabling tool management and entering the token, tools with a fixed
+After the enabled installation session is ready, tools with a fixed
 package offer an **Install** button:
 
 | Tool | What the button runs |
@@ -127,7 +133,8 @@ When a light is amber because an installed tool's service is stopped, the HUD
 shows **Start service**. It runs `systemctl start` on one fixed unit per tool,
 through the same `pkexec` password prompt:
 
-The **Apps → Start installed services** area keeps these actions visible without
+Under **Setup → Advanced**, expand **Advanced actions, desktop apps and
+capability reference**. **Start installed services** keeps these actions visible without
 opening each app card. It lists only tools whose installation was observed by
 the local heartbeat, shows when the expected process is already present, and
 links back to the per-launch authorization control. Start remains unavailable
@@ -146,7 +153,8 @@ comes before Download, because `ollama pull` needs the server running.
 
 ## Open desktop support apps
 
-**Apps → Open desktop support apps** offers Wireshark, Zenmap and ClamTk when
+The same Advanced disclosure's **Open desktop support apps** offers Wireshark,
+Zenmap and ClamTk when
 their fixed executable is available in an active Linux desktop session. Each
 button asks for confirmation and starts only the selected GUI as the current
 user. It does not start a scan, packet capture, sensor or service. A launch
@@ -160,6 +168,7 @@ opt-in and per-launch token described above.
 |-------|-------------|---------|
 | `GET /api/heartbeat` | `X-Megalodon-Check: 1`, HUD mode | `megalodon-tool-heartbeat-v1` receipt |
 | `GET /api/install` | `X-Megalodon-Check: 1`, HUD mode | recipe catalog, current job status and `management: {enabled, authorization}`; authorization is `disabled` or `per_launch_token`; never the token |
+| `GET /api/install/token` | exactly one `X-Megalodon-Check: 1`, no query, Origin absent or exact host origin, non-root local HUD with Setup; normal Host/session checks | `megalodon-tool-session-v1`; enabled launch's action nonce or `token: null` while management is disabled; never starts a job |
 | `POST /api/install` | explicitly enabled non-root Linux HUD, exact same-site `Origin`, `Content-Type: application/json`, `X-Megalodon-Install: 1`, exactly one matching `X-Megalodon-Install-Token`, body `{"tool": "<id>", "action": "install" or "start"}` (action optional, defaults to install) of 1–96 bytes | starts one fixed recipe or service unit; `202` accepted, `409` while another job runs, `422` unavailable |
 
 The body selects only a string tool id and optional string action; repeated

@@ -9,7 +9,7 @@ Upstream instructions were consulted on **2026-09-22**; package versions remain 
 that anything is installed or accepted on your computer. Do not run the whole
 page as one script. Stop at an error and use the troubleshooting table.
 
-In the local HUD, open **Setup → Apps & connections**, select Scapy, then
+In the local HUD, open **Setup → Apps → Installed apps**, select Scapy, then
 **Easy setup and verification**. These cards belong to the local application;
 the separate hosted Site is a snapshot viewer.
 Copy buttons copy text only: they do not install, execute, probe, or mark a
@@ -103,7 +103,7 @@ and explicit interface authorization remain separate.
 | `externally-managed-environment` | Use the selected virtual environment; do not bypass system Python protection |
 | Scapy installed, HUD still says not checked | Expected for the PATH-only report; run the exact HUD Python package check and keep standalone/desktop environments separate |
 
-Return to **Check this computer** for the existing local checks. Restart the HUD
+Return to **Setup → Overview → This computer → Check now** for the existing local checks. Restart the HUD
 from an updated environment when its PATH changed. These observations do not
 connect third-party telemetry, prove tool trust, or authorize sensors, model
 operation, firewall changes, remote exposure, release or deployment.
