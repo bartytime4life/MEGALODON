@@ -1,0 +1,261 @@
+{
+  "baseline": {
+    "deterministic_sha256": "c189f4f1f40c91af49a37dc986df714a787eaf1edf103c941a5723ef53e6e4b6",
+    "installed_source_sha256": {
+      "evidence_storage.py": "31552c123c168a9279e75ca5f8a510058bfc16560e8bb78458e2630f7bf7cc8a",
+      "layered_evaluation.py": "7863d9180ddaa707af708dfec329de770db7b9d67a2624a3bf28a88722da7a6b",
+      "layered_review.py": "e7c2887758fd820eaaa31153229e336d54dd642f3f80cfe90a36ab154bdf3aa5",
+      "models.py": "5f8aa889be6b5b0c46dd8bb53354352e0bc0b18d69f62b9e8c7b395edef6d076",
+      "offline/analysis.py": "9de4af0f1b18ad4a4f2e8ffe2c781349979be602ecc7040f8a098f6f370427a0",
+      "offline/common.py": "35a8fc5b9e476c4ccc73987b33878daebd7a32064259e11bace8e0a8e8cd4ff7",
+      "security_patterns.py": "fc8857d7c1706b44e215464ab81dcb2bd208add8e376c61dee3ae093f2203276",
+      "validation.py": "9fdda3f151c304c8a48e0c8de0cb0d93b43eef01db077d1340586f1e1646c02c"
+    },
+    "source": {
+      "attestation": "caller-declared",
+      "commit": "201fe4939cbfb160dccb80782455d106cdebaed4",
+      "tree": "c9dc2fd6094482a22450f7a3de4c48340293fdbf"
+    },
+    "source_attestation": "caller-declared; candidate is an uncommitted source overlay where specified",
+    "synthetic_workload": {
+      "false_alert_definition": "Ordinary case with a layered candidate, not a malicious verdict.",
+      "fn": 3,
+      "fp": 4,
+      "missed_case_definition": "Useful case without a layered candidate; individual findings can still exist.",
+      "tn": 6,
+      "tp": 7
+    },
+    "totals": {
+      "candidates": 38,
+      "checked_references": 796,
+      "evidence_errors": 0,
+      "layered_reviews": 12,
+      "unstable_permutations": 0
+    }
+  },
+  "candidate_overlay": {
+    "deterministic_sha256": "cdf73e6848c48703426989de9b5d01e7b76a8a653c140ce05211abe94e5bba1f",
+    "installed_source_sha256": {
+      "evidence_storage.py": "31552c123c168a9279e75ca5f8a510058bfc16560e8bb78458e2630f7bf7cc8a",
+      "layered_evaluation.py": "8528be6941e614e36a2767390ec01810847425e474e5dcdb7a00e9504209bf20",
+      "layered_review.py": "e7c2887758fd820eaaa31153229e336d54dd642f3f80cfe90a36ab154bdf3aa5",
+      "models.py": "5f8aa889be6b5b0c46dd8bb53354352e0bc0b18d69f62b9e8c7b395edef6d076",
+      "offline/analysis.py": "8fe9ba426e46631e4819961ff8c59d86baef662a8c7133d7d8589bebe5b12de1",
+      "offline/common.py": "35a8fc5b9e476c4ccc73987b33878daebd7a32064259e11bace8e0a8e8cd4ff7",
+      "security_patterns.py": "96cf21def4e2027dc7848983984ab38fb21477bd7798e5d2e04e4a3dfdd81f57",
+      "validation.py": "9fdda3f151c304c8a48e0c8de0cb0d93b43eef01db077d1340586f1e1646c02c"
+    },
+    "source": {
+      "attestation": "caller-declared",
+      "commit": "201fe4939cbfb160dccb80782455d106cdebaed4",
+      "tree": "c9dc2fd6094482a22450f7a3de4c48340293fdbf"
+    },
+    "source_attestation": "caller-declared; candidate is an uncommitted source overlay where specified",
+    "synthetic_workload": {
+      "false_alert_definition": "Ordinary case with a layered candidate, not a malicious verdict.",
+      "fn": 2,
+      "fp": 4,
+      "missed_case_definition": "Useful case without a layered candidate; individual findings can still exist.",
+      "tn": 6,
+      "tp": 8
+    },
+    "totals": {
+      "candidates": 39,
+      "checked_references": 841,
+      "evidence_errors": 0,
+      "layered_reviews": 13,
+      "unstable_permutations": 0
+    }
+  },
+  "corpus_sha256": "c5bdd27538470a16609a88419b208f797cb731deb92785e09b1273e795d7d942",
+  "denominators": {
+    "indeterminate_excluded": 5,
+    "ordinary": 10,
+    "total": 25,
+    "useful": 10
+  },
+  "independent_experiment": {
+    "baseline_analysis_sha256": "9de4af0f1b18ad4a4f2e8ffe2c781349979be602ecc7040f8a098f6f370427a0",
+    "baseline_revision": "201fe4939cbfb160dccb80782455d106cdebaed4",
+    "candidate_analysis_sha256": "8fe9ba426e46631e4819961ff8c59d86baef662a8c7133d7d8589bebe5b12de1",
+    "candidate_head": "201fe4939cbfb160dccb80782455d106cdebaed4",
+    "checks": [
+      "exhaustive-window oracle",
+      "half-open exact boundary",
+      "complete nonoverlap support",
+      "unrelated-anchor invariance",
+      "time-translation invariance",
+      "input-permutation invariance",
+      "legacy default full-output equality"
+    ],
+    "experiment_sha256": "7bb738b58e068830d4b26e55dd772204893b51cbd35e83d2bf4fd52dcbf35c6f",
+    "limitations": [
+      "No false-positive rate or attack/DNS intent inference.",
+      "The rolling mode deliberately differs from legacy fixed-bin semantics.",
+      "Finite seeded cases are regression evidence, not exhaustive qualification."
+    ],
+    "named_cases": {
+      "exactly_sixty_seconds_excluded": {
+        "baseline_fixed_bin_counts": [],
+        "rolling_counts": [],
+        "rolling_windows_us": []
+      },
+      "nonoverlap_complete_support": {
+        "baseline_fixed_bin_counts": [
+          60,
+          40
+        ],
+        "rolling_counts": [
+          60,
+          40
+        ],
+        "rolling_windows_us": [
+          [
+            0,
+            60000000
+          ],
+          [
+            60000000,
+            120000000
+          ]
+        ]
+      },
+      "one_microsecond_inside_included": {
+        "baseline_fixed_bin_counts": [
+          20
+        ],
+        "rolling_counts": [
+          20
+        ],
+        "rolling_windows_us": [
+          [
+            0,
+            60000000
+          ]
+        ]
+      },
+      "simultaneous_starts": {
+        "baseline_fixed_bin_counts": [
+          40
+        ],
+        "rolling_counts": [
+          40
+        ],
+        "rolling_windows_us": [
+          [
+            0,
+            60000000
+          ]
+        ]
+      },
+      "sources_separate": {
+        "baseline_fixed_bin_counts": [],
+        "rolling_counts": [],
+        "rolling_windows_us": []
+      },
+      "unrelated_anchor_absent": {
+        "baseline_fixed_bin_counts": [
+          20
+        ],
+        "rolling_counts": [
+          20
+        ],
+        "rolling_windows_us": [
+          [
+            55000000,
+            115000000
+          ]
+        ]
+      },
+      "unrelated_anchor_present": {
+        "baseline_fixed_bin_counts": [],
+        "rolling_counts": [
+          20
+        ],
+        "rolling_windows_us": [
+          [
+            55000000,
+            115000000
+          ]
+        ]
+      }
+    },
+    "python": "3.12.3",
+    "random_cases": 500,
+    "random_input_sha256": "5fa4334a0ad618323d8bee1dbaf9164209d484d239fcbfbbe4654f8c80afa0e9",
+    "scope": "Synthetic packet metadata only; no native analyzer, capture, model, evidence store or host action.",
+    "seed": 20261111
+  },
+  "input_identifiability": {
+    "conditional_binary_agreement_bound": {
+      "denominator": 20,
+      "maximum_agreement_ratio": {
+        "denominator": 20,
+        "numerator": 17
+      },
+      "maximum_agreements": 17,
+      "minimum_disagreements": 3,
+      "status": "defined"
+    },
+    "conflicting_input_groups": 3,
+    "conflicts": [
+      {
+        "cases": [
+          "scheduled_dns_connections",
+          "suspicious_dns_and_callback"
+        ],
+        "indeterminate_excluded": 0,
+        "input_sha256": "0a6c4e10d2309875500d643deb476de9ff8ef1726086df23ddd9461fb8b6a5a6",
+        "minimum_binary_disagreements": 1,
+        "ordinary": 1,
+        "useful": 1
+      },
+      {
+        "cases": [
+          "authorized_discovery_and_schedule",
+          "suspicious_sweep_and_callback"
+        ],
+        "indeterminate_excluded": 0,
+        "input_sha256": "2262a47fce597ccdf04d9cb1fc90924285d018b8935e105fe0fe485bfb777104",
+        "minimum_binary_disagreements": 1,
+        "ordinary": 1,
+        "useful": 1
+      },
+      {
+        "cases": [
+          "scheduled_health_checks",
+          "suspicious_cadence_only"
+        ],
+        "indeterminate_excluded": 0,
+        "input_sha256": "fd016f392ecfb1063d0dc402b50722d749d04c3adacc64f05d2efe14be6b73f2",
+        "minimum_binary_disagreements": 1,
+        "ordinary": 1,
+        "useful": 1
+      }
+    ],
+    "determinate_cases": 20,
+    "indeterminate_excluded": 5,
+    "input_fields": [
+      "rows",
+      "start",
+      "end",
+      "previous",
+      "gaps"
+    ],
+    "interpretation": "Any deterministic binary decision from exactly these inputs must disagree with at least the stated number of stipulated labels. This is not operational accuracy, a probability, calibration or a universal error bound.",
+    "labels_in_input_identity": false,
+    "row_order": "preserved",
+    "scope": "Exact ordered analyzer inputs in this synthetic fixture set only.",
+    "total_cases": 25,
+    "unique_inputs": 22
+  },
+  "labels_sha256": "6d3e9a7ae906959ff5966e0e6cd00fe3d62bd2434b82e1ca28af1948989f7bd7",
+  "limitations": [
+    "No representative traffic or malicious-intent measurement.",
+    "Legacy offline version-1 report bins remain unchanged.",
+    "Source hashes identify measured files; candidate HEAD still names the base until the reviewed change is committed.",
+    "Independent experiment script was retained in the local evidence bundle, not shipped as an operational command."
+  ],
+  "schema": "megalodon-rolling-review-comparison-v1",
+  "scope": "Immutable synthetic case-hour workload and provenance before storage admission/cooldown; not operational accuracy."
+}

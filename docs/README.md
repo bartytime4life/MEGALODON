@@ -27,6 +27,8 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 For synthetic review workload and provenance measurements, use the
 [offline layered evaluation](layered-evaluation.md). Operational detection accuracy
 remains unmeasured.
+For the mathematical changes, primary sources and next experiments, read
+[science and mathematics](science-and-math.md).
 
 ## Read the architecture
 

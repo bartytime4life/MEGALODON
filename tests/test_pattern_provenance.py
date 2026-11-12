@@ -94,7 +94,7 @@ def test_cadence_selects_one_representative_per_distinct_start_time():
     assert result['evidence_refs'] == [r['id'] for r in values]
 
 
-def test_burst_exposes_absolute_bin_and_counts_transport_qualified_observations():
+def test_burst_exposes_absolute_window_and_counts_transport_qualified_observations():
     values = activity('PORT_53_BURST', offset=55)
     result = reviews(values, 'PORT_53_BURST')[0]
     assert result['facts']['window_start'] == utc(START + 55)
@@ -104,6 +104,44 @@ def test_burst_exposes_absolute_bin_and_counts_transport_qualified_observations(
     values[-1]['data']['protocol'] = 'ICMP'
     values[-1]['data']['src_port'] = values[-1]['data']['dst_port'] = None
     assert not reviews(values, 'PORT_53_BURST')
+
+
+def test_rolling_burst_survives_unrelated_earlier_anchor_and_minute_boundary():
+    support = [row(i + 1, 59.5 + i / 20, port=53) for i in range(20)]
+    noise = row(100, 0, port=443, destination='198.51.100.250')
+    noise['id'] = 'c' * 32 + ':1'
+    alone, = reviews(support, 'PORT_53_BURST')
+    together, = reviews([noise] + support, 'PORT_53_BURST')
+    assert together['evidence_refs'] == alone['evidence_refs'] == [r['id'] for r in support]
+    assert together['source_segments'] == alone['source_segments'] == [SEGMENT]
+    for name in ('records', 'first_seen', 'last_seen', 'window_start', 'window_end'):
+        assert together['facts'][name] == alone['facts'][name]
+    assert together['facts']['records'] == 20
+    assert together['facts']['window_start'] == utc(START + 59.5)
+
+
+def test_rolling_window_has_an_exact_exclusive_end_and_hour_horizon():
+    support = [row(i + 1, i, port=53) for i in range(19)]
+    final = row(20, 60 - 0.000001, port=53)
+    assert reviews(support + [final], 'PORT_53_BURST')
+    final['data']['first_seen'] = final['observed_at'] = utc(START + 60)
+    assert not reviews(support + [final], 'PORT_53_BURST')
+    near_end = [row(i + 1, 3590 + i / 4, port=53) for i in range(20)]
+    review, = reviews(near_end, 'PORT_53_BURST')
+    assert review['facts']['window_start'] == utc(START + 3590)
+    assert review['facts']['window_end'] == utc(START + 3600)
+    assert review['evidence_refs'] == [r['id'] for r in near_end]
+
+
+def test_rolling_bursts_keep_disjoint_support_and_deterministic_reference_pages():
+    first = activity('PORT_53_BURST', offset=55, count=30)
+    second = activity('PORT_53_BURST', offset=125, count=20, first_number=101)
+    expected = reviews(first + second, 'PORT_53_BURST')
+    assert len(expected) == 2
+    assert [r['facts']['records'] for r in expected] == [30, 20]
+    assert expected[0]['facts']['references_omitted'] == 6
+    assert set(expected[0]['evidence_refs']).isdisjoint(expected[1]['evidence_refs'])
+    assert reviews(list(reversed(first + second)), 'PORT_53_BURST') == expected
 
 
 def test_packet_bursts_use_observation_time_and_never_become_connection_cadence():

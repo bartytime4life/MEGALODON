@@ -1,5 +1,6 @@
 """Synthetic evaluation is an honest workload/provenance test, not accuracy proof."""
 from copy import deepcopy
+from itertools import product
 import json
 from pathlib import Path
 import socket
@@ -29,18 +30,90 @@ def scenario(name):
     return corpus['start'], case, rows, oracle
 
 
+def test_input_agreement_bound_matches_independent_exhaustive_toy_classifiers():
+    # Enumerate every binary classifier on three input symbols. Unknown labels
+    # never count as either correct or incorrect in this independent oracle.
+    examples = [('x', 'ordinary')] * 3 + [('x', 'useful'), ('x', 'indeterminate')]
+    examples += [('y', 'ordinary')] + [('y', 'useful')] * 2 + [('z', 'indeterminate')] * 2
+    cases = [(str(index), {'rows': [symbol]}, label)
+             for index, (symbol, label) in enumerate(examples)]
+    agreements = []
+    for decisions in product(('ordinary', 'useful'), repeat=3):
+        predict = dict(zip(('x', 'y', 'z'), decisions))
+        agreements.append(sum(predict[symbol] == label for symbol, label in examples
+                              if label != 'indeterminate'))
+    result = evaluation._input_identifiability(cases)
+    bound = result['conditional_binary_agreement_bound']
+    assert result['determinate_cases'] == 7 and result['indeterminate_excluded'] == 3
+    assert result['unique_inputs'] == 3 and result['conflicting_input_groups'] == 2
+    assert bound == dict(status='defined', minimum_disagreements=2,
+                         maximum_agreements=max(agreements), denominator=7,
+                         maximum_agreement_ratio=dict(numerator=5, denominator=7))
+    assert evaluation._input_identifiability(cases[::-1]) == result
+
+
+def test_input_identity_preserves_row_order_and_every_actual_analyzer_argument():
+    inputs = evaluation._analyzer_inputs([{'value': 1}, {'value': 2}], 100, ['one', 'two'])
+    assert set(inputs) == {'rows', 'start', 'end', 'previous', 'gaps'}
+    assert inputs['end'] == 3700 and inputs['previous'] == []
+    variants = [deepcopy(inputs) for _ in range(5)]
+    variants[0]['rows'].reverse()
+    variants[1]['start'] += 1
+    variants[2]['end'] += 1
+    variants[3]['previous'] = [{'baseline': 1}]
+    variants[4]['gaps'].reverse()
+    cases = [(str(index), value, 'ordinary') for index, value in enumerate([inputs, *variants])]
+    assert evaluation._input_identifiability(cases)['unique_inputs'] == 6
+
+
+def test_labels_and_display_ids_cannot_change_input_identity():
+    shared = {'rows': [{'measurement': 1}], 'start': 0, 'end': 3600, 'previous': [], 'gaps': []}
+    first = evaluation._input_identifiability([('a', shared, 'ordinary'), ('b', shared, 'useful')])
+    renamed = evaluation._input_identifiability([('new-a', shared, 'ordinary'), ('new-b', shared, 'useful')])
+    assert first['conflicts'][0]['input_sha256'] == renamed['conflicts'][0]['input_sha256']
+    same_label = evaluation._input_identifiability([('a', shared, 'useful'), ('b', shared, 'useful')])
+    assert first['unique_inputs'] == same_label['unique_inputs'] == 1
+    assert same_label['conflicting_input_groups'] == 0
+    assert same_label['conditional_binary_agreement_bound']['minimum_disagreements'] == 0
+
+
+@pytest.mark.parametrize('cases', [[], [('unknown', {'rows': []}, 'indeterminate')]])
+def test_no_determinate_labels_leave_agreement_ratio_undefined(cases):
+    bound = evaluation._input_identifiability(cases)['conditional_binary_agreement_bound']
+    assert bound == dict(status='undefined_no_determinate_cases', minimum_disagreements=0,
+                         maximum_agreements=0, denominator=0, maximum_agreement_ratio=None)
+
+
+def test_bundled_input_ambiguity_is_measured_without_operational_accuracy():
+    value = report()
+    audit = value['input_identifiability']
+    assert audit['total_cases'] == 25 and audit['unique_inputs'] == 22
+    assert audit['determinate_cases'] == 20 and audit['indeterminate_excluded'] == 5
+    assert audit['conflicting_input_groups'] == 3 and audit['row_order'] == 'preserved'
+    assert {tuple(group['cases']) for group in audit['conflicts']} == {
+        ('scheduled_health_checks', 'suspicious_cadence_only'),
+        ('authorized_discovery_and_schedule', 'suspicious_sweep_and_callback'),
+        ('scheduled_dns_connections', 'suspicious_dns_and_callback'),
+    }
+    assert audit['conditional_binary_agreement_bound'] == dict(
+        status='defined', minimum_disagreements=3, maximum_agreements=17, denominator=20,
+        maximum_agreement_ratio=dict(numerator=17, denominator=20))
+    assert value['all_match'] is True
+    assert value['operational_accuracy'] is value['operational_false_positive_rate'] is None
+
+
 def test_declared_intent_is_separate_from_prediction_and_unknowns_are_excluded():
     value = report()
     assert value['denominators'] == dict(total=25, ordinary=10, useful=10, indeterminate_excluded=5)
-    assert {key: value['synthetic_workload'][key] for key in ('tp', 'fp', 'fn', 'tn')} == dict(tp=7, fp=4, fn=3, tn=6)
-    assert value['totals'] == dict(candidates=38, layered_reviews=12, checked_references=796,
+    assert {key: value['synthetic_workload'][key] for key in ('tp', 'fp', 'fn', 'tn')} == dict(tp=8, fp=4, fn=2, tn=6)
+    assert value['totals'] == dict(candidates=39, layered_reviews=13, checked_references=841,
                                   evidence_errors=0, unstable_permutations=0)
     assert value['all_match'] is True  # This does not mean perfect classification.
     assert value['operational_accuracy'] is value['operational_false_positive_rate'] is None
     cases = {row['case']: row for row in value['cases']}
     assert cases['authorized_discovery_and_schedule']['result_sha256'] == cases['suspicious_sweep_and_callback']['result_sha256']
     assert cases['scheduled_dns_connections']['result_sha256'] == cases['suspicious_dns_and_callback']['result_sha256']
-    assert cases['dns_bin_boundary_miss']['layered_reviews'] == 0
+    assert cases['dns_bin_boundary_miss']['layered_reviews'] == 1
     assert cases['dns_bin_boundary_control']['layered_reviews'] == 1
 
 
@@ -53,6 +126,8 @@ def test_swapping_truth_labels_cannot_change_analyzer_output(monkeypatch):
     changed = report()
     assert [c['result_sha256'] for c in original['cases']] == [c['result_sha256'] for c in changed['cases']]
     assert changed['synthetic_workload']['tp'] == original['synthetic_workload']['fp']
+    assert [c['input_sha256'] for c in original['input_identifiability']['conflicts']] == [
+        c['input_sha256'] for c in changed['input_identifiability']['conflicts']]
 
 
 @pytest.mark.parametrize('name', ['authorized_discovery', 'scheduled_dns_connections', 'overlapping_cadence_starts'])
@@ -100,6 +175,69 @@ def test_reference_omissions_preserve_full_support_dependencies():
     for candidate in result['individual']:
         assert candidate['facts']['references_omitted'] == 6
         assert len(candidate['evidence_refs']) == 24
+
+
+def test_independent_burst_oracle_uses_full_half_open_windows_and_hour_horizon():
+    corpus, _ = evaluation.load_corpus(); start = corpus['start']
+    case = dict(blocks=[dict(offsets=list(range(30)) + list(range(60, 81)) + list(range(3579, 3600)),
+                            port=53, supports=['PORT_53_BURST'], segment=1)])
+    rows, oracle = evaluation.observations(case, start)
+    group = dict(sensor='synthetic-sensor', device='192.0.2.1', interface='fixture0')
+    windows = evaluation._port53_support_windows(oracle, start, group)
+    assert [window['records'] for window in windows] == [30, 21, 21]
+    assert [len(window['references']) for window in windows] == [30, 21, 21]
+    assert windows[0]['references_omitted'] == 6
+    assert windows[0]['window_end'] == evaluation.utc(start + 60)
+    assert windows[1]['window_start'] == evaluation.utc(start + 60)
+    assert windows[-1]['window_end'] == evaluation.utc(start + 3600)
+    assert not windows[0]['references'] & windows[1]['references']
+    # Fabricated predicted counts, times or pages cannot modify this oracle.
+    claimed = dict(group, evidence_refs=[], facts=dict(records=999, window_start='forged'))
+    assert evaluation._port53_support_windows(oracle, start, claimed) == windows
+    result = evaluation._run(rows, start, [])
+    assert evaluation.evidence_errors(result, oracle, start)['errors'] == {}
+
+
+def test_layered_oracle_uses_selected_burst_extent_instead_of_whole_hour_union():
+    corpus, _ = evaluation.load_corpus(); start = corpus['start']
+    case = dict(blocks=[
+        dict(offsets=list(range(600, 630)), port=53, supports=['PORT_53_BURST'], segment=1),
+        dict(offsets=list(range(1800, 1830)), port=53, supports=['PORT_53_BURST'], segment=2),
+        dict(offsets=list(range(1200, 1216)), port=445, fanout=True, supports=['HOST_FANOUT'], segment=3),
+    ])
+    rows, oracle = evaluation.observations(case, start)
+    result = evaluation._run(rows, start, [])
+    review, = result['layered']
+    bursts = [candidate for candidate in result['individual'] if candidate['rule'] == 'PORT_53_BURST']
+    assert len(bursts) == 2
+    selected, = [candidate for candidate in bursts
+                 if set(candidate['evidence_refs']) <= set(review['evidence_refs'])]
+    support, = [window for window in evaluation._port53_support_windows(oracle, start, selected)
+                if set(selected['evidence_refs']) <= window['references']]
+    left = evaluation.epoch(support['first_seen'])
+    right = evaluation.epoch(support['last_seen'])
+    expected_gap = max(0, left - (start + 1215), start + 1200 - right)
+    assert expected_gap in {571, 585}
+    qualification = review['facts']['evidence_qualification']
+    assert qualification['support_time_relation'] == 'separated'
+    assert qualification['support_time_gap_seconds'] == expected_gap
+    assert evaluation.evidence_errors(result, oracle, start)['errors'] == {}
+    # Unioning both bursts spans the intervening fanout and invents overlap.
+    qualification.update(support_time_relation='overlapping_extents', support_time_gap_seconds=0)
+    assert evaluation.evidence_errors(result, oracle, start)['errors']['incorrect_evidence_qualification'] == 1
+
+
+@pytest.mark.parametrize('field,value', [
+    ('records', 29), ('window_start', '2026-10-01T00:00:00.000000Z'),
+    ('window_end', '2026-10-01T23:59:59.000000Z'), ('first_seen', 'forged'),
+    ('last_seen', 'forged'), ('references_omitted', 0),
+])
+def test_independent_burst_oracle_rejects_forged_counts_and_timing(field, value):
+    start, _, rows, oracle = scenario('reference_page_omissions')
+    result = evaluation._run(rows, start, [])
+    candidate = next(candidate for candidate in result['individual'] if candidate['rule'] == 'PORT_53_BURST')
+    candidate['facts'][field] = value
+    assert evaluation.evidence_errors(result, oracle, start)['errors']['incorrect_port53_window_facts'] == 1
 
 
 @pytest.mark.parametrize('name,rule', [('authorized_discovery', 'HOST_FANOUT'),
