@@ -149,6 +149,80 @@ def test_suricata_configuration_is_fixed_passive_cli_and_bounded_interface(manag
         manager.start({'action':'suricata_configure','interface':'eth0;id'})
 
 
+@pytest.mark.parametrize('body', [
+    {'action':'desktop_notifications','enabled':'true'},
+    {'action':'desktop_notifications','enabled':1},
+    {'action':'desktop_notifications','enabled':True,'command':'notify-send'},
+    {'action':'suricata_rules_stage','interface':'eth0','home_net':'192.168.1.7/24'},
+    {'action':'suricata_rules_stage','interface':'eth0;id','home_net':'192.168.1.0/24'},
+    {'action':'suricata_rules_stage','interface':'eth0','home_net':'192.168.1.0/24','url':'https://other.invalid'},
+    {'action':'suricata_rules_activate','generation':None},
+    {'action':'suricata_rules_activate','generation':'A'*32},
+    {'action':'suricata_rules_activate','generation':'a'*31},
+    {'action':'suricata_rules_activate','generation':'a'*32,'interface':'eth0'},
+    {'action':'suricata_rules_check','generation':'a'*32},
+    {'action':'suricata_rules_rollback','path':'/tmp/other'},
+])
+def test_network_defense_rejects_unbounded_or_ambiguous_actions(manager, body):
+    with pytest.raises(ValueError):
+        manager.start(body)
+    assert manager.snapshot()['job']['state'] == 'idle'
+
+
+@pytest.mark.parametrize('action,args,fields', [
+    ('stage',('eth0','192.168.1.0/24'),dict(interface='eth0',home_net='192.168.1.0/24')),
+    ('activate',('a'*32,),dict(generation='a'*32)),
+    ('check',(),{}), ('rollback',(),{}),
+])
+def test_rules_actions_dispatch_only_explicit_reviewed_inputs(manager, monkeypatch, action, args, fields):
+    calls=[]
+    for operation in ('stage','activate','check','rollback'):
+        monkeypatch.setattr(manager.suricata_rules, operation,
+                            lambda *a, op=operation: calls.append((op,a)) or {'message':'Fixture rule action completed.', 'state':'staged' if op=='stage' else 'active'})
+    manager.run=lambda *a:pytest.fail('Rules dispatch must use the rules manager')
+    before=dict(manager._settings)
+    manager.snapshot()
+    assert calls == []
+    manager.start(dict(action='suricata_rules_'+action,**fields))
+    manager._thread.join(2)
+    assert manager.snapshot()['job']['state'] == 'finished'
+    assert calls == [(action,args)]
+    assert next(row for row in manager.snapshot()['tools'] if row['id']=='suricata')['state']==('staged' if action=='stage' else 'active')
+    assert manager._settings == before
+    assert not manager.profile.exists(), 'Rule staging must not change the saved active capture interface'
+
+
+def test_rules_worker_failure_is_not_reported_as_activation(manager, monkeypatch):
+    def reject(generation):
+        assert generation == 'b'*32
+        raise ValueError('The staged generation changed; review it again.')
+    monkeypatch.setattr(manager.suricata_rules,'activate',reject)
+    manager.start(dict(action='suricata_rules_activate',generation='b'*32))
+    manager._thread.join(2)
+    status=manager.snapshot()['job']
+    assert status['state'] == 'failed'
+    assert 'generation changed' in status['message']
+
+
+@pytest.mark.parametrize('enabled', [False,True])
+def test_desktop_preference_requires_explicit_worker_action(manager, monkeypatch, enabled):
+    calls=[]
+    monkeypatch.setattr(manager.notifications,'configure',lambda **kw:calls.append(kw) or True)
+    manager.snapshot()
+    assert calls == []
+    manager.start(dict(action='desktop_notifications',enabled=enabled))
+    manager._thread.join(2)
+    assert calls == [dict(enabled=enabled)]
+    assert manager.snapshot()['job']['state'] == 'finished'
+
+
+def test_unavailable_desktop_preference_is_reported_as_failed(manager, monkeypatch):
+    monkeypatch.setattr(manager.notifications,'configure',lambda **kw:False)
+    manager.start(dict(action='desktop_notifications',enabled=True))
+    manager._thread.join(2)
+    assert manager.snapshot()['job']['state'] == 'failed'
+
+
 def test_saved_collector_settings_are_loaded_and_report_watchers_preserved(manager,monkeypatch):
     requested=[]
     monkeypatch.setattr(manager.companions,'request_collection',
@@ -305,6 +379,32 @@ def test_get_is_read_only_and_action_requires_no_installer_token(endpoint):
     assert code==200 and value['token']==endpoint[1].token and endpoint[2]==[]
     assert request(endpoint)[0]==202 and endpoint[2]==[{'action':'qwen_check'}]
     assert endpoint[3].install_operator_token is None
+
+
+@pytest.mark.parametrize('value', [
+    dict(action='desktop_notifications',enabled=True),
+    dict(action='suricata_rules_stage',interface='eth0',home_net='192.168.1.0/24'),
+    dict(action='suricata_rules_activate',generation='a'*32),
+    dict(action='suricata_rules_check'), dict(action='suricata_rules_rollback'),
+])
+def test_network_defense_http_actions_require_operator_token_and_origin(endpoint, value):
+    body=json.dumps(value).encode()
+    assert request(endpoint,body=body,omit=('X-Megalodon-Config-Token',))[0] == 403
+    assert request(endpoint,body=body,extra=(('Origin','http://evil.invalid'),),omit=('Origin',))[0] == 403
+    assert endpoint[2] == []
+    assert request(endpoint,body=body)[0] == 202
+    assert endpoint[2] == [value]
+
+
+def test_network_defense_status_get_does_not_run_rules_or_deliver_notifications(endpoint, monkeypatch):
+    manager=endpoint[1]
+    for operation in ('stage','activate','check','rollback'):
+        monkeypatch.setattr(manager.suricata_rules,operation,
+                            lambda *a:pytest.fail('GET must not invoke privileged rules operations'))
+    monkeypatch.setattr(manager.notifications,'configure',lambda **kw:pytest.fail('GET must not change notifications'))
+    manager.run=lambda *a:pytest.fail('GET must not run commands')
+    assert request(endpoint,method='GET',body=b'')[0] == 200
+    assert endpoint[2] == []
 
 
 @pytest.mark.parametrize('action', ['model_stage_download','model_library_check','model_library_reuse','model_stage_cancel','model_test','model_test_cancel','startup_check','startup_enable','startup_disable','startup_services'])

@@ -26,6 +26,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from .evidence_storage import epoch, utc
+from .flow_ingestion import producer_scope
 from .local_install import _atomic_write, _regular_owned_file
 
 SCHEMA = 'megalodon-reports-v1'
@@ -362,7 +363,11 @@ class ReportService(RetainedEvidenceReader):
                                         state=_label(action.get('status','Recorded outcome unavailable')),
                                         detail=_label(action.get('action','Recorded response'))))
                         elif category == 'flows':
-                            key = (source, str(data.get('source_id')), data.get('first_seen'), data.get('byte_basis', 'unknown'))
+                            try:interface,sensor_name=producer_scope(data)
+                            except ValueError:
+                                gaps.append('A flow with invalid producer identity labels was excluded.')
+                                continue
+                            key = (source, interface, sensor_name, str(data.get('source_id')), data.get('first_seen'), data.get('byte_basis', 'unknown'))
                             if key not in flows and len(flows) >= MAX_FLOWS:
                                 flow_overflow = True
                                 continue
@@ -430,8 +435,14 @@ class ReportService(RetainedEvidenceReader):
             except (OSError, ValueError, sqlite3.Error):
                 gaps.append('An evidence segment expired or could not be read during report generation.')
         grouped = {}
-        for (source, identity, first_seen, basis), value in flows.items():
-            group = grouped.setdefault((source, basis), dict(source=source, byte_basis=basis, records=0, connections=0, sent_bytes=0, received_bytes=0, unknown_counters=0, protocols=Counter()))
+        for (source, interface, sensor_name, identity, first_seen, basis), value in flows.items():
+            scope=(source,interface,sensor_name,basis)
+            if scope not in grouped and len(grouped)>=MAX_KEYS:
+                flow_overflow=True
+                continue
+            group = grouped.setdefault(scope, dict(source=source, interface=interface,sensor_name=sensor_name,
+                sensor_identity_basis='producer_reported' if sensor_name is not None else 'unreported',
+                byte_basis=basis, records=0, connections=0, sent_bytes=0, received_bytes=0, unknown_counters=0, protocols=Counter()))
             group['connections'] += 1
             grouping_overflow |= _counter(group['protocols'], value['protocol'])
             group['records'] += value['updates']
@@ -462,7 +473,9 @@ class ReportService(RetainedEvidenceReader):
         if finding_overflow:
             gaps.append('Finding details are limited to 5,000 rows; finding totals include every processed finding.')
         if flow_overflow:
-            gaps.append('The 100,000-connection flow aggregation limit was reached; flow totals are incomplete.')
+            gaps.append('Flow aggregation exceeded 100,000 connections or 4,096 producer/interface groups; flow totals are incomplete.')
+        if flows:
+            gaps.append('Sensor/interface labels are producer-reported where present; missing labels remain unknown. Overlapping sensors may observe the same traffic.')
         if compacted_records:
             gaps.append('Some packet metadata is represented by five-minute, directional conversation summaries. Individual packet details are unavailable for those intervals.')
         if compacted_edge:
@@ -845,9 +858,10 @@ def render_html(value):
     parts=['<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MEGALODON network report</title><style>'+REPORT_CSS+'</style></head><body><main><header class="hero"><div class="eyebrow">MEGALODON / LOCAL REPORT</div><h1>Your network, explained.</h1><p>'+e(_friendly(start,zone))+' → '+e(_friendly(end,zone))+'</p><p>'+e(attention)+'</p><div class="stats">'+''.join('<div class="stat"><strong>'+e(v)+'</strong>'+e(k)+'</div>' for k,v in [('Packet records',f"{summary['packet_records']:,}"),('Reported packet data',_size_label(summary['packet_bytes'])),('Findings',f"{summary['finding_count']:,}"),('Resource samples',f"{summary['resource_samples']:,}")])+'</div></header>']
     parts+=['<section><h2>What needs attention</h2><p>'+e(attention)+'</p>'+_categories(severities,'Findings by source and severity','findings')+_table(['Source / recorded severity','Findings'],severities.items(),empty='No finding severity labels were returned.')+'<details><summary>What this report could and could not see</summary><p>'+('All available source rows within the report work limits were processed.' if coverage.get('aggregation_complete') else 'Some source rows or details could not be processed. This report is incomplete.')+'</p><ul>'+''.join('<li>'+e(g)+'</li>' for g in coverage['gaps'])+'</ul></details></section>']
     parts+=['<div class="chart-grid"><section><h2>Traffic over time</h2><p class="muted">Packet records in 48 equal time intervals. Empty intervals do not prove uninterrupted capture.</p>',_traffic_chart(value['timeline'],start,end,zone),'<details><summary>Traffic chart table</summary>',_table(['Interval begins','Packet records'],[(interval(i),n) for i,n in enumerate(value['timeline'])]),'</details></section><section><h2>Recorded protocol mix</h2>',_categories(value['packet_protocols'],'Packet protocols','packet records'),'<details><summary>Protocol chart table</summary>',_table(['Protocol','Packet records'],value['packet_protocols'].items()),'</details></section></div>']
-    parts+=['<section><h2>Connection summaries</h2><p class="muted">Each source is shown separately. Repeated updates to a connection count once. Its largest retained byte counters may include traffic before this report began. These totals are not added to packet totals.</p>',_table(['Source','Counter meaning','Connections','Updates','To responder','To originator','Unknown counters'],[(r['source'],r['byte_basis'].replace('_',' '),r['connections'],r['records'],_size_label(r['sent_bytes']),_size_label(r['received_bytes']),r['unknown_counters']) for r in value['flow_sources']],empty='No connection summaries were retained. Packet charts may still contain data.')]
+    parts+=['<section><h2>Connection summaries</h2><p class="muted">Each recorded source, sensor and interface is shown separately. Sensor names are producer-reported. Repeated updates to a connection count once. Its largest retained byte counters may include traffic before this report began. These totals are not added to packet totals.</p>',_table(['Source','Reported sensor','Reported interface','Counter meaning','Connections','Updates','To responder','To originator','Unknown counters'],[(r['source'],r.get('sensor_name') or 'Not recorded',r.get('interface') or 'Not recorded',r['byte_basis'].replace('_',' '),r['connections'],r['records'],_size_label(r['sent_bytes']),_size_label(r['received_bytes']),r['unknown_counters']) for r in value['flow_sources']],empty='No connection summaries were retained. Packet charts may still contain data.')]
     for group in value['flow_sources']:
-        parts+=['<h3>'+e(group['source'])+' / connection protocols</h3>',_categories(group.get('protocols',{}),'Connection protocols','connections'),'<details><summary>Connection protocol table</summary>',_table(['Protocol','Source connections'],group.get('protocols',{}).items()),'</details>']
+        title=' / '.join((group['source'],group.get('sensor_name') or 'Sensor not recorded',group.get('interface') or 'Interface not recorded'))
+        parts+=['<h3>'+e(title)+' / connection protocols</h3>',_categories(group.get('protocols',{}),'Connection protocols','connections'),'<details><summary>Connection protocol table</summary>',_table(['Protocol','Source connections'],group.get('protocols',{}).items()),'</details>']
     parts+=['</section><section><h2>Download, upload and PC resources</h2><p class="muted">Receive means data arriving on an interface; send means data leaving it. Both include local-network traffic. VPNs and bridges can count the same traffic, so interfaces stay separate.</p>']
     names=sorted({name for row in value['resources'] for name in row['interfaces']})
     if not names:parts+=['<p class="notice">No historical interface speeds were retained for this period.</p>']

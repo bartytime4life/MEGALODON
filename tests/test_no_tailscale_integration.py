@@ -10,9 +10,15 @@ from megalodon.network_topology import parse_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 IDENTIFIERS = re.compile(
-    rb'tailscale|tailscaled|tailscale0|tailnet|magicdns|ts\.net|tailscale_|ts_authkey',
+    rb'tailscale|tailscaled|tailscale0|tailnet|magicdns|(?<![a-z0-9_-])ts\.net(?![a-z0-9_-])|tailscale_|ts_authkey',
     re.IGNORECASE,
 )
+
+
+def test_provider_domain_boundary_preserves_real_detection_without_suffix_collisions():
+    for value in (b'ts.net', b'host.ts.net', b'https://host.ts.net/path', b'TS.NET'):
+        assert IDENTIFIERS.search(value)
+    assert not IDENTIFIERS.search(b'https://rules.emergingthreats.net/open/')
 
 
 @pytest.mark.parametrize('relative', [

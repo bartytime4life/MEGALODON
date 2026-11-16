@@ -11,7 +11,7 @@ from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONF
 from megalodon.dashboard_settings import SETTINGS_JS
 
 
-@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs", "startup_preferences_browser.cjs", "support_status_browser.cjs"])
+@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs", "startup_preferences_browser.cjs", "support_status_browser.cjs", "network_defense_browser.cjs"])
 def test_support_config_behavior(script):
     node = shutil.which("node")
     if node is None:
@@ -59,6 +59,14 @@ def test_support_config_composition():
     assert 'Other saved-file imports use their adapter commands.' in INDEX_HTML
     assert 'innerHTML' not in SUPPORT_CONFIG_JS
     assert 'localStorage' not in SUPPORT_CONFIG_JS
+
+
+def test_network_defense_controls_survive_settings_composition_once():
+    for identifier in ('support-network-defense','support-notifications-toggle',
+                       'support-rules-home-net','support-rules-stage','support-rules-activate',
+                       'support-rules-check','support-rules-rollback'):
+        assert INDEX_HTML.count(f'id="{identifier}"') == 1
+    assert INDEX_HTML.index('id="support-network-defense"') < INDEX_HTML.index('id="support-rules-activate"')
 
 
 def test_model_loading_is_secondary_to_explicit_selection_and_test():

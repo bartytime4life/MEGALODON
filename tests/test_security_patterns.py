@@ -45,6 +45,67 @@ def test_ipv6_sensor_interface_and_measurement_separation():
     assert all(b['count']==60 for b in base)
 
 
+def test_named_producers_partition_flow_identity_patterns_and_legacy_baselines():
+    values=[]
+    for n,name in enumerate(('sensor-a','sensor-b',None)):
+        group=rows(source='suricata-eve',count=8)
+        for i,row in enumerate(group):
+            row['id']=f'{SEGMENT}:{n*8+i+1}'
+            row['observed_at']=utc(START+i)
+            row['data'].update(dst_ip=f'198.51.100.{n*8+i+1}',first_seen=utc(START+i))
+            if name:row['data']['sensor_name']=name
+        values+=group
+    baselines,checks,gaps=analyze_hour(values,START,START+3600,[])
+    assert len(baselines)==3 and all(b['count']==8 for b in baselines)
+    assert sorted(len(b['key']) for b in baselines)==[4,5,5]
+    assert {b['key'][4] for b in baselines if len(b['key'])==5}=={'sensor-a','sensor-b'}
+    assert 'HOST_FANOUT' not in {c['rule'] for c in checks}
+    assert not any('Conflicting connection' in gap for gap in gaps)
+
+
+def test_eve_labels_enable_same_sensor_correlation_without_mixing_named_producers():
+    from megalodon.flow_ingestion import normalize_suricata
+    from megalodon.layered_review import layered_reviews
+    def observations(second_sensor):
+        result=[]
+        for i in range(21):
+            at=START+i if i<16 else START+100+(i-16)*10
+            raw=dict(timestamp=utc(at+1),event_type='flow',flow_id=i+1,host='sensor-a' if i<16 else second_sensor,
+                in_iface='mirror0',src_ip='192.0.2.1',dest_ip=f'198.51.100.{i+1}' if i<16 else '203.0.113.1',
+                src_port=50000,dest_port=443,proto='TCP',flow=dict(start=utc(at),end=utc(at+1),state='closed',
+                    bytes_toserver=100,bytes_toclient=100,pkts_toserver=1,pkts_toclient=1))
+            category,record=normalize_suricata(raw)
+            result.append(dict(record,category=category,id=f'{SEGMENT}:{i+1}'))
+        return result
+    _,signals,_=analyze_hour(observations('sensor-a'),START,START+3600,[])
+    review,=layered_reviews(signals,START,START+3600)[0]
+    assert review['sensor_name']=='sensor-a' and review['interface']=='mirror0'
+    assert review['sensor_identity_basis']=='producer_reported'
+    assert {s['rule'] for s in review['facts']['signals']}=={'HOST_FANOUT','REGULAR_INTERVAL'}
+    assert any('engine, run and rules identity are unverified' in gap for gap in review['missing_information'])
+    _,separate,_=analyze_hour(observations('sensor-b'),START,START+3600,[])
+    assert layered_reviews(separate,START,START+3600)[0]==[]
+
+
+def test_named_sensor_baselines_never_train_other_or_unnamed_producers():
+    history=[]
+    for hour in range(24):
+        values=rows(START+hour*3600,source='suricata-eve')
+        for row in values:row['data']['sensor_name']='sensor-a'
+        baseline,_,_=analyze_hour(values,START+hour*3600,START+(hour+1)*3600,history)
+        history+=baseline
+    at=START+24*3600
+    for name in ('sensor-a','sensor-b',None):
+        values=rows(at,source='suricata-eve',port=8443)
+        if name:
+            for row in values:row['data']['sensor_name']=name
+        _,checks,_=analyze_hour(values,at,at+3600,history)
+        assert ('NEW_DESTINATION_PORT' in {c['rule'] for c in checks}) is (name=='sensor-a')
+        if name is None:
+            assert all('sensor_name' not in c for c in checks)
+            assert any('Producer sensor identity was not recorded' in gap for c in checks for gap in c['missing_information'])
+
+
 def test_findings_contaminate_compatible_device_hours():
     values=rows()+rows(source='suricata-eve',category='packets')
     values[-1]['data']['findings']=[dict(rule_id='PORT_SCAN',severity='HIGH')]

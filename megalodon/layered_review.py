@@ -86,6 +86,10 @@ def _signal(item, start, end):
     interface = item['interface']
     if not _text(interface, 64) or interface == 'unreported':
         raise ValueError
+    sensor_name = item.get('sensor_name', '')
+    if 'sensor_name' in item and (not _text(sensor_name, 128) or sensor_name != sensor_name.strip()
+            or item.get('sensor_identity_basis') != 'producer_reported'):
+        raise ValueError
     if (not _text(item['sensor'], 128) or item['measurement'] not in {'packet', 'flow', 'finding'}
             or type(item['id']) is not str or not IDENTIFIER.fullmatch(item['id'])
             or epoch(item['start']) != start or epoch(item['end']) != end
@@ -101,11 +105,13 @@ def _signal(item, start, end):
     gaps = item['missing_information']
     if type(gaps) is not list or len(gaps) > 18 or any(not _text(g, 512) for g in gaps):
         raise ValueError
-    return (address, interface), item
+    # Different named producers (including named versus unknown) cannot supply
+    # each other's signals, even when their interface labels and IPs coincide.
+    return (address, interface, sensor_name), item
 
 
 def layered_reviews(items, start, end):
-    """One deterministic two-family review per address/interface/completed hour.
+    """One two-family review per address/interface/producer/completed hour.
 
     Callers supply the current hourly candidates only. No feedback, model text,
     old reviews, learned thresholds or recursively derived reviews are inputs.
@@ -147,7 +153,8 @@ def layered_reviews(items, start, end):
         assert len(refs) <= MAX_REFERENCES
         qualification, qualification_notes = _qualification(pair, start, end)
         facts = dict(window_seconds=3600, relationship='same_address_interface_hour',
-            signals=[dict(rule=v['rule'], sensor=v['sensor'], measurement=v['measurement']) for v in pair],
+            signals=[dict(rule=v['rule'], sensor=v['sensor'], measurement=v['measurement'],
+                **(dict(sensor_name=v['sensor_name']) if 'sensor_name' in v else {})) for v in pair],
             independent_corroboration=False, attack_sequence_established=False,
             evidence_qualification=qualification)
         source_gaps = list(dict.fromkeys([*qualification_notes,
@@ -157,13 +164,15 @@ def layered_reviews(items, start, end):
         # Keep one component coverage note inside Findings' four-note page,
         # even when both shared support and unavailable timing need disclosure.
         source_gaps.insert(0, BOUNDARY + ' ' + UNKNOWN_AUTHORIZATION)
-        review = candidate('LAYERED_ACTIVITY', (*key, 'Separate source-qualified signals', 'signal co-occurrence'),
+        review_key = (*key[:2], 'Separate source-qualified signals', 'signal co-occurrence')
+        if key[2]:review_key=(*review_key,key[2])
+        review = candidate('LAYERED_ACTIVITY', review_key,
             start, end, facts, refs, segments, gaps=source_gaps,
             source_start=min(epoch(v['source_start']) for v in pair))
         # Both complete bounded reference lists are retained, not silently cut
         # to the generic candidate's 24-reference display budget.
         review['evidence_refs'] = refs
         review['label'] = 'Layered activity to review'
-        review['fingerprint'] = stable(['layered-activity-v1', key, facts['signals']])
+        review['fingerprint'] = stable(['layered-activity-v1', key if key[2] else key[:2], facts['signals']])
         reviews.append(review)
     return reviews, gaps

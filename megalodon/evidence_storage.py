@@ -71,8 +71,12 @@ def policy_value(value):
 
 
 class EvidenceStorage:
-    def __init__(self, settings, *, home=None, clock=time.time, monotonic=time.monotonic, segment_bytes=SEGMENT_BYTES):
+    def __init__(self, settings, *, home=None, clock=time.time, monotonic=time.monotonic, segment_bytes=SEGMENT_BYTES,
+                 finding_observer=None):
+        if finding_observer is not None and not callable(finding_observer):
+            raise ValueError('A finding observer must be a trusted local callback.')
         if fcntl is None:raise ValueError('Managed evidence requires the local Linux HUD.')
+        self.finding_observer = finding_observer
         self.settings = settings
         self.home = Path.home() if home is None else Path(home)
         self.root = self.home/'.local/share/megalodon/evidence'
@@ -661,7 +665,7 @@ class EvidenceStorage:
             dependencies.update(v for row in records for v in row.get('data',{}).get('source_segments',[]))
         if len(dependencies)>256 or any(not isinstance(v,str) or not re.fullmatch(r'[a-f0-9]{32}',v) for v in dependencies):
             raise ValueError('Invalid derived source dependencies')
-        prepared=[]
+        prepared=[];notification_times=[]
         for row in records:
             if type(row) is not dict or set(row)!={'observed_at','source','data'} or type(row['data']) is not dict:
                 raise ValueError('Invalid evidence record.')
@@ -672,6 +676,9 @@ class EvidenceStorage:
             raw=json.dumps(row['data'],separators=(',',':'),sort_keys=True,allow_nan=False)
             if len(raw.encode())>32768:raise ValueError('Evidence record exceeds its bound.')
             prepared.append((utc(stamp),utc(self.clock()),row['source'],raw))
+            if self.finding_observer is not None and category=='findings' and row['source']=='suricata-eve':
+                severity=json.loads(raw).get('severity')
+                if type(severity) is int and severity in (1,2):notification_times.append((stamp,))
         if not prepared:return 0
         with self.lock:
             if self._lease_fd is None:raise ValueError('Evidence owner lease is closed.')
@@ -694,6 +701,9 @@ class EvidenceStorage:
             with self._writer_db(entry) as db:
                 self._checkpoint(entry,db)
                 db.executemany('INSERT INTO records(observed_at,recorded_at,source,data) VALUES(?,?,?,?)',prepared)
+                # Read the record cursor before checkpoint inserts can change
+                # last_insert_rowid; no history scan or raw data leaves here.
+                notification_cursor=db.execute('SELECT last_insert_rowid()').fetchone()[0] if notification_times else None
                 if combined:db.execute("INSERT OR REPLACE INTO checkpoints VALUES('derived_sources',?)",(json.dumps(dict(sources=combined)),))
                 if checkpoint is not None:
                     key,value=checkpoint
@@ -712,8 +722,25 @@ class EvidenceStorage:
             entry['records']+=len(prepared)
             entry['first_at']=min([entry['first_at']] + stamps) if entry['first_at'] else min(stamps)
             entry['last_at']=max([entry['last_at']] + stamps) if entry['last_at'] else max(stamps)
-            self._save(force=category in {'audit','reports'})
+            self._save(force=category in {'audit','reports'} or bool(notification_times))
+            self._notify_findings('sensor:'+entry['id'],notification_cursor,notification_times)
             return len(prepared)
+
+    def _notify_findings(self,scope,cursor,observations):
+        """Hints follow both SQLite commit and durable catalog save, never replay.
+
+        Every timestamp for a finding must be fresh. Core observations include
+        both packet and detector time so a newly analyzed old import stays quiet.
+        A failed optional desktop hint cannot turn committed evidence into a
+        failed ingestion or expose evidence content to the callback.
+        """
+        if self.finding_observer is None or not observations:return
+        try:
+            now=self.clock()
+            count=sum(all(now-120<=stamp<=now+60 for stamp in stamps) for stamps in observations)
+            if count:self.finding_observer(scope,cursor,count=count)
+        except Exception:
+            pass
 
     def _seal(self,entry):
         with self._writer_db(entry) as db:
@@ -1215,6 +1242,11 @@ class SegmentedPacketWriter:
                 self.entry['first_at']=min([self.entry['first_at'],*stamps]) if self.entry['first_at'] else min(stamps)
                 self.entry['last_at']=max([self.entry['last_at'],*stamps]) if self.entry['last_at'] else max(stamps)
                 self.manager._save(force=any(detections or actions for _,detections,actions in bundles))
+                if self.manager.finding_observer is not None:
+                    observations=[(event.observed_at.timestamp(),detection.detected_at.timestamp())
+                                  for event,detections,_ in bundles for detection in detections
+                                  if detection.suppressed_reason is None]
+                    self.manager._notify_findings('detector:'+self.entry['id'],max(result),observations)
                 return result
             except BaseException:
                 self.manager._write_metrics['write_failures'] += 1

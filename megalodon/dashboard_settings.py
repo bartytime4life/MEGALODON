@@ -51,6 +51,7 @@ def compose_settings(html: str) -> str:
     support, startup = _take(support, "startup-settings")
     support, feedback = _take_match(support, r'<div class="support-config-feedback"[^>]*>')
     support, capture = _take_match(support, r'<section class="support-capture"[^>]*>')
+    support, network_defense = _take(support, "support-network-defense")
     support, collectors = _take_match(support, r'<details class="support-collector-settings"[^>]*>')
     support, services = _take_match(support, r'<details class="support-service-settings"[^>]*>')
     services, model = _take_match(services, r'<section aria-labelledby="support-model-title"[^>]*>')
@@ -88,7 +89,7 @@ def compose_settings(html: str) -> str:
       <a href="#support-model-title"><span>Local AI</span><strong id="settings-model-summary">Checking…</strong><small id="settings-model-name">Saved model</small><b aria-hidden="true">↗</b></a>
       <a href="#apps-connections-title"><span>Apps</span><strong id="settings-apps-summary">Checking…</strong><small>Install and configure</small><b aria-hidden="true">↗</b></a>
     </div>''' + startup + health
-    traffic = capture + _disclosure('Background sensors · Zeek and Suricata',
+    traffic = capture + network_defense + _disclosure('Background sensors · Zeek and Suricata',
         _inside(services).split('<div class="support-tool-settings">', 1)[1].rsplit('</div>', 1)[0])
     traffic += _disclosure('Device discovery', network) + _disclosure('IP location data', geography)
     app_body = apps + management + collectors + _disclosure('Host security and threat context', security)

@@ -346,7 +346,20 @@ class FindingsReview(RetainedEvidenceReader):
             src_ip=source, dst_ip=destination, src_port=_number(data.get('src_port'), 65535), dst_port=_number(data.get('dst_port'), 65535),
             protocol=_text(data.get('protocol'), 32), sensor_severity=severity if type(severity) is int else None,
             observed_service_hint=_text(data.get('app_proto'), 40, 'Not recorded'))
-        return self._record(summary, facts, [entry['id']], ['A sensor alert is evidence to review, not proof of compromise.'])
+        metadata = data.get('alert_metadata')
+        if type(metadata) is dict:
+            for field in ('gid', 'rev'):
+                if field in metadata:facts[field] = _number(metadata[field])
+        for field, maximum in (('sensor_name', 128), ('interface', 64)):
+            if field in data:facts[field] = _text(data[field], maximum, 'Not recorded')
+        gaps = ['A sensor alert is evidence to review, not proof of compromise.']
+        if row['source'] == 'suricata-eve':
+            facts['sensor_identity_basis'] = 'producer_reported' if data.get('sensor_name') else 'unreported'
+            if data.get('interface'):facts['interface_basis'] = 'producer_reported'
+            gaps.append('Sensor/interface labels are producer-reported; engine, run and rules identity are unverified.')
+            if not data.get('sensor_name'):gaps.append('Producer sensor identity was not recorded.')
+            if not data.get('interface'):gaps.append('The sensor interface was not recorded.')
+        return self._record(summary, facts, [entry['id']], gaps)
 
     def _patterns(self, start, end, *, identifier=None):
         result = []
@@ -374,6 +387,8 @@ class FindingsReview(RetainedEvidenceReader):
             facts = dict(rule=_text(item.get('rule'), 64), device=summary['subject'],
                 start=_text(item.get('start'), 40), end=summary['observed_at'], measurement=_text(item.get('measurement'), 96),
                 sensor=_text(item.get('sensor'), 96), what_happened=summary['summary'], recorded_evidence=_bounded(item.get('facts', {})))
+            if 'sensor_name' in item:
+                facts.update(sensor_name=_text(item['sensor_name'], 128),sensor_identity_basis='producer_reported')
             gaps = list(item.get('missing_information', [])[:4])
             if item.get('facts', {}).get('preserved_finding'):
                 gaps.insert(0, 'Only a preserved finding reference is recorded; original detector counts, thresholds and window are unavailable.')

@@ -116,8 +116,9 @@ def test_real_managed_eve_intake_reaches_findings_and_saved_report(service):
     from megalodon.reporting import ReportService
     path=service.evidence.home/'synthetic-eve.json'
     event=dict(timestamp=utc(service.clock()-20),event_type='alert',flow_id=7003,
+        host='office-sensor',in_iface='mirror0',
         src_ip='192.0.2.10',dest_ip='198.51.100.20',src_port=40000,dest_port=443,proto='TCP',
-        alert=dict(signature='Synthetic end-to-end sensor witness',signature_id=7003,severity=1))
+        alert=dict(signature='Synthetic end-to-end sensor witness',signature_id=7003,severity=1,gid=1,rev=7))
     path.write_text(json.dumps(event)+'\n')
     worker=FlowIngestor(service.evidence,home=service.evidence.home,eve_path=path)
     assert worker.poll('suricata',include_flows=False)==1
@@ -126,6 +127,11 @@ def test_real_managed_eve_intake_reaches_findings_and_saved_report(service):
     assert feed['page']['returned']==1 and feed['items'][0]['severity']=='high'
     detail=service.snapshot(selected=feed['items'][0]['id'])['selected']
     assert 'Synthetic end-to-end sensor witness' in json.dumps(detail['facts'])
+    assert detail['facts']['sensor_name']=='office-sensor' and detail['facts']['interface']=='mirror0'
+    assert detail['facts']['sensor_identity_basis']=='producer_reported'
+    assert detail['facts']['interface_basis']=='producer_reported'
+    assert detail['facts']['gid']==1 and detail['facts']['rev']==7 and detail['facts']['rule']=='7003'
+    assert any('engine, run and rules identity are unverified' in gap for gap in detail['gaps'])
     report=ReportService(service.evidence)
     try:
         job=report.create(dict(start=utc(service.clock()-60),end=utc(service.clock())))
@@ -137,6 +143,17 @@ def test_real_managed_eve_intake_reaches_findings_and_saved_report(service):
         assert b'Synthetic end-to-end sensor witness' in html
     finally:report.close()
     assert service.model_calls==[] and service.defense.calls==[]
+
+
+def test_historic_sensor_findings_keep_identity_unknown(service):
+    service.evidence.append_records('findings',[dict(observed_at=utc(service.clock()-20),source='suricata-eve',
+        data=dict(signature='Earlier observation',signature_id=42,severity=2,
+                  src_ip='192.0.2.1',dst_ip='198.51.100.1',protocol='TCP'))])
+    detail=selected(service)
+    assert detail['facts']['sensor_identity_basis']=='unreported'
+    assert not {'sensor_name','interface','gid','rev'} & detail['facts'].keys()
+    assert 'Producer sensor identity was not recorded.' in detail['gaps']
+    assert 'The sensor interface was not recorded.' in detail['gaps']
 
 
 def test_sources_keep_separate_roles_and_patterns_do_not_invent_severity(service):

@@ -2250,6 +2250,7 @@ def serve(
             from .flow_ingestion import FlowIngestor
             from .connection_program import ConnectionPrograms
             handler.evidence=EvidenceStorage(runtime_settings)
+            handler.evidence.finding_observer=handler.support_config.notifications.observe
             from .managed_receipts import ManagedReceipts
             if handler.evidence.enabled:
                 for channel in ('qwen','defense'):ManagedReceipts(handler.evidence,channel).reconcile_interrupted()

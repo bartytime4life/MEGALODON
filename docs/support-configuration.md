@@ -66,6 +66,41 @@ requests bounded capture cleanup and finalizes its ingestion receipt.
 | Zeek | Verify the CLI and prepare automatic 10-second / 2,000-frame samples while background monitoring is enabled. Completed qualified conn.log intake remains separate. |
 | Suricata | Configure the passive system service for the selected interface, one worker, its runtime directory, and EVE read access. Existing rules are retained. Recent log summaries are separate from admitted alert evidence. |
 
+The **Network detection and alerts** section adds optional local desktop hints
+for newly committed, unsuppressed core findings and priority 1/2 Suricata alerts.
+Both event and finding timestamps must be recent; old imports do not replay
+desktop hints. Hints contain no addresses, signatures or other evidence text,
+aggregate at most once per minute, and grant no response authority. The saved
+preference defaults off. They require a running HUD and desktop session;
+successful helper submission does not verify desktop delivery. Findings remain
+available in the HUD if a hint fails.
+
+Its separate Suricata rules workflow stages ET Open, validates the candidate,
+and activates only the exact reviewed generation. Staging requires the selected
+interface and an explicit protected-network CIDR. Activation, recheck and rollback
+use fixed OS-authorized actions. The passive profile preserves supported existing
+custom rules and refuses ambiguous configuration. A dated native configuration
+test and service check do not prove event delivery or coverage. See the
+[Google Wifi defense guide](artex-home-network-defense.md) before choosing a
+capture position or interpreting `HOME_NET` on a WAN link.
+
+The privileged rules helper requires root-owned, non-writable executable and
+configuration ancestry. Some distribution packages deliberately give the
+Suricata account ownership of its updater or configuration directory; those
+layouts are unsupported by this stricter lifecycle workflow, not evidence of
+compromise. Review a migration to trusted configuration before activation.
+Reinstalling the same package may recreate its ownership policy; do not apply
+recursive ownership changes or weaken the helper's checks to make it pass.
+
+The protected action bodies are closed: `desktop_notifications` requires a
+boolean `enabled`; `suricata_rules_stage` requires `interface` and `home_net`;
+`suricata_rules_activate` requires the reviewed 32-character hexadecimal
+`generation`; `suricata_rules_check` and `suricata_rules_rollback` accept no
+additional fields. Reading their cached status performs no rule update, service
+probe or notification. Failed status reads disable their controls. A changed
+session token requires another explicit click; these actions never replay
+automatically after a failed permission check.
+
 Collector scopes persist in `~/.config/megalodon/support-config.json`; report
 watching remains active. A scope change is refused while a collector is running.
 Only the chosen collector is queued by its configuration action. Previously
@@ -108,6 +143,8 @@ The same actions are available from the reviewed checkout:
 ./scripts/configure-support-apps.sh zeek_check
 ./scripts/configure-support-apps.sh suricata_configure --interface enp11s0
 ./scripts/configure-support-apps.sh suricata_check
+./scripts/configure-support-apps.sh desktop_notifications --enabled
+./scripts/configure-support-apps.sh suricata_rules_check
 ```
 
 Replace the example interface with the one selected in your HUD. These scripts
