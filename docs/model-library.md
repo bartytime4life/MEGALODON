@@ -232,13 +232,13 @@ or an adversary able to conceal and restore changes between observations.
 
 It reads at most 1 MiB per file for six named source files, refuses links and
 nonregular files, and compares SHA-256 with the package source at
-checkpoint `e13facc23cde3866e0bef31d7605e26efb176d8c` (Google Wifi network-defense
-setup and desktop finding hints). This local source checkpoint identifies bytes;
-it does not imply merge, deployment, or operational acceptance. The preceding
-checkpoint was `41aac8cdcd25837857f6651e8d046cb70b21e8f5` (Setup status failure
-propagation), following `c9eda15a6700d46c00eeaa20852f169b79cab8a9` (Stage 0
-entry guards). This refresh changes the support-configuration and dashboard
-support-configuration hashes. This six-file
+checkpoint `202172bfc3a5076fbb03fcafb1528412ecb36da8` (router and capture-placement
+guidance). This local source checkpoint identifies bytes; it does not imply
+merge, deployment, or operational acceptance. The preceding checkpoint was
+`e13facc23cde3866e0bef31d7605e26efb176d8c` (Google Wifi network-defense setup and
+desktop finding hints), following `41aac8cdcd25837857f6651e8d046cb70b21e8f5`
+(Setup status failure propagation). This refresh changes only the dashboard
+support-configuration hash. This six-file
 comparison does not inspect `execution_boundary.py`, the complete dashboard,
 or prove Stage 0 enforcement.
 It checks file/directory
