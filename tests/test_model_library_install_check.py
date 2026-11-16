@@ -32,7 +32,7 @@ def package(tmp_path, monkeypatch):
     return package
 
 
-def test_pins_match_the_merged_package_source():
+def test_pins_match_the_expected_package_source():
     assert len(check.EXPECTED) == 6
     assert all(sha256((ROOT / "megalodon" / name).read_bytes()).hexdigest() == value
                for name, value in check.EXPECTED.items())
