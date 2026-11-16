@@ -1,8 +1,13 @@
-"""Static router guidance; selection changes presentation only."""
+"""Static router and switch guidance; selection changes presentation only."""
 from html import escape
 
 from .router_compatibility import (
     CHECKED_ON, COLLECTION_MODES, DEFAULT_MODE_ID, DEFAULT_PROFILE_ID, PROFILES,
+)
+from .switch_compatibility import (
+    CHECKED_ON as SWITCH_CHECKED_ON,
+    DEFAULT_PROFILE_ID as DEFAULT_SWITCH_PROFILE_ID,
+    PROFILES as SWITCH_PROFILES,
 )
 
 
@@ -40,21 +45,44 @@ def _mode(mode):
             f'<dt>Preparation</dt><dd>{escape(mode.preparation)}</dd></dl></section>')
 
 
+def _switch_profile(profile):
+    identifier = escape(profile.id, quote=True)
+    sources = ''.join(
+        f'<li><a href="{escape(source.url, quote=True)}" target="_blank" '
+        f'rel="noopener noreferrer">{escape(source.title)}</a></li>'
+        for source in profile.sources)
+    caveats = ''.join(f'<li>{escape(value)}</li>' for value in profile.caveats)
+    return (f'<section class="router-guide-panel" data-switch-profile="{identifier}" '
+            f'aria-labelledby="switch-profile-{identifier}-title"'
+            f'{"" if profile.id == DEFAULT_SWITCH_PROFILE_ID else " hidden"}>'
+            f'<h6 id="switch-profile-{identifier}-title">{escape(profile.name)}</h6>'
+            f'<p class="support-config-note">{escape(profile.category)}</p>'
+            f'<dl><dt>Collection options</dt><dd>{escape(profile.collection)}</dd>'
+            f'<dt>Switch features to review</dt><dd>{escape(profile.features)}</dd></dl>'
+            f'<ul>{caveats}</ul><details><summary>Publisher sources</summary><ul>{sources}</ul></details></section>')
+
+
 ROUTER_COMPATIBILITY_HTML = (
     '<section id="router-compatibility" aria-labelledby="router-compatibility-title">'
-    '<h5 id="router-compatibility-title">Router and capture placement guide</h5>'
-    '<p>Choose a router family and a capture placement to review collection options. '
-    'This guide does not configure your router or verify monitoring coverage. '
+    '<h5 id="router-compatibility-title">Router, switch and capture placement guide</h5>'
+    '<p>Choose a router family, a switch family and a capture placement to review collection options. '
+    'This guide does not configure your router or switch, or verify monitoring coverage. '
+    'Independent profile choices do not validate the combined network topology. '
     'Choices last only while this page is open.</p>'
-    f'<p class="support-config-note">Publisher references checked {escape(CHECKED_ON)}. '
+    f'<p class="support-config-note">Router references checked {escape(CHECKED_ON)}; '
+    f'switch references checked {escape(SWITCH_CHECKED_ON)}. '
     'Features depend on the exact model and firmware.</p>'
     '<div class="router-guide-choices"><div><label for="router-guide-profile">Router family</label>'
     f'<select id="router-guide-profile" data-default="{escape(DEFAULT_PROFILE_ID, quote=True)}">'
     + _options(PROFILES, DEFAULT_PROFILE_ID) + '</select></div>'
+    '<div><label for="switch-guide-profile">Switch family</label>'
+    f'<select id="switch-guide-profile" data-default="{escape(DEFAULT_SWITCH_PROFILE_ID, quote=True)}">'
+    + _options(SWITCH_PROFILES, DEFAULT_SWITCH_PROFILE_ID) + '</select></div>'
     '<div><label for="router-guide-mode">Capture placement</label>'
     f'<select id="router-guide-mode" data-default="{escape(DEFAULT_MODE_ID, quote=True)}">'
     + _options(COLLECTION_MODES, DEFAULT_MODE_ID) + '</select></div></div>'
     '<div class="router-guide-panels"><div>' + ''.join(map(_profile, PROFILES)) + '</div><div>'
+    + ''.join(map(_switch_profile, SWITCH_PROFILES)) + '</div><div>'
     + ''.join(map(_mode, COLLECTION_MODES)) + '</div></div>'
     '<p class="support-config-note">The HUD capture and bounded Zeek sampler use non-promiscuous capture '
     '(<code>-p</code>). Mirrored traffic needs a separately prepared promiscuous sensor and tested local '
@@ -66,7 +94,7 @@ ROUTER_COMPATIBILITY_HTML = (
 ROUTER_COMPATIBILITY_CSS = r'''
 #router-compatibility { margin:0 0 28px; padding:0 0 22px; border-bottom:1px solid #294451; }
 #router-compatibility [hidden] { display:none!important; }
-#router-compatibility .router-guide-choices,#router-compatibility .router-guide-panels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; }
+#router-compatibility .router-guide-choices,#router-compatibility .router-guide-panels { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px; }
 #router-compatibility .router-guide-choices { margin:16px 0 20px; }
 #router-compatibility select { width:100%; max-width:none; }
 #router-compatibility h6 { margin:0 0 8px; font-size:.9rem; }
@@ -76,7 +104,7 @@ ROUTER_COMPATIBILITY_CSS = r'''
 #router-compatibility ul { padding-left:20px; }
 #router-compatibility li { margin:7px 0; font-size:.82rem; line-height:1.6; color:#bdcfd9; }
 #router-compatibility a { overflow-wrap:anywhere; }
-@media(max-width:650px) { #router-compatibility .router-guide-choices,#router-compatibility .router-guide-panels { grid-template-columns:1fr; gap:16px; } }
+@media(max-width:900px) { #router-compatibility .router-guide-choices,#router-compatibility .router-guide-panels { grid-template-columns:1fr; gap:16px; } }
 '''
 
 
@@ -96,6 +124,7 @@ ROUTER_COMPATIBILITY_JS = r'''
     display();
   }
   bind('router-guide-profile','data-router-profile','routerProfile');
+  bind('switch-guide-profile','data-switch-profile','switchProfile');
   bind('router-guide-mode','data-router-mode','routerMode');
 })();
 '''

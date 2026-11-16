@@ -13,13 +13,18 @@ import pytest
 from megalodon.dashboard_assets import DASHBOARD_CSS, DASHBOARD_JS, INDEX_HTML
 from megalodon.dashboard_router_compatibility import (
     ROUTER_COMPATIBILITY_CSS, ROUTER_COMPATIBILITY_HTML, ROUTER_COMPATIBILITY_JS,
-    _mode, _options, _profile,
+    _mode, _options, _profile, _switch_profile,
 )
 from megalodon.dashboard_settings import SETTINGS_JS
 from megalodon.dashboard_support_config import SUPPORT_CONFIG_JS
 from megalodon.router_compatibility import (
     CHECKED_ON, COLLECTION_MODES, DEFAULT_MODE_ID, DEFAULT_PROFILE_ID, PROFILES,
     Source,
+)
+from megalodon.switch_compatibility import (
+    CHECKED_ON as SWITCH_CHECKED_ON,
+    DEFAULT_PROFILE_ID as DEFAULT_SWITCH_PROFILE_ID,
+    PROFILES as SWITCH_PROFILES,
 )
 
 
@@ -54,7 +59,10 @@ def test_guide_is_composed_once_in_traffic_before_capture():
     assert ROUTER_COMPATIBILITY_CSS in DASHBOARD_CSS
     assert DASHBOARD_JS.count(ROUTER_COMPATIBILITY_JS) == 1
     assert CHECKED_ON in ROUTER_COMPATIBILITY_HTML
-    assert 'does not configure your router or verify monitoring coverage' in ROUTER_COMPATIBILITY_HTML
+    assert SWITCH_CHECKED_ON in ROUTER_COMPATIBILITY_HTML
+    assert 'Router, switch and capture placement guide' in ROUTER_COMPATIBILITY_HTML
+    assert 'does not configure your router or switch, or verify monitoring coverage' in ROUTER_COMPATIBILITY_HTML
+    assert 'Independent profile choices do not validate the combined network topology' in ROUTER_COMPATIBILITY_HTML
     assert 'Choices last only while this page is open' in ROUTER_COMPATIBILITY_HTML
     assert 'non-promiscuous capture' in ROUTER_COMPATIBILITY_HTML
     assert '(<code>-p</code>)' in ROUTER_COMPATIBILITY_HTML
@@ -65,6 +73,7 @@ def test_every_profile_and_mode_is_rendered_with_only_defaults_visible():
     elements = Layout(ROUTER_COMPATIBILITY_HTML).elements
     for attribute, catalog, default, selector in (
         ('data-router-profile', PROFILES, DEFAULT_PROFILE_ID, 'router-guide-profile'),
+        ('data-switch-profile', SWITCH_PROFILES, DEFAULT_SWITCH_PROFILE_ID, 'switch-guide-profile'),
         ('data-router-mode', COLLECTION_MODES, DEFAULT_MODE_ID, 'router-guide-mode'),
     ):
         panels = [attrs for _, attrs, _ in elements if attribute in attrs]
@@ -80,7 +89,7 @@ def test_every_profile_and_mode_is_rendered_with_only_defaults_visible():
         assert selector not in SUPPORT_CONFIG_JS
     assert not [tag for tag, _, _ in elements if tag in {'form', 'button', 'input', 'iframe', 'script'}]
     links = [attrs for tag, attrs, _ in elements if tag == 'a']
-    assert [link['href'] for link in links] == [source.url for profile in PROFILES for source in profile.sources]
+    assert [link['href'] for link in links] == [source.url for profile in (*PROFILES, *SWITCH_PROFILES) for source in profile.sources]
     for link in links:
         assert urlsplit(link['href']).scheme == 'https'
         assert link['target'] == '_blank'
@@ -94,11 +103,15 @@ def test_catalog_text_cannot_inject_active_html_or_attributes():
                       vendor_features=text, caveats=(text,), sources=(source,))
     mode = replace(COLLECTION_MODES[0], id=text, name=text, visibility=text,
                    limitations=text, preparation=text)
-    elements = Layout(_profile(profile) + _mode(mode) + _options((profile,), profile.id)).elements
+    switch = replace(SWITCH_PROFILES[0], id=text, name=text, category=text, collection=text,
+                     features=text, caveats=(text,), sources=(source,))
+    elements = Layout(_profile(profile) + _switch_profile(switch) + _mode(mode)
+                      + _options((profile,), profile.id) + _options((switch,), switch.id)).elements
     assert not [tag for tag, _, _ in elements if tag in {'img', 'script'}]
     assert not [name for _, attrs, _ in elements for name in attrs if name.startswith('on')]
     assert next(attrs['href'] for tag, attrs, _ in elements if tag == 'a') == source.url
     assert next(attrs['data-router-profile'] for _, attrs, _ in elements if 'data-router-profile' in attrs) == text
+    assert next(attrs['data-switch-profile'] for _, attrs, _ in elements if 'data-switch-profile' in attrs) == text
     assert next(attrs['value'] for tag, attrs, _ in elements if tag == 'option') == text
 
 
@@ -110,8 +123,10 @@ def test_selector_is_read_only_and_heartbeat_preserves_choices():
         [node, str(Path(__file__).with_name('router_compatibility_browser.cjs'))],
         input=json.dumps(dict(code=SETTINGS_JS, guide_code=ROUTER_COMPATIBILITY_JS,
                              profiles=[profile.id for profile in PROFILES],
+                             switches=[profile.id for profile in SWITCH_PROFILES],
                              modes=[mode.id for mode in COLLECTION_MODES],
-                             default_profile=DEFAULT_PROFILE_ID, default_mode=DEFAULT_MODE_ID)),
+                             default_profile=DEFAULT_PROFILE_ID, default_mode=DEFAULT_MODE_ID,
+                             default_switch=DEFAULT_SWITCH_PROFILE_ID)),
         capture_output=True, text=True, timeout=10, check=False,
     )
     assert result.returncode == 0, result.stderr

@@ -32,7 +32,8 @@ The [Findings workbench](findings-review.md) keeps evidence, local AI interpreta
 assessment and optional response in separate controls.
 
 The [router compatibility guide](router-compatibility.md) in Traffic covers 25
-named router families plus an unknown-model fallback. Its two selectors change
+named router families plus an unknown-model fallback. The [switch guide](switch-compatibility.md)
+adds 13 named families and three general choices. Its three independent selectors change
 only the displayed guidance for this page visit. They neither detect/configure
 hardware nor establish capture coverage. Reference links and model/mode caveats
 remain available even when live configuration status is unavailable.

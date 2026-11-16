@@ -5,9 +5,12 @@ with **25 named router families plus a generic profile**. A profile is a startin
 point for reviewing a model and its packet path, not universal compatibility
 certification or evidence that any device is being monitored.
 
-In **Setup → Traffic**, choose **Router family** and **Capture placement** to
-change the displayed guidance. The initial choices are the generic profile and
-this PC's normal connection. Choices last only while the page remains open;
+In **Setup → Traffic**, choose **Router family**, **Switch family** and **Capture
+placement** to change the displayed guidance. The [switch guide](switch-compatibility.md)
+adds model-specific mirror options and Google Wifi wiring limits. The initial
+choices are the generic router, no switch and this PC's normal connection.
+These independent selections do not validate a combined topology.
+Choices last only while the page remains open;
 heartbeat refreshes preserve them. Selection performs no network request,
 saves no coverage assertion, accepts no router credentials and changes no router,
 capture interface, firewall or service configuration. Publisher links open only

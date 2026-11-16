@@ -4,19 +4,22 @@ const vm = require('node:vm');
 let input = '';
 process.stdin.on('data', chunk => input += chunk);
 process.stdin.on('end', () => {
-  const {code,guide_code,profiles,modes,default_profile,default_mode} = JSON.parse(input);
+  const {code,guide_code,profiles,switches,modes,default_profile,default_switch,default_mode} = JSON.parse(input);
   const nodes = new Map(), windowEvents = new Map();
   const forbidden = name => () => { throw Error('Guide attempted '+name); };
   const element = (dataset={}) => ({dataset,hidden:false,value:'',disabled:false,textContent:'',events:{},
     addEventListener(name,fn){this.events[name]=fn;}});
   const profilePanels=profiles.map(id=>element({routerProfile:id}));
   const modePanels=modes.map(id=>element({routerMode:id}));
-  const profile=element({default:default_profile}), mode=element({default:default_mode});
-  profile.value=default_profile;mode.value=default_mode;
+  const switchPanels=switches.map(id=>element({switchProfile:id}));
+  const profile=element({default:default_profile}), mode=element({default:default_mode}), switchProfile=element({default:default_switch});
+  profile.value=default_profile;mode.value=default_mode;switchProfile.value=default_switch;
   nodes.set('router-guide-profile',profile);nodes.set('router-guide-mode',mode);
+  nodes.set('switch-guide-profile',switchProfile);
   nodes.set('router-compatibility',{querySelectorAll(selector){
     if(selector==='[data-router-profile]')return profilePanels;
     if(selector==='[data-router-mode]')return modePanels;
+    if(selector==='[data-switch-profile]')return switchPanels;
     throw Error('Unexpected guide query: '+selector);
   }});
   const setup=element();setup.querySelectorAll=()=>[];setup.contains=()=>false;
@@ -36,31 +39,39 @@ process.stdin.on('end', () => {
   Object.defineProperty(context.document,'cookie',{get:forbidden('cookie read'),set:forbidden('cookie write')});
   const check=(panels,key,id)=>assert.deepEqual(panels.filter(panel=>!panel.hidden).map(panel=>panel.dataset[key]),[id]);
   const choose=(control,value)=>{control.value=value;control.events.change();};
+  const groups=[
+    {control:profile,panels:profilePanels,key:'routerProfile',ids:profiles,default:default_profile},
+    {control:switchProfile,panels:switchPanels,key:'switchProfile',ids:switches,default:default_switch},
+    {control:mode,panels:modePanels,key:'routerMode',ids:modes,default:default_mode},
+  ];
+  const expected=new Map(groups.map(group=>[group.key,group.default]));
+  function checkAll(){
+    for(const group of groups){
+      check(group.panels,group.key,expected.get(group.key));
+      assert.equal(group.control.value,expected.get(group.key));
+      assert.equal(group.control.disabled,false);
+    }
+  }
   vm.runInNewContext(code,context);
-  check(profilePanels,'routerProfile',default_profile);check(modePanels,'routerMode',default_mode);
-  for(const id of profiles){
-    choose(profile,id);check(profilePanels,'routerProfile',id);
-    check(modePanels,'routerMode',default_mode);assert.equal(mode.value,default_mode);
+  checkAll();
+  // Each choice changes only its own panel, including overlapping catalog IDs.
+  for(const group of groups){
+    for(const id of group.ids){
+      choose(group.control,id);expected.set(group.key,id);checkAll();
+    }
   }
-  const selectedProfile=profile.value;
-  for(const id of modes){
-    choose(mode,id);check(modePanels,'routerMode',id);
-    check(profilePanels,'routerProfile',selectedProfile);assert.equal(profile.value,selectedProfile);
-  }
-  const selectedMode=mode.value;
+  const selected=new Map(expected);
   for(const state of [{capture:{state:'running'},model:{selection_state:'none'}},{status:'unavailable'},null]){
     windowEvents.get('megalodon-support-state')({detail:state});
     context.window.megalodonAppsRefilter();
-    check(profilePanels,'routerProfile',selectedProfile);check(modePanels,'routerMode',selectedMode);
-    assert.equal(profile.value,selectedProfile);assert.equal(mode.value,selectedMode);
-    assert.equal(profile.disabled,false);assert.equal(mode.disabled,false);
+    checkAll();
   }
   // Invalid selection must not leave an unrelated prior profile appearing selected.
-  for(const invalid of ['','unrecognized','__proto__','<img src=x onerror=bad()>']){
-    choose(profile,invalid);assert.equal(profile.value,default_profile);check(profilePanels,'routerProfile',default_profile);
-    check(modePanels,'routerMode',selectedMode);
-    choose(mode,invalid);assert.equal(mode.value,default_mode);check(modePanels,'routerMode',default_mode);
-    choose(mode,selectedMode);
+  for(const group of groups){
+    for(const invalid of ['','unrecognized','__proto__','<img src=x onerror=bad()>']){
+      choose(group.control,invalid);expected.set(group.key,group.default);checkAll();
+      choose(group.control,selected.get(group.key));expected.set(group.key,selected.get(group.key));checkAll();
+    }
   }
   // Rendering a page without Setup is supported; no status/API fallback occurs.
   vm.runInNewContext(guide_code,{document:{getElementById:()=>null},fetch:forbidden('fallback fetch')});
