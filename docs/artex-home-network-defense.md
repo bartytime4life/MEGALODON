@@ -11,6 +11,10 @@ establish that a sensor, rule, firmware update, or response was deployed.
 Keep device addresses, MAC addresses, screenshots, captures, and installation
 paths in private operator records, outside the repository.
 
+For other router families and the read-only Setup → Traffic selector, see
+[router compatibility and capture placement](router-compatibility.md). A profile
+selection does not configure a router or establish network-wide coverage.
+
 ## What to defend against
 
 The [FBI's November 13 ARTEX advisory](https://www.ic3.gov/CSA/2026/261113.pdf)

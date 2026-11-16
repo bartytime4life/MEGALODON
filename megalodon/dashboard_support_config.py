@@ -28,7 +28,7 @@ SUPPORT_CONFIG_HTML = r'''
   </section>
   <section id="support-network-defense" class="support-capture" aria-labelledby="support-network-defense-title">
     <h5 id="support-network-defense-title">Network detection and alerts</h5>
-    <p>A PC on Google Wifi can review traffic it receives. Whole-home internet visibility needs a suitable mirror or tap; local mesh traffic may remain unseen. Monitoring pauses when this PC sleeps or the HUD stops.</p>
+    <p>A PC can review traffic delivered to its capture interface. Broader visibility needs suitable network placement and a prepared sensor; local switched or mesh traffic may remain unseen. Monitoring pauses when this PC sleeps or the HUD stops.</p>
     <p id="support-notifications-status" role="status">Desktop notification preference unavailable.</p>
     <button type="button" id="support-notifications-toggle" disabled>Enable desktop hints</button>
     <p class="support-config-note">Generic local hints for new detector findings and priority 1–2 Suricata alerts, at most once per minute. Review evidence in the HUD before responding. Desktop delivery is not verified.</p>

@@ -15,6 +15,7 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 | Open MEGALODON on Linux | [Visual quick start](gui-quick-start.md) | [Install, update, troubleshoot](local-pc-setup.md) |
 | Prepare Suricata offline configuration | [Installing Suricata and configuration script](installing-suricata.md) | [Pinned alert-only producer boundary](../contracts/suricata-eve/v1/producer/README.md) |
 | Prepare ARTEX defenses on Google Wifi | [Home-network defense and visibility](artex-home-network-defense.md) | [Local response limits](visual-operations-defense.md#temporary-containment) |
+| Choose a capture path for another router | [Router compatibility guide](router-compatibility.md) | Setup → Traffic → Router and capture placement guide |
 | Understand the interface | [Visual tour](wiki/visual-tour.md) | [Three investigation journeys](wiki/investigation-journeys.md) |
 | Trace a finding to its evidence | [Findings and inspector](control-room-contract.md#qualified-finding-evidence-inspector) | [Control room contract](control-room-contract.md) |
 | Assess host recovery preparation | [Recovery readiness and external receipts](host-backup-evidence.md) | [Host-security limits](host-security.md#recovery-readiness-in-setup) |

@@ -1,9 +1,9 @@
 # Complete documentation catalog
 
-**192 Markdown documents accounted for.** Current inventory basis:
+**193 Markdown documents accounted for.** Current inventory basis:
 [`main@201fe4939cbfb160dccb80782455d106cdebaed4`](https://github.com/bartytime4life/MEGALODON/commit/201fe4939cbfb160dccb80782455d106cdebaed4)
 (November 11, 2026, America/Chicago), plus the science and mathematics candidate
-and the November 16 ARTEX home-network guide.
+and the November 16 ARTEX home-network and router compatibility guides.
 Every tracked or non-ignored new Markdown path is listed below, including
 maintained guides, versioned contracts, proposals, templates and dated records.
 See [current state](current-state.md#november-11-source-orientation) and the
@@ -94,6 +94,7 @@ or source basis.
 | Document | Repository path |
 | --- | --- |
 | [ARTEX defense on a Google Wifi home network](artex-home-network-defense.md) | `docs/artex-home-network-defense.md` |
+| [Router compatibility and capture placement](router-compatibility.md) | `docs/router-compatibility.md` |
 | [Installing Suricata: offline configuration](installing-suricata.md) | `docs/installing-suricata.md` |
 | [Qwen completion and result integrity](advisory-result-integrity.md) | `docs/advisory-result-integrity.md` |
 | [Alert lifecycle and delivery outbox contract](alert-lifecycle-contract.md) | `docs/alert-lifecycle-contract.md` |

@@ -468,6 +468,7 @@ record delivery state; they do not override the checked-in contracts.
 | Click-by-click setup, checks, downloads, and navigation | [Visual quick start](docs/gui-quick-start.md) |
 | Existing local workflow entry points and their authority limits | [Operator workflow index](docs/operator-workflows.md) |
 | Required software and optional tools, with official links | [Software downloads](docs/software-downloads.md) |
+| Router families, capture placement and visibility limits | [Router compatibility guide](docs/router-compatibility.md); also in Setup → Traffic |
 | Runtime behavior and acceptance boundary | [`SPECIFICATION.md`](SPECIFICATION.md) |
 | Threat model and production controls | [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) |
 | Red/blue/purple validation and future AI gates | [`docs/red-blue-security-guide.md`](docs/red-blue-security-guide.md) |
