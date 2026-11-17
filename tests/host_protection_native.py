@@ -26,7 +26,7 @@ def echo_server(family, port, udp=False):
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if family == socket.AF_INET6:
         server.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-    server.bind(('::' if family == socket.AF_INET6 else '0.0.0.0', port))
+    server.bind(('::1' if family == socket.AF_INET6 else '127.0.0.1', port))
     if not udp:
         server.listen(16)
     def echo(connection):
@@ -53,7 +53,7 @@ def exchange(address, port, udp=False, source_port=None):
     with socket.socket(family, socket.SOCK_DGRAM if udp else socket.SOCK_STREAM) as client:
         client.settimeout(.3)
         if source_port:
-            client.bind(('::' if family == socket.AF_INET6 else '0.0.0.0', source_port))
+            client.bind(('::1' if family == socket.AF_INET6 else '127.0.0.1', source_port))
         try:
             client.connect((address, port))
             client.sendall(b'test')
