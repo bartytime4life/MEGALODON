@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from ipaddress import ip_address, ip_network
 import json
+import math
 from pathlib import Path
 import re
 import secrets
@@ -17,9 +18,12 @@ from .defense_guard import ROOT_PROGRAM
 from .managed_capture import now
 from .operations import PROTECTED_SERVICE_PORTS
 from .qwen_advisory import bounded_advisory_text
+from .host_protection import validate_policy, preview_policy
 
 ACTIONS = {'analyze':{'ip'},'refresh_inventory':set(),'scan_files':set(),
-           'plan_containment':{'ip'},'apply_containment':{'plan_id'},'release_containment':{'ip'}}
+           'plan_containment':{'ip'},'apply_containment':{'plan_id'},'release_containment':{'ip'},
+           'plan_host_protection':{'policy'},'apply_host_protection':{'plan_id'},
+           'check_host_protection':set(),'remove_host_protection':set()}
 # NAT64 prefixes embed an IPv4 peer; like IPv4-mapped forms they are refused so
 # the IPv4 allowlist and reserved-range checks cannot be bypassed.
 NAT64=(ip_network('64:ff9b::/96'),ip_network('64:ff9b:1::/48'))
@@ -48,16 +52,19 @@ def validate_request(value):
             raise ValueError('Use one canonical IP address.')
     if 'plan_id' in value and (type(value['plan_id']) is not str or not re.fullmatch(r'[a-f0-9]{32}',value['plan_id'])):
         raise ValueError('Choose an existing containment preview.')
+    if 'policy' in value:
+        return dict(value,policy=validate_policy(value['policy']))
     return dict(value)
 
 
 def _restorable(rows,cutoff):
     """Rows replayed after restart, in ledger order: the latest 64 (recent list),
-    every row since the cutoff, and each apply opened without an outcome row that
-    no later verified apply/release of its address supersedes."""
-    tail=deque(maxlen=64);window=deque(maxlen=4096);unfinished={}
+    every row since the cutoff, each unfinished per-IP apply, and four recent
+    host-policy rows (whose leases outlive the per-IP containment window)."""
+    tail=deque(maxlen=64);window=deque(maxlen=4096);unfinished={};host_tail=deque(maxlen=4)
     for item in enumerate(rows):
         row=item[1];tail.append(item);unfinished.pop(row['receipt_id'],None)
+        if row.get('action') in {'apply_host_protection','remove_host_protection','check_host_protection'}:host_tail.append(item)
         if datetime.fromisoformat(row['timestamp'].replace('Z','+00:00'))>=cutoff:window.append(item)
         else:window.clear()
         if row.get('state')=='applied' and row.get('action') in {'apply_containment','release_containment'}:
@@ -65,7 +72,7 @@ def _restorable(rows,cutoff):
         elif row.get('state')=='not_attempted' and row.get('action')=='apply_containment' and row.get('approved_preview'):
             unfinished[row['receipt_id']]=item
             if len(unfinished)>64:unfinished.pop(next(iter(unfinished)))
-    selected=dict((*unfinished.values(),*tail,*window))
+    selected=dict((*unfinished.values(),*tail,*window,*host_tail))
     return [selected[index] for index in sorted(selected)]
 
 
@@ -77,6 +84,7 @@ class Defense:
         self._lock=Lock();self._thread=None;self._plans={};self._active={}
         # IP -> receipt of a pending apply whose placeholder is in _active.
         self._pending={}
+        self._host=dict(state='unknown',verified_at=None,expires_at=None,policy=None,counters=None)
         self._recent=deque(maxlen=20)
         self._job=dict(state='idle',action=None,message='Choose an observed IP or a fixed defensive workflow.',started_at=None,finished_at=None,result=None)
         self._audit_ready=True
@@ -101,6 +109,11 @@ class Defense:
 
     def _restore(self,row):
         action=row.get('action');result=row.get('result') or {}
+        if action in {'apply_host_protection','remove_host_protection','check_host_protection'}:
+            if row.get('state') in {'applied','observed'} and result.get('verified') is True:
+                self._host=dict(result,state='last_verified_active' if result['active'] else 'last_verified_inactive')
+            elif row.get('state')=='not_attempted' or (row.get('state')=='failed' and row.get('host_attempted')):
+                self._host=dict(self._host,state='needs_review')
         self._recent.append(dict(receipt_id=row['receipt_id'],timestamp=row['timestamp'],action=action,state=row.get('state'),
                                  ip=row.get('ip'),message=row.get('message','')))
         if row.get('state')=='applied' and action=='apply_containment':
@@ -142,6 +155,10 @@ class Defense:
                 audit_ready=self._audit_ready,
                 scope=dict(nmap_target=self.configuration.companions.config.nmap_target if self.configuration.companions else None,
                            scan_folders=[p.name for p in self.configuration.companions.config.clamav_paths] if self.configuration.companions else []))
+            value['host_protection']=deepcopy(self._host)
+            host=value['host_protection']
+            if host['state']=='last_verified_active' and host.get('expires_at') and not _before(stamp,host['expires_at']):
+                host['state']='lease_elapsed'
             if include_token:value['token']=self.token
             return value
 
@@ -189,6 +206,34 @@ class Defense:
             raise ValueError('Firewall result was not verified.')
         return result
 
+    def _host_guard(self,action,policy):
+        from importlib.resources import files
+        # The packaged, fixed helper is independent of caller/model text.
+        program=files('megalodon').joinpath('host_guard.py').read_text(encoding='utf-8')
+        raw,code=self.run(['/usr/bin/pkexec','/usr/bin/python3','-I','-c',program,action,
+                           json.dumps(policy,separators=(',',':'))],8192,90)
+        if code:raise ValueError('OS authorization or host protection verification did not complete.')
+        result=json.loads(raw,object_pairs_hook=_strict_pairs)
+        if (type(result) is not dict or set(result)!={'present','active','remaining_seconds','policy','counters','verified'}
+                or result['verified'] is not True or type(result['present']) is not bool or type(result['active']) is not bool
+                or type(result['remaining_seconds']) not in (int,float) or not math.isfinite(result['remaining_seconds'])
+                or not 0<=result['remaining_seconds']<=28800
+                or result['active']!=(result['remaining_seconds']>0)
+                or (not result['present'] and (result['policy'] is not None or result['active']))
+                or type(result['counters']) is not dict or set(result['counters'])!={'invalid','unsolicited','allowed_service'}
+                or any(type(v) is not int or not 0<=v<2**64 for v in result['counters'].values())):
+            raise ValueError('Host protection result was not verified.')
+        if result['present']:
+            validated=validate_policy(result['policy'])
+            if result['remaining_seconds']>validated['duration_seconds']:
+                raise ValueError('Unexpected protection lease.')
+        if ((action=='apply' and (not result['active'] or result['policy']!=policy))
+                or (action=='remove' and result['present'])):
+            raise ValueError('Host protection change was not verified.')
+        result.update(verified_at=now(),expires_at=(datetime.now(timezone.utc)+timedelta(
+            seconds=result['remaining_seconds'])).isoformat().replace('+00:00','Z') if result['active'] else None)
+        return result
+
     def _work(self,request):
         action=request['action'];identifier=str(uuid4());result=None;changed=False;attempted_host=False;opened=False
         try:
@@ -196,7 +241,28 @@ class Defense:
             self._append(identifier,state='not_attempted',action=action,ip=request.get('ip') or (approved_preview or {}).get('ip'),
                          message='Operator requested a fixed workflow.',request=request,approved_preview=approved_preview,result=None)
             opened=True
-            if action=='analyze' and getattr(self.configuration,'intelligence',None) is not None:
+            if action=='plan_host_protection':
+                result=dict(preview_policy(request['policy']),id=secrets.token_hex(16),
+                            expires_at=(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat().replace('+00:00','Z'))
+                with self._lock:
+                    self._plans={k:v for k,v in self._plans.items() if _before(now(),v['expires_at'])}
+                    if len(self._plans)>=8:raise ValueError('Too many pending previews; wait for expiry.')
+                    self._plans[result['id']]=result
+                message='Host protection preview ready. Confirm these inbound services before OS authorization.'
+            elif action in {'apply_host_protection','check_host_protection','remove_host_protection'}:
+                policy={}
+                if action=='apply_host_protection':
+                    with self._lock:plan=self._plans.pop(request['plan_id'],None)
+                    if plan is None or plan.get('kind')!='host_protection' or not _before(now(),plan['expires_at']):
+                        raise ValueError('Host protection preview expired; create a fresh preview.')
+                    policy=validate_policy(plan['policy'])
+                attempted_host=True
+                operation={'apply_host_protection':'apply','check_host_protection':'status','remove_host_protection':'remove'}[action]
+                result=self._host_guard(operation,policy)
+                changed=operation!='status'
+                message=('Host protection verified. The kernel automatically drops unsolicited inbound traffic until the lease expires.'
+                         if result['active'] else 'Host protection is inactive in the verified managed table. Other firewall policies remain in force.')
+            elif action=='analyze' and getattr(self.configuration,'intelligence',None) is not None:
                 answer=self.configuration.intelligence.explain_device(request['ip'])
                 result=dict(ip=request['ip'],**answer,basis='committed_evidence')
                 message=('Local AI review saved with evidence citations. Choose any response yourself.'
@@ -250,7 +316,7 @@ class Defense:
                 message='Preview ready. Apply requires a separate operator action and OS authorization.'
             elif action=='apply_containment':
                 with self._lock:plan=self._plans.pop(request['plan_id'],None)
-                if plan is None or not _before(now(),plan['expires_at']):raise ValueError('Preview expired; create a fresh preview.')
+                if plan is None or plan.get('kind')=='host_protection' or not _before(now(),plan['expires_at']):raise ValueError('Preview expired; create a fresh preview.')
                 self._target(plan['ip'])
                 attempted_host=True
                 result=self._guard('apply',plan['ip']);changed=True
@@ -264,7 +330,7 @@ class Defense:
                 result=self._guard('release',request['ip']);changed=True
                 with self._lock:self._active.pop(request['ip'],None)
                 message='The managed block is absent. Other firewall policies were left in place.'
-            state='applied' if changed else 'awaiting_confirmation' if action=='plan_containment' else 'observed'
+            state='applied' if changed else 'awaiting_confirmation' if action in {'plan_containment','plan_host_protection'} else 'observed'
             audit_result=result
             if action=='analyze' and getattr(self.configuration,'intelligence',None) is not None:
                 # The explanation lives with its source-dependent managed record.
@@ -290,6 +356,8 @@ class Defense:
                      provider_message or (str(exc) if type(exc) is ValueError and len(str(exc))<=240 else
                      'Local defense workflow unavailable. No model proposal was executed.' if opened else
                      'Defense audit could not record this request; nothing was attempted. Retry shortly.'))
+            if attempted_host and action.endswith('host_protection'):
+                message='Host protection outcome needs review. Check or remove protection with OS authorization. Any applied lease expires in the kernel; this may take up to eight hours.'
             # An outcome row needs its recorded opening row; an unrecorded request
             # (including the storage reserve refusal) ran nothing and leaves no row.
             if opened:
@@ -314,6 +382,7 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description='MEGALODON fixed local defense workflows')
     parser.add_argument('action',choices=['status',*ACTIONS],default='status',nargs='?')
     parser.add_argument('--ip');parser.add_argument('--plan-id')
+    parser.add_argument('--policy-json',help='Host protection policy: services array and duration_seconds; used only for a preview.')
     args=parser.parse_args(argv)
     settings=load_settings(Path.home()/'.config/megalodon/settings.toml')
     host=loopback_host(settings.dashboard.host);port=settings.dashboard.port
@@ -332,6 +401,7 @@ def main(argv=None):
         request={'action':args.action}
         if args.ip is not None:request['ip']=args.ip
         if args.plan_id is not None:request['plan_id']=args.plan_id
+        if args.policy_json is not None:request['policy']=json.loads(args.policy_json,object_pairs_hook=_strict_pairs)
         value=call(validate_request(request),value['token'])
     value.pop('token',None)
     print(json.dumps(value,indent=2))

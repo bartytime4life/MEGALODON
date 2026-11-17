@@ -1,13 +1,20 @@
 # Complete documentation catalog
 
-**194 Markdown documents accounted for.** Current inventory basis:
+**195 Markdown documents accounted for.** Current inventory basis:
 [`main@201fe4939cbfb160dccb80782455d106cdebaed4`](https://github.com/bartytime4life/MEGALODON/commit/201fe4939cbfb160dccb80782455d106cdebaed4)
 (November 11, 2026, America/Chicago), plus the science and mathematics candidate
-and the November 16 ARTEX home-network, router compatibility and switch compatibility guides.
+and the November 16 ARTEX home-network, router compatibility and switch compatibility guides,
+plus the November 17 host-protection candidate guide.
 Every tracked or non-ignored new Markdown path is listed below, including
 maintained guides, versioned contracts, proposals, templates and dated records.
 See [current state](current-state.md#november-11-source-orientation) and the
 [refresh scope and validation](documentation-refresh-2026-11-11.md).
+
+## November 17 addition
+
+| Document | Repository path |
+| --- | --- |
+| [Protect the PC running MEGALODON](host-protection.md) | `docs/host-protection.md` |
 
 ## November 11 reconciliation
 

@@ -178,7 +178,7 @@ untrusted advice and never becomes privilege or authorization.
 Both new GET endpoints require one `X-Megalodon-Check: 1`, the existing local
 Host/sign-in checks and a non-root Linux HUD. GET performs no model request or
 host change. POST `/api/defense` also requires exact same Origin, JSON media
-type, one 32-character `X-Megalodon-Defense-Token`, a bounded 512-byte body and
+type, one 32-character `X-Megalodon-Defense-Token`, a bounded 2 KiB body and
 a closed request shape. Duplicate keys/headers and caller-supplied commands are
 refused. Status polling has no privileged firewall read or password prompt.
 
@@ -195,3 +195,11 @@ used for design evaluation.
 ## Expanded workspace and history
 
 The current local HUD adds the wider globe/LAN workspace, selected-interface speed strip and managed evidence controls. See [Managed evidence and the expanded HUD](managed-evidence.md) for profile defaults, deletion preview, segment recovery, export limits, discovery scope and server-source coverage. Storage configuration lives in Setup; traffic stays in the HUD.
+
+## Stateful host protection
+
+The separate [host-protection workflow](host-protection.md) now adds explicit
+service-policy previews and a finite kernel lease for this PC. Once authorized,
+the kernel automatically drops unsolicited inbound traffic without a model or
+detector decision. This is distinct from the five-minute per-IP containment
+workflow described above and from the non-mutating core firewall planner.
