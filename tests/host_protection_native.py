@@ -21,12 +21,12 @@ def ip(*args):
     subprocess.run(['/usr/sbin/ip', *args], check=True, capture_output=True, timeout=5)
 
 
-def echo_server(family, port, udp=False):
+def echo_server(family, port, address, udp=False):
     server = socket.socket(family, socket.SOCK_DGRAM if udp else socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if family == socket.AF_INET6:
         server.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-    server.bind(('::1' if family == socket.AF_INET6 else '127.0.0.1', port))
+    server.bind((address, port))
     if not udp:
         server.listen(16)
     def echo(connection):
@@ -48,12 +48,14 @@ def echo_server(family, port, udp=False):
     return server
 
 
-def exchange(address, port, udp=False, source_port=None):
+def exchange(address, port, udp=False, source_port=None, source_address=None):
     family = socket.AF_INET6 if ':' in address else socket.AF_INET
     with socket.socket(family, socket.SOCK_DGRAM if udp else socket.SOCK_STREAM) as client:
         client.settimeout(.3)
         if source_port:
-            client.bind(('::1' if family == socket.AF_INET6 else '127.0.0.1', source_port))
+            if source_address is None:
+                raise ValueError('An explicit namespace client address is required')
+            client.bind((source_address, source_port))
         try:
             client.connect((address, port))
             client.sendall(b'test')
@@ -73,7 +75,8 @@ def peer():
             ip('addr', 'add', '198.18.0.2/24', 'dev', 'mg-peer')
             ip('-6', 'addr', 'add', 'fd42::2/64', 'dev', 'mg-peer', 'nodad')
             ip('link', 'set', 'mg-peer', 'up')
-            servers = [echo_server(f, 18083) for f in (socket.AF_INET, socket.AF_INET6)]
+            servers = [echo_server(socket.AF_INET, 18083, '198.18.0.2'),
+                       echo_server(socket.AF_INET6, 18083, 'fd42::2')]
             answer = True
         elif command['action'] == 'keep':
             kept = socket.create_connection(('198.18.0.1', 18080), timeout=.5)
@@ -82,7 +85,8 @@ def peer():
             kept.sendall(b'existing')
             answer = kept.recv(128) == b'existing'
         else:
-            answer = exchange(command['address'], command['port'], command.get('udp', False), command.get('source_port'))
+            answer = exchange(command['address'], command['port'], command.get('udp', False),
+                              command.get('source_port'), 'fd42::2' if ':' in command['address'] else '198.18.0.2')
         print(json.dumps(answer), flush=True)
 
 
@@ -117,7 +121,10 @@ def main():
         ip('link', 'set', 'mg-host', 'up')
         call('init')
         for family in (socket.AF_INET, socket.AF_INET6):
-            servers.extend([echo_server(family, 18080), echo_server(family, 18081), echo_server(family, 18082, True), echo_server(family, 68, True)])
+            address = 'fd42::1' if family == socket.AF_INET6 else '198.18.0.1'
+            servers.extend([echo_server(family, 18080, address), echo_server(family, 18081, address),
+                            echo_server(family, 18082, address, True), echo_server(family, 68, address, True),
+                            echo_server(family, 18081, '::1' if family == socket.AF_INET6 else '127.0.0.1')])
         # Exercise preservation of tracked sessions under an existing firewall.
         guard.nft(['-f', '-'], {'nftables': [
             {'add': {'table': {'family': 'inet', 'name': 'unrelated_test'}}},
