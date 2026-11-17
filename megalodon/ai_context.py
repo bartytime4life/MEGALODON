@@ -31,7 +31,12 @@ SOURCE_KINDS = {
 PROTOCOLS = frozenset({"TCP", "UDP", "ICMP", "ICMPV6", "SCTP", "DNS", "OTHER", "UNKNOWN"})
 TRANSPORTS = frozenset({"TCP", "UDP", "SCTP"})
 FLAGS = frozenset({"SYN", "ACK", "FIN", "RST", "PSH", "URG", "ECE", "CWR"})
-RULES = frozenset({"PORT_SCAN", "SYN_FLOOD", "DNS_TUNNELING"})
+# Literal by contract: this builder imports only a fixed stdlib set.
+# tests/test_threat_integration.py keeps it equal to megalodon.rule_catalog.
+RULES = frozenset({
+    "PORT_SCAN", "SYN_FLOOD", "DNS_TUNNELING", "BRUTE_FORCE", "HOST_SWEEP",
+    "DATA_EXFILTRATION", "BEACONING", "IOC_MATCH",
+})
 FACTS = frozenset({"protocol", "src_port", "dst_port", "tcp_flags", "findings"})
 MISSING_REASONS = frozenset({"not_collected", "not_qualified", "not_applicable"})
 COVERAGE_REASONS = frozenset({"source_gap", "incomplete_window", "sensor_disagreement", "no_qualified_records"})

@@ -1,0 +1,104 @@
+"""One closed catalog of every detector rule a stored finding may carry.
+
+Projection, AI evidence and browser validators are fail-closed: an unknown
+``rule_id`` makes them refuse the whole response. They therefore derive their
+closed sets from this catalog instead of repeating literal rule lists. The
+catalog describes rules; it never configures, dispatches or enables them.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+
+
+@dataclass(frozen=True)
+class RuleDescription:
+    rule_id: str
+    layer: str
+    severity: str
+    measurement_key: str
+    unit: str
+    windowed: bool
+    summary: str
+    lookalikes: str
+    attack: tuple[str, ...]
+    review_category: str
+    response_party: str
+
+
+CORE_LAYER = "core-specification"
+THREAT_LAYER = "threat-signals"
+
+RULES: tuple[RuleDescription, ...] = (
+    RuleDescription(
+        "SYN_FLOOD", CORE_LAYER, "HIGH", "count", "SYN events", True,
+        "The recorded SYN_FLOOD rule identifies SYN activity for review.",
+        "Legitimate load or authorized testing can produce similar patterns.",
+        ("T1498",), "traffic_volume", "source",
+    ),
+    RuleDescription(
+        "PORT_SCAN", CORE_LAYER, "MEDIUM", "distinct_ports", "distinct destination ports", True,
+        "The recorded PORT_SCAN rule identifies a port-access pattern for review.",
+        "Inventory work and authorized testing can produce similar patterns.",
+        ("T1046",), "discovery", "source",
+    ),
+    RuleDescription(
+        "DNS_TUNNELING", CORE_LAYER, "CRITICAL", "dns_query_length", "DNS query length", False,
+        "The recorded DNS_TUNNELING rule identifies DNS metadata for review.",
+        "A long DNS query can be legitimate; this finding does not prove tunneling.",
+        ("T1071.004",), "dns", "source",
+    ),
+    RuleDescription(
+        "BRUTE_FORCE", THREAT_LAYER, "HIGH", "attempts", "connection attempts", True,
+        "Repeated connection attempts from one source reached one authentication service.",
+        "Reconnecting clients, health checks and configuration tools can retry the same service.",
+        ("T1110",), "credential_access", "source",
+    ),
+    RuleDescription(
+        "HOST_SWEEP", THREAT_LAYER, "MEDIUM", "distinct_hosts", "distinct internal hosts", True,
+        "One source contacted many distinct internal hosts in a short window.",
+        "Inventory scanners, backup agents and network discovery features sweep subnets too.",
+        ("T1018", "T1046"), "discovery", "source",
+    ),
+    RuleDescription(
+        "DATA_EXFILTRATION", THREAT_LAYER, "HIGH", "mebibytes", "MiB sent outbound", True,
+        "An internal host sent a large volume of reported bytes to one public address.",
+        "Cloud backup, file sync, video calls and uploads can send the same volume.",
+        ("T1041", "T1048"), "traffic_volume", "destination",
+    ),
+    RuleDescription(
+        "BEACONING", THREAT_LAYER, "MEDIUM", "intervals", "regular intervals", True,
+        "Connection starts from one host to one public service repeated at a near-constant interval.",
+        "Update checks, telemetry, keep-alives and monitoring agents also poll on a schedule.",
+        ("T1071", "T1573"), "command_and_control", "destination",
+    ),
+    RuleDescription(
+        "IOC_MATCH", THREAT_LAYER, "HIGH", "matches", "watchlist matches", False,
+        "An address in this event matched an operator-supplied watchlist indicator.",
+        "Indicator lists go stale; shared hosting and reassigned addresses cause false matches.",
+        ("T1071",), "threat_intelligence", "matched",
+    ),
+)
+
+BY_ID: dict[str, RuleDescription] = {rule.rule_id: rule for rule in RULES}
+ALL_RULE_IDS: tuple[str, ...] = tuple(rule.rule_id for rule in RULES)
+CORE_RULE_IDS: tuple[str, ...] = tuple(r.rule_id for r in RULES if r.layer == CORE_LAYER)
+THREAT_RULE_IDS: tuple[str, ...] = tuple(r.rule_id for r in RULES if r.layer == THREAT_LAYER)
+MEASUREMENT_UNITS: dict[str, str] = {rule.rule_id: rule.unit for rule in RULES}
+UNWINDOWED_RULES: frozenset[str] = frozenset(r.rule_id for r in RULES if not r.windowed)
+
+
+def browser_constants() -> str:
+    """Return a JS object literal for embedded validators; JSON is valid JS."""
+    return json.dumps(
+        {
+            "rules": list(ALL_RULE_IDS),
+            "units": MEASUREMENT_UNITS,
+            "unwindowed": sorted(UNWINDOWED_RULES),
+            "summaries": {r.rule_id: f"{r.summary} {r.lookalikes}" for r in RULES},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )

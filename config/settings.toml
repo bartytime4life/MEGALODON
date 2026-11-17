@@ -22,6 +22,26 @@ alert_cooldown_seconds = 30
 max_tracked_sources = 4096
 max_events_per_source_window = 4096
 
+[threat_detection]
+# Review signals beside the three core rules; see docs/threat-detection.md.
+# Findings are heuristics for review, never malware verdicts.
+enabled = true
+brute_force_window_seconds = 60
+brute_force_attempts = 15
+host_sweep_window_seconds = 15
+host_sweep_distinct_hosts = 24
+exfiltration_window_seconds = 300
+exfiltration_threshold_mib = 100
+beacon_min_intervals = 8
+beacon_min_interval_seconds = 5
+beacon_max_interval_seconds = 3600
+beacon_jitter_percent = 10
+alert_cooldown_seconds = 600
+max_tracked_keys = 8192
+# Optional owner-private IP/CIDR indicator file; empty disables IOC_MATCH.
+watchlist_path = ""
+watchlist_severity = "HIGH"
+
 [blocking]
 # Keep this false; this evaluation-release candidate produces firewall plans only.
 enabled = false

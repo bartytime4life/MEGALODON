@@ -175,6 +175,7 @@ or source basis.
 | [Configure support apps from the local HUD](support-configuration.md) | `docs/support-configuration.md` |
 | [Suricata evidence projection v1](suricata-evidence-projection.md) | `docs/suricata-evidence-projection.md` |
 | [Offline threat-context reader v1](threat-context-reader.md) | `docs/threat-context-reader.md` |
+| [Threat-signal detection layer and IOC watchlist](threat-detection.md) | `docs/threat-detection.md` |
 | [Tool heartbeat and one-click install](tool-heartbeat.md) | `docs/tool-heartbeat.md` |
 | [Local tool readiness receipt](tool-readiness.md) | `docs/tool-readiness.md` |
 | [Ubuntu candidate evidence coverage index](ubuntu-candidate-coverage.md) | `docs/ubuntu-candidate-coverage.md` |

@@ -145,6 +145,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="maximum number of preview occurrences (1-366; default 10)",
     )
 
+    sub.add_parser(
+        "detectors",
+        help="print the core specification and threat-signal detector registries",
+    )
+    watchlist = sub.add_parser(
+        "watchlist", help="check, query or import a local IP/CIDR indicator watchlist"
+    )
+    watch_sub = watchlist.add_subparsers(dest="watchlist_command", required=True)
+    watch_check = watch_sub.add_parser("check", help="validate a watchlist file and summarize it")
+    watch_check.add_argument("--path", type=Path, required=True)
+    watch_match = watch_sub.add_parser("match", help="look up one address in a watchlist")
+    watch_match.add_argument("--path", type=Path, required=True)
+    watch_match.add_argument("--address", required=True)
+    watch_import = watch_sub.add_parser(
+        "import-stix",
+        help="convert IP equality indicators from a digest-pinned STIX 2.1 bundle",
+    )
+    watch_import.add_argument("--bundle", type=Path, required=True)
+    watch_import.add_argument("--digest", required=True, help="sha256:<hex> of the bundle bytes")
+    watch_import.add_argument("--output", type=Path, required=True)
+    watch_import.add_argument("--replace", action="store_true", help="overwrite an existing output")
+
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     run.add_argument("--source", choices=("sample", "jsonl", "scapy"), default=None)
@@ -909,6 +931,66 @@ def _reconciliation_message() -> str:
     )
 
 
+def _detectors() -> int:
+    from .detector_registry import registry_document as core_registry
+    from .threat_detector import registry_document as threat_registry
+
+    print(json.dumps(
+        {"core": core_registry(), "threat_signals": threat_registry()},
+        indent=2, sort_keys=True,
+    ))
+    return 0
+
+
+def _watchlist(args: argparse.Namespace) -> int:
+    from .offline.common import OfflineError
+    from .threat_context import ThreatContextError, read_completed_bundle
+    from .validation import ValidationError
+    from .watchlist import Watchlist, load_watchlist, render, stix_indicators, write_private
+
+    try:
+        if args.watchlist_command == "check":
+            result = load_watchlist(args.path).summary()
+        elif args.watchlist_command == "match":
+            from .validation import parse_ip
+
+            address = parse_ip(args.address)
+            hit = load_watchlist(args.path).match(address)
+            result = {
+                "schema": "megalodon-watchlist-match-v1",
+                "address": address,
+                "matched": hit is not None,
+                "indicator": hit[0] if hit else None,
+                "label": hit[1] if hit else None,
+            }
+        else:
+            objects, receipt = read_completed_bundle(args.bundle, args.digest)
+            entries, counts = stix_indicators(objects)
+            Watchlist(entries)  # enforce indicator bounds before writing anything
+            write_private(
+                args.output,
+                render(entries, f"imported from STIX bundle {receipt['bundle_id']}"),
+                replace=args.replace,
+            )
+            result = {
+                "schema": "megalodon-watchlist-import-v1",
+                "bundle_id": receipt["bundle_id"],
+                "artifact_digest": receipt["artifact_digest"],
+                "indicators_written": len({str(network) for network, _ in entries}),
+                **counts,
+                "pattern_handling": "ip_equality_only_never_execute",
+                "network_access_performed": False,
+            }
+    except ThreatContextError as exc:
+        print(f"megalodon: STIX bundle refused: {exc}", file=sys.stderr)
+        return 2
+    except (ValidationError, OfflineError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
 def _run(args: argparse.Namespace) -> int:
     try:
         # Refuse an explicit unbounded source before configuration, store, or
@@ -1439,6 +1521,10 @@ def main(argv: list[str] | None = None) -> None:
         code = _automation_preview(args)
     elif args.command == "run":
         code = _run(args)
+    elif args.command == "detectors":
+        code = _detectors()
+    elif args.command == "watchlist":
+        code = _watchlist(args)
     elif args.command in {"dashboard", "hud"}:
         code = _dashboard(args)
     elif args.command == "database-migrate":

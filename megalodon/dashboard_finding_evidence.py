@@ -58,11 +58,8 @@ FINDING_EVIDENCE_CSS = r'''
 
 FINDING_EVIDENCE_JS = r'''
 const roomEvidenceState={key:null,context:null,signature:null,buttons:new Map()};
-const roomEvidenceExplanations=Object.freeze({
-  SYN_FLOOD:'The recorded SYN_FLOOD rule identifies SYN activity for review. Legitimate load or authorized testing can produce similar patterns.',
-  PORT_SCAN:'The recorded PORT_SCAN rule identifies a port-access pattern for review. Inventory work and authorized testing can produce similar patterns.',
-  DNS_TUNNELING:'The recorded DNS_TUNNELING rule identifies DNS metadata for review. A long DNS query can be legitimate; this finding does not prove tunneling.'
-});
+const roomEvidenceCatalog=Object.freeze(__RULE_CATALOG__);
+const roomEvidenceExplanations=Object.freeze(roomEvidenceCatalog.summaries);
 function roomEvidenceText(id,value) {const node=byId(id);if(node.textContent!==value)node.textContent=value;}
 function roomEvidenceKey(f,e) {return JSON.stringify([f.id,e.id,e.run_id,e.source,e.observed_at,f.detected_at,f.rule_id,f.severity,f.detector_version,e.src_ip,e.dst_ip,e.src_port,e.dst_port,e.protocol,e.tcp_flags,e.byte_count,f.measurement??null]);}
 function roomEvidenceContext() {const h=roomState.history;return JSON.stringify(h?['history',h.start,h.end,h.before]:['latest',roomState.range,roomState.custom]);}
@@ -89,7 +86,7 @@ function renderRoomEvidence(selected,stale) {
   const measurement=finding.measurement;
   roomEvidenceText('room-evidence-measured',measurement?measurement.value+' '+measurement.unit:'Not recorded');
   roomEvidenceText('room-evidence-threshold',measurement?.threshold!=null?String(measurement.threshold)+' (at least)':'Not recorded');
-  roomEvidenceText('room-evidence-window',finding.rule_id==='DNS_TUNNELING'&&measurement?'Single event; no sliding window':measurement?.window_seconds!=null?measurement.window_seconds+' seconds; inclusive cutoff':'Not recorded');
+  roomEvidenceText('room-evidence-window',roomEvidenceCatalog.unwindowed.includes(finding.rule_id)&&measurement?'Single event; no sliding window':measurement?.window_seconds!=null?measurement.window_seconds+' seconds; inclusive cutoff':'Not recorded');
   const age=Date.now()-Date.parse(event.observed_at);
   roomEvidenceText('room-evidence-age',age<0?'Observation time is ahead of this browser clock; clock agreement is unknown.':'Observation age: '+(age<60000?'less than one minute':age<3600000?Math.floor(age/60000)+' minutes':age<86400000?Math.floor(age/3600000)+' hours':Math.floor(age/86400000)+' days')+'. A refreshed projection does not make this observation new.');
   for(const [key,button] of roomEvidenceState.buttons)button.setAttribute('aria-expanded',String(key===roomEvidenceState.key));
@@ -126,3 +123,5 @@ function renderRoomFindings(selected,stale,has) {
 }
 byId('room-evidence-close').addEventListener('click',()=>{const button=roomEvidenceState.buttons.get(roomEvidenceState.key);clearRoomEvidence();if(button)button.focus?.();else byId('room-findings-title').focus?.();});
 '''
+from .rule_catalog import browser_constants as _rule_constants
+FINDING_EVIDENCE_JS = FINDING_EVIDENCE_JS.replace('__RULE_CATALOG__', _rule_constants())

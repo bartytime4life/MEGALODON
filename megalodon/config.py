@@ -7,6 +7,7 @@ from pathlib import Path
 import ipaddress
 import tomllib
 
+from .threat_detector import ThreatDetectionSettings
 from .validation import ValidationError, parse_network, safe_text
 
 
@@ -84,6 +85,38 @@ class Settings:
     storage: StorageSettings = field(default_factory=StorageSettings)
     dashboard: DashboardSettings = field(default_factory=DashboardSettings)
     ai: AISettings = field(default_factory=AISettings)
+    threat: ThreatDetectionSettings = field(default_factory=ThreatDetectionSettings)
+
+
+def _threat_settings(raw: dict[str, object]) -> ThreatDetectionSettings:
+    """Typed [threat_detection] table; unknown keys refuse rather than being ignored."""
+    defaults = ThreatDetectionSettings()
+    known = set(defaults.__dataclass_fields__)
+    unknown = set(raw) - known
+    if unknown:
+        raise ValidationError(
+            "threat_detection contains unsupported settings: " + ", ".join(sorted(unknown))
+        )
+    values: dict[str, object] = {}
+    for name in known:
+        if name not in raw:
+            continue
+        value = raw[name]
+        default = getattr(defaults, name)
+        if isinstance(default, bool):
+            values[name] = _boolean(value, f"threat_detection.{name}")
+        elif isinstance(default, int):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValidationError(f"threat_detection.{name} must be an integer")
+            values[name] = value
+        elif name == "watchlist_severity":
+            values[name] = _text(value, "threat_detection.watchlist_severity", 16).upper()
+        else:
+            values[name] = _text(value, f"threat_detection.{name}", 1024, allow_empty=True)
+    try:
+        return ThreatDetectionSettings(**values)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from None
 
 
 DEFAULT_ALLOWLIST = (
@@ -310,4 +343,5 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
             max_context=_bounded_integer(ai.get("max_context", 2048), "ai.max_context", 256, 4096),
             keep_warm=_boolean(ai.get("keep_warm", False), "ai.keep_warm"),
         ),
+        threat=_threat_settings(_table(raw.get("threat_detection", {}), "threat_detection")),
     )

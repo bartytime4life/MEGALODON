@@ -17,7 +17,9 @@ FAMILIES = {
     'PORT_SCAN': 'discovery', 'HOST_FANOUT': 'discovery',
     'SYN_FLOOD': 'traffic_volume',
     'DNS_TUNNELING': 'dns', 'PORT_53_BURST': 'dns',
-    'REGULAR_INTERVAL': 'cadence',
+    'REGULAR_INTERVAL': 'cadence', 'BEACONING': 'cadence',
+    'BRUTE_FORCE': 'credential_access', 'HOST_SWEEP': 'discovery',
+    'DATA_EXFILTRATION': 'traffic_volume', 'IOC_MATCH': 'threat_intelligence',
     'NEW_DESTINATION_PORT': 'baseline_change',
     'PROTOCOL_SHIFT': 'baseline_change', 'SERVICE_SHIFT': 'baseline_change',
 }
