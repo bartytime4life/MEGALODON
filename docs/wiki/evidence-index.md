@@ -3,12 +3,12 @@
 > Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
 
 
-## Latest documentation reading — November 11
+## Historical documentation reading — November 11
 
-The current source reading is
+The November 11 source reading is
 [`418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),
 November 11 in America/Chicago (the #774 merge was November 12 UTC).
-[Current source orientation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation)
+[November 11 source orientation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation)
 and the [refresh record](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-refresh-2026-11-11.md)
 separate implementation, prior candidate validation, merge identity and checks
 performed for this documentation pass.

@@ -1,5 +1,7 @@
 # Development and Validation
 
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
 > [Documentation field guide](https://github.com/bartytime4life/MEGALODON/blob/main/docs/README.md) · [Complete catalog](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-map.md). Preserve historical pins and counts; update maintained guides when behavior changes.
 
 Keep changes narrow, source-pinned, and reviewable. Documentation, plans, issue

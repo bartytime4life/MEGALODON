@@ -1,6 +1,8 @@
 # Linux dashboard browser acceptance
 
-> **Latest source-head observation — October 22, 2026:** main `2cb706039724d9ea0bda09cbd3c17698b15ba55c`, [Linux browser run 39878396547](https://github.com/bartytime4life/MEGALODON/actions/runs/39878396547), succeeded with the merged Playwright 1.64.0 compatibility profile. CI and CodeQL also succeeded at that source pin. This is observed hosted evidence, not a documentation-candidate or installed-host run. The earlier `0acdf72` timeout, #660/#661 macOS failures and older passing receipts retain their own identities; #662 changes fixture qualification without relaxing production ancestry policy.
+> Maintained source: merged #779 at `dee4027a8541335f43460d6bef37024606f4bfdf` qualifies Playwright 1.65.2 and the fifteen-wheel closure. See [the current dependency profile](dependency-policy.md#hash-verified-browser-test-profile). The [November 17 candidate](repo-app-review-2026-11-17.md) adds a separate synthetic Help science journey; it does not replace the real CLI/SQLite/HTTP browser lane or rewrite older receipts.
+
+> **Historical source-head observation — October 22, 2026:** main `2cb706039724d9ea0bda09cbd3c17698b15ba55c`, [Linux browser run 39878396547](https://github.com/bartytime4life/MEGALODON/actions/runs/39878396547), succeeded with the merged Playwright 1.64.0 compatibility profile. CI and CodeQL also succeeded at that source pin. This is observed hosted evidence, not a documentation-candidate or installed-host run. The earlier `0acdf72` timeout, #660/#661 macOS failures and older passing receipts retain their own identities; #662 changes fixture qualification without relaxing production ancestry policy.
 
 This opt-in test executes the actual CLI, ingestion/service code, SQLite writer,
 separate dashboard reader, HTTP handler, bundled assets, and a real browser.

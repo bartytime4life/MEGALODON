@@ -1,5 +1,7 @@
 # Three investigation journeys
 
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
 Start with a question, then follow the recorded evidence. These journeys use
 implemented interfaces, with navigation reviewed at [source `418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),
 November 11, 2026 (America/Chicago). Historical contract links retain their own

@@ -1,5 +1,7 @@
 # Quick Start
 
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
 > [See the interface first](visual-tour.md) · [Current scope and open gates](roadmap-and-limits.md). Commands below are run from the root of a reviewed checkout as your ordinary user.
 
 The supported application is a local Linux HUD. Use an ordinary user and owner-private storage. Synthetic core evaluation does not require a cloud account, model, GPU, capture tool or firewall privilege.

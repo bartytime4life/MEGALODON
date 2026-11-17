@@ -1,5 +1,7 @@
 # MEGALODON Documentation Wiki
 
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
 ## A workspace you can inspect
 
 <picture>
@@ -97,7 +99,7 @@ The historical October 1 benchmark recorded **98.1% fewer OS-written bytes** for
 27.06 ms. [Both result and cost](engineering-case-studies.md#1-recording-efficiency-with-a-visible-tradeoff)
 remain visible.
 
-**Current navigation basis:** [`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026
+**Historical November 11 navigation basis:** [`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026
 (America/Chicago). [Current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) records
 the source map and remaining host/platform gates. Historical captures and
 benchmarks keep their own revisions. This Wiki is generated from `docs/wiki/`

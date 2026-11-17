@@ -1,6 +1,8 @@
 # CI dependency and action policy
 
-> **Source qualification — October 22, 2026 / `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** merged #660 supplies Playwright 1.64.0, its native-focus driver profile and composed wheel lock; #657 supplies Pluggy 1.7.0. CI, Linux browser acceptance and CodeQL succeeded at this source pin. [Exact results](current-state.md#exact-source-head-checks-observed) are separate from installed-host or native-platform acceptance. Earlier dependency receipts keep their historical pins.
+> Current merged browser profile: Playwright 1.65.2, qualified by #779 at `dee4027a8541335f43460d6bef37024606f4bfdf`; its composed closure has fifteen wheels and no pyee requirement. The versioned details below retain exact artifact pins. [Current source and candidate](current-state.md) separates source delivery from installed-host acceptance.
+
+> **Historical source qualification — October 22, 2026 / `2cb706039724d9ea0bda09cbd3c17698b15ba55c`:** merged #660 supplies Playwright 1.64.0, its native-focus driver profile and composed wheel lock; #657 supplies Pluggy 1.7.0. CI, Linux browser acceptance and CodeQL succeeded at this source pin. [Exact results](current-state.md#exact-source-head-checks-observed) are separate from installed-host or native-platform acceptance. Earlier dependency receipts keep their historical pins.
 
 Status: ● implemented for the required pull-request validation inputs; the
 compatibility lane is non-required discovery work. This document does not change
