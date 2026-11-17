@@ -34,9 +34,11 @@ class Elements(HTMLParser):
 def test_composition_retains_every_existing_control_without_runtime_reparenting():
     source = Path('megalodon/dashboard_assets.py').read_text()
     namespace = {'__package__': 'megalodon'}
-    exec(compile(source.replace('INDEX_HTML = compose_settings(INDEX_HTML)', ''), '<before-settings>', 'exec'), namespace)
+    original='INDEX_HTML = compose_findings(compose_settings(INDEX_HTML))'
+    assert original in source
+    exec(compile(source.replace(original, 'INDEX_HTML = compose_findings(INDEX_HTML)'), '<before-settings>', 'exec'), namespace)
     before, after = Elements(namespace['INDEX_HTML']), Elements(INDEX_HTML)
-    assert before.controls == after.controls
+    assert after.controls == before.controls | {'router-guide-profile','switch-guide-profile','router-guide-mode'}
     assert not [key for key, count in Counter(after.ids).items() if count > 1]
     assert [panel['data-setup-category'] for panel in after.panels] == ['overview', 'traffic', 'ai', 'apps', 'storage', 'advanced']
     assert ['hidden' in panel for panel in after.panels] == [False, True, True, True, True, True]

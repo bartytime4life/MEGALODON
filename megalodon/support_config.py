@@ -25,6 +25,8 @@ from .live_connections import LiveConnections
 from .background_monitor import BackgroundMonitor
 from .support_sensors import SupportSensors, zeek_binary
 from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
+from .desktop_notifications import DesktopNotifications
+from .suricata_rules import SuricataRules
 from .host_security import HostSecurity
 from . import backup_evidence, gateway_review, hardening_review, persistence_review, process_network, recovery_readiness
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
@@ -71,11 +73,16 @@ ACTION_FIELDS = {
     'model_library_check': set(), 'model_stage_download': {'catalog_id'}, 'model_stage_cancel': set(),
     'model_library_reuse': {'store_id', 'model', 'model_digest', 'verification_profile'},
     'qwen_configure': set(), 'suricata_configure': {'interface'},
+    'desktop_notifications': {'enabled'},
+    'suricata_rules_stage': {'interface', 'home_net'},
+    'suricata_rules_activate': {'generation'},
+    'suricata_rules_check': set(), 'suricata_rules_rollback': set(),
 }
 TOOL_NAMES = {'security':'Host security and threat context', 'persistence':'Persistence review', 'wireshark':'Wireshark / capture access', 'tshark':'TShark', 'nftables':'nftables', 'capture':'HUD packet metadata',
               'nmap':'Nmap / Zenmap', 'clamav':'ClamAV / ClamTk', 'osquery':'osquery',
               'qwen':'Local AI / Ollama', 'zeek':'Zeek', 'suricata':'Suricata',
-              'background':'Background traffic', 'geography':'IP geography', 'startup':'Startup settings'}
+              'background':'Background traffic', 'geography':'IP geography', 'startup':'Startup settings',
+              'desktop':'Desktop notifications'}
 # Only a root-owned packaged capture helper gains two packet capabilities.
 # PKEXEC_UID is supplied by pkexec, never by an HTTP parameter. ACL access is
 # immediate for this user, so a desktop logout/group refresh is unnecessary.
@@ -172,6 +179,13 @@ def validate_action(value):
         raise ValueError('Choose an AI response limit from 1 to 1800 seconds.')
     if action=='model_policy' and type(value['keep_ready']) is not bool:
         raise ValueError('Choose whether to keep the selected model ready.')
+    if action=='desktop_notifications' and type(value['enabled']) is not bool:
+        raise ValueError('Choose whether to enable local desktop notifications.')
+    if action=='suricata_rules_stage':
+        from .suricata_rules import validate_scope
+        validate_scope(value['interface'], value['home_net'])
+    if action=='suricata_rules_activate' and (type(value['generation']) is not str or not re.fullmatch(r'[a-f0-9]{32}',value['generation'])):
+        raise ValueError('Stage and review an exact rules generation before activation.')
     if 'interface' in value:
         valid_interface(value['interface'])
     if 'nmap_target' in value:
@@ -226,6 +240,9 @@ class SupportConfiguration:
         self.capture = ManagedCapture(settings, self.root / 'analyzer', on_ready, connections=self.connections)
         self.background = BackgroundMonitor(self.capture, self.geography, lambda:self._geography_enabled)
         self.sensors = SupportSensors(self.home)
+        self.notifications = DesktopNotifications(home=self.home)
+        self.notifications.bootstrap({})
+        self.suricata_rules = SuricataRules(run=run)
         self.host_security = HostSecurity(self.home)
         # Cached read-only reviews; one run per TTL window, even when several HUD requests arrive together.
         self._reviews = {}
@@ -457,6 +474,8 @@ class SupportConfiguration:
                          job=dict(self._job), capture=self.capture.snapshot(), background=self.background.snapshot(),
                          geography_enabled=self._geography_enabled, model=self.model_telemetry.snapshot(),
                          model_library=self.model_library.snapshot(), startup=self.startup_policy.snapshot(),
+                         desktop_notifications=self.notifications.snapshot(),
+                         suricata_rules=self.suricata_rules.snapshot(),
                          configured_collectors=sorted(self._configured),
                          host_security=host_security, recovery_readiness=recovery_readiness.review(host_security),
                          backup_evidence=backups,
@@ -576,7 +595,23 @@ class SupportConfiguration:
                 with self._lock:
                     settings = dict(self._settings, interface=request['interface'])
                 self._save(settings=settings)
-            if action in {'model_library_check','model_stage_download'}:
+            if action.startswith('suricata_rules_'):
+                operation = action.removeprefix('suricata_rules_')
+                if operation == 'stage':
+                    result = self.suricata_rules.stage(request['interface'], request['home_net'])
+                elif operation == 'activate':
+                    result = self.suricata_rules.activate(request['generation'])
+                elif operation == 'check':
+                    result = self.suricata_rules.check()
+                else:
+                    result = self.suricata_rules.rollback()
+                message = result['message']
+            elif action == 'desktop_notifications':
+                if not self.notifications.configure(enabled=request['enabled']):
+                    raise ValueError('Desktop notification preference could not be saved. Review local state access.')
+                message = ('Local desktop hints enabled for new detector findings and priority 1–2 sensor alerts while the HUD runs. '
+                           'Desktop delivery is not verified.' if request['enabled'] else 'Local desktop hints disabled.')
+            elif action in {'model_library_check','model_stage_download'}:
                 message = self.model_library.execute(request.get('catalog_id'))
             elif action == 'model_library_reuse':
                 ai = self.settings.ai
@@ -813,7 +848,7 @@ class SupportConfiguration:
                 message = 'Installed Suricata configuration passed its native validation. Start support apps can start the configured service; HUD evidence intake is separate.'
             else:
                 raise ValueError('Unsupported setup action.')
-            self._tool(tool, 'ready', message)
+            self._tool(tool, result['state'] if action.startswith('suricata_rules_') else 'ready', message)
         except (OSError, ValueError, ConfigBusy, subprocess.SubprocessError) as exc:
             failed = True
             from .local_install import InstallError
@@ -839,6 +874,7 @@ class SupportConfiguration:
                 self._job.update(state='failed' if failed else 'finished', message=message, finished_at=now())
 
     def close(self):
+        self.notifications.close()
         self._scanner_stop.set()
         self.model_library.cancel()
         self.model_test.cancel()
@@ -852,6 +888,7 @@ class SupportConfiguration:
 
     def resume(self):
         execution_boundary.require_effects_allowed()
+        self.notifications.start()
         self.model_lifecycle.start()
         if self._background_enabled:
             try:
@@ -889,6 +926,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Configure local MEGALODON support apps through the running HUD')
     parser.add_argument('action', nargs='?', choices=['status',*ACTION_FIELDS], default='status')
     parser.add_argument('--interface')
+    parser.add_argument('--enabled', action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument('--home-net')
+    parser.add_argument('--generation')
     parser.add_argument('--tool-id', choices=sorted(EXECUTABLES))
     parser.add_argument('--directory')
     parser.add_argument('--nmap-target')

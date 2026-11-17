@@ -8,6 +8,7 @@ from threading import Lock
 import time
 
 from .companion_automation import _run_fixed
+from .flow_ingestion import producer_scope
 
 IDLE_SECONDS = 15
 RETENTION_SECONDS = 60
@@ -122,7 +123,9 @@ class LiveConnections:
         stamp=datetime.fromisoformat(value['last_seen'].replace('Z','+00:00'))
         age=max(0,(datetime.now(timezone.utc)-stamp).total_seconds())
         if age>RETENTION_SECONDS:return
-        identity=(record['source'],value['source_id'],value['first_seen'])
+        try:interface,sensor_name=producer_scope(value)
+        except ValueError:return
+        identity=(record['source'],interface,sensor_name,value['source_id'],value['first_seen'])
         with self._lock:
             if getattr(self,'_flow_source',None)!=record['source']:
                 self._flows.clear();self._timeline.clear();self._summary_counts.clear()
@@ -155,7 +158,9 @@ class LiveConnections:
             self._flows[identity]=dict(id=hashlib.sha256(repr(identity).encode()).hexdigest()[:20],protocol=value['protocol'],
                 a=endpoints[0],b=endpoints[1],a_to_b=directions[0],b_to_a=directions[1],
                 first_seen=value['first_seen'],last_seen=value['last_seen'],state='closed' if completed else 'recent',
-                flags=[],services=[value['app_proto']] if value.get('app_proto') else [],_seen=self.clock()-age,source=record['source'],observation='flow summary',byte_basis=value.get('byte_basis','unknown'))
+                flags=[],services=[value['app_proto']] if value.get('app_proto') else [],_seen=self.clock()-age,source=record['source'],observation='flow summary',byte_basis=value.get('byte_basis','unknown'),
+                **(dict(interface=interface) if interface is not None else {}),
+                **(dict(sensor_name=sensor_name,sensor_identity_basis='producer_reported') if sensor_name is not None else {}))
             self._packets=sum(r['a_to_b']['packets']+r['b_to_a']['packets'] for r in self._flows.values())
             self._bytes=sum(r['a_to_b']['bytes']+r['b_to_a']['bytes'] for r in self._flows.values())
             if delta and any(delta):

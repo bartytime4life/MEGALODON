@@ -2,6 +2,7 @@
 import re
 
 from .dashboard_operations import _take
+from .dashboard_router_compatibility import ROUTER_COMPATIBILITY_HTML, ROUTER_COMPATIBILITY_CSS, ROUTER_COMPATIBILITY_JS
 
 
 def _take_match(html: str, pattern: str) -> tuple[str, str]:
@@ -51,6 +52,7 @@ def compose_settings(html: str) -> str:
     support, startup = _take(support, "startup-settings")
     support, feedback = _take_match(support, r'<div class="support-config-feedback"[^>]*>')
     support, capture = _take_match(support, r'<section class="support-capture"[^>]*>')
+    support, network_defense = _take(support, "support-network-defense")
     support, collectors = _take_match(support, r'<details class="support-collector-settings"[^>]*>')
     support, services = _take_match(support, r'<details class="support-service-settings"[^>]*>')
     services, model = _take_match(services, r'<section aria-labelledby="support-model-title"[^>]*>')
@@ -88,7 +90,7 @@ def compose_settings(html: str) -> str:
       <a href="#support-model-title"><span>Local AI</span><strong id="settings-model-summary">Checking…</strong><small id="settings-model-name">Saved model</small><b aria-hidden="true">↗</b></a>
       <a href="#apps-connections-title"><span>Apps</span><strong id="settings-apps-summary">Checking…</strong><small>Install and configure</small><b aria-hidden="true">↗</b></a>
     </div>''' + startup + health
-    traffic = capture + _disclosure('Background sensors · Zeek and Suricata',
+    traffic = ROUTER_COMPATIBILITY_HTML + capture + network_defense + _disclosure('Background sensors · Zeek and Suricata',
         _inside(services).split('<div class="support-tool-settings">', 1)[1].rsplit('</div>', 1)[0])
     traffic += _disclosure('Device discovery', network) + _disclosure('IP location data', geography)
     app_body = apps + management + collectors + _disclosure('Host security and threat context', security)
@@ -123,7 +125,7 @@ def compose_settings(html: str) -> str:
     return html.replace(marker, workspace + marker, 1)
 
 
-SETTINGS_CSS = r'''
+SETTINGS_CSS = ROUTER_COMPATIBILITY_CSS + r'''
 #workspace-setup { --settings-surface:#0c1b25; --settings-line:#263e4c; --settings-muted:#a9bfcc; --settings-teal:#86e4cf; background:#07141d; color:#ecf5f8; }
 #workspace-setup [hidden] { display:none!important; }
 #workspace-setup .settings-console { margin:0; padding:26px 30px 48px; border:0; border-radius:0; background:transparent; box-shadow:none; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
@@ -243,7 +245,7 @@ SETTINGS_CSS = r'''
 @media(prefers-reduced-motion:reduce) { #workspace-setup * { animation:none!important; transition:none!important; } }
 '''
 
-SETTINGS_JS = r'''
+SETTINGS_JS = ROUTER_COMPATIBILITY_JS + r'''
 (() => {
  const root=document.getElementById('workspace-setup');if(!root||typeof root.querySelectorAll!=='function')return;
  const panels=[...root.querySelectorAll('[data-setup-category]')],tabs=[...root.querySelectorAll('.settings-nav [role="tab"]')];

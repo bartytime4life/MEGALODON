@@ -26,6 +26,21 @@ SUPPORT_CONFIG_HTML = r'''
     </div>
     <div class="support-capture-reading"><p id="support-capture-message">No capture status loaded.</p><dl><div><dt>Received packets</dt><dd id="support-capture-received">—</dd></div><div><dt>Accepted records</dt><dd id="support-capture-accepted">—</dd></div><div><dt>Skipped packets</dt><dd id="support-capture-skipped">—</dd></div></dl><p id="support-capture-time" class="support-config-note">Capture time unavailable.</p></div>
   </section>
+  <section id="support-network-defense" class="support-capture" aria-labelledby="support-network-defense-title">
+    <h5 id="support-network-defense-title">Network detection and alerts</h5>
+    <p>A PC can review traffic delivered to its capture interface. Broader visibility needs suitable network placement and a prepared sensor; local switched or mesh traffic may remain unseen. Monitoring pauses when this PC sleeps or the HUD stops.</p>
+    <p id="support-notifications-status" role="status">Desktop notification preference unavailable.</p>
+    <button type="button" id="support-notifications-toggle" disabled>Enable desktop hints</button>
+    <p class="support-config-note">Generic local hints for new detector findings and priority 1–2 Suricata alerts, at most once per minute. Review evidence in the HUD before responding. Desktop delivery is not verified.</p>
+    <details><summary>Suricata detection rules</summary>
+      <p>Stage ET Open rules from the official update service, then review and activate that exact generation. Existing custom rules are preserved; ambiguous configurations require manual review. Activation restarts the passive sensor and may request your system password.</p>
+      <label for="support-rules-home-net">Protected network (CIDR)</label><input id="support-rules-home-net" type="text" maxlength="64" spellcheck="false" placeholder="192.168.1.0/24" disabled>
+      <p class="support-config-note">Use the network actually visible on the selected capture interface above. A WAN tap needs a separate addressing review; the LAN subnet does not identify clients after IPv4 NAT.</p>
+      <p id="support-rules-status" role="status">Rules status unavailable.</p>
+      <div class="support-config-actions"><button type="button" id="support-rules-stage" disabled>Download and stage ET Open</button><button type="button" id="support-rules-activate" disabled>Activate reviewed generation</button><button type="button" id="support-rules-check" disabled>Recheck installed rules</button><button type="button" id="support-rules-rollback" disabled>Roll back last activation</button></div>
+      <p class="support-config-note">Dated validation and service status do not prove event delivery, detection accuracy or whole-home visibility. Recheck after changing configuration. Sleep and sensor outages leave monitoring gaps.</p>
+    </details>
+  </section>
   <details class="support-collector-settings"><summary>Inventory and file-scan settings</summary><div class="support-tool-settings">
     <section aria-labelledby="support-config-nmap-title"><h5 id="support-config-nmap-title">Nmap</h5><p>Choose a private IPv4 address or network you manage, up to 256 addresses.</p><label for="support-config-nmap-target">Inventory target</label><input id="support-config-nmap-target" type="text" value="127.0.0.1/32" maxlength="18" spellcheck="false" disabled aria-describedby="support-nmap-help"><p id="support-nmap-help" class="support-config-note">Use /24–/32, such as 192.168.1.0/24. A single address uses /32.</p><button type="button" id="support-config-nmap-save" disabled>Save and collect inventory</button></section>
     <section aria-labelledby="support-config-clamav-title"><h5 id="support-config-clamav-title" tabindex="-1">ClamAV</h5><p>Scan a folder in your home directory and update the HUD result.</p><label for="support-config-scan-folder">Folder to scan</label><select id="support-config-scan-folder" disabled><option value="Downloads">Downloads</option><option value="Documents">Documents</option></select><div class="support-config-actions"><button type="button" id="support-config-clamav-save" disabled>Save and scan folder</button><button type="button" id="support-config-signatures" disabled>Update virus signatures</button></div><p class="support-config-note">The installed signature updater may request operating-system authorization.</p></section>
@@ -136,6 +151,9 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   if(!el('support-config-tool-id').value)el('support-config-tool-id').value='zeek';
   const state={configVisible:false,globeVisible:false,liveAction:false,open:false,pending:false,valid:false,token:null,payload:null,timer:null,dirty:new Set(),hydrated:false,submitted:null};
   const actions={
+    'support-notifications-toggle':'desktop_notifications',
+    'support-rules-stage':'suricata_rules_stage','support-rules-activate':'suricata_rules_activate',
+    'support-rules-check':'suricata_rules_check','support-rules-rollback':'suricata_rules_rollback',
     'startup-check':'startup_check','startup-enable':'startup_enable','startup-disable':'startup_disable','startup-services-enable':'startup_services',
     'host-security-audit':'security_audit','host-security-baseline':'security_baseline','host-security-check':'security_check','host-security-refresh':'security_refresh','persistence-baseline':'persistence_baseline',
     'support-model-cancel':'model_cancel','support-model-save':'model_select','support-model-refresh':'model_refresh','support-model-load':'model_load','support-model-ready':'model_policy',
@@ -152,12 +170,14 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   Object.assign(actionNames,{model_stage_download:'Downloading and staging model',model_library_check:'Checking staged files',model_stage_cancel:'Cancelling model staging',model_library_reuse:'Checking existing local model files'});
   Object.assign(actionNames,{model_test:'Testing the saved local model',model_test_cancel:'Cancelling the local model test'});
   Object.assign(actionNames,{startup_check:'Checking startup settings',startup_enable:'Enabling HUD at sign-in',startup_disable:'Turning off HUD sign-in startup',startup_services:'Enabling installed services at boot'});
+  Object.assign(actionNames,{desktop_notifications:'Saving desktop notification preference'});
+  Object.assign(actionNames,{suricata_rules_stage:'Downloading and validating detection rules',suricata_rules_activate:'Activating reviewed rules',suricata_rules_check:'Rechecking installed rules',suricata_rules_rollback:'Restoring previous rules configuration'});
   const jobActions=new Set([...Object.keys(actionNames),'clamav_self_check']);
   const modelActions=new Set(['model_select','model_refresh','model_cancel','model_policy','model_load','qwen_check','qwen_configure']);
   const modelRunActions=new Set(['model_cancel','model_load','qwen_check','qwen_configure']);
   const modelUnbound=(model=state.payload?.model)=>model?.binding_status==='UNBOUND'||model?.model_state==='unbound'||model?.lifecycle?.state==='unbound'||model?.error_code==='OWNER_MODEL_BINDING_NOT_RECORDED';
   const inputIds=['support-config-interface','support-config-nmap-target','support-config-scan-folder','support-model-select','support-model-compute','support-model-timeout','support-config-tool-id','support-config-tool-directory'];
-  const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure'];
+  const interfaceActions=['capture_permissions','capture_start','wireshark_open','background_start','suricata_configure','suricata_rules_stage'];
   const object=v=>v && typeof v==='object' && !Array.isArray(v);
   const text=(v,max=512)=>typeof v==='string' && v.length<=max && !/[\x00-\x1f\x7f]/.test(v);
   const stamp=v=>v===null || (text(v,40) && /Z$/.test(v) && Number.isFinite(Date.parse(v)));
@@ -190,6 +210,8 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     if(v.configured_collectors!==undefined&&(!Array.isArray(v.configured_collectors)||v.configured_collectors.length>3||!v.configured_collectors.every(x=>['nmap','clamav','osquery'].includes(x))))throw Error('Invalid saved collectors');
     if(v.model?.selection_state!==undefined&&!['none','configured','restored','saved','invalid'].includes(v.model.selection_state))throw Error('Invalid model preference state');
     libraryChecked(v.model_library);
+    if(v.desktop_notifications!==undefined){const n=v.desktop_notifications;if(!object(n)||n.schema!=='megalodon-desktop-notifications-v1'||typeof n.enabled!=='boolean'||!['closed','unavailable','disabled','ready','starting'].includes(n.state)||!count(n.pending_count)||n.pending_count>1000||n.interval_seconds!==60||!['not_attempted','attempted','submitted','unavailable'].includes(n.last_result)||!(n.last_attempt_at===null||(typeof n.last_attempt_at==='number'&&Number.isFinite(n.last_attempt_at)&&n.last_attempt_at>=0&&n.last_attempt_at<=253402300799))||n.delivery_verified!==false||n.action_authority!=='none')throw Error('Invalid desktop notification status');}
+    if(v.suricata_rules!==undefined){const r=v.suricata_rules;if(!object(r)||r.schema!=='megalodon-suricata-rules-v1'||!['unconfigured','staged','active','rolled_back','failed','needs_review'].includes(r.state)||!stamp(r.checked_at)||!(r.generation===null||/^[a-f0-9]{32}$/.test(r.generation))||!(r.interface===null||text(r.interface,15))||!(r.home_net===null||text(r.home_net,64))||!count(r.rule_count)||typeof r.native_test_passed!=='boolean'||!['active_at_check','inactive_at_check','not_checked','unknown'].includes(r.runtime_state)||!['available','restored','failed','none'].includes(r.rollback)||!text(r.message))throw Error('Invalid rules status');}
     return v;
   }
   const capturing=()=>state.payload && ['starting','running'].includes(state.payload.capture.state);
@@ -236,6 +258,11 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     for(const [id,action] of Object.entries(actions)){
       if(!el(id))continue;el(id).disabled=blocked || (working() && !['capture_stop','background_stop','model_cancel','model_test_cancel'].includes(action)) || (interfaceActions.includes(action)&&!el('support-config-interface').value)
         || (action==='capture_start'&&!!capturing()) || (action==='capture_stop'&&!capturing())
+        || (action==='desktop_notifications'&&(!state.payload?.desktop_notifications||['closed','unavailable'].includes(state.payload.desktop_notifications.state)))
+        || (action.startsWith('suricata_rules_')&&!state.payload?.suricata_rules)
+        || (action==='suricata_rules_activate'&&(state.payload?.suricata_rules?.state!=='staged'||state.payload.suricata_rules.native_test_passed!==true||!state.payload.suricata_rules.generation))
+        || (action==='suricata_rules_stage'&&!el('support-rules-home-net')?.value.trim())
+        || (action==='suricata_rules_rollback'&&!['available','failed'].includes(state.payload?.suricata_rules?.rollback)&&state.payload?.suricata_rules?.error!=='PENDING_RECOVERY')
         || (action==='background_start'&&!!state.payload?.background?.enabled&&state.payload.background.state!=='failed') || (action==='background_stop'&&!state.payload?.background?.enabled&&!capturing())
         || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!state.payload?.model?.options.some(row=>row.name===el('support-model-select').value)) || (action==='model_cancel'&&!state.payload?.model?.running)
         || (modelRunActions.has(action)&&aiBlocked) || (modelActions.has(action)&&!modelRunActions.has(action)&&choiceBlocked) || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
@@ -246,6 +273,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     el('support-model-test').disabled=blocked||!!working()||state.payload?.model?.response_test?.selection_saved!==true||['model','compute_mode','timeout_seconds'].some(key=>state.dirty.has(key));
     el('support-model-test-cancel').disabled=blocked||state.payload?.model?.response_test?.state!=='running';
     for(const id of inputIds)el(id).disabled=(id.startsWith('support-model-')?choiceBlocked:blocked)||!!working();
+    if(el('support-rules-home-net'))el('support-rules-home-net').disabled=blocked||!!working();
     // A failed status read or an authorization hold must retain a read-only retry.
     el('support-model-refresh').disabled=state.pending||!workspaceVisible()||(state.valid&&(!!working()||choiceBlocked));
     el('support-model-refresh').textContent=!state.valid?'Retry model status':'Refresh installed models';
@@ -258,6 +286,11 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     libraryControls(blocked);
   }
   function render(v){
+    const notice=v.desktop_notifications;
+    if(el('support-notifications-status'))el('support-notifications-status').textContent=notice ? `Desktop hints ${notice.enabled?'enabled':'disabled'} · ${notice.state}. Last attempt: ${notice.last_result.replace(/_/g,' ')}${notice.last_attempt_at===null?'':', '+time(new Date(notice.last_attempt_at*1000).toISOString())}. Delivery is not verified.` : 'Desktop notification preference unavailable.';
+    if(el('support-notifications-toggle'))el('support-notifications-toggle').textContent=notice?.enabled?'Disable desktop hints':'Enable desktop hints';
+    const rules=v.suricata_rules;
+    if(el('support-rules-status'))el('support-rules-status').textContent=rules ? `${rules.message} Checked: ${time(rules.checked_at)}. Rules: ${rules.rule_count}. Service: ${rules.runtime_state.replace(/_/g,' ')}.${rules.generation?' Generation '+rules.generation+'.':''}${rules.interface?' Interface '+rules.interface+'.':''}${rules.home_net?' Protected network '+rules.home_net+'.':''}` : 'Rules status unavailable.';
     startupRender(v);
     libraryRender(v.model_library);
     const h=v.host_security;
@@ -362,6 +395,8 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   }
   function accept(v){if(state.submitted && v.job.action===state.submitted.action && ['finished','failed'].includes(v.job.state)){if(v.job.state==='finished'){const action=state.submitted.action;if(interfaceActions.includes(action))state.dirty.delete('interface');if(action==='nmap_configure')state.dirty.delete('nmap_target');if(action==='clamav_configure')state.dirty.delete('scan_folder');if(action==='tool_directory_set')state.dirty.delete('tool_directory');if(action==='model_policy')state.dirty.delete('keep_ready');if(action==='model_select'){state.dirty.delete('model');state.dirty.delete('compute_mode');state.dirty.delete('timeout_seconds');}}state.submitted=null;}state.payload=v;if(v.token)state.token=v.token;state.valid=true;state.hydrated=true;el('support-config-retry').hidden=true;if(el('live-action-retry'))el('live-action-retry').hidden=true;render(v);}
   function modelUnavailable(){
+    if(el('support-notifications-status'))el('support-notifications-status').textContent='Desktop notification preference unavailable.';
+    if(el('support-rules-status'))el('support-rules-status').textContent='Rules status unavailable. Recheck before using an earlier result.';
     const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Model list unavailable · retry status';
     const select=el('support-model-select');select.replaceChildren(placeholder);delete select.dataset.optionsKey;
     el('support-model-authorization').hidden=true;
@@ -378,6 +413,9 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
   async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();let finished;state.readDone=new Promise(resolve=>{finished=resolve;});state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;state.readDone=null;controls();schedule();finished();}}
   function payloadFor(action){
     const value={action};
+    if(action==='desktop_notifications')value.enabled=!state.payload.desktop_notifications.enabled;
+    if(action==='suricata_rules_stage'){value.home_net=el('support-rules-home-net').value.trim();if(!value.home_net.includes('/')||value.home_net.length>64)throw Error('Enter the protected network in CIDR notation.');}
+    if(action==='suricata_rules_activate')value.generation=state.payload.suricata_rules.generation;
     if(interfaceActions.includes(action)){value.interface=el('support-config-interface').value;if(!state.payload.interfaces.some(i=>i.name===value.interface))throw Error('Select an available capture interface.');}
     if(action==='nmap_configure'){
       let target=el('support-config-nmap-target').value.trim();if(!target.includes('/'))target+='/32';
@@ -403,13 +441,15 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     return value;
   }
   async function act(action){
+    const reviewedGeneration=action==='suricata_rules_activate'?state.payload?.suricata_rules?.generation:null;
     if(state.readDone)await state.readDone;
+    if(action==='suricata_rules_activate'&&reviewedGeneration!==state.payload?.suricata_rules?.generation){feedback('The staged rules changed. Review the displayed generation before activating.','stale');return;}
     const button=Object.entries(actions).find(([,value])=>value===action);
     if(!button||!el(button[0])||el(button[0]).disabled||state.pending||!state.valid||!state.token||!workspaceVisible()||(modelRunActions.has(action)&&modelUnbound()))return;
     let payload;try{payload=payloadFor(action);}catch(error){feedback(error.message,'failed');return;}
     const focusedControl=document.activeElement?.id;
-    cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]|| (action==='model_cancel'?'Cancelling AI request':'Saving local AI settings')}…${['capture_permissions','signature_update','qwen_configure','suricata_configure','startup_services'].includes(action)?' A system authorization prompt may appear.':''}`,'working');controls();
-    try{let value;try{value=await request(payload);}catch(error){if(error.status!==403)throw error;const refreshed=await request();accept(refreshed);if(action==='model_stage_download'){el('model-library-online').checked=false;feedback('Setup permission changed. Review the model source and confirm the download again.','stale');return;}value=await request(payload);}if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
+    cancel();state.pending=true;state.liveAction=['background_start','background_stop','geography_refresh','geography_disable'].includes(action);feedback(`${actionNames[action]|| (action==='model_cancel'?'Cancelling AI request':'Saving local AI settings')}…${(['capture_permissions','signature_update','qwen_configure','suricata_configure','startup_services'].includes(action)||action.startsWith('suricata_rules_'))?' A system authorization prompt may appear.':''}`,'working');controls();
+    try{let value;try{value=await request(payload);}catch(error){if(error.status!==403)throw error;if(action.startsWith('suricata_rules_')||action==='desktop_notifications')throw error;const refreshed=await request();accept(refreshed);if(action==='model_stage_download'){el('model-library-online').checked=false;feedback('Setup permission changed. Review the model source and confirm the download again.','stale');return;}value=await request(payload);}if(value){state.submitted=payload;accept(value);}else{accept(await request());feedback('Another support action is already running. Wait for it to finish, then try again.','working');}}
     catch(error){fail(error);}finally{state.pending=false;controls();schedule();if(focusedControl&&document.activeElement===document.body&&!el(focusedControl)?.disabled)el(focusedControl)?.focus({preventScroll:true});}
   }
   function open(value){state.open=value;el('support-config').hidden=setupWorkspace?false:!value;el('support-apps-configure').setAttribute('aria-expanded',value?'true':'false');
@@ -424,6 +464,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     el('support-model-select').value=model.model;state.dirty.delete('model');controls();act('model_select');
   });
   for(const [id,key] of [['support-model-timeout','timeout_seconds'],['support-model-select','model'],['support-model-compute','compute_mode'],['support-config-interface','interface'],['support-config-nmap-target','nmap_target'],['support-config-scan-folder','scan_folder']])el(id).addEventListener('change',()=>{state.dirty.add(key);controls();});
+  if(el('support-rules-home-net'))el('support-rules-home-net').addEventListener('input',controls);
   el('support-model-timeout').addEventListener('input',()=>{state.dirty.add('timeout_seconds');controls();});
   el('support-config-nmap-target').addEventListener('input',()=>state.dirty.add('nmap_target'));
   el('support-config-tool-id').addEventListener('change',()=>{state.dirty.delete('tool_directory');el('support-config-tool-directory').value=state.payload?.tool_directories?.[el('support-config-tool-id').value]||'';controls();});

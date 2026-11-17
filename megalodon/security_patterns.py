@@ -88,7 +88,7 @@ def _history_by_key(previous):
     index = defaultdict(list)
     for baseline in previous:
         key = baseline.get('key')
-        if isinstance(key, list) and len(key) == 4:
+        if isinstance(key, list) and len(key) in {4, 5}:
             try:
                 index[tuple(key)].append(baseline)
             except TypeError:
@@ -99,12 +99,22 @@ def _history_by_key(previous):
 def candidate(rule, key, start, end, facts, references, segments, *, gaps=(), source_start=None):
     if len(set(segments))>MAX_DEPENDENCIES:raise ValueError('Pattern source dependency limit exceeded')
     happened, matters, query, workflow = CONTEXT[rule]
+    identity = {}
+    identity_gaps = []
+    if len(key) == 5:
+        identity = dict(sensor_name=key[4],sensor_identity_basis='producer_reported')
+        identity_gaps.append('Sensor and interface labels are producer-reported; engine, run and rules identity are unverified.')
+    elif key[2] == 'suricata-eve':
+        identity_gaps.append('Producer sensor identity was not recorded; engine, run and rules identity are unverified.')
+    if key[2] == 'suricata-eve' and key[1] == 'unreported':
+        identity_gaps.append('The sensor interface was not recorded.')
     return dict(id=stable([rule,key,start,facts]), fingerprint=stable([rule,key,facts.get('port'),facts.get('protocol')]),
         rule=rule,label='Unusual activity to review', device=key[0], interface=key[1],sensor=key[2],measurement=key[3],
+        **identity,
         start=utc(start),end=utc(end),source_start=utc(start if source_start is None else source_start),
         what_happened=happened,why_it_matters=matters,what_you_can_do=WORKFLOWS[workflow]['title'],
         workflow=workflow,knowledge_query=query,facts=facts,evidence_refs=references[:24],source_segments=sorted(set(segments)),
-        missing_information=list(dict.fromkeys(gaps))[:16]+['This sensor cannot establish all traffic between other devices.', 'Traffic patterns do not establish AI involvement.'],
+        missing_information=list(dict.fromkeys([*identity_gaps,*gaps]))[:16]+['This sensor cannot establish all traffic between other devices.', 'Traffic patterns do not establish AI involvement.'],
         required_measurements={'PORT_53_BURST':'Per-observation timestamps and destination ports',
             'LAYERED_ACTIVITY':'Two fixed signal families with source-qualified references in the same completed hour',
             'HOST_FANOUT':'At least 16 distinct unicast destinations on one TCP or UDP port within 60 seconds, using connection start times',
@@ -113,6 +123,16 @@ def candidate(rule, key, start, end, facts, references, segments, *, gaps=(), so
             'PROTOCOL_SHIFT':'At least 24 compatible, finding-free hourly samples',
             'SERVICE_SHIFT':'Sensor service labels in at least 24 compatible hourly samples'}.get(rule,'Committed source-qualified observations'),
         state='unreviewed',action_status='not_attempted')
+
+
+def _sensor_name(data):
+    """Missing historic identity stays missing; a name is only a producer claim."""
+    if 'sensor_name' not in data:
+        return None
+    name = safe_text(data['sensor_name'], 'producer sensor name', 128)
+    if not name or not name.isprintable() or name != name.strip() or len(name.encode('utf-8')) > 128:
+        raise ValueError('Invalid producer sensor name.')
+    return name
 
 
 def _connection_identity(row):
@@ -137,7 +157,7 @@ def _connection_identity(row):
         interface=data.get('interface'))
     source = safe_text(row['source'], 'connection source', 128)
     reference = safe_text(row['id'], 'connection reference', 128)
-    key = (source, event.interface or 'unreported', identity, event.observed_at)
+    key = (source, event.interface or 'unreported', _sensor_name(data), identity, event.observed_at)
     signature = (event.src_ip, event.dst_ip, event.src_port, event.dst_port, event.protocol)
     return key, signature, (epoch(row['observed_at']), reference)
 
@@ -185,9 +205,13 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             peer=str(ipaddress.ip_address(data['dst_ip']))
         except (KeyError,ValueError,TypeError):
             all_gaps.append('Some source records lack endpoint addresses.');continue
+        try:sensor_name=_sensor_name(data)
+        except (ValueError,TypeError):
+            all_gaps.append('Some source records have invalid producer sensor labels.');continue
         kind='packet' if category=='packets' or compacted else 'flow' if category=='flows' else 'finding'
         if compacted:source='accepted packet metadata'
         key=(device,str(data.get('interface') or 'unreported'),source,kind)
+        if sensor_name is not None:key=(*key,sensor_name)
         if key not in groups:
             if len(groups)>=MAX_GROUPS:
                 all_gaps.append('Device grouping limit reached.');continue
@@ -240,7 +264,8 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
     # Every baseline still discloses all of the hour's gaps.
     hour_gaps=tuple(all_gaps)
     baselines=[];results=findings[:64]
-    affected={key[0] for key,g in groups.items() if g['finding']}|{f['device'] for f in findings}
+    affected={(key[0],key[1],key[4] if len(key)==5 else None) for key,g in groups.items() if g['finding']}
+    affected.update((f['device'],f['interface'],f.get('sensor_name')) for f in findings)
     previous_by_key = _history_by_key(previous) if groups else {}
     for key,group in groups.items():
         key=list(key)
@@ -250,7 +275,7 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
         compatible=list({p['start']:p for p in compatible}.values())
         samples=len(compatible)
         count=sum(group['protocols'].values())
-        contaminated=key[0] in affected
+        contaminated=(key[0],key[1],key[4] if len(key)==5 else None) in affected
         eligible=not hour_gaps and not contaminated and count>=20 and max(group['times'])-min(group['times'])>=3000
         baseline=dict(id=stable([key,start]),key=key,start=start,end=end,eligible=eligible,
             count=count,protocols=dict(group['protocols']),ports=dict(group['ports']),services=dict(group['services']),

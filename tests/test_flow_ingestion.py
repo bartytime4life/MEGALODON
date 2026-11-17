@@ -144,6 +144,37 @@ def test_missing_zeek_measurements_stay_unknown_with_explicit_byte_basis():
     assert all(data[key] is None for key in ('sent_bytes','received_bytes','sent_packets','received_packets'))
 
 
+@pytest.mark.parametrize('kind', ['flow', 'alert'])
+def test_eve_producer_labels_are_preserved_without_inventing_verified_identity(kind):
+    raw=eve();raw.update(event_type=kind,host='office-sensor',in_iface='mirror0')
+    if kind=='alert':raw['alert']=dict(signature='Synthetic identity',signature_id=42,severity=2,gid=1,rev=3)
+    data=normalize_suricata(raw)[1]['data']
+    assert data['sensor_name']=='office-sensor' and data['interface']=='mirror0'
+    assert data['sensor_identity_basis']==data['interface_basis']=='producer_reported'
+    assert not {'run_id','ruleset_id','rules_sha256','engine_version'} & data.keys()
+    raw.pop('host');raw.pop('in_iface')
+    unknown=normalize_suricata(raw)[1]['data']
+    assert not {'sensor_name','interface','sensor_identity_basis','interface_basis'} & unknown.keys()
+
+
+@pytest.mark.parametrize('field,bad', [
+    ('host',None),('host',True),('host',''),('host',' leading'),('host','bad\nname'),
+    ('host','x'*129),('host','é'*65),('host','\ud800'),
+    ('in_iface',[]),('in_iface',''),('in_iface','x'*65),('in_iface','trailing '),
+])
+def test_invalid_eve_producer_labels_are_rejected(field,bad):
+    raw=eve();raw[field]=bad
+    with pytest.raises(ValueError):normalize_suricata(raw)
+
+
+@pytest.mark.parametrize('field', ['gid','rev'])
+@pytest.mark.parametrize('bad', [True,-1,'1',2**53])
+def test_invalid_eve_signature_identity_is_rejected(field,bad):
+    raw=eve();raw.update(event_type='alert',alert=dict(signature='Synthetic identity',signature_id=42,severity=2))
+    raw['alert'][field]=bad
+    with pytest.raises(ValueError):normalize_suricata(raw)
+
+
 def test_findings_preserve_structured_alert_and_flow_context_without_raw_event_content():
     raw=eve(2**63+4);raw.update(event_type='alert',app_proto='tls',payload='captured bytes are excluded',packet='excluded')
     raw['alert']=dict(signature='Synthetic finding',signature_id=2001,severity=2,gid=1,rev=8,action='allowed',
@@ -413,6 +444,34 @@ def test_repeated_and_out_of_order_cumulative_updates_never_double_count():
     row=data['connections'][0]
     assert row['a_to_b']['bytes']==140 and row['b_to_a']['bytes']==280
     assert sum(p['sent_bytes']+p['received_bytes']+p['unattributed_bytes'] for p in data['timeline'])==120
+
+
+def test_live_flow_counters_partition_reused_ids_by_producer_and_interface():
+    value=cache();end=time.time()-1;start=end-30
+    scopes=[('sensor-a','mirror0'),('sensor-b','mirror0'),('sensor-a','mirror1'),(None,None)]
+    def record(name,interface,*,sent=100,last=end):
+        raw=eve(start=start,end=last,sent=sent)
+        if name is not None:raw['host']=name
+        if interface is not None:raw['in_iface']=interface
+        return normalize_suricata(raw)[1]
+    for name,interface in scopes:
+        value.observe_summary(record(name,interface))
+        value.observe_summary(record(name,interface))
+    initial=snapshot(value)
+    assert len(initial['connections'])==4 and initial['totals']['bytes']==1200
+    assert initial['timeline']==[]
+    assert {(r.get('sensor_name'),r.get('interface')) for r in initial['connections']}==set(scopes)
+    value.observe_summary(record('sensor-a','mirror0',sent=150,last=end+.5))
+    updated=snapshot(value)
+    assert len(updated['connections'])==4 and updated['totals']['bytes']==1250
+    assert sum(p['sent_bytes']+p['received_bytes'] for p in updated['timeline'])==50
+
+
+def test_invalid_live_producer_scope_cannot_replace_valid_counter_baselines():
+    value=cache();record=summary();value.observe_summary(record)
+    record['data']['sensor_name']=['unhashable']
+    value.observe_summary(record)
+    assert len(snapshot(value)['connections'])==1 and snapshot(value)['totals']['bytes']==300
 
 
 def test_counter_regression_cannot_create_a_second_delta_when_prior_totals_return():

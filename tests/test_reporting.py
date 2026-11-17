@@ -84,6 +84,44 @@ def test_flow_counters_are_deduplicated_and_sources_separate(report_service):
     assert value['summary']['packet_records']==0
 
 
+def test_flow_report_keeps_producers_interfaces_and_unknown_identity_separate(report_service):
+    base=dict(source_id='1',first_seen=utc(report_service.clock()-120),byte_basis='ip_bytes',sent_bytes=100,received_bytes=200)
+    scopes=[('sensor-a','mirror0'),('sensor-b','mirror0'),('sensor-a','mirror1'),(None,None)]
+    for name,interface in scopes:
+        data=dict(base)
+        if name is not None:data['sensor_name']=name
+        if interface is not None:data['interface']=interface
+        add(report_service,'flows',data,source='suricata-eve')
+        add(report_service,'flows',dict(data,sent_bytes=150),source='suricata-eve')
+    report=make(report_service)
+    groups=report['flow_sources']
+    assert {(g['sensor_name'],g['interface']) for g in groups}==set(scopes)
+    assert all(g['connections']==1 and g['records']==2 and g['sent_bytes']==150 for g in groups)
+    assert next(g for g in groups if g['sensor_name'] is None)['sensor_identity_basis']=='unreported'
+    _,html=report_service.download(report['id'],'html')
+    assert b'Reported sensor' in html and b'sensor-a' in html and b'mirror1' in html and b'Not recorded' in html
+
+
+def test_invalid_producer_scope_does_not_hide_remaining_report_flows(report_service):
+    base=dict(source_id='1',first_seen=utc(report_service.clock()-120),byte_basis='ip_bytes',sent_bytes=100,received_bytes=200)
+    add(report_service,'flows',dict(base,sensor_name=['invalid']),source='suricata-eve')
+    add(report_service,'flows',dict(base,sensor_name='sensor-a'),source='suricata-eve')
+    report=make(report_service)
+    assert len(report['flow_sources'])==1 and report['flow_sources'][0]['sensor_name']=='sensor-a'
+    assert any('invalid producer identity labels' in gap for gap in report['coverage']['gaps'])
+
+
+def test_report_producer_group_bound_remains_explicit(report_service,monkeypatch):
+    import megalodon.reporting as reporting
+    monkeypatch.setattr(reporting,'MAX_KEYS',2)
+    base=dict(source_id='1',first_seen=utc(report_service.clock()-120),byte_basis='ip_bytes',sent_bytes=100,received_bytes=200)
+    for name in ('sensor-a','sensor-b','sensor-c'):
+        add(report_service,'flows',dict(base,sensor_name=name),source='suricata-eve')
+    report=make(report_service)
+    assert len(report['flow_sources'])==2 and report['coverage']['flow_totals_truncated']
+    assert any('producer/interface groups' in gap for gap in report['coverage']['gaps'])
+
+
 def test_findings_html_and_csv_are_inert_and_paginated(report_service):
     for n in range(3):
         add(report_service,'findings',dict(signature='<script>alert(1)</script>',severity='=2+2',src_ip='192.0.2.1',dst_ip='198.51.100.1'))

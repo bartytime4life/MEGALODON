@@ -64,6 +64,22 @@ def test_addresses_interfaces_hours_and_aliases_do_not_merge(field, value):
     assert layered_reviews(items, START, START + 3600)[0] == []
 
 
+@pytest.mark.parametrize('second_name', ['sensor-b', None])
+def test_named_and_unknown_producer_identities_do_not_merge(second_name):
+    items=pair()
+    items[0].update(sensor_name='sensor-a',sensor_identity_basis='producer_reported')
+    if second_name:items[1].update(sensor_name=second_name,sensor_identity_basis='producer_reported')
+    assert layered_reviews(items,START,START+3600)[0]==[]
+
+
+@pytest.mark.parametrize('name,basis', [(None,'producer_reported'),('','producer_reported'),
+    (' leading','producer_reported'),('x'*129,'producer_reported'),('sensor-a','verified')])
+def test_invalid_producer_identity_does_not_enter_layered_review(name,basis):
+    items=pair();items[0].update(sensor_name=name,sensor_identity_basis=basis)
+    result,gaps=layered_reviews(items,START,START+3600)
+    assert result==[] and INVALID_GAP in gaps
+
+
 @pytest.mark.parametrize('field,value', [
     ('device', True), ('device', 'fe80::1%eth0'), ('device', 'not-an-address'),
     ('interface', 'x' * 65), ('interface', 'bad\ninterface'),

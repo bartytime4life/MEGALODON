@@ -53,6 +53,20 @@ def metadata_label(value,limit=64):
     return value
 
 
+def producer_label(value, limit):
+    """Validate a recorded label, without authenticating the named producer."""
+    value = metadata_label(value, limit)
+    if value != value.strip() or len(value.encode('utf-8')) > limit:
+        raise ValueError('Invalid producer metadata label.')
+    return value
+
+
+def producer_scope(data):
+    """Separate recorded observation scopes; absent legacy labels stay unknown."""
+    return tuple(producer_label(data[field],limit) if data.get(field) is not None else None
+                 for field,limit in (('interface',64),('sensor_name',128)))
+
+
 def alert_metadata(value):
     """Retain the bounded structured alert object, never encoded raw content."""
     def validate(item,depth=0):
@@ -98,6 +112,10 @@ def normalize_suricata(value):
     if proto not in {'TCP','UDP','ICMP','ICMPV6','SCTP'}:proto='OTHER'
     data=dict(src_ip=address(value['src_ip']),dst_ip=address(value['dest_ip']),src_port=port(value.get('src_port')),
               dst_port=port(value.get('dest_port')),protocol=proto,source_id=flow_identity(value['flow_id']))
+    if 'host' in value:
+        data.update(sensor_name=producer_label(value['host'], 128),sensor_identity_basis='producer_reported')
+    if 'in_iface' in value:
+        data.update(interface=producer_label(value['in_iface'], 64),interface_basis='producer_reported')
     if kind=='flow':
         flow=value['flow']
         if type(flow) is not dict:raise ValueError('Invalid flow summary.')
@@ -117,6 +135,8 @@ def normalize_suricata(value):
         data.update(signature=title,signature_id=count(alert['signature_id']),severity=severity,
                     alert_metadata=alert_metadata(alert),
                     observation='Suricata sensor finding; structured metadata only; not an admitted core detector finding')
+        for field in ('gid', 'rev'):
+            if field in alert:count(alert[field])
         if 'app_proto' in value:data['app_proto']=metadata_label(value['app_proto'])
         if 'flow' in value:data['flow_context']=alert_flow_context(value['flow'])
     if kind=='flow' and 'app_proto' in value:data['app_proto']=metadata_label(value['app_proto'])

@@ -8,7 +8,7 @@ open the relevant category and focus their destination.
 | Category | Current task |
 | --- | --- |
 | Overview | Read this computer's status and choose **Check now** for a fresh local metadata check |
-| Traffic | Review packet capture, background sensors, device discovery and IP-location settings |
+| Traffic | Review router/capture-placement guidance, packet capture, background sensors, device discovery and IP-location settings |
 | Local AI | Save a model preference; expand **Knowledge and automatic review** for public references and local-learning choices |
 | Apps | Install or configure optional tools; inspect host security and installation-session options |
 | Storage | Review evidence limits and retained-history policy |
@@ -30,6 +30,13 @@ meaning; moving a slider alone does not apply a restrictive action.
 
 The [Findings workbench](findings-review.md) keeps evidence, local AI interpretation,
 assessment and optional response in separate controls.
+
+The [router compatibility guide](router-compatibility.md) in Traffic covers 25
+named router families plus an unknown-model fallback. The [switch guide](switch-compatibility.md)
+adds 13 named families and three general choices. Its three independent selectors change
+only the displayed guidance for this page visit. They neither detect/configure
+hardware nor establish capture coverage. Reference links and model/mode caveats
+remain available even when live configuration status is unavailable.
 
 ## Installing a companion
 
