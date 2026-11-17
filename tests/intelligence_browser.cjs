@@ -19,9 +19,9 @@ process.stdin.on('end', async () => {
   const get = id => { if (!nodes.has(id)) nodes.set(id, node()); return nodes.get(id); };
   get('knowledge-setup').attributes['aria-labelledby'] = 'knowledge-title';
   get('findings-workbench').attributes['data-findings-owned'] = 'true';
-  const knowledge = {state: 'ready', entries: 0, used_bytes: 0, sources: {}, generation: 'synthetic',
+  const knowledge = {schema:'megalodon-knowledge-v1',state: 'ready', entries: 0, used_bytes: 0, sources: {}, generation: 'synthetic',
     rollback_available: false, last_check: null, enabled: false, token: 'a'.repeat(32)};
-  const patterns = () => ({enabled, automatic: false, baseline: {ready_groups: 2, largest_group_hours: 24},
+  const patterns = () => ({schema:'megalodon-intelligence-v1',token:'b'.repeat(32),enabled, automatic: false, baseline: {ready_groups: 2, largest_group_hours: 24},
     unresolved: 0, reviews: [], gaps: [], truncated: false, job: {state: explaining ? 'running' : 'idle', message: 'Synthetic only.'}});
   const result = title => ({results: [{title, identifier: 'reference', edition: 'synthetic', url: 'https://example.test/', excerpt: title} ]});
   const response = (value, ok = true) => ({ok, text: async () => JSON.stringify(value)});
@@ -35,7 +35,10 @@ process.stdin.on('end', async () => {
       statusReads++;
       if(holdStatus)return new Promise(resolve=>heldStatus.push({path,resolve}));
       if(statusFailed)return Promise.resolve(response({error:'Synthetic refresh failure'},false));
-      if(path===statusMalformed)return Promise.resolve(response({}));
+      if(path===statusMalformed){
+        const malformed=scenario.endsWith('-null')?null:scenario.endsWith('-boolean')?true:scenario.endsWith('-token')?{...knowledge,token:'invalid'}:scenario.endsWith('-count')?{...knowledge,entries:'0'}:scenario.endsWith('-setting')?{...patterns(),enabled:'false'}:{};
+        return Promise.resolve(response(malformed));
+      }
       return Promise.resolve(response(path === '/api/knowledge' ? knowledge : patterns()));
     }};
   vm.runInNewContext(code, context);
@@ -57,7 +60,7 @@ process.stdin.on('end', async () => {
   } else if (scenario === 'status-failure' || scenario.startsWith('status-malformed-')) {
     assert.equal(get('ki-save').disabled,false);
     edit('old search');const oldSearch=submit();await settle();
-    statusFailed=scenario==='status-failure';statusMalformed=scenario==='status-malformed-knowledge'?'/api/knowledge':scenario==='status-malformed-patterns'?'/api/intelligence':null;await poll();
+    statusFailed=scenario==='status-failure';statusMalformed=scenario.startsWith('status-malformed-')?(scenario.endsWith('-patterns')||scenario.endsWith('-setting')?'/api/intelligence':'/api/knowledge'):null;await poll();
     for(const id of ['ki-save','ki-update','ki-rollback','ki-cancel'])assert.equal(get(id).disabled,true,id);
     assert.match(get('ki-library-state').textContent,/unavailable/);
     assert.match(get('ki-learning').textContent,/unavailable/);
