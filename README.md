@@ -57,10 +57,13 @@ It contains documentation-only addresses.
 
 ## What works today
 
-**Source orientation: [`main@418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026 (America/Chicago).**
-[Current changes and exact boundaries](docs/current-state.md#november-11-source-orientation)
-cover the guided HUD, reliable searches and report selection, exact comparison
-arithmetic, file inspection, model maintenance and the partial Stage 0 fence.
+**Source basis: [`main@dee4027`](https://github.com/bartytime4life/MEGALODON/commit/dee4027a8541335f43460d6bef37024606f4bfdf), November 17, 2026 (America/Chicago).**
+Merged changes include exact rolling/time arithmetic, router/switch guidance,
+finite host-input protection and Playwright 1.65.2 qualification. The current
+[repo/app review candidate](docs/repo-app-review-2026-11-17.md) adds refresh
+recovery and [interactive security science in Help](docs/security-science-lab.md).
+[Current changes and exact boundaries](docs/current-state.md) distinguish this
+candidate from the merged baseline and older validation records.
 Code presence and hosted checks do not establish the configuration, accuracy
 or recovery capability of a particular installed PC.
 
@@ -75,6 +78,7 @@ or recovery capability of a particular installed PC.
 | Local AI preparation | Installed-model selection, explicit file verification, pinned staging and a separate fixed response diagnostic | Operational inference remains **UNBOUND**; maintenance or a diagnostic response does not accept a model |
 | Recovery readiness | AIDE evidence gaps; backup/test receipt hashes checked against separate operator trust | **No host-file restore; `restore_eligible` remains false** |
 | Explicit Linux workflows | Protected configuration, bounded scans, temporary IP containment and [host input protection](docs/host-protection.md) | Host policy automatically drops unsolicited inbound traffic only during an explicitly authorized finite lease; core detector responses remain plans |
+| Security science | Offline worked examples for precision, recall, false alarms and Wilson uncertainty; defensive evidence lessons | Hypothetical counts only; no calibration or detector/action authority |
 | Desktop lifecycle | Private per-user install, update/rollback and managed HUD service | Login startup is opt-in; saved monitoring has its own scope |
 | Separate snapshot viewer (dated record) | Address-free summary import, held in tab memory; [publication scope](site/README.md) | No live PC connection or host control; current availability is not established here |
 

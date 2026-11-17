@@ -1,8 +1,35 @@
 # MEGALODON MVP specification and proposed platform extension
 
-> **Documentation orientation — November 11, 2026 (America/Chicago) / source `418fa54474f3f77d0758e94aab5735a516d8c43b`:** Start with [current state and evidence boundaries](docs/current-state.md#november-11-source-orientation) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+> **Documentation orientation — November 17, 2026 (America/Chicago) / merged source `dee4027a8541335f43460d6bef37024606f4bfdf`:** Start with [current state and evidence boundaries](docs/current-state.md#november-17-maintained-source-and-review-candidate) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
 
-## Current correctness and guided review — November 11, 2026
+## Offline security science and refresh recovery — November 17, 2026 candidate
+
+Help includes an offline confusion-matrix lab and original source-linked defensive
+lessons. Each TP/FP/FN/TN cell accepts an integer in [0, 1,000,000,000]. Precision,
+recall, false-positive rate and accuracy use their explicit denominators; a zero
+denominator is undefined. The illustrative 95% Wilson interval for precision
+requires independent Bernoulli trials with a common probability and suitable
+labels. Neither the inputs nor the outputs enter telemetry, a model, a detector,
+persistence or any host policy. [Exact formulas and scope](docs/security-science-lab.md).
+
+Protection status reads visibly disable action admission, pause while the
+document is hidden and refresh on return. A failed security-library status pair
+invalidates current action capability and learning/reference claims; recovery
+requires a new successful pair. Concurrent status pairs are refused. Existing
+HTTP, model, OS-authorization and receipt boundaries remain authoritative.
+
+## November 17 pattern-recognition candidate
+
+Comparison-history copies for the same exact key and completed hour must agree
+before that hour contributes one sample. Contradictory copies are excluded with
+a coverage diagnostic, including an eligible/ineligible conflict. Twenty-four
+unambiguous eligible hours within seven days are still required. Sorting the
+selected hours makes replay order irrelevant. No threshold or host-action
+permission changes. Findings displays the existing cadence rule’s measured
+spread, lower median and 5% tolerance with its limitations; see
+[science and mathematics](docs/science-and-math.md).
+
+## Historical correctness and guided review — November 11, 2026
 
 The merged source includes the following refinements. Their source/test links
 describe regression contracts; the [documentation refresh record](docs/documentation-refresh-2026-11-11.md)

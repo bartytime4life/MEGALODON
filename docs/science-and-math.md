@@ -5,6 +5,39 @@ The implementation basis is `main@201fe4939cbfb160dccb80782455d106cdebaed4`.
 Synthetic checks establish properties of supplied metadata; operational
 usefulness still requires a representative, separately authorized evaluation.
 
+## November 17 learning companion and current implementation
+
+The [interactive Help lab](security-science-lab.md) makes base-rate, confusion-matrix
+and uncertainty reasoning available without a terminal or model. It links the
+primary research below to defensive investigation tasks. Its counts are examples,
+not sensor measurements. The exact CLI projection remains separate.
+
+Since the basis recorded above, #776 merged rolling reviews and #777 replaced
+fixed-detector floating-point epoch decisions with integer microseconds. These
+are implemented source changes; they do not establish operational accuracy.
+[Current source and candidate](current-state.md) records the latest distinction.
+
+## Recognize patterns without letting duplicates define normal
+
+The November 17 candidate makes comparison-history deduplication conservative.
+For each exact device/interface/source/measurement key, an hour contributes at
+most one sample. Identical copies collapse. If copies of that hour disagree
+(including eligibility, counts or supporting segments), the hour is excluded and
+a coverage diagnostic is retained. Arrival order no longer chooses a winner.
+The seven-day horizon, 24 unambiguous eligible-hour minimum and exact rational
+20-percentage-point comparisons remain in place. Other sensors cannot resolve
+a conflict for this source. This protects comparison integrity; it does not
+authenticate a producer or detect fabricated but internally consistent inputs.
+
+Findings also explains a qualified cadence with its actual gap spread and lower
+median. Five distinct start times are required. The lower median must lie from
+one second through one hour, and `max(gaps) - min(gaps) <= floor(median/20)`.
+This fixed 5% tolerance describes regularity, not incident confidence. Scheduled
+jobs can match; jitter and missing starts can prevent a match. No phase search,
+missing-beat inference or response escalation is introduced. The existing
+source-qualified layered review combines different signal families without
+claiming their statistical independence.
+
 ## Exact rolling windows for retained burst reviews
 
 At the source basis, twenty port-53 observations at 59.50, 59.55, ..., 60.45
@@ -112,10 +145,10 @@ python -m megalodon.evaluation base-rate --population 1000000 \
   --false-positive-ppm 10000
 ```
 
-The next numerical correctness investigation concerns the fixed detector's
-floating-point epoch windows: translating two equally spaced timestamps can
-change an exact-boundary result. It requires a separate correction and oracle;
-the rolling-window work does not silently change that detector's state units.
+The fixed detector's floating-point epoch translation defect identified at this
+source basis was subsequently corrected by merged PR #777, with integer
+microsecond windows and boundary/translation regressions. The earlier rolling
+review work and its historical results remain separate.
 
 ## Reproduce the current implementation checks
 

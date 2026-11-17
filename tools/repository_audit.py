@@ -81,6 +81,22 @@ class Controls(HTMLParser):
         if tag=='a' and a.get('href','').startswith('#'):self.links.append(a['href'][1:])
         if tag in {'button','input','select','textarea'}:self.items.append(dict(element=tag,id=a.get('id'),type=a.get('type'),label=a.get('aria-label'),disabled='disabled' in a))
 
+
+def dynamic_targets(script):
+    """Account only for the shipped closed app-card constructor, without running JS.
+
+    These are static construction references, not rendered-browser acceptance.
+    Unknown anchors and a missing/changed constructor still fail the inventory.
+    """
+    if "for(const id of MegalodonControls.ids){" not in script or "card.id='setup-app-'+id;" not in script:
+        return set()
+    match=re.search(r"const MegalodonControls = \(\(\) => \{\s*const ids = (\[[^\]\n]+\]);",script)
+    if match is None:return set()
+    ids=ast.literal_eval(match[1])
+    if not isinstance(ids,list) or len(ids)>32 or any(not isinstance(i,str) or re.fullmatch('[a-z][a-z0-9-]{0,31}',i) is None for i in ids):
+        return set()
+    return {'setup-app-'+i for i in ids}
+
 def inventory_output(value):
     """Require a new, ordinary JSON file beside the preserved audit ledger."""
     path=Path(value)
@@ -117,13 +133,15 @@ def collect(output=HISTORICAL_OUTPUT):
     sys.path.insert(0,str(ROOT))
     from megalodon.dashboard_assets import INDEX_HTML,DASHBOARD_JS
     c=Controls();c.feed(INDEX_HTML)
+    generated=dynamic_targets(DASHBOARD_JS)
     for item in c.items:
         item['source_references']=DASHBOARD_JS.count(item['id']) if item['id'] else 0
         item['verification']='Static binding/form reference; dynamic behavior covered by browserless tests; selected rendered journeys recorded in docs/audit/browser-local-acceptance.json, not a per-control visual certification'
     return dict(schema='megalodon-repository-audit-v1',baseline=BASE,method='Every file is read and classified; machine checks are not a line-by-line independent audit.',
                 counts=dict(Counter(r['classification'] for r in rows)),files=rows,
                 controls=c.items,control_count=len(c.items),duplicate_ids=sorted(k for k,v in Counter(c.ids).items() if v>1),
-                missing_anchors=sorted(set(c.links)-set(c.ids)),
+                dynamic_anchor_references=sorted(generated),
+                missing_anchors=sorted(set(c.links)-set(c.ids)-generated),
                 exclusions=['Ignored private runtime evidence and build environments','Ledger self-digest is intentionally omitted'],
                 verification_record='docs/repository-audit.md')
 

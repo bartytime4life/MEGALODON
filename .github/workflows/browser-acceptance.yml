@@ -101,6 +101,16 @@ jobs:
         run: python tests/browser_cadence_review.py
       - name: Review host protection policy and recovery controls in Chrome
         run: python tests/browser_host_protection.py artifacts/host-protection/
+      - name: Review offline security science and defensive lessons in Chrome
+        run: python tests/browser_security_lab.py artifacts/security-lab/
+      - name: Retain synthetic security science screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-science-synthetic-${{ github.sha }}
+          path: artifacts/security-lab/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Retain synthetic host protection screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,6 +1,6 @@
 # Protect the PC running MEGALODON
 
-This source candidate adds an explicit, time-limited Linux host firewall policy
+The source merged in PR #780 adds an explicit, time-limited Linux host firewall policy
 in **Overview → Control incoming connections**. Once applied, the kernel drops
 unsolicited inbound traffic automatically. It does not wait for a model, a
 packet-capture process, an IP reputation service or the dashboard to classify an
@@ -150,3 +150,12 @@ it never targets the runner's parent network namespace.
 The stateful rules and lease semantics follow the primary
 [nftables reference](https://www.netfilter.org/projects/nftables/manpage.html)
 and [element timeout documentation](https://wiki.nftables.org/wiki-nftables/index.php/Element_timeouts).
+
+## Navigation and refresh behavior
+
+Help offers a direct **Protect incoming access to this PC** route. The security
+science lessons also link to these existing controls; navigation grants no policy
+authority. While a status read is in flight, action buttons are disabled rather
+than appearing clickable and silently ignoring the click. Status polling pauses
+when the document is hidden and refreshes on return. An action outcome still
+requires its receipt/readback; browser visibility cannot apply or renew a lease.

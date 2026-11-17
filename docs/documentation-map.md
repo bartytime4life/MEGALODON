@@ -1,19 +1,19 @@
 # Complete documentation catalog
 
-**195 Markdown documents accounted for.** Current inventory basis:
-[`main@201fe4939cbfb160dccb80782455d106cdebaed4`](https://github.com/bartytime4life/MEGALODON/commit/201fe4939cbfb160dccb80782455d106cdebaed4)
-(November 11, 2026, America/Chicago), plus the science and mathematics candidate
-and the November 16 ARTEX home-network, router compatibility and switch compatibility guides,
-plus the November 17 host-protection candidate guide.
+**197 Markdown documents accounted for.** Current inventory basis:
+[`main@dee4027a8541335f43460d6bef37024606f4bfdf`](https://github.com/bartytime4life/MEGALODON/commit/dee4027a8541335f43460d6bef37024606f4bfdf)
+(November 17, 2026, America/Chicago), plus the current review and security-science guides.
 Every tracked or non-ignored new Markdown path is listed below, including
 maintained guides, versioned contracts, proposals, templates and dated records.
-See [current state](current-state.md#november-11-source-orientation) and the
+See [current state](current-state.md) and the
 [refresh scope and validation](documentation-refresh-2026-11-11.md).
 
 ## November 17 addition
 
 | Document | Repository path |
 | --- | --- |
+| [Security science in Help](security-science-lab.md) | `docs/security-science-lab.md` |
+| [Repository and application review](repo-app-review-2026-11-17.md) | `docs/repo-app-review-2026-11-17.md` |
 | [Protect the PC running MEGALODON](host-protection.md) | `docs/host-protection.md` |
 
 ## November 11 reconciliation

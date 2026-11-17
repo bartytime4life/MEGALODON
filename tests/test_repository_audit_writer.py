@@ -48,3 +48,13 @@ def test_late_file_creation_cannot_replace_a_snapshot(tmp_path,monkeypatch):
     target.write_text('preserved')
     with pytest.raises(FileExistsError):repository_audit.write_inventory(target,{'value':'replacement'})
     assert target.read_text()=='preserved'
+
+
+def test_known_dynamic_cards_are_classified_without_hiding_broken_links():
+    from megalodon.dashboard_assets import INDEX_HTML,DASHBOARD_JS
+    targets=repository_audit.dynamic_targets(DASHBOARD_JS)
+    assert 'setup-app-nftables' in targets and len(targets)==12
+    controls=repository_audit.Controls();controls.feed(INDEX_HTML+'<a href="#unknown-card">Broken</a>')
+    missing=set(controls.links)-set(controls.ids)-targets
+    assert missing=={'unknown-card'}
+    assert repository_audit.dynamic_targets(DASHBOARD_JS.replace("card.id='setup-app-'+id;","card.id='broken-app-'+id;"))==set()

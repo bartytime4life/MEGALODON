@@ -16,6 +16,8 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 | Prepare Suricata offline configuration | [Installing Suricata and configuration script](installing-suricata.md) | [Pinned alert-only producer boundary](../contracts/suricata-eve/v1/producer/README.md) |
 | Prepare ARTEX defenses on Google Wifi | [Home-network defense and visibility](artex-home-network-defense.md) | [Local response limits](visual-operations-defense.md#temporary-containment) |
 | Choose a router or switch capture path | [Router compatibility guide](router-compatibility.md), [switch compatibility](switch-compatibility.md) | Setup → Traffic → Router, switch and capture placement guide |
+| Explore security mathematics | [Interactive science in Help](security-science-lab.md) | [Exact CLI workload projection](alert-workload-lab.md), [research and timing mathematics](science-and-math.md) |
+| Protect incoming access on this PC | [Finite host protection](host-protection.md) | [Defense and audit boundaries](visual-operations-defense.md) |
 | Understand the interface | [Visual tour](wiki/visual-tour.md) | [Three investigation journeys](wiki/investigation-journeys.md) |
 | Trace a finding to its evidence | [Findings and inspector](control-room-contract.md#qualified-finding-evidence-inspector) | [Control room contract](control-room-contract.md) |
 | Assess host recovery preparation | [Recovery readiness and external receipts](host-backup-evidence.md) | [Host-security limits](host-security.md#recovery-readiness-in-setup) |
@@ -57,10 +59,12 @@ compromise. See [security boundaries](wiki/security-boundaries.md).
 
 ## Know which document governs
 
-[Current state and limits](current-state.md#november-11-source-orientation) leads
-with merged `main@418fa54` and the November 11 guided-console and numerical
-reliability changes. [The current refresh record](documentation-refresh-2026-11-11.md)
-separates source, candidate checks and publication. Earlier November 9 and October
+[Current state and limits](current-state.md) leads with the November 17 merged
+source and its separate [repo/app review candidate](repo-app-review-2026-11-17.md).
+The latter adds interactive security science and refresh recovery; the merged
+baseline includes host protection and the qualified Playwright upgrade.
+The [November 11 refresh record](documentation-refresh-2026-11-11.md) retains its
+source, candidate-check and publication scope. Earlier November 9 and October
 orientations retain their dates. The [reconciliation record](documentation-refresh-2026-10-22.md)
 explains how the supplied September architecture/research plans relate to it. [The complete documentation catalog](documentation-map.md)
 accounts for every tracked Markdown document, including versioned contracts,

@@ -1,8 +1,23 @@
 # Current state and evidence boundaries
 
-## November 17 host-protection candidate
+## November 17 maintained source and review candidate
 
-Built on main after network setup PR #778, this candidate adds an explicit
+Merged source: [`main@dee4027a8541335f43460d6bef37024606f4bfdf`](https://github.com/bartytime4life/MEGALODON/commit/dee4027a8541335f43460d6bef37024606f4bfdf).
+PR #780 delivered finite host-input protection; #779 delivered the qualified
+Playwright 1.65.2 profile and fifteen-wheel browser closure. Their source and
+hosted validation do not establish installation or live-PC protection.
+
+The [current repo/app candidate](repo-app-review-2026-11-17.md) adds an
+[offline security-science lab](security-science-lab.md), direct Help routes to
+PC protection, truthful library failure/recovery, single-flight library status
+and protection-refresh admission/visibility fixes. It also excludes contradictory
+comparison-hour copies and explains the actual cadence tolerance in Findings. The complete documentation
+catalog and maintained Wiki source point here; older pins and counts below are
+historical. Candidate verification is reported at its own PR head.
+
+## November 17 merged host-protection source
+
+Merged in PR #780 after network setup PR #778, the source adds an explicit
 stateful Linux host-input policy with client-scoped service exceptions, kernel
 lease expiry, receipt-backed apply/check/remove and browser controls. The
 operator authorizes a finite policy; packet drops then occur in the kernel
@@ -17,9 +32,8 @@ retain their original source and validation scope.
 
 **Source basis:** [`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),
 tree `f0e47918ed0f6715197e944e6cb18e221ea498d5`. PR [#774](https://github.com/bartytime4life/MEGALODON/pull/774)
-merged at `2026-11-12T00:03:54Z` (November 11 in America/Chicago). This is the
-current reading for maintained guides; the November 9 and October sections below
-remain historical at their own pins.
+merged at `2026-11-12T00:03:54Z` (November 11 in America/Chicago). This is the November 11 reading; the November 17 section above supplies the
+current orientation. Earlier sections remain historical at their own pins.
 
 | Task | Implemented behavior | Meaning / guide |
 | --- | --- | --- |

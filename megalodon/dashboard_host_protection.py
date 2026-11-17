@@ -56,7 +56,7 @@ HOST_PROTECTION_JS = r'''
   function clearPlan(){state.plan=null;get('plan').replaceChildren();get('plan').hidden=true;get('apply').hidden=true;get('apply').disabled=true;}
   function edited(){state.generation++;clearPlan();message('Policy changed. Preview these settings before applying them.');}
   function render(){
-    const ready=state.data?.audit_ready===true&&!state.pending&&state.data?.job.state!=='running';
+    const ready=state.data?.audit_ready===true&&!state.pending&&!state.loading&&state.data?.job.state!=='running';
     for(const id of ['preview','check','remove'])get(id).disabled=!ready;
     get('add').disabled=get('services').children.length>=8;
     if(state.plan&&Date.parse(state.plan.expires_at)<=Date.now()){clearPlan();message('Preview expired. Create a fresh preview.');}
@@ -111,16 +111,16 @@ HOST_PROTECTION_JS = r'''
     render();
   }
   async function load(){
-    if(state.loading)return;state.loading=true;
+    if(state.loading||document.hidden)return;state.loading=true;render();
     try{process(await request());}catch(error){state.data=null;state.pending=false;state.request=null;clearPlan();message('Could not verify the response. Any applied lease still expires in the kernel. '+error.message);render();}
-    finally{state.loading=false;clearTimeout(state.timer);state.timer=setTimeout(load,state.request?750:10000);}
+    finally{state.loading=false;render();clearTimeout(state.timer);if(!document.hidden)state.timer=setTimeout(load,state.request?750:10000);}
   }
   async function act(payload){
     if(state.pending||state.loading||!state.data?.audit_ready||state.data.job.state==='running')return;
     const generation=state.generation;state.pending=true;state.loading=true;clearPlan();render();message('Waiting for the fixed workflow. Any OS authorization prompt appears on this PC.');
     try{const value=await request(payload);state.request={id:value.job.request_id,action:payload.action,generation};process(value);}
     catch(error){state.data=null;state.pending=false;state.request=null;message('The action outcome is unknown. Verify protection before retrying. '+error.message);render();}
-    finally{state.loading=false;clearTimeout(state.timer);state.timer=setTimeout(load,500);}
+    finally{state.loading=false;render();clearTimeout(state.timer);if(!document.hidden)state.timer=setTimeout(load,500);}
   }
   function addService(value=null){
     if(get('services').children.length>=8)return;
@@ -145,7 +145,8 @@ HOST_PROTECTION_JS = r'''
   get('apply').addEventListener('click',()=>{if(state.plan&&Date.parse(state.plan.expires_at)>Date.now())act({action:'apply_host_protection',plan_id:state.plan.id});else{clearPlan();message('Preview expired. Create a fresh preview.');}});
   get('check').addEventListener('click',()=>act({action:'check_host_protection'}));
   get('remove').addEventListener('click',()=>act({action:'remove_host_protection'}));
-  function tick(){render();setTimeout(tick,1000);}
+  document.addEventListener('visibilitychange',()=>{clearTimeout(state.timer);if(!document.hidden)load();});
+  function tick(){if(!document.hidden)render();setTimeout(tick,1000);}
   setTimeout(tick,1000);load();
 })();
 '''
