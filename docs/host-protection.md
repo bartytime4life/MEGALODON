@@ -142,6 +142,11 @@ checks keyboard confirmation, form/preview binding, explicit policy reuse,
 nftables. Rendered component acceptance is separate from installed HUD and
 whole-application browser acceptance.
 
+The browser acceptance workflow also runs this control journey and retains its
+synthetic screenshots. The separate **Host protection packet acceptance** job
+runs the native harness in fresh namespaces on Ubuntu and retains its result;
+it never targets the runner's parent network namespace.
+
 The stateful rules and lease semantics follow the primary
 [nftables reference](https://www.netfilter.org/projects/nftables/manpage.html)
 and [element timeout documentation](https://wiki.nftables.org/wiki-nftables/index.php/Element_timeouts).
