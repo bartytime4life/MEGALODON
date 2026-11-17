@@ -11,6 +11,7 @@ adds the five detections a defender most often expects from a network sensor:
 | `HOST_SWEEP` | one source contacts 24 distinct **internal** hosts within 15 s | MEDIUM | source | T1018, T1046 |
 | `DATA_EXFILTRATION` | an internal host sends ≥ 100 MiB of reported bytes to **one public address** within 300 s | HIGH | destination | T1041, T1048 |
 | `BEACONING` | 8 consecutive connection starts from an internal host to one public `address:port` at a near-constant interval (≤ 10 % deviation from the median, 5 s – 3600 s) | MEDIUM | destination | T1071, T1573 |
+| `DECOY_TOUCH` | anything contacts a configured **decoy port** or **unassigned decoy address** | CRITICAL | source | T1046, T1018 |
 | `IOC_MATCH` | the source or destination matches an operator-supplied **local watchlist** indicator | HIGH (configurable) | matched address | T1071 |
 
 Every finding is a **heuristic for human review**, not a malware verdict. Each
@@ -21,6 +22,7 @@ Findings view shows next to the finding:
 * `HOST_SWEEP` — inventory scanners, backup agents, printer/NAS discovery.
 * `DATA_EXFILTRATION` — cloud backup, file sync, video calls, large uploads.
 * `BEACONING` — update checks, telemetry, keep-alives, monitoring agents.
+* `DECOY_TOUCH` — a misconfigured client, a stale DNS or ARP entry, or your own test.
 * `IOC_MATCH` — stale indicators, shared hosting, reassigned addresses.
 
 ## Exact semantics
@@ -44,6 +46,33 @@ Findings view shows next to the finding:
   and parallel sockets are one contact, not a fast beacon.
 * Windows are event-time and inclusive; time is exact integer microseconds.
   A source/key cooldown (default 600 s) suppresses repeats.
+
+## Decoys (tripwires)
+
+A decoy is something no legitimate client should ever touch, so a contact is
+a high-confidence signal with very few false alarms. MEGALODON detects decoy
+contact from captured metadata alone: **nothing listens, nothing answers and
+no new attack surface is opened.**
+
+* **Decoy ports** — pick ports that no real service on your network uses, for
+  example `2222`, `3390` or `4455`. A TCP connection attempt (SYN without ACK, or
+  a flagless flow record) or any UDP packet to that port on any host trips it.
+* **Decoy addresses** — reserve a few unassigned internal addresses (outside
+  your DHCP pool) and list them. Any packet to them trips it; this is a small
+  "darknet" sensor for internal scanning and lateral movement.
+
+```toml
+[threat_detection]
+decoy_ports = [2222, 3390, 4455]
+decoy_addresses = ["192.168.1.250", "192.168.1.251"]
+```
+
+Up to 64 ports and 256 addresses; addresses must be unicast and non-loopback.
+Each (source, decoy) pair alerts once per cooldown. Decoys only see what the
+capture sees: put the sensor where the traffic to them flows.
+
+For host-side tripwires (bait files) and authentication-log review, see
+[host tripwires and login review](host-tripwires.md).
 
 ## Atomicity and bounds
 

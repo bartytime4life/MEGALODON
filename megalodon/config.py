@@ -109,6 +109,10 @@ def _threat_settings(raw: dict[str, object]) -> ThreatDetectionSettings:
             if isinstance(value, bool) or not isinstance(value, int):
                 raise ValidationError(f"threat_detection.{name} must be an integer")
             values[name] = value
+        elif isinstance(default, tuple):
+            if not isinstance(value, list):
+                raise ValidationError(f"threat_detection.{name} must be a TOML array")
+            values[name] = tuple(value)
         elif name == "watchlist_severity":
             values[name] = _text(value, "threat_detection.watchlist_severity", 16).upper()
         else:

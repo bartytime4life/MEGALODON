@@ -74,6 +74,12 @@ RULES: tuple[RuleDescription, ...] = (
         ("T1071", "T1573"), "command_and_control", "destination",
     ),
     RuleDescription(
+        "DECOY_TOUCH", THREAT_LAYER, "CRITICAL", "contacts", "decoy contacts", False,
+        "A source contacted a decoy port or unassigned decoy address that no legitimate client uses.",
+        "A misconfigured client, a stale DNS record or an operator's own test can touch a decoy.",
+        ("T1046", "T1018"), "discovery", "source",
+    ),
+    RuleDescription(
         "IOC_MATCH", THREAT_LAYER, "HIGH", "matches", "watchlist matches", False,
         "An address in this event matched an operator-supplied watchlist indicator.",
         "Indicator lists go stale; shared hosting and reassigned addresses cause false matches.",

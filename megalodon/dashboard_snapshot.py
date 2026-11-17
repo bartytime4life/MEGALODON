@@ -47,8 +47,8 @@ function validateHudSnapshot(text, now=Date.now()) {
   if(![generated,start,end].every(Number.isFinite)||generated>now+60000||start>end||end>generated+60000)throw new Error('Invalid or future snapshot time.');
   if(!count(data.events,500)||data.events<1||!count(data.findings,200)||typeof data.reported_bytes!=='string'||!/^(0|[1-9][0-9]{0,21})$/.test(data.reported_bytes)||BigInt(data.reported_bytes)>BigInt(data.events)*9223372036854775807n||typeof data.limited!=='boolean'||!['unknown','degraded'].includes(data.quality))throw new Error('Invalid snapshot counts or quality.');
   for(const [key,length,total] of [['lanes',3,data.events],['timeline',12,data.events],['protocols',8,data.events],['sources',2,data.events],['severities',4,data.findings],['detectors',snapshotLabels.detectors.length,data.findings]]){
-    // Summaries exported before the threat-signal layer carry only the three core counts.
-    const legacy=key==='detectors'&&Array.isArray(data[key])&&data[key].length===3;
+    // Earlier exports carry fewer detector counts: 3 (core only) or 8 (before DECOY_TOUCH).
+    const legacy=key==='detectors'&&Array.isArray(data[key])&&[3,8].includes(data[key].length);
     if(!Array.isArray(data[key])||(data[key].length!==length&&!legacy)||!data[key].every(v=>count(v,total))||data[key].reduce((a,b)=>a+b,0)!==total)throw new Error('Inconsistent snapshot totals.');
   }
   if(data.lanes[1]>data.severities[0]+data.severities[1]||data.lanes[2]>data.severities[2]+data.severities[3]||data.findings>0&&data.lanes[1]+data.lanes[2]===0)throw new Error('Inconsistent traffic lanes.');
