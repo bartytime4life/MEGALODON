@@ -148,7 +148,9 @@ def parse_lines(lines: Iterable[str]) -> list[tuple[ipaddress._BaseNetwork, str]
 
 
 def _read_private(path: str) -> bytes:
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    # O_NONBLOCK: a FIFO without a writer must be refused, not waited on.
+    flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+             | getattr(os, "O_NONBLOCK", 0))
     try:
         descriptor = os.open(path, flags)
     except OSError as exc:

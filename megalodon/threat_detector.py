@@ -307,7 +307,8 @@ class ThreatDetector:
                 continue
             key = ("IOC_MATCH", address)
             if not self._can_emit(key, now, journal):
-                return None
+                # A cooled-down source must not hide a new destination match.
+                continue
             touched.append(key)
             indicator, label = hit
             evidence: dict[str, Any] = {

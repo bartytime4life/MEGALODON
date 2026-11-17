@@ -385,3 +385,34 @@ def test_lost_handle_is_unwound_by_rollback_pending():
     assert state(detector) == before and detector._pending is None
     assert detector.rollback_pending() is False
     assert rules(detector.analyze(events[-1])) == ["BRUTE_FORCE"]
+
+
+def test_cooled_down_source_does_not_hide_a_new_destination_indicator():
+    watchlist = Watchlist(parse_lines(["203.0.113.66 # a", "198.51.100.77 # b"]))
+    detector = ThreatDetector(watchlist=watchlist)
+    first = detector.analyze(syn("203.0.113.66", LAN_A, 443, T0))
+    assert first[0].evidence["matched_address"] == "203.0.113.66"
+    second = detector.analyze(syn("203.0.113.66", "198.51.100.77", 443, T0 + timedelta(seconds=1)))
+    assert rules(second) == ["IOC_MATCH"]
+    assert second[0].evidence["matched_direction"] == "destination"
+    assert second[0].evidence["response_target"] == "198.51.100.77"
+
+
+def test_watchlist_fifo_is_refused_without_blocking():
+    import threading
+    with tempfile.TemporaryDirectory() as directory:
+        fifo = Path(directory) / "pipe"
+        os.mkfifo(fifo, 0o600)
+        outcome = []
+
+        def attempt():
+            try:
+                load_watchlist(fifo)
+            except ValidationError as exc:
+                outcome.append(str(exc))
+
+        worker = threading.Thread(target=attempt, daemon=True)
+        worker.start()
+        worker.join(5)
+        assert not worker.is_alive(), "opening a writer-less FIFO blocked"
+        assert outcome == ["watchlist must be a regular file"]
