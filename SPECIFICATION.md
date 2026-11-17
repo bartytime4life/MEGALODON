@@ -474,6 +474,18 @@ invokes `nft`; `auto_block=true` with `dry_run=false` is rejected as unsafe.
 Application is not a supported operator CLI or service action in the evaluation
 release. Unattended response is not an MVP operation.
 
+### Separate host-input policy candidate
+
+The [host protection workflow](docs/host-protection.md) is a separately scoped
+Linux HUD operation. A closed, operator-selected inbound service policy and
+finite kernel lease may be previewed and applied only through a distinct
+confirmed, OS-authorized request. It preserves tracked established traffic and
+explicit network infrastructure exceptions while dropping other unsolicited
+input. Receipts precede execution, interrupted outcomes require verification,
+foreign tables are refused, and no detector/model or GET path invokes it.
+The legacy CLI and service planning boundary above remains unchanged. This
+source candidate does not itself establish release or installed-PC acceptance.
+
 ### Gate for restoring firewall application
 
 No live mutation path may be restored until a separately reviewed design and

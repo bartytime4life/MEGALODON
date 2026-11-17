@@ -99,6 +99,16 @@ jobs:
             python tests/browser_native_profile.py'
       - name: Review offline cadence evidence in Chrome
         run: python tests/browser_cadence_review.py
+      - name: Review host protection policy and recovery controls in Chrome
+        run: python tests/browser_host_protection.py artifacts/host-protection/
+      - name: Retain synthetic host protection screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: host-protection-synthetic-${{ github.sha }}
+          path: artifacts/host-protection/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Retain synthetic startup and model screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

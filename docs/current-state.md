@@ -1,5 +1,18 @@
 # Current state and evidence boundaries
 
+## November 17 host-protection candidate
+
+Built on main after network setup PR #778, this candidate adds an explicit
+stateful Linux host-input policy with client-scoped service exceptions, kernel
+lease expiry, receipt-backed apply/check/remove and browser controls. The
+operator authorizes a finite policy; packet drops then occur in the kernel
+without an AI decision. The core detection planner remains non-mutating.
+[Workflow, recovery, tests and coverage limits](host-protection.md).
+
+Source delivery does not establish installation, native OS authorization,
+independent review or protection of the user's live PC. The dated sections below
+retain their original source and validation scope.
+
 ## November 11 source orientation
 
 **Source basis:** [`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),

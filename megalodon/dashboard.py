@@ -1418,8 +1418,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "same-origin local defense action required"}, status=403)
             return
         lengths = self.headers.get_all("Content-Length", [])
-        if (len(lengths) != 1 or len(lengths[0]) > 3 or not lengths[0].isascii() or not lengths[0].isdigit()
-                or not 2 <= int(lengths[0]) <= 512):
+        if (len(lengths) != 1 or len(lengths[0]) > 4 or not lengths[0].isascii() or not lengths[0].isdigit()
+                or not 2 <= int(lengths[0]) <= 2048):
             self._send_json({"error": "invalid defense request length"}, status=400)
             return
         try:
