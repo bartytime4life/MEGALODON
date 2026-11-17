@@ -29,11 +29,23 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/host-protection-native
           parent_net="$(readlink /proc/self/ns/net)"
+          # Mapped root cannot traverse the runner's owner-private home. Stage
+          # only the two stdlib-only test inputs in a private, root-owned copy.
+          fixture_root="$(mktemp -d /tmp/megalodon-host-native.XXXXXX)"
+          trap 'sudo rm -rf -- "$fixture_root"' EXIT
+          mkdir -p "$fixture_root/tests" "$fixture_root/megalodon"
+          cp tests/host_protection_native.py "$fixture_root/tests/"
+          cp megalodon/host_guard.py "$fixture_root/megalodon/"
+          touch "$fixture_root/megalodon/__init__.py"
+          cmp tests/host_protection_native.py "$fixture_root/tests/host_protection_native.py"
+          cmp megalodon/host_guard.py "$fixture_root/megalodon/host_guard.py"
+          sha256sum "$fixture_root/tests/host_protection_native.py" "$fixture_root/megalodon/host_guard.py"
+          sudo chown -R root:root "$fixture_root"
           # sudo is needed on runners restricting unprivileged user namespaces.
           # The harness refuses the parent network namespace and a nonempty ruleset.
           sudo env MEGALODON_TEST_PARENT_NET="$parent_net" \
             unshare --user --map-root-user --net \
-            /usr/bin/python3 tests/host_protection_native.py \
+            /usr/bin/python3 "$fixture_root/tests/host_protection_native.py" \
             | tee artifacts/host-protection-native/result.json
       - name: Retain isolated packet acceptance
         if: always()
