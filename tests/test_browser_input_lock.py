@@ -19,8 +19,7 @@ INCLUDE = "-r test-linux-cp311.txt"
 ENTRY = re.compile(r"([a-z][a-z0-9-]*)==([0-9.]+) --hash=sha256:([0-9a-f]{64})")
 BROWSER_PINS = {
     "greenlet": ("3.5.6", "1c20ea32a73d17b9b60e3371240e17b0068120c98a5ec01a224a7dd8c89733ba"),
-    "playwright": ("1.64.1", "577b8d88778c245cfbd145ae17cf53044f084b1b46c55c69081d4069d56057e2"),
-    "pyee": ("13.0.1", "af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228"),
+    "playwright": ("1.65.2", "58932d35f56767ab7ebcdd3d4a733bfb3e62a1a5bc43c08e28b9fa9b3e61cf33"),
 }
 
 
@@ -28,13 +27,13 @@ def assert_composition(text):
     lines = [line for line in text.splitlines() if line and not line.startswith("#")]
     assert lines[0] == INCLUDE, "only the reviewed local include is allowed"
     matches = [ENTRY.fullmatch(line) for line in lines[1:]]
-    assert len(matches) == 3 and all(matches), "three closed hashed browser pins"
+    assert len(matches) == 2 and all(matches), "two closed hashed browser pins"
     assert {m[1]: (m[2], m[3]) for m in matches} == BROWSER_PINS
     inherited = [ENTRY.fullmatch(line) for line in
                  (ROOT / "constraints/test-linux-cp311.txt").read_text().splitlines()
                  if line and not line.startswith("#")]
     assert len(inherited) == 13 and all(inherited)
-    assert len({m[1] for m in inherited} | BROWSER_PINS.keys()) == 16
+    assert len({m[1] for m in inherited} | BROWSER_PINS.keys()) == 15
 
 
 def assert_wiring(text):
@@ -53,7 +52,7 @@ def assert_wiring(text):
         'mkdir "$RUNNER_TEMP/browser-cp311-wheelhouse"\n',
         'python -m pip download --require-hashes --only-binary=:all: --no-cache-dir \\\n'
         '            --dest "$RUNNER_TEMP/browser-cp311-wheelhouse" -r ' + LOCK + '\n',
-        '[ "${#browser_wheels[@]}" -eq 16 ]\n',
+        '[ "${#browser_wheels[@]}" -eq 15 ]\n',
         'sha256sum ' + LOCK + ' constraints/test-linux-cp311.txt "${browser_wheels[@]}"\n',
         'python -m pip install -c constraints/ci.txt --no-index \\\n'
         '            --find-links "$RUNNER_TEMP/browser-cp311-wheelhouse" --require-hashes \\\n'
@@ -93,8 +92,8 @@ def test_browser_workflow_verifies_inputs_before_acceptance():
     (INCLUDE, "-r test-linux-cp312.txt"),
     (INCLUDE, "-r https://invalid.example/inputs.txt"),
     (INCLUDE, ""),
-    ("playwright==1.64.1", "playwright>=1.64.1"),
-    (" --hash=sha256:" + BROWSER_PINS["pyee"][1], ""),
+    ("playwright==1.65.2", "playwright>=1.65.2"),
+    (" --hash=sha256:" + BROWSER_PINS["playwright"][1], ""),
     (BROWSER_PINS["greenlet"][1], "0" * 64),
     (BROWSER_PINS["playwright"][1], BROWSER_PINS["playwright"][1]
      + " --hash=sha256:" + "0" * 64),
@@ -116,7 +115,7 @@ def test_composition_weakenings_fail(old, new):
     ('or platform.libc_ver()[0] != "glibc"', ""),
     ("pip download --require-hashes", "pip download"),
     ("--only-binary=:all:", "--prefer-binary"),
-    ('-eq 16 ]', '-eq 3 ]'),
+    ('-eq 15 ]', '-eq 3 ]'),
     ("sha256sum constraints/browser-linux-cp311.txt", "echo constraints/browser-linux-cp311.txt"),
     ("--find-links \"$RUNNER_TEMP/browser-cp311-wheelhouse\" --require-hashes",
      "--find-links \"$RUNNER_TEMP/browser-cp311-wheelhouse\""),

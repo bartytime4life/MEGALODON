@@ -1,6 +1,6 @@
 """Run the fixed browser suite with an isolated, pinned native-focus driver copy.
 
-Stock Playwright 1.64.1 forces pages active on its own CDP session. A second
+Stock Playwright 1.65.2 forces pages active on its own CDP session. A second
 session cannot release that session's Chromium capturer. Change only that
 initialization call, in a temporary copy; never edit the installed driver.
 """
@@ -17,12 +17,12 @@ import subprocess
 import sys
 import tempfile
 
-PLAYWRIGHT_VERSION = "1.64.1"
+PLAYWRIGHT_VERSION = "1.65.2"
 PROFILE = f"playwright-{PLAYWRIGHT_VERSION}-native-focus-v1"
 DRIVER_MODULE = Path("driver/package/lib/coreBundle.js")
 MAX_DRIVER_BYTES = 4 * 1024 * 1024
-STOCK_SHA256 = "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d"
-NATIVE_SHA256 = "a08fe18c02c46ef364029a72ee5299529cea7e093b21f9f8ce69c8be64e8a2e6"
+STOCK_SHA256 = "874451b4e7acf90cda4330be42db2259c9e5036c22150f18016f04768434234c"
+NATIVE_SHA256 = "a452ef18195782eba06faa6b230f54d9f3c8832cd3f23c6031f007bbf2fd3cbf"
 FOCUS_CALL = b'promises2.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));'
 NATIVE_CALL = FOCUS_CALL.replace(b"true", b"false")
 

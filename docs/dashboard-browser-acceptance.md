@@ -33,7 +33,7 @@ It complements the installed check and does not resolve print pagination.
 ## Prepared environment and execution
 
 From an installed repository checkout on non-root Linux, with Chrome stable,
-Xvfb/Openbox, and the test-only Playwright 1.64.1 package already installed,
+Xvfb/Openbox, and the test-only Playwright 1.65.2 package already installed,
 use an X display already managed by Openbox:
 
 ```bash
@@ -72,7 +72,7 @@ branch protection and does not supply an independent approval.
 ## Native-focus driver profile (issue #97)
 
 The test must remove automation's forced-visible behavior before measuring
-native visibility. The reviewed Playwright 1.64.1 driver core bundle sets
+native visibility. The reviewed Playwright 1.65.2 driver core bundle sets
 `Emulation.setFocusEmulationEnabled` to `true` on its own CDP session.
 [Chrome documents](https://developer.chrome.com/docs/devtools/rendering/apply-effects#emulate_a_focused_page)
 that focus emulation keeps visibility at `visible` and suppresses visibility
@@ -105,6 +105,36 @@ not MEGALODON acceptance; only the real-application lane establishes the latter.
 The profile still has to observe native hidden and visible states and demonstrate
 suspension/recovery through unchanged application logic. It never synthesizes
 visibility to make an assertion pass.
+
+## Playwright 1.65.2 dependency repair — November 17, 2026
+
+[PR #779](https://github.com/bartytime4life/MEGALODON/pull/779) originally
+broadened the Linux lock to all published platform hashes, leaving the source
+inventory and version-pinned native-focus profile inconsistent. Its initial
+ordinary-test and wheel jobs refused `BUILD_INPUT_INVENTORY:INVALID_LOCK_ENTRY`;
+the browser job refused `DRIVER_VERSION_MISMATCH`.
+
+The repair admits only the exact Linux x86_64 wheel published by
+[PyPI](https://pypi.org/project/playwright/1.65.2/#files), independently compares
+its downloaded bytes, and updates the profile to
+`playwright-1.65.2-native-focus-v1`. The reviewed focus-initialization context is
+unchanged and still contains exactly one protected call. Only that call changes
+from true to false in the temporary test-driver copy. Unknown versions, bytes,
+additional calls, and unexpected transformed output still fail closed.
+
+| Checked bytes | SHA-256 |
+| --- | --- |
+| `playwright-1.65.2-py3-none-manylinux1_x86_64.whl` | `58932d35f56767ab7ebcdd3d4a733bfb3e62a1a5bc43c08e28b9fa9b3e61cf33` |
+| Stock `driver/package/lib/coreBundle.js` (3,626,940 bytes) | `874451b4e7acf90cda4330be42db2259c9e5036c22150f18016f04768434234c` |
+| Copy with the single protected focus call changed to false | `a452ef18195782eba06faa6b230f54d9f3c8832cd3f23c6031f007bbf2fd3cbf` |
+
+The wheel metadata declares only `greenlet>=3.1.1,<4.0.0`; the unchanged greenlet
+3.5.6 pin satisfies it. The removed pyee dependency is no longer admitted. The
+thirteen inherited wheels plus these two additions form a fifteen-wheel browser
+profile. Its composition assertions, workflow count and source inventory change
+together. The browser version, native focus/visibility observations, sandbox
+request and application assertions still require their own hosted receipts;
+wheel inspection alone does not establish browser acceptance.
 
 ## Playwright 1.64.1 dependency repair — October 27, 2026
 
