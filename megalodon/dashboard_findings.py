@@ -150,7 +150,7 @@ FINDINGS_JS = r'''
   const dest=typeof c?.destination==='string'?c.destination:'Unknown';
   box.append(node('p','Destination: '+dest+(Number.isInteger(counts.port)?' · port '+counts.port:'')+(typeof counts.protocol==='string'?' · '+counts.protocol:'')));
   if(Number.isInteger(counts.unique_observations)&&dt)box.append(node('p',counts.unique_observations+' connection starts, typically '+dt+' seconds apart.'));
-  if(Number.isSafeInteger(counts.median_interval_us)&&counts.median_interval_us>=1000000&&counts.median_interval_us<=3600000000&&Number.isSafeInteger(counts.interval_spread_us)&&counts.interval_spread_us>=0&&counts.interval_spread_us<=Math.floor(counts.median_interval_us/20)){
+  if(Number.isSafeInteger(counts.unique_observations)&&counts.unique_observations>=5&&Number.isSafeInteger(counts.median_interval_us)&&counts.median_interval_us>=1000000&&counts.median_interval_us<=3600000000&&Number.isSafeInteger(counts.interval_spread_us)&&counts.interval_spread_us>=0&&counts.interval_spread_us<=Math.floor(counts.median_interval_us/20)){
    const spread=new Intl.NumberFormat(undefined,{maximumFractionDigits:3}).format(counts.interval_spread_us/1000000),relative=new Intl.NumberFormat(undefined,{maximumFractionDigits:3}).format(100*counts.interval_spread_us/counts.median_interval_us);
    box.append(node('p','Why this pattern qualified: the longest gap minus the shortest gap is '+spread+' seconds ('+relative+'% of the lower median gap), within the fixed 5% tolerance. Simultaneous starts count once.'));
    box.append(node('p','This is a timing regularity check, not a maliciousness score. Scheduled jobs can match; missing starts or jitter can hide a cadence. Compare the program, destination, approved schedule and linked evidence.'));

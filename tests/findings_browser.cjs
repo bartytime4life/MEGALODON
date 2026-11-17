@@ -21,6 +21,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('nod
   assert.match(text(get('fw-cadence')),/missing starts or jitter/);
   feed.selected.facts.recorded_evidence.interval_spread_us=500001;await poll();
   assert.doesNotMatch(text(get('fw-cadence')),/Why this pattern qualified/,'inconsistent facts cannot claim qualification');
+  feed.selected.facts.recorded_evidence.interval_spread_us=0;feed.selected.facts.recorded_evidence.unique_observations=4;await poll();assert.doesNotMatch(text(get('fw-cadence')),/Why this pattern qualified/,'four starts cannot claim qualification');
   assert.equal(posts().length,0);console.log('Cadence explanation: measured spread, exact threshold boundary, limits and no actions passed');return;
  }
  if(longText){
