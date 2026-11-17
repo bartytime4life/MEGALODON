@@ -173,7 +173,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m megalodon run --source sample --max-events 13
-          python -m megalodon run --source sample --demo-threat --max-events 114
+          python -m megalodon run --source sample --demo-threat --max-events 149
           python -m megalodon firewall-plan 8.8.8.8 --reason "CI smoke"
           python -m megalodon posture --platform windows
 
