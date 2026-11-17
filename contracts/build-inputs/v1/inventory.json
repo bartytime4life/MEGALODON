@@ -219,14 +219,9 @@
           "version": "3.5.6"
         },
         {
-          "declared_sha256": "sha256:577b8d88778c245cfbd145ae17cf53044f084b1b46c55c69081d4069d56057e2",
+          "declared_sha256": "sha256:58932d35f56767ab7ebcdd3d4a733bfb3e62a1a5bc43c08e28b9fa9b3e61cf33",
           "name": "playwright",
-          "version": "1.64.1"
-        },
-        {
-          "declared_sha256": "sha256:af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228",
-          "name": "pyee",
-          "version": "13.0.1"
+          "version": "1.65.2"
         }
       ],
       "id": "browser-linux-cp311",
@@ -237,7 +232,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "browser acceptance additions",
-      "source_sha256": "2de095551e4020d24ee625c557914bcda9df63eff5542ad2441c6096c122ae7d"
+      "source_sha256": "8b92a091e060fae940b48389945e2cd9e006f66f3d630d52174218a4a8527798"
     }
   ],
   "project": {

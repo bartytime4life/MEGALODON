@@ -107,7 +107,7 @@ PROFILE_SPECS = (
         "platform": "linux-glibc-x86_64",
         "python": "3.11",
         "includes": ("test-linux-cp311.txt",),
-        "packages": frozenset({"greenlet", "playwright", "pyee"}),
+        "packages": frozenset({"greenlet", "playwright"}),
     },
 )
 

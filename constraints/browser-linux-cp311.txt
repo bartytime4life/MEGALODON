@@ -1,15 +1,13 @@
 # Browser-test wheel requirements, NOT constraints. Install with -r.
 # Profile: Linux glibc x86_64 / CPython 3.11 / browser-acceptance only.
-# Reuse the reviewed thirteen-wheel test/backend closure; add three browser wheels.
+# Reuse the reviewed thirteen-wheel test/backend closure; add two browser wheels.
 # Versions are admitted together with the native-focus driver profile update.
-# Playwright Linux wheel verified against PyPI on 2026-10-27 UTC;
-# unchanged greenlet/pyee hashes retain their 2026-09-22 observation.
+# Playwright Linux wheel and dependency metadata verified against PyPI on 2026-11-17 UTC;
+# the unchanged greenlet hash retains its 2026-09-22 observation. Playwright no longer requires pyee.
 # The sole include is relative to this file, never a URL or operator input.
 # OS/Chrome/Xvfb/Openbox and Python/pip bootstrap remain outside this lock.
 -r test-linux-cp311.txt
 # greenlet-3.5.6-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl — https://pypi.org/project/greenlet/3.5.6/#files
 greenlet==3.5.6 --hash=sha256:1c20ea32a73d17b9b60e3371240e17b0068120c98a5ec01a224a7dd8c89733ba
-# playwright-1.64.1-py3-none-manylinux1_x86_64.whl — https://pypi.org/project/playwright/1.64.1/#files
-playwright==1.64.1 --hash=sha256:577b8d88778c245cfbd145ae17cf53044f084b1b46c55c69081d4069d56057e2
-# pyee-13.0.1-py3-none-any.whl — https://pypi.org/project/pyee/13.0.1/#files
-pyee==13.0.1 --hash=sha256:af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228
+# playwright-1.65.2-py3-none-manylinux1_x86_64.whl — https://pypi.org/project/playwright/1.65.2/#files
+playwright==1.65.2 --hash=sha256:58932d35f56767ab7ebcdd3d4a733bfb3e62a1a5bc43c08e28b9fa9b3e61cf33
