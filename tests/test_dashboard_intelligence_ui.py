@@ -9,7 +9,7 @@ import pytest
 from megalodon.dashboard_intelligence import KNOWLEDGE_JS
 
 
-@pytest.mark.parametrize('scenario', ['success', 'failure', 'edited', 'repeated', 'paused', 'status-failure', 'status-overlap',
+@pytest.mark.parametrize('scenario', ['success', 'failure', 'edited', 'repeated', 'paused', 'status-failure', 'status-overlap', 'status-malformed-knowledge', 'status-malformed-patterns',
                                       'device-success', 'device-failure', 'device-deselected'])
 def test_reference_search_and_learning_status(scenario):
     node = shutil.which('node')

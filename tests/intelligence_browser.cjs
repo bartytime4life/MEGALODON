@@ -3,7 +3,7 @@ let input = '';
 process.stdin.on('data', value => input += value);
 process.stdin.on('end', async () => {
   const {code, scenario} = JSON.parse(input), nodes = new Map(), timers = new Map(), reads = [], listeners = new Map();
-  let serial = 0, enabled = scenario !== 'paused', explaining = false, statusFailed = false, holdStatus=false, statusReads=0;
+  let serial = 0, enabled = scenario !== 'paused', explaining = false, statusFailed = false, statusMalformed=null, holdStatus=false, statusReads=0;
   const heldStatus=[];
   const writes = [];
   function node(tag = '') {
@@ -35,6 +35,7 @@ process.stdin.on('end', async () => {
       statusReads++;
       if(holdStatus)return new Promise(resolve=>heldStatus.push({path,resolve}));
       if(statusFailed)return Promise.resolve(response({error:'Synthetic refresh failure'},false));
+      if(path===statusMalformed)return Promise.resolve(response({}));
       return Promise.resolve(response(path === '/api/knowledge' ? knowledge : patterns()));
     }};
   vm.runInNewContext(code, context);
@@ -53,10 +54,10 @@ process.stdin.on('end', async () => {
     for(const item of heldStatus)item.resolve(response(item.path==='/api/knowledge'?knowledge:patterns()));
     await loading;assert.equal(get('ki-save').disabled,false);
     assert.equal(writes.length,0);
-  } else if (scenario === 'status-failure') {
+  } else if (scenario === 'status-failure' || scenario.startsWith('status-malformed-')) {
     assert.equal(get('ki-save').disabled,false);
     edit('old search');const oldSearch=submit();await settle();
-    statusFailed=true;await poll();
+    statusFailed=scenario==='status-failure';statusMalformed=scenario==='status-malformed-knowledge'?'/api/knowledge':scenario==='status-malformed-patterns'?'/api/intelligence':null;await poll();
     for(const id of ['ki-save','ki-update','ki-rollback','ki-cancel'])assert.equal(get(id).disabled,true,id);
     assert.match(get('ki-library-state').textContent,/unavailable/);
     assert.match(get('ki-learning').textContent,/unavailable/);
@@ -64,7 +65,7 @@ process.stdin.on('end', async () => {
     reads[0].resolve(response(result('obsolete reference')));await oldSearch;
     assert.doesNotMatch(get('ki-search-results').textContent,/obsolete reference/);
     await get('ki-update').events.click();assert.equal(writes.length,0,'stale tokens cannot start maintenance');
-    statusFailed=false;await poll();
+    statusFailed=false;statusMalformed=null;await poll();
     assert.equal(get('ki-save').disabled,false);assert.equal(get('ki-update').disabled,false);
     assert.doesNotMatch(get('ki-setup-status').textContent,/failure|unavailable/);
     assert.match(get('ki-learning').textContent,/24 of 24/);

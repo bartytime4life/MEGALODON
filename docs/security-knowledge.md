@@ -281,3 +281,7 @@ explains the exclusion. Findings explains a cadence using its actual lower
 median and longest-minus-shortest gap, with its fixed 5% tolerance and the
 possibility of scheduled jobs, jitter or missing starts. These are review
 explanations, not new response permissions. See [the mathematical contract](science-and-math.md).
+
+Incomplete HTTP-successful status responses also enter the unavailable state;
+rendering failures cannot leave current action authority behind or terminate the
+refresh loop. A later valid pair recovers, preserving unsaved preference choices.

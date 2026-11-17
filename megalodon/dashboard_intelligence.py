@@ -69,7 +69,7 @@ KNOWLEDGE_JS = r'''
    knowledge=null;patterns=null;lastLibrary='';lastKey='';searchRevision++;selectionRevision++;deviceReviews=null;
    for(const id of ['ki-save','ki-update','ki-rollback','ki-cancel'])el(id).disabled=true;
    el('ki-cancel').hidden=true;el('ki-hud-status').textContent='Local analysis unavailable';
-   el('ki-library-state').textContent='Library unavailable';el('ki-setup-status').textContent=error.message;
+   el('ki-library-state').textContent='Library unavailable';el('ki-setup-status').textContent=['TypeError','SyntaxError'].includes(error.name)?'Local status could not be validated. Actions are paused until a successful refresh.':error.message;
    el('ki-learning').textContent='Current learning status is unavailable.';
    el('ki-storage').textContent='Current reference storage and freshness are unavailable.';
    el('ki-sources').replaceChildren();el('ki-search-results').textContent='Reference status unavailable. Retry after the next successful refresh.';
@@ -78,7 +78,7 @@ KNOWLEDGE_JS = r'''
    el('ki-coverage').textContent='Current comparison coverage is unavailable.';
    el('ki-device-review').textContent='Saved reviews could not be verified. Retry after status recovers.';
  }
- async function refresh(){if(pending||refreshing||document.hidden)return;refreshing=true;render();try{const recovering=!knowledge||!patterns;const values=await Promise.all([request('/api/knowledge'),request('/api/intelligence')]);knowledge=values[0];patterns=values[1];if(recovering)el('ki-setup-status').textContent=dirty?'Status recovered. Your unsaved choices are still in the form.':'Status available. Preferences are saved on this PC.';}catch(e){unavailable(e);}finally{refreshing=false;render();}}
+ async function refresh(){if(pending||refreshing||document.hidden)return;refreshing=true;render();try{const recovering=!knowledge||!patterns;const values=await Promise.all([request('/api/knowledge'),request('/api/intelligence')]);knowledge=values[0];patterns=values[1];if(recovering)el('ki-setup-status').textContent=dirty?'Status recovered. Your unsaved choices are still in the form.':'Status available. Preferences are saved on this PC.';render();}catch(e){unavailable(e);}finally{refreshing=false;render();}}
  async function act(path,body){if(pending||refreshing||!patterns||!knowledge)return false;pending=true;render();try{await request(path,body,path==='/api/knowledge'?knowledge.token:patterns.token);el('ki-setup-status').textContent='Saved locally.';lastKey='';return true;}catch(e){el('ki-setup-status').textContent=e.message;el('ki-review-state').textContent=e.message;return false;}finally{pending=false;await refresh();}}
  for(const id of ['ki-enabled','ki-automatic','ki-updates'])el(id).addEventListener('change',()=>{dirty=true;});
  el('ki-save').addEventListener('click',async()=>{if(pending||!knowledge||!patterns)return;const choices={enabled:el('ki-enabled').checked,automatic:el('ki-automatic').checked};const updates=el('ki-updates').checked;if(!await act('/api/intelligence',{action:'configure',...choices}))return;if(!await act('/api/knowledge',{action:'configure',enabled:updates})){el('ki-setup-status').textContent='Pattern preferences saved; reference update preference could not be saved. Please retry.';return;}dirty=false;render();});
