@@ -347,6 +347,31 @@ def iter_sample(*, include_demo_threat: bool = False) -> Iterator[PacketEvent]:
             byte_count=300,
             interface="sample",
         )
+        # Threat-signal demo (synthetic): the SYN burst above already targets SSH
+        # (BRUTE_FORCE). One internal host then sweeps its subnet, uploads a large
+        # volume to one public address and beacons on a fixed five-second cadence.
+        internal = "192.168.50.10"
+        for index in range(24):
+            yield PacketEvent(
+                observed_at=start + timedelta(seconds=7, milliseconds=index * 10),
+                src_ip=internal, dst_ip=f"192.168.50.{100 + index}", protocol="TCP",
+                src_port=41000 + index, dst_port=445, tcp_flags=frozenset({"SYN"}),
+                byte_count=60, interface="sample",
+            )
+        for index in range(2):
+            yield PacketEvent(
+                observed_at=start + timedelta(seconds=8, milliseconds=index * 500),
+                src_ip=internal, dst_ip="8.8.8.8", protocol="TCP", src_port=42000,
+                dst_port=443, tcp_flags=frozenset({"ACK", "PSH"}),
+                byte_count=64 * 1024 * 1024, interface="sample",
+            )
+        for index in range(9):
+            yield PacketEvent(
+                observed_at=start + timedelta(seconds=10 + 5 * index),
+                src_ip=internal, dst_ip="8.8.8.8", protocol="TCP",
+                src_port=43000 + index, dst_port=8443, tcp_flags=frozenset({"SYN"}),
+                byte_count=60, interface="sample",
+            )
 
 
 def iter_scapy(interface: str) -> Iterator[PacketEvent]:

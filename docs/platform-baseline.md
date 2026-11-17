@@ -200,7 +200,7 @@ git checkout --detach "$BASE"
 .venv/bin/python -m compileall -q megalodon tests
 .venv/bin/python -m pytest
 .venv/bin/python -m megalodon run --source sample --max-events 13
-.venv/bin/python -m megalodon run --source sample --demo-threat --max-events 114
+.venv/bin/python -m megalodon run --source sample --demo-threat --max-events 149
 .venv/bin/python -m megalodon run --source jsonl --input examples/events.jsonl --max-events 100
 .venv/bin/python -m megalodon firewall-plan 8.8.8.8 --reason 'baseline smoke only'
 ```
@@ -254,7 +254,7 @@ Invoke-Checked -Program $Python -Arguments @('-m', 'pip', 'install', '-e', '.[te
 Invoke-Checked -Program $Python -Arguments @('-m', 'pip', 'check')
 Invoke-Checked -Program $Python -Arguments @('-m', 'compileall', '-q', 'megalodon', 'tests')
 Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'run', '--source', 'sample', '--max-events', '13')
-Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'run', '--source', 'sample', '--demo-threat', '--max-events', '114')
+Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'run', '--source', 'sample', '--demo-threat', '--max-events', '149')
 Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'run', '--source', 'jsonl', '--input', 'examples/events.jsonl', '--max-events', '100')
 Invoke-Checked -Program $Python -Arguments @('-m', 'megalodon', 'dashboard', '--host', '127.0.0.1', '--port', '8797')
 ```

@@ -70,6 +70,7 @@ or recovery capability of a particular installed PC.
 | Capability | Implemented behavior | Meaningful boundary |
 | --- | --- | --- |
 | Metadata analysis | Typed admission, three fixed heuristics, private SQLite audit | Patterns for review; no payload inspection or malware verdict |
+| [Threat signals](docs/threat-detection.md) | Brute force, internal host sweep, outbound exfiltration volume, C2-style beaconing and a local IP/CIDR watchlist (with STIX import) beside the core rules | Bounded, uncalibrated review signals; block planning names the remote party and stays plan-only |
 | Visual investigation | Guided HUD next step, direct evidence routes, optional app disclosure; Findings, Sensors, Setup, Reports, Evidence and Help | Sensor alert context is separate from saved Findings; source and time windows limit conclusions |
 | History and reporting | Segmented evidence, indexed baseline comparisons, selection-bound visual reports and fixed schedules | Missing intervals remain missing; packet and flow units stay separate; resource averages round at the final display step |
 | Optional sources | TShark, closed Zeek logs, strict Suricata admission and separate background observations | Importer, installed tool and qualified producer are distinct |
@@ -143,6 +144,10 @@ Current Linux HUD setup and action routes have separate protections.
 | `SYN_FLOOD` | 100 TCP SYN-without-ACK events from one source / 10 seconds | Burst pattern; not proof of a denial-of-service attack |
 | `PORT_SCAN` | 20 distinct TCP candidate-probe destination ports from one source / 5 seconds; ACK and RST excluded | Port-access pattern; authorized inventory can look similar |
 | `DNS_TUNNELING` | DNS/UDP query-length metadata ≥ 50 | Length heuristic; no query content or tunneling proof |
+
+The separate [threat-signal layer](docs/threat-detection.md) adds `BRUTE_FORCE`,
+`HOST_SWEEP`, `DATA_EXFILTRATION`, `BEACONING` and `IOC_MATCH` in the same atomic
+transaction without changing these three specification rules or their corpus.
 
 These are the default specification thresholds, not calibrated production accuracy.
 Per-source bounds and cooldowns constrain the detector state.

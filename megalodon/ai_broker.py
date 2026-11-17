@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .rule_catalog import ALL_RULE_IDS
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -342,8 +344,7 @@ class ReceiptStore:
 def _recorded_measurement(rule: str, value: object) -> dict | None:
     if value is None:
         return None
-    units = {'PORT_SCAN': 'distinct destination ports', 'SYN_FLOOD': 'SYN events',
-             'DNS_TUNNELING': 'DNS query length'}
+    from .rule_catalog import MEASUREMENT_UNITS as units, UNWINDOWED_RULES
     if (type(value) is not dict or set(value) != {'value', 'threshold', 'window_seconds', 'unit'}
             or value.get('unit') != units.get(rule)):
         raise BrokerError('EVIDENCE_INVALID')
@@ -352,7 +353,7 @@ def _recorded_measurement(rule: str, value: object) -> dict | None:
     if (type(count) is not int or not 1 <= count <= 65536
             or threshold is not None and (type(threshold) is not int or not 1 <= threshold <= count)
             or window is not None and (type(window) is not int or not 1 <= window <= 3600)
-            or rule == 'DNS_TUNNELING' and window is not None):
+            or rule in UNWINDOWED_RULES and window is not None):
         raise BrokerError('EVIDENCE_INVALID')
     return dict(value)
 
@@ -371,7 +372,7 @@ def _qualified(reader: AIReader, window_minutes: int, limit: int) -> dict[str, o
     for item in traffic.get("findings", [])[:200]:
         if type(item) is not dict or set(item) - {"id", "event_id", "detected_at", "rule_id", "severity", "detector_version", "measurement"}:
             raise BrokerError("EVIDENCE_INVALID")
-        if item.get("rule_id") not in {"SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING"} or item.get("severity") not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+        if item.get("rule_id") not in ALL_RULE_IDS or item.get("severity") not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
             raise BrokerError("EVIDENCE_INVALID")
         measurement = _recorded_measurement(item["rule_id"], item.get("measurement"))
         try:

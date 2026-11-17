@@ -5,7 +5,7 @@ SNAPSHOT_VALIDATOR_JS = r'''
 const snapshotLabels = {
   protocols:['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'],
   sources:['JSONL import','Scapy'], severities:['LOW','MEDIUM','HIGH','CRITICAL'],
-  detectors:['SYN_FLOOD','PORT_SCAN','DNS_TUNNELING'], lanes:['Normal · no linked finding','Review · LOW / MEDIUM','Danger · HIGH / CRITICAL']
+  detectors:__RULE_IDS__, lanes:['Normal · no linked finding','Review · LOW / MEDIUM','Danger · HIGH / CRITICAL']
 };
 function validateHudSnapshot(text, now=Date.now()) {
   if(typeof text!=='string'||new TextEncoder().encode(text).byteLength>16384)throw new Error('Choose a HUD summary smaller than 16 KiB.');
@@ -46,14 +46,19 @@ function validateHudSnapshot(text, now=Date.now()) {
   const generated=timestamp(data.generated_at),start=timestamp(data.start),end=timestamp(data.end);
   if(![generated,start,end].every(Number.isFinite)||generated>now+60000||start>end||end>generated+60000)throw new Error('Invalid or future snapshot time.');
   if(!count(data.events,500)||data.events<1||!count(data.findings,200)||typeof data.reported_bytes!=='string'||!/^(0|[1-9][0-9]{0,21})$/.test(data.reported_bytes)||BigInt(data.reported_bytes)>BigInt(data.events)*9223372036854775807n||typeof data.limited!=='boolean'||!['unknown','degraded'].includes(data.quality))throw new Error('Invalid snapshot counts or quality.');
-  for(const [key,length,total] of [['lanes',3,data.events],['timeline',12,data.events],['protocols',8,data.events],['sources',2,data.events],['severities',4,data.findings],['detectors',3,data.findings]]){
-    if(!Array.isArray(data[key])||data[key].length!==length||!data[key].every(v=>count(v,total))||data[key].reduce((a,b)=>a+b,0)!==total)throw new Error('Inconsistent snapshot totals.');
+  for(const [key,length,total] of [['lanes',3,data.events],['timeline',12,data.events],['protocols',8,data.events],['sources',2,data.events],['severities',4,data.findings],['detectors',snapshotLabels.detectors.length,data.findings]]){
+    // Summaries exported before the threat-signal layer carry only the three core counts.
+    const legacy=key==='detectors'&&Array.isArray(data[key])&&data[key].length===3;
+    if(!Array.isArray(data[key])||(data[key].length!==length&&!legacy)||!data[key].every(v=>count(v,total))||data[key].reduce((a,b)=>a+b,0)!==total)throw new Error('Inconsistent snapshot totals.');
   }
   if(data.lanes[1]>data.severities[0]+data.severities[1]||data.lanes[2]>data.severities[2]+data.severities[3]||data.findings>0&&data.lanes[1]+data.lanes[2]===0)throw new Error('Inconsistent traffic lanes.');
   return data;
 }
 if(typeof module!=='undefined')module.exports={validateHudSnapshot,snapshotLabels};
 '''
+import json as _json
+from .rule_catalog import ALL_RULE_IDS as _RULE_IDS
+SNAPSHOT_VALIDATOR_JS = SNAPSHOT_VALIDATOR_JS.replace('__RULE_IDS__', _json.dumps(list(_RULE_IDS)).replace('"', "'"))
 
 SNAPSHOT_HOSTED_JS = r'''
 if(typeof document!=='undefined'){
@@ -68,7 +73,7 @@ if(typeof document!=='undefined'){
     el('snapshot-events').textContent=data?String(data.events):'—';el('snapshot-findings').textContent=data?String(data.findings):'—';
     el('snapshot-bytes').textContent=data?data.reported_bytes:'—';el('snapshot-sources').textContent=data?String(data.sources.filter(n=>n>0).length):'—';
     el('snapshot-range').textContent=data?`${data.start} → ${data.end} · ${data.limited?'limited candidate window':'bounded returned set'} · quality ${data.quality}`:'No summary loaded. Charts show only imported, qualified metadata.';
-    for(const name of ['protocols','sources','severities','detectors','lanes'])chart('snapshot-'+name+'-chart',snapshotLabels[name],data?.[name],['severities','detectors'].includes(name)?'findings':'records');
+    for(const name of ['protocols','sources','severities','detectors','lanes'])chart('snapshot-'+name+'-chart',snapshotLabels[name].slice(0,data?.[name]?.length??snapshotLabels[name].length),data?.[name],['severities','detectors'].includes(name)?'findings':'records');
     const timeline=el('snapshot-timeline');timeline.replaceChildren();
     if(data){const peak=Math.max(1,...data.timeline);data.timeline.forEach((value,index)=>{const column=document.createElement('div');const bar=document.createElement('span');bar.style.height=`${value/peak*120}px`;const label=document.createElement('small');label.textContent=String(index+1);column.setAttribute('aria-label',`Interval ${index+1}: ${value} records`);column.title=`Interval ${index+1}: ${value} records`;const count=document.createElement('b');count.textContent=String(value);column.append(count,bar,label);timeline.append(column);});}
     else timeline.textContent='No saved time series loaded.';

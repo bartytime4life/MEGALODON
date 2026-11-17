@@ -22,7 +22,10 @@ MAX_FINDINGS = 200
 MAX_BYTES = 256 * 1024
 MAX_SAFE_INTEGER = 2**53 - 1
 SCHEMA = "dashboard-traffic-v1"
-DETECTORS = ("SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING")
+from .rule_catalog import ALL_RULE_IDS, BY_ID as _RULES, UNWINDOWED_RULES
+
+# Derived from the one rule catalog so a new detector never breaks the view.
+DETECTORS = ALL_RULE_IDS
 PROTOCOLS = ("TCP", "UDP", "ICMP", "ICMPV6", "DNS", "HTTP", "TLS", "OTHER")
 LIMITATIONS = (
     "Newest 500 stored event candidates and 200 linked finding candidates only; not complete history.",
@@ -123,16 +126,14 @@ def _measurement(rule: str, raw: object) -> dict | None:
         evidence = json.loads(raw, object_pairs_hook=_strict_pairs)
         if type(evidence) is not dict:
             return None
-        key, unit = {'SYN_FLOOD': ('count', 'SYN events'),
-                     'PORT_SCAN': ('distinct_ports', 'distinct destination ports'),
-                     'DNS_TUNNELING': ('dns_query_length', 'DNS query length')}[rule]
+        key, unit = _RULES[rule].measurement_key, _RULES[rule].unit
         value = _integer(evidence.get(key), minimum=1, maximum=65536)
         threshold = evidence.get('threshold')
         if threshold is not None:
             threshold = _integer(threshold, minimum=1, maximum=65536)
             if value < threshold:
                 return None
-        window = evidence.get('window_seconds') if rule != 'DNS_TUNNELING' else None
+        window = evidence.get('window_seconds') if rule not in UNWINDOWED_RULES else None
         if window is not None:
             window = _integer(window, minimum=1, maximum=3600)
         return dict(value=value, threshold=threshold, window_seconds=window, unit=unit)

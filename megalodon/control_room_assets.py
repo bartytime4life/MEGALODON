@@ -375,7 +375,8 @@ ROOM_CSS += COVERAGE_CSS + FINDING_EVIDENCE_CSS + CASE_CSS
 ROOM_JS = r"""
 const roomState = {snapshot:null, failed:false, connected:null, busy:false, range:'recorded', custom:null, selection:null, history:null};
 const roomProtocols = ['TCP','UDP','ICMP','ICMPV6','DNS','HTTP','TLS','OTHER'];
-const roomRules = ['SYN_FLOOD','PORT_SCAN','DNS_TUNNELING'];
+const roomCatalog = Object.freeze(__RULE_CATALOG__);
+const roomRules = roomCatalog.rules;
 const roomFlags = ['FIN','SYN','RST','PSH','ACK','URG','ECE','CWR'];
 const roomId = value => typeof value === 'string' && /^[1-9][0-9]{0,15}$/.test(value) && Number.isSafeInteger(Number(value));
 function roomStamp(value) {
@@ -423,12 +424,12 @@ function validateTraffic(value) {
       || !roomStamp(f.detected_at) || !roomRules.includes(f.rule_id) || !knownSeverities.has(f.severity)
       || f.detector_version!=='unknown; not stored on historical finding') throw new Error('Invalid finding');
     if(f.measurement!=null) {
-      const m=f.measurement, units={SYN_FLOOD:'SYN events',PORT_SCAN:'distinct destination ports',DNS_TUNNELING:'DNS query length'};
+      const m=f.measurement, units=roomCatalog.units;
       if(!referenceExactKeys(m,['value','threshold','window_seconds','unit']) || m.unit!==units[f.rule_id]
         || !Number.isInteger(m.value) || m.value<1 || m.value>65536
         || !(m.threshold===null || (Number.isInteger(m.threshold)&&m.threshold>=1&&m.threshold<=m.value))
         || !(m.window_seconds===null || (Number.isInteger(m.window_seconds)&&m.window_seconds>=1&&m.window_seconds<=3600))
-        || (f.rule_id==='DNS_TUNNELING'&&m.window_seconds!==null)) throw new Error('Invalid finding measurement');
+        || (roomCatalog.unwindowed.includes(f.rule_id)&&m.window_seconds!==null)) throw new Error('Invalid finding measurement');
     }
     findings.add(f.id);
   });
@@ -629,6 +630,8 @@ byId('room-latest').addEventListener('click',()=>{byId('room-range').value='reco
 byId('room-pause').addEventListener('click',()=>{if(typeof togglePause==='function'){togglePause();renderRoomControls();}});
 byId('room-refresh').addEventListener('click',refreshRoom);
 """
+from .rule_catalog import browser_constants as _rule_constants
+ROOM_JS = ROOM_JS.replace('__RULE_CATALOG__', _rule_constants())
 
 from .dashboard_history import HISTORY_JS
 ROOM_JS += FINDING_EVIDENCE_JS + CASE_JS + HISTORY_JS
