@@ -9,6 +9,7 @@ and validation rule stays the single source of truth.
 """
 
 from .status_glossary import STATUS_GLOSSARY_HTML
+from .dashboard_security_lab import SECURITY_LAB_HTML
 
 # Fixed order and short names match ``workflowToolIds`` and the heartbeat probes.
 APP_RAIL_TOOLS = (
@@ -65,10 +66,12 @@ HELP_HTML = r'''
   <div class="room-help-grid help-guide">
     <section class="help-tasks" aria-labelledby="help-here"><h3 id="help-here">What would you like to do?</h3>
       <nav aria-label="Help tasks"><ul class="help-task-list">
+        <li><a href="#host-protection-title"><span><strong>Protect incoming access to this PC</strong><small>Review allowed services and a temporary host policy.</small></span><span aria-hidden="true">→</span></a></li>
         <li><a href="#support-capture-title"><span><strong>Collect live traffic</strong><small>Choose an interface, allow capture, then start HUD traffic.</small></span><span aria-hidden="true">→</span></a></li>
         <li><a href="#support-model-title"><span><strong>Check local AI</strong><small>Choose an installed model and verify a reply on this PC.</small></span><span aria-hidden="true">→</span></a></li>
         <li><a href="#network-setup-title"><span><strong>Find devices on my network</strong><small>Review private networks you manage before enabling discovery.</small></span><span aria-hidden="true">→</span></a></li>
         <li><a href="#room-findings-title"><span><strong>Review a finding</strong><small>Read the recorded evidence. A finding is a reason to investigate.</small></span><span aria-hidden="true">→</span></a></li>
+        <li><a href="#security-lab-title"><span><strong>Explore security science</strong><small>Try alert mathematics and learn which evidence each attack pattern needs.</small></span><span aria-hidden="true">→</span></a></li>
       </ul></nav>
       <div class="help-more-links" aria-label="More setup help"><a href="#support-config-clamav-title">File scans &amp; signatures</a><a href="#storage-history-title">Storage &amp; history</a><a href="#support-host-security">Host security checks</a></div>
       <p class="help-note">Need a tool first? <a href="#setup-software-title">Find software in Setup</a>. For current collector activity, open <a href="#integrations-title">Sensors</a>.</p>
@@ -92,6 +95,7 @@ HELP_HTML = r'''
       </details>
       <details><summary>What stays on this computer?</summary><p>Traffic metadata, findings, local AI requests and saved reports are processed locally by these workflows. Download links open external publisher websites; explicit reference updates fetch public data. Discovery sends checks to the networks you select. Exported files are yours to manage. Local AI provides advice; its reply alone never proves an attack or runs a generated command.</p></details>
     </section>
+    __SECURITY_LAB__
     <details class="help-advanced"><summary id="help-terminal">Advanced: imports, desktop apps and launch options</summary><div class="help-advanced-body">
       <p>Routine capture, local AI and collector settings are available in <a href="#support-config-title">Setup</a>. The steps below cover work that still needs a desktop app or terminal.</p>
       <h4>Import an existing metadata file</h4><p>Other saved-file imports use their adapter commands. Import only sources you are authorized to inspect. To see supported run options, use <code>python -m megalodon run --help</code> in your MEGALODON terminal. Choose <span class="help-control">Refresh metadata</span> after importing into the selected store. If that store was missing at launch, refresh can read it once a valid store exists at the same location. Selecting a different data source needs a new session.</p>
@@ -102,7 +106,7 @@ HELP_HTML = r'''
     </div></details>
   </div>
 </section>
-'''.replace('__HELP_STATUS_GLOSSARY__', STATUS_GLOSSARY_HTML)
+'''.replace('__HELP_STATUS_GLOSSARY__', STATUS_GLOSSARY_HTML).replace('__SECURITY_LAB__', SECURITY_LAB_HTML)
 
 
 def _compose_help(html: str) -> str:

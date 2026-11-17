@@ -1,12 +1,14 @@
 # Builder Profile
 
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
 ## Andy — directing complex work with AI
 
 MEGALODON is a working portfolio for [Andy / bartytime4life](https://github.com/bartytime4life): turning an ambitious security-workspace brief into a project people can inspect, use locally, and improve. The work combines product direction with AI-assisted implementation, interface design, documentation, and validation.
 
 The useful hiring question is **how the builder directs and evaluates complex work**. These pages connect that question to observable project artifacts. They do not assign professional credentials, employment history, solo authorship, or a security certification.
 
-The current operator reading is merged source `418fa54474f3f77d0758e94aab5735a516d8c43b`,
+The historical November 11 operator reading is merged source `418fa54474f3f77d0758e94aab5735a516d8c43b`,
 November 11, 2026 (America/Chicago). Older pinned examples below keep their
 historical scope; [current state](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation)
 separates implemented source, tests and remaining acceptance gates.

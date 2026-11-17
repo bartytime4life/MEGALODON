@@ -1,5 +1,7 @@
 # Practical Applications
 
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
 MEGALODON is useful when a person needs to understand a local observation and
 retain the evidence behind a decision. These walkthroughs use implemented
 features, with navigation reviewed at [`418fa54`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b).

@@ -1,6 +1,8 @@
 # Technical Deep Dive
 
-**Current source reading:** [`418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026 (America/Chicago).
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
+**Historical November 11 source reading:** [`418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026 (America/Chicago).
 These are implemented source boundaries. Regression tests and hosted results
 have narrower scope than installed-host or operational acceptance. Older pinned
 links and diagrams below retain their October 22 source basis; they are not new
@@ -150,11 +152,11 @@ rollback remain separate tools. Neither is operating-system recovery.
 
 ## Qualification and reproducibility
 
-The current browser profile is `playwright-1.64.0-native-focus-v1`. It checks an
-exact distributed driver module and modifies a temporary copy's one native-focus
+The maintained browser profile is `playwright-1.65.2-native-focus-v1`, qualified
+in merged PR #779. Its Linux closure has fifteen wheels and no pyee dependency. The helper checks an exact distributed driver module and modifies a temporary copy's one native-focus
 setting; it does not edit the installed driver. Lock hashes, isolated test
 profile and the browser assertion suite remain separate layers.
-[Dependency policy](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/dependency-policy.md).
+[Current dependency policy](https://github.com/bartytime4life/MEGALODON/blob/main/docs/dependency-policy.md).
 
 Core CI `39878396530`, Linux browser `39878396547` and CodeQL `39878396556`
 succeeded at the October 22 source `2cb706039724d9ea0bda09cbd3c17698b15ba55c`. These are historical workflow results, not a fresh

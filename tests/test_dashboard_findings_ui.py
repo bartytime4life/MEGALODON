@@ -69,3 +69,7 @@ def test_operations_apply_uses_same_caution_without_changing_defense_payload():
     assert "acknowledge_disruption:true" in FINDINGS_JS
     assert "S.planRequest.id" in FINDINGS_JS and "S.feed?.model.settings_sha256" in FINDINGS_JS
     assert 'innerHTML' not in FINDINGS_JS+CAUTION_JS
+
+
+def test_cadence_explains_actual_tolerance_and_missing_evidence_without_actions():
+    run_harness('findings_browser.cjs',code=FINDINGS_JS,html=FINDINGS_HTML,fixture=findings_fixture(),cadence=True)

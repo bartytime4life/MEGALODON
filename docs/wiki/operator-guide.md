@@ -1,6 +1,8 @@
 # Operator Guide
 
-> Operator navigation basis: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance. Historical evidence retains its own source pins.
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
+> Historical November 11 operator navigation basis: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance. Historical evidence retains its own source pins.
 
 The HUD combines evidence views with separately authorized local workflows. Read source, time, scope and action state before interpreting any display.
 

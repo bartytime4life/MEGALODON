@@ -1,6 +1,8 @@
 # Security Boundaries
 
-> Current source orientation: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). Earlier pinned links retain their historical source scope. This documents existing interfaces; it authorizes no model, sensor, service or firewall operation.
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
+> Historical November 11 source orientation: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). Earlier pinned links retain their historical source scope. This documents existing interfaces; it authorizes no model, sensor, service or firewall operation.
 
 The local HUD has real, scoped operator actions. Its safety depends on keeping evidence reads, model advice, configuration, privileged execution and acceptance distinct.
 
@@ -60,3 +62,15 @@ host restoration remains unavailable and `restore_eligible` is false. AIDE,
 dated reference context and AI commentary cannot change that boundary.
 [Receipt contract](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/host-backup-evidence.md) and
 [technical deep dive](technical-deep-dive.md#recovery-evidence-without-a-restore-engine).
+
+## Finite host-input protection and offline education
+
+The separately authorized host-input policy preserves tracked replies and approved
+client-scoped services while dropping other unsolicited inbound traffic during a
+kernel lease. Its counters do not prove attacks or AI use, and it does not patch
+allowed applications. [Host-protection contract](https://github.com/bartytime4life/MEGALODON/blob/main/docs/host-protection.md).
+
+The Help science lab runs only on hypothetical counts in browser memory. Its
+metrics and interval are educational arithmetic, not calibrated incident odds or
+response authority. The candidate also clears stale library action capabilities
+and serializes refreshes. [Current review](https://github.com/bartytime4life/MEGALODON/blob/main/docs/repo-app-review-2026-11-17.md).

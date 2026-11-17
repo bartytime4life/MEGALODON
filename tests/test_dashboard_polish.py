@@ -218,7 +218,11 @@ def test_help_routes_common_tasks_to_existing_gui_controls_and_keeps_commands_ad
                          or native_control or native_link)
             assert focusable and "disabled" not in attrs and attrs.get("type") != "hidden", (
                 f"Help route must move keyboard focus to its destination: {href}")
-    assert not any(item["tag"] in {"button", "form"} for item in help_elements), "Help links only navigate; they never execute a task"
+    for item in help_elements:
+        if item['tag'] in {'button', 'form'}:
+            assert item['tag']=='button' and item['attrs'].get('type')=='button'
+            assert 'data-lab-example' in item['attrs'], 'Help never starts a host workflow'
+            assert any('security-lab' in a['attrs'].get('class','').split() for a in item['ancestors'])
     advanced = next(item for item in help_elements if item["tag"] == "details" and "help-advanced" in item["attrs"].get("class", "").split())
     assert "open" not in advanced["attrs"], "advanced terminal instructions start collapsed"
     assert all(advanced in item["ancestors"] for item in help_elements if item["tag"] == "code")

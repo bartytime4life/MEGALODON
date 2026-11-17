@@ -257,3 +257,31 @@ The comparison uses the existing saved review and refresh path. It does not
 invoke a model when expanded, add confidence scores, or introduce automatic
 reanalysis of changed evidence. Source-retention checks and existing opt-in
 analysis scheduling still govern which reviews are available.
+
+## Status failure and recovery
+
+The library and pattern status pair is single-flight. While it is refreshing,
+maintenance actions are visibly disabled. A failed pair clears current action
+capability, reference results, learning/storage claims and selected-review
+verification; a late search response cannot restore them. A subsequent successful
+pair restores controls and source/learning status. Unsaved preferences stay in
+the form. This recovery does not automatically start a reference update or model.
+
+For an API-independent explanation of false alarms, denominators and uncertainty,
+open **Help → Explore security science**. The [offline lab](security-science-lab.md)
+uses hypothetical cases and links defensive lessons to the existing workflows.
+
+### Comparison integrity and timing explanations (November 17 candidate)
+
+Historical comparison hours now count only once when their complete baseline
+copies agree. Conflicting copies are excluded regardless of arrival order;
+comparisons still require 24 unambiguous eligible hours within seven days for
+the exact source/interface/measurement key. The returned coverage diagnostic
+explains the exclusion. Findings explains a cadence using its actual lower
+median and longest-minus-shortest gap, with its fixed 5% tolerance and the
+possibility of scheduled jobs, jitter or missing starts. These are review
+explanations, not new response permissions. See [the mathematical contract](science-and-math.md).
+
+Incomplete HTTP-successful status responses also enter the unavailable state;
+rendering failures cannot leave current action authority behind or terminate the
+refresh loop. A later valid pair recovers, preserving unsaved preference choices.

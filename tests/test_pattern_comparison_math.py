@@ -96,13 +96,9 @@ def test_comparison_history_is_partitioned_once_per_hour():
     assert Counted.key_reads <= len(previous), 'history selection must not rescan every baseline for every group'
 
 
-def test_history_keeps_eligibility_window_last_duplicate_and_source_dependencies():
+def test_history_keeps_eligibility_window_exact_copies_and_source_dependencies():
     previous = history()
-    # Duplicates replace the value for that same start; they add no sample.
-    replacement = deepcopy(previous[0])
-    replacement['protocols'] = {'TCP': 50, 'UDP': 50}
-    previous[0]['protocols'] = {'TCP': 90, 'UDP': 10}
-    previous.extend([replacement, dict(deepcopy(previous[1]), eligible=False),
+    previous.extend([deepcopy(previous[0]),
         dict(deepcopy(previous[0]), start=START),
         dict(deepcopy(previous[0]), start=START-7*86400-1)])
     result = shifts(compact_rows(75), previous)
@@ -110,12 +106,37 @@ def test_history_keeps_eligibility_window_last_duplicate_and_source_dependencies
     assert {finding['facts']['eligible_hours'] for finding in result} == {24}
     assert {finding['source_start'] for finding in result} == {utc(START-24*3600)}
     assert all(finding['source_segments'] == [SEGMENT] for finding in result)
-    # Another sensor, interface, address or measurement cannot train this group.
     for position, value in enumerate(('192.0.2.2', 'other0', 'other sensor', 'flow')):
         incompatible = deepcopy(previous)
         for baseline in incompatible:
             baseline['key'][position] = value
         assert not shifts(compact_rows(75), incompatible)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('protocols', {'TCP': 90, 'UDP': 10}),
+    ('eligible', False),
+    ('source_segments', ['b'*32]),
+])
+def test_conflicting_history_is_excluded_independent_of_arrival_order(field, value):
+    previous = history()
+    conflict = dict(deepcopy(previous[0]), **{field:value})
+    for ordered in (previous+[conflict], [conflict]+previous, list(reversed(previous+[conflict]))):
+        _, checks, gaps = analyze_hour(compact_rows(75), START, START+3600, ordered)
+        assert not checks, '23 unambiguous eligible hours cannot train a comparison'
+        assert gaps == ['Conflicting comparison-hour copies were excluded from learning.']
+    # A 25th unambiguous hour restores the minimum, with no dependency on the
+    # contradictory copies and no replay-order choice of the traffic mix.
+    extra = dict(deepcopy(previous[-1]), start=START-25*3600, end=START-24*3600)
+    outcomes=[]
+    for ordered in (previous+[conflict,extra], [extra,conflict]+previous):
+        _, checks, gaps = analyze_hour(compact_rows(75), START, START+3600, ordered)
+        outcomes.append(checks)
+        assert len(checks)==2
+        assert all(c['facts']['eligible_hours']==24 for c in checks)
+        assert all(c['source_segments']==[SEGMENT] and c['action_status']=='not_attempted' for c in checks)
+        assert all(gaps[0] in c['missing_information'] for c in checks)
+    assert outcomes[0]==outcomes[1]
 
 
 def test_inventory_uses_the_latest_prior_within_its_own_two_hour_window():

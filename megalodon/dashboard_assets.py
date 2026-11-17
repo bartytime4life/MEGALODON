@@ -758,7 +758,7 @@ const workspaceTargets = {
   ...Object.fromEntries(['core','tshark','zeek','suricata','scapy','nftables','clamav','osquery','qwen','nmap','lynis','aide'].map(id=>['setup-app-'+id,'setup'])),
   'support-host-security':'setup', 'support-config-clamav-title':'setup',
   ...Object.fromEntries(['zeek','suricata-setup','clamav-save','osquery','qwen-setup','nmap-save'].map(id=>['support-config-'+id,'setup'])),
-  'help-language': 'help', 'status-glossary': 'help'
+  'help-language': 'help', 'status-glossary': 'help', 'security-lab-title': 'help', 'host-protection-title': 'live'
 };
 const state = {
   events: [],
@@ -2200,6 +2200,7 @@ from .dashboard_ai_assets import AI_PANEL, AI_CSS, AI_JS
 from .dashboard_heartbeat import HEARTBEAT_CSS
 from .dashboard_intelligence import compose_intelligence, KNOWLEDGE_CSS, KNOWLEDGE_JS
 from .dashboard_polish import compose_polish, POLISH_CSS, POLISH_JS
+from .dashboard_security_lab import SECURITY_LAB_CSS, SECURITY_LAB_JS
 
 DASHBOARD_CSS += HOST_TELEMETRY_CSS + INVENTORY_CSS + CLAMAV_CSS + OSQUERY_CSS + REFERENCE_CONTRACT_CSS + ROOM_CSS + GLOBE_CSS + APP_VIEWER_CSS + AI_CSS + HEARTBEAT_CSS + ACTION_CSS + SUPPORT_APPS_CSS + SUPPORT_CONFIG_CSS + LIVE_GLOBE_CSS + WORKFLOWS_CSS + OPERATIONS_CSS + NETWORK_CSS + STORAGE_CSS + REPORTS_CSS
 INDEX_HTML = INDEX_HTML.replace("<!-- HUD_SETUP -->", SETUP_HTML)
@@ -2220,8 +2221,8 @@ INDEX_HTML = INDEX_HTML.replace(CLAMAV_HTML, CLAMAV_HTML + FILE_INSPECTION_HTML,
 INDEX_HTML = INDEX_HTML.replace('<span id="ops-status"', '<a class="companion-local-link" href="#file-inspection-title">Inspect a file →</a><span id="ops-status"', 1)
 INDEX_HTML = INDEX_HTML.replace('<div class="help-more-links" aria-label="More setup help">', '<div class="help-more-links" aria-label="More setup help"><a href="#file-inspection-title">Inspect a downloaded program</a>', 1)
 INDEX_HTML = INDEX_HTML.replace('<details><summary>What stays on this computer?</summary>', '<details><summary>How do I inspect a downloaded program?</summary><p>Open <a href="#file-inspection-title">Inspect a file</a> beside the saved ClamAV folder summary. Choose a program, then select Inspect. Choosing alone sends nothing. LIEF reads executable structure; Detect It Easy identifies compiler and packing clues. Each tool reports its own completion. Packing is also used by legitimate software. Read the coverage and unknowns before deciding what to do; these clues give no safety verdict.</p><p>File inspection requires local HUD sign-in. If this HUD has sign-in disabled, open <a href="#setup-account-title">Local sign-in in Setup</a>, prepare a protected launch, then open and sign in to that HUD. Preparing the command does not launch or restart anything.</p><p>The program is never run or unpacked. Its bytes go to this authenticated localhost HUD only after Inspect. Only the latest normalized metadata report remains in the HUD session. Export JSON saves that report without the selected filename, file contents, hashes, or paths. Optional inspector installation uses the authorized installer in Setup.</p></details><details><summary>What stays on this computer?</summary>', 1)
-DASHBOARD_CSS += FILE_INSPECTION_CSS + SETTINGS_CSS + MAP_CSS + KNOWLEDGE_CSS + HOST_PROTECTION_CSS + POLISH_CSS + FINDINGS_CSS + VISUAL_CONTROLS_CSS
-DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + SETTINGS_JS + VISUAL_CONTROLS_JS + CAUTION_JS + FINDINGS_JS + FILE_INSPECTION_JS + HOST_PROTECTION_JS + "\nbootstrap();\n"
+DASHBOARD_CSS += FILE_INSPECTION_CSS + SETTINGS_CSS + MAP_CSS + KNOWLEDGE_CSS + HOST_PROTECTION_CSS + SECURITY_LAB_CSS + POLISH_CSS + FINDINGS_CSS + VISUAL_CONTROLS_CSS
+DASHBOARD_JS += REFERENCE_CONTRACT_JS + LIFECYCLE_JS + READINESS_JS + CONTROLS_JS + SETUP_JS + INTEGRATIONS_JS + ROOM_JS + GLOBE_JS + APP_VIEWER_JS + AI_JS + ACTION_JS + TELEMETRY_CONNECTIONS_JS + INVENTORY_JS + CLAMAV_JS + OSQUERY_JS + COMPANION_JS + HOST_TELEMETRY_JS + SUPPORT_APPS_JS + SUPPORT_CONFIG_JS + LIVE_GLOBE_JS + WORKFLOWS_JS + OPERATIONS_JS + NETWORK_JS + STORAGE_JS + APPS_SETUP_JS + REPORTS_JS + KNOWLEDGE_JS + INVESTIGATION_JS + MAP_JS + POLISH_JS + SETTINGS_JS + VISUAL_CONTROLS_JS + CAUTION_JS + FINDINGS_JS + FILE_INSPECTION_JS + HOST_PROTECTION_JS + SECURITY_LAB_JS + "\nbootstrap();\n"
 
 DASHBOARD_JS = local_support_script(local_workflow_script(DASHBOARD_JS))
 INDEX_HTML = INDEX_HTML.replace('<section class="ops-desk" aria-labelledby="operations-title">', HOST_PROTECTION_HTML + '<section class="ops-desk" aria-labelledby="operations-title">', 1)

@@ -269,10 +269,19 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
     previous_by_key = _history_by_key(previous) if groups else {}
     for key,group in groups.items():
         key=list(key)
-        compatible=[p for p in previous_by_key.get(tuple(key), ()) if p.get('eligible')
-                    and start-7*86400<=p['start']<start]
-        # Deduplicate a repeated import or interrupted hourly pass.
-        compatible=list({p['start']:p for p in compatible}.values())
+        # One completed hour is one sample. Identical copies add no weight;
+        # conflicting copies cannot let arrival order choose what is normal.
+        by_hour={};conflicting=set()
+        for prior in previous_by_key.get(tuple(key), ()):
+            if not start-7*86400<=prior['start']<start:continue
+            hour=prior['start']
+            if hour in by_hour and by_hour[hour]!=prior:conflicting.add(hour)
+            else:by_hour[hour]=prior
+        compatible=[p for hour,p in sorted(by_hour.items())
+                    if hour not in conflicting and p.get('eligible')]
+        if conflicting:
+            gap='Conflicting comparison-hour copies were excluded from learning.'
+            if gap not in all_gaps:all_gaps.append(gap)
         samples=len(compatible)
         count=sum(group['protocols'].values())
         contaminated=(key[0],key[1],key[4] if len(key)==5 else None) in affected
@@ -355,7 +364,8 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
             if port not in known and n>=5 and len(results)<64:
                 protocol,number=port.split(':')
                 results.append(candidate('NEW_DESTINATION_PORT',key,start,end,dict(protocol=protocol,port=int(number),observations=n,eligible_hours=samples),
-                    group['refs'],segments,source_start=source_start))
+                    group['refs'],segments,source_start=source_start,
+                    gaps=([gap] if conflicting else ())))
         for field,rule in [('protocols','PROTOCOL_SHIFT'),('services','SERVICE_SHIFT')]:
             prior=Counter()
             for sample in compatible:prior.update(sample.get(field,{}))
@@ -369,7 +379,8 @@ def analyze_hour(rows, start, end, previous, *, gaps=()):
                 if n>=5 and 100*abs(delta)>=SHARE_SHIFT_POINTS*denominator and len(results)<64:
                     shift=float(round(Fraction(100*delta,denominator),1))
                     results.append(candidate(rule,key,start,end,dict(label=label,share_change_points=shift,observations=n,eligible_hours=samples),
-                        group['refs'],segments,source_start=source_start))
+                        group['refs'],segments,source_start=source_start,
+                        gaps=([gap] if conflicting else ())))
     all_gaps=list(dict.fromkeys(all_gaps))[:16]
     for baseline in baselines:baseline['gaps']=all_gaps
     return baselines,results,all_gaps

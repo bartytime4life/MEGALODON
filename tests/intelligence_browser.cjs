@@ -3,7 +3,9 @@ let input = '';
 process.stdin.on('data', value => input += value);
 process.stdin.on('end', async () => {
   const {code, scenario} = JSON.parse(input), nodes = new Map(), timers = new Map(), reads = [], listeners = new Map();
-  let serial = 0, enabled = scenario !== 'paused', explaining = false;
+  let serial = 0, enabled = scenario !== 'paused', explaining = false, statusFailed = false, statusMalformed=null, holdStatus=false, statusReads=0;
+  const heldStatus=[];
+  const writes = [];
   function node(tag = '') {
     return {tag, ownText: '', children: [], events: {}, attributes: {}, value: '', hidden: false,
       get textContent() { return this.ownText + this.children.map(child => child.textContent).join(' '); },
@@ -17,9 +19,9 @@ process.stdin.on('end', async () => {
   const get = id => { if (!nodes.has(id)) nodes.set(id, node()); return nodes.get(id); };
   get('knowledge-setup').attributes['aria-labelledby'] = 'knowledge-title';
   get('findings-workbench').attributes['data-findings-owned'] = 'true';
-  const knowledge = {state: 'ready', entries: 0, used_bytes: 0, sources: {}, generation: 'synthetic',
+  const knowledge = {schema:'megalodon-knowledge-v1',state: 'ready', entries: 0, used_bytes: 0, sources: {}, generation: 'synthetic',
     rollback_available: false, last_check: null, enabled: false, token: 'a'.repeat(32)};
-  const patterns = () => ({enabled, automatic: false, baseline: {ready_groups: 2, largest_group_hours: 24},
+  const patterns = () => ({schema:'megalodon-intelligence-v1',token:'b'.repeat(32),enabled, automatic: false, baseline: {ready_groups: 2, largest_group_hours: 24},
     unresolved: 0, reviews: [], gaps: [], truncated: false, job: {state: explaining ? 'running' : 'idle', message: 'Synthetic only.'}});
   const result = title => ({results: [{title, identifier: 'reference', edition: 'synthetic', url: 'https://example.test/', excerpt: title} ]});
   const response = (value, ok = true) => ({ok, text: async () => JSON.stringify(value)});
@@ -27,8 +29,16 @@ process.stdin.on('end', async () => {
     createElement: node, addEventListener(type, listener) { listeners.set(type, listener); }}, URL, AbortController,
     setTimeout(fn, delay) { const id = ++serial; timers.set(id, {fn, delay}); return id; },
     clearTimeout(id) { timers.delete(id); },
-    fetch(path) {
+    fetch(path, options) {
+      if(options?.method==='POST')writes.push({path, options});
       if (path.startsWith('/api/knowledge/search?') || path.startsWith('/api/intelligence?device=')) return new Promise((resolve, reject) => reads.push({path, resolve, reject}));
+      statusReads++;
+      if(holdStatus)return new Promise(resolve=>heldStatus.push({path,resolve}));
+      if(statusFailed)return Promise.resolve(response({error:'Synthetic refresh failure'},false));
+      if(path===statusMalformed){
+        const malformed=scenario.endsWith('-null')?null:scenario.endsWith('-boolean')?true:scenario.endsWith('-token')?{...knowledge,token:'invalid'}:scenario.endsWith('-count')?{...knowledge,entries:'0'}:scenario.endsWith('-setting')?{...patterns(),enabled:'false'}:{};
+        return Promise.resolve(response(malformed));
+      }
       return Promise.resolve(response(path === '/api/knowledge' ? knowledge : patterns()));
     }};
   vm.runInNewContext(code, context);
@@ -38,7 +48,31 @@ process.stdin.on('end', async () => {
   const edit = value => { get('ki-search').value = value; get('ki-search').events.input?.(); };
   const submit = () => get('ki-search-form').events.submit({preventDefault() {}});
   await poll();
-  if (scenario.startsWith('device-')) {
+  if (scenario === 'status-overlap') {
+    holdStatus=true;const before=statusReads;const loading=poll();await settle();
+    assert.equal(get('ki-save').disabled,true,'refresh admission is visibly disabled');
+    listeners.get('visibilitychange')();listeners.get('visibilitychange')();await settle();
+    assert.equal(statusReads,before+2,'visibility changes cannot overlap the active status pair');
+    assert.equal(heldStatus.length,2);
+    for(const item of heldStatus)item.resolve(response(item.path==='/api/knowledge'?knowledge:patterns()));
+    await loading;assert.equal(get('ki-save').disabled,false);
+    assert.equal(writes.length,0);
+  } else if (scenario === 'status-failure' || scenario.startsWith('status-malformed-')) {
+    assert.equal(get('ki-save').disabled,false);
+    edit('old search');const oldSearch=submit();await settle();
+    statusFailed=scenario==='status-failure';statusMalformed=scenario.startsWith('status-malformed-')?(scenario.endsWith('-patterns')||scenario.endsWith('-setting')?'/api/intelligence':'/api/knowledge'):null;await poll();
+    for(const id of ['ki-save','ki-update','ki-rollback','ki-cancel'])assert.equal(get(id).disabled,true,id);
+    assert.match(get('ki-library-state').textContent,/unavailable/);
+    assert.match(get('ki-learning').textContent,/unavailable/);
+    assert.equal(get('ki-sources').children.length,0);
+    reads[0].resolve(response(result('obsolete reference')));await oldSearch;
+    assert.doesNotMatch(get('ki-search-results').textContent,/obsolete reference/);
+    await get('ki-update').events.click();assert.equal(writes.length,0,'stale tokens cannot start maintenance');
+    statusFailed=false;statusMalformed=null;await poll();
+    assert.equal(get('ki-save').disabled,false);assert.equal(get('ki-update').disabled,false);
+    assert.doesNotMatch(get('ki-setup-status').textContent,/failure|unavailable/);
+    assert.match(get('ki-learning').textContent,/24 of 24/);
+  } else if (scenario.startsWith('device-')) {
     const choose = address => listeners.get('megalodon:endpoint-selected')({detail: address});
     const review = label => ({reviews: [{id: label, device: '192.0.2.1', label, interface: 'synthetic', measurement: 'metadata',
       what_happened: label + ' source facts', why_it_matters: 'Synthetic comparison.', what_you_can_do: 'Read the saved evidence.',

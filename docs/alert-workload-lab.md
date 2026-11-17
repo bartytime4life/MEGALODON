@@ -6,6 +6,14 @@ false-positive assumptions affect the number of units needing review.
 It does not measure the three MEGALODON rules, inspect traffic, train a model,
 or estimate whether an actual alert is malicious.
 
+## Browser companion
+
+**Help → Explore security science** adds a separate offline companion for integer
+TP/FP/FN/TN examples, explicit metric denominators and a hypothetical Wilson
+interval. It runs without the telemetry/reference APIs and changes no settings.
+[Inputs, formulas and sampling assumptions](security-science-lab.md). The pure
+CLI execution boundary and exact-fraction projection below are unchanged.
+
 ## Try a hypothetical scenario
 
 From the repository root in the supported Python environment:

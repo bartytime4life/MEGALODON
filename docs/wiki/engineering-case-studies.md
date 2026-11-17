@@ -1,5 +1,7 @@
 # Engineering Case Studies
 
+> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+
 > **Historical case studies:** The first four studies retain their October 11 source revision and recorded measurement scope. The November update below describes later source repairs separately. [Current documentation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation) and [the visual tour](visual-tour.md) provide the current orientation without rewriting historical results.
 
 Four examples show how MEGALODON connects product choices to implementation and evidence. Source links below are pinned to `4da7fae0d8df2d8cd6b3ff93964055f7e14972bb`. Linked tests describe regression protection; their existence alone is not a claim that every check passed or that a host was accepted.

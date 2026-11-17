@@ -469,3 +469,13 @@ A measurement change clears the active inspection and requires reselection.
 Malformed measurement data does not erase the linked finding. This view does
 not reconstruct the full evaluated event set, establish sensor completeness,
 change detector thresholds, or authorize any response.
+
+## Explore security science in Help
+
+Choose **Help → Explore security science** for the offline worked examples and
+defensive evidence lessons. Keyboard-activated presets compare rare/common
+conditions, editable TP/FP/FN/TN counts update the metric explanations, and invalid
+inputs hide stale results. The explicit denominators and sampling assumptions
+remain visible. [Lab guide](security-science-lab.md). **Protect incoming access to
+this PC** opens the existing finite policy workflow; each action retains its
+preview, audit and OS authorization requirements.
