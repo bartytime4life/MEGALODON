@@ -117,13 +117,15 @@ def test_projection_ai_and_snapshot_accept_every_threat_rule(tmp_path):
     if node:
         legacy = dict(snapshot, detectors=[0, 0, 0], findings=0, severities=[0, 0, 0, 0],
                       lanes=[snapshot["events"], 0, 0])
+        before_decoys = dict(legacy, detectors=[0] * 8)
         script = SNAPSHOT_VALIDATOR_JS + (
-            "\nconst [a,b]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-            "validateHudSnapshot(a);validateHudSnapshot(b);"
+            "\nconst [a,b,c]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+            "validateHudSnapshot(a);validateHudSnapshot(b);validateHudSnapshot(c);"
             "try{validateHudSnapshot(JSON.stringify(Object.assign(JSON.parse(a),{detectors:[1]})));"
             "process.exit(3)}catch(e){}")
         subprocess.run([node, "-e", script], check=True, timeout=10, text=True,
-                       input=json.dumps([json.dumps(snapshot), json.dumps(legacy)]))
+                       input=json.dumps([json.dumps(snapshot), json.dumps(legacy),
+                                         json.dumps(before_decoys)]))
 
 
 def test_every_catalog_rule_has_consumer_context():

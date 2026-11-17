@@ -61,6 +61,8 @@ _INTERNAL_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in (
     "169.254.0.0/16", "fc00::/7", "fe80::/10",
 ))
 _LIMITED_BROADCAST = ipaddress.ip_address("255.255.255.255")
+MAX_DECOY_PORTS = 64
+MAX_DECOY_ADDRESSES = 256
 
 
 def _microseconds(value: datetime) -> int:
@@ -116,8 +118,13 @@ class ThreatDetectionSettings:
     max_tracked_keys: int = 8192
     watchlist_path: str = ""
     watchlist_severity: str = "HIGH"
+    # Tripwires: ports no real service on this network uses, and unassigned
+    # internal addresses. Any contact is a near-certain sign of scanning.
+    decoy_ports: tuple[int, ...] = ()
+    decoy_addresses: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        self._validate_decoys()
         if self.watchlist_severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
             raise ValueError(
                 "threat_detection.watchlist_severity must be LOW, MEDIUM, HIGH or CRITICAL"
@@ -152,6 +159,37 @@ class ThreatDetectionSettings:
             raise ValueError("threat_detection.enabled must be a boolean")
         if not isinstance(self.watchlist_path, str) or len(self.watchlist_path) > 1024:
             raise ValueError("threat_detection.watchlist_path must be text")
+
+    def _validate_decoys(self) -> None:
+        ports = self.decoy_ports
+        if (not isinstance(ports, tuple) or len(ports) > MAX_DECOY_PORTS
+                or any(isinstance(p, bool) or not isinstance(p, int) or not 1 <= p <= 65535
+                       for p in ports)
+                or len(set(ports)) != len(ports)):
+            raise ValueError(
+                f"threat_detection.decoy_ports must be up to {MAX_DECOY_PORTS} distinct ports 1-65535"
+            )
+        addresses = self.decoy_addresses
+        if (not isinstance(addresses, tuple) or len(addresses) > MAX_DECOY_ADDRESSES
+                or not all(isinstance(a, str) for a in addresses)):
+            raise ValueError(
+                f"threat_detection.decoy_addresses must be up to {MAX_DECOY_ADDRESSES} addresses"
+            )
+        canonical = []
+        for text in addresses:
+            try:
+                parsed = _canonical(text)
+            except ValueError:
+                raise ValueError("threat_detection.decoy_addresses contains an invalid address") from None
+            if (parsed.is_multicast or parsed.is_unspecified or parsed.is_loopback
+                    or parsed == _LIMITED_BROADCAST):
+                raise ValueError(
+                    "threat_detection.decoy_addresses must be unicast, non-loopback addresses"
+                )
+            canonical.append(str(parsed))
+        if len(set(canonical)) != len(canonical):
+            raise ValueError("threat_detection.decoy_addresses must be distinct")
+        object.__setattr__(self, "decoy_addresses", tuple(canonical))
 
 
 class _Journal:
@@ -245,6 +283,8 @@ class ThreatDetector:
         self.settings = settings or ThreatDetectionSettings()
         self.allowlist = allowlist
         self.watchlist = watchlist
+        self._decoy_ports = frozenset(self.settings.decoy_ports)
+        self._decoy_addresses = frozenset(self.settings.decoy_addresses)
         # rule-scoped state maps; every key is also tracked in one LRU.
         self.brute: dict[tuple[str, str, int], deque[int]] = {}
         self.sweep: dict[str, OrderedDict[str, int]] = {}
@@ -275,7 +315,7 @@ class ThreatDetector:
                 now = _microseconds(event.observed_at)
                 src = str(_canonical(event.src_ip))
                 dst = str(_canonical(event.dst_ip))
-                for rule in (self._ioc, self._brute_force, self._host_sweep,
+                for rule in (self._decoy, self._ioc, self._brute_force, self._host_sweep,
                              self._exfiltration, self._beaconing):
                     found = rule(event, src, dst, now, journal, touched)
                     if found is not None:
@@ -298,6 +338,31 @@ class ThreatDetector:
         return True
 
     # ---------------------------------------------------------------- rules
+    def _decoy(self, event, src, dst, now, journal, touched):
+        settings = self.settings
+        if dst in self._decoy_addresses and src != dst:
+            kind, decoy = "address", dst
+        elif (event.dst_port in self._decoy_ports and src not in self._decoy_addresses
+              and (event.protocol == "UDP" or _connection_start(event))):
+            kind, decoy = "port", str(event.dst_port)
+        else:
+            return None
+        key = ("DECOY_TOUCH", (src, kind, decoy))
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        target = f"decoy address {dst}" if kind == "address" else f"decoy port {decoy}"
+        return self._result(
+            event, "DECOY_TOUCH", src,
+            f"{src} contacted {target}; nothing legitimate should ever reach it",
+            {
+                "contacts": 1,
+                "decoy_kind": kind,
+                "decoy": decoy,
+                "protocol": event.protocol,
+            },
+        )
+
     def _ioc(self, event, src, dst, now, journal, touched):
         if self.watchlist is None or not len(self.watchlist):
             return None
@@ -564,7 +629,7 @@ def registry_document() -> dict[str, object]:
         ],
         "default_settings": {
             k: v for k, v in settings.__dict__.items()
-            if k not in {"watchlist_path", "watchlist_severity"}
+            if k not in {"watchlist_path", "watchlist_severity", "decoy_ports", "decoy_addresses"}
         },
         "auth_services": {str(port): name for port, name in sorted(AUTH_SERVICES.items())},
         "state": {

@@ -49,7 +49,7 @@ def state(detector):
 def test_catalog_core_rules_match_the_specification_registry():
     assert set(rule_catalog.CORE_RULE_IDS) == set(RULE_IDS)
     assert set(rule_catalog.THREAT_RULE_IDS) == {
-        "BRUTE_FORCE", "HOST_SWEEP", "DATA_EXFILTRATION", "BEACONING", "IOC_MATCH"}
+        "BRUTE_FORCE", "HOST_SWEEP", "DATA_EXFILTRATION", "BEACONING", "DECOY_TOUCH", "IOC_MATCH"}
     assert not set(rule_catalog.THREAT_RULE_IDS) & set(RULE_IDS)
     assert '"BEACONING"' in rule_catalog.browser_constants()
 
@@ -416,3 +416,58 @@ def test_watchlist_fifo_is_refused_without_blocking():
         worker.join(5)
         assert not worker.is_alive(), "opening a writer-less FIFO blocked"
         assert outcome == ["watchlist must be a regular file"]
+
+
+# ------------------------------------------------------------------ decoys
+def test_decoy_address_and_port_are_high_confidence_tripwires():
+    settings = ThreatDetectionSettings(decoy_ports=(2222, 4455), decoy_addresses=("192.168.1.250",))
+    detector = ThreatDetector(settings)
+    found = detector.analyze(PacketEvent(T0, LAN_A, "192.168.1.250", "ICMP"))
+    assert rules(found) == ["DECOY_TOUCH"]
+    assert found[0].severity == "CRITICAL"
+    assert found[0].evidence["decoy_kind"] == "address"
+    assert found[0].evidence["response_target"] == LAN_A
+    port = detector.analyze(syn("198.51.100.4", LAN_B, 2222, T0 + timedelta(seconds=1)))
+    assert rules(port) == ["DECOY_TOUCH"] and port[0].evidence["decoy"] == "2222"
+    udp = detector.analyze(PacketEvent(T0 + timedelta(seconds=2), "198.51.100.5", LAN_B, "UDP",
+                                       dst_port=4455))
+    assert rules(udp) == ["DECOY_TOUCH"]
+
+
+def test_decoy_ignores_replies_and_cools_down_per_source_and_decoy():
+    settings = ThreatDetectionSettings(decoy_ports=(2222,), decoy_addresses=("192.168.1.250",))
+    detector = ThreatDetector(settings)
+    # An established-session packet to the port is not a new contact attempt.
+    assert detector.analyze(syn(LAN_A, LAN_B, 2222, T0, flags=("ACK",))) == []
+    # Traffic from the decoy address itself (e.g. an operator test box) is not a touch.
+    assert detector.analyze(syn("192.168.1.250", LAN_B, 2222, T0)) == []
+    assert rules(detector.analyze(syn(LAN_A, LAN_B, 2222, T0 + timedelta(seconds=1)))) == ["DECOY_TOUCH"]
+    assert detector.analyze(syn(LAN_A, LAN_B, 2222, T0 + timedelta(seconds=2))) == []
+    # A different source is a separate tripwire event.
+    assert rules(detector.analyze(syn(LAN_B, LAN_A, 2222, T0 + timedelta(seconds=3)))) == ["DECOY_TOUCH"]
+
+
+def test_no_decoys_configured_means_no_decoy_findings():
+    detector = ThreatDetector()
+    for port in (2222, 4455, 23):
+        assert "DECOY_TOUCH" not in rules(detector.analyze(syn(LAN_A, LAN_B, port, T0)))
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"decoy_ports": (0,)}, {"decoy_ports": (22, 22)}, {"decoy_ports": tuple(range(1, 66))},
+    {"decoy_addresses": ("224.0.0.251",)}, {"decoy_addresses": ("127.0.0.1",)},
+    {"decoy_addresses": ("bogus",)}, {"decoy_addresses": ("10.0.0.1", "::ffff:10.0.0.1")},
+])
+def test_decoy_settings_are_validated(kwargs):
+    with pytest.raises(ValueError):
+        ThreatDetectionSettings(**kwargs)
+
+
+def test_decoy_rollback_restores_cooldown():
+    detector = ThreatDetector(ThreatDetectionSettings(decoy_ports=(2222,)))
+    before = state(detector)
+    prepared = detector.prepare(syn(LAN_A, LAN_B, 2222, T0))
+    assert rules(prepared.results) == ["DECOY_TOUCH"]
+    prepared.rollback()
+    assert state(detector) == before
+    assert rules(detector.analyze(syn(LAN_A, LAN_B, 2222, T0))) == ["DECOY_TOUCH"]

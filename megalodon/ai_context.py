@@ -35,7 +35,7 @@ FLAGS = frozenset({"SYN", "ACK", "FIN", "RST", "PSH", "URG", "ECE", "CWR"})
 # tests/test_threat_integration.py keeps it equal to megalodon.rule_catalog.
 RULES = frozenset({
     "PORT_SCAN", "SYN_FLOOD", "DNS_TUNNELING", "BRUTE_FORCE", "HOST_SWEEP",
-    "DATA_EXFILTRATION", "BEACONING", "IOC_MATCH",
+    "DATA_EXFILTRATION", "BEACONING", "DECOY_TOUCH", "IOC_MATCH",
 })
 FACTS = frozenset({"protocol", "src_port", "dst_port", "tcp_flags", "findings"})
 MISSING_REASONS = frozenset({"not_collected", "not_qualified", "not_applicable"})

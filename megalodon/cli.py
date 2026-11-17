@@ -167,6 +167,33 @@ def build_parser() -> argparse.ArgumentParser:
     watch_import.add_argument("--output", type=Path, required=True)
     watch_import.add_argument("--replace", action="store_true", help="overwrite an existing output")
 
+    canary = sub.add_parser(
+        "canary", help="plant and check bait files that reveal reading, change or deletion"
+    )
+    canary_sub = canary.add_subparsers(dest="canary_command", required=True)
+    canary_plant = canary_sub.add_parser("plant", help="create bait files and an owner-private manifest")
+    canary_plant.add_argument("--dir", type=Path, required=True, help="existing directory for the bait")
+    canary_plant.add_argument("--manifest", type=Path, required=True,
+                              help="manifest path outside the bait directory")
+    canary_plant.add_argument("--count", type=_bounded_cli_integer("count", 1, 5), default=3)
+    canary_plant.add_argument("--replace", action="store_true", help="overwrite an existing manifest")
+    for name, text in (("check", "report removed, changed or read canaries (exit 1 when tripped)"),
+                       ("rearm", "after review, reset canaries so new reads are detected")):
+        command = canary_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, required=True)
+
+    auth = sub.add_parser(
+        "auth-review",
+        help="review an auth log for brute force, spraying and suspicious logins (exit 1 on HIGH+)",
+    )
+    auth.add_argument("--input", required=True,
+                      help="auth log path (e.g. /var/log/auth.log), or - for journalctl -o short-iso on stdin")
+    auth.add_argument("--utc", action="store_true",
+                      help="classic syslog stamps are UTC rather than this computer's local time")
+    auth.add_argument("--emit-watchlist", type=Path,
+                      help="write attacking addresses to an owner-private IOC watchlist file")
+    auth.add_argument("--replace", action="store_true", help="overwrite an existing watchlist output")
+
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     run.add_argument("--source", choices=("sample", "jsonl", "scapy"), default=None)
@@ -931,6 +958,50 @@ def _reconciliation_message() -> str:
     )
 
 
+def _canary(args: argparse.Namespace) -> int:
+    from . import canary
+    from .validation import ValidationError
+
+    try:
+        if args.canary_command == "plant":
+            result = canary.plant(str(args.dir), str(args.manifest), count=args.count,
+                                  replace=args.replace)
+        elif args.canary_command == "check":
+            result = canary.check(str(args.manifest))
+        else:
+            result = canary.rearm(str(args.manifest))
+    except (ValidationError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 1 if result.get("tripped") else 0
+
+
+def _auth_review(args: argparse.Namespace) -> int:
+    from datetime import timezone
+
+    from .auth_review import read_lines, review
+    from .validation import ValidationError
+    from .watchlist import parse_indicator, render, write_private
+
+    try:
+        report, reviewer = review(read_lines(args.input), source=args.input,
+                                  zone=timezone.utc if args.utc else None)
+        if args.emit_watchlist is not None:
+            entries = [(parse_indicator(address), label)
+                       for address, label in reviewer.attacker_sources()]
+            write_private(args.emit_watchlist,
+                          render(entries, "attacking addresses from megalodon auth-review"),
+                          replace=args.replace)
+            report["watchlist_written"] = {"path": str(args.emit_watchlist),
+                                           "indicators": len(entries)}
+    except (ValidationError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 1 if report["severity_counts"]["CRITICAL"] or report["severity_counts"]["HIGH"] else 0
+
+
 def _detectors() -> int:
     from .detector_registry import registry_document as core_registry
     from .threat_detector import registry_document as threat_registry
@@ -1521,6 +1592,10 @@ def main(argv: list[str] | None = None) -> None:
         code = _automation_preview(args)
     elif args.command == "run":
         code = _run(args)
+    elif args.command == "canary":
+        code = _canary(args)
+    elif args.command == "auth-review":
+        code = _auth_review(args)
     elif args.command == "detectors":
         code = _detectors()
     elif args.command == "watchlist":

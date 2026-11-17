@@ -14,6 +14,7 @@ CONTEXT = {
     'HOST_SWEEP': 'This detector counts distinct private, CGNAT, link-local or unique-local destinations per source; NAT can merge many devices into one source and ARP or neighbor discovery is not observed (RFC 1918, RFC 6598, RFC 4193).',
     'DATA_EXFILTRATION': 'This detector sums reported bytes from an internal source to one public destination. Reported bytes include headers and retransmissions and do not reveal content (RFC 9293).',
     'BEACONING': 'This detector compares intervals between connection starts to one public address and port. NAT keep-alives, QUIC and TCP keep-alive timers can produce regular timing (RFC 4787, RFC 9000, RFC 9293).',
+    'DECOY_TOUCH': 'A decoy is a port or unassigned address that no service uses, so contact implies discovery. Address spoofing, broadcast-to-unicast relays and stale ARP or DNS entries can still produce stray packets (RFC 1918, RFC 826).',
     'IOC_MATCH': 'An indicator matches an address, not an actor. Address reassignment, NAT and shared hosting make IP indicators decay quickly (RFC 4787).',
     'PORT_53_BURST': 'DNS can use UDP, TCP, TLS or HTTPS. Port 53 observations are not a count of parsed DNS questions (RFC 7766, RFC 7858, RFC 8484).',
     'NEW_DESTINATION_PORT': 'A transport port is not an application identity. QUIC uses UDP, while TLS protects application data (RFC 9000, RFC 8446).',

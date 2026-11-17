@@ -41,6 +41,11 @@ max_tracked_keys = 8192
 # Optional owner-private IP/CIDR indicator file; empty disables IOC_MATCH.
 watchlist_path = ""
 watchlist_severity = "HIGH"
+# Tripwires: ports no service on your network uses, and unassigned internal
+# addresses. Any contact raises a CRITICAL DECOY_TOUCH finding.
+# Example: decoy_ports = [2222, 3390, 4455]; decoy_addresses = ["192.168.1.250"]
+decoy_ports = []
+decoy_addresses = []
 
 [blocking]
 # Keep this false; this evaluation-release candidate produces firewall plans only.
