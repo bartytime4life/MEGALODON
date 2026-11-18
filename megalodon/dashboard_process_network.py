@@ -36,7 +36,7 @@ function validProcessNetwork(p) {
     &&count(r.established)&&count(r.listening)&&count(r.other)&&r.established+r.listening+r.other>0
     &&Array.isArray(r.remotes)&&r.remotes.length<=__REMOTES__&&r.remotes.every(endpoint)&&new Set(r.remotes).size===r.remotes.length
     &&count(r.remotes_total)&&r.remotes_total>=r.remotes.length
-    &&Array.isArray(r.flags)&&r.flags.length<=2&&r.flags.every(f=>Object.hasOwn(rules,f))&&new Set(r.flags).size===r.flags.length;
+    &&Array.isArray(r.flags)&&r.flags.length<=Object.keys(rules).length&&r.flags.every(f=>Object.hasOwn(rules,f))&&new Set(r.flags).size===r.flags.length;
   return keys(p,['schema','reviewed_at','programs','programs_total','flagged_total','processes_reviewed','tables_complete','scan_complete','gaps','action_status','action_authority'])
     &&p.schema===__SCHEMA__&&p.action_authority==='none'&&p.action_status==='not_attempted'&&stamp(p.reviewed_at)
     &&Array.isArray(p.programs)&&p.programs.length<=__PROGRAMS__&&p.programs.every(program)

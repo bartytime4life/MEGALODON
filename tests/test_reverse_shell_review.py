@@ -110,7 +110,10 @@ def test_reverse_shell_rows_render_in_the_hud(root):
     process(root, 100, "/usr/bin/bash", {0: "socket:501", 1: "socket:501"})
     process(root, 120, "/usr/bin/dash", {0: "pipe:900"}, comm="sh")
     process(root, 121, "/usr/bin/nc", {1: "pipe:900", 3: "socket:503"})
+    # Executable flags combine with reverse-shell flags; the whole review must still render.
+    process(root, 161, "/tmp/.x/bash (deleted)", {0: "socket:501"}, comm="bash")
     result = process_network.review(root, uid=UID, now=NOW)
+    assert max(len(row["flags"]) for row in result["programs"]) == 3
     script = PROCESS_NETWORK_JS + """
 const input=JSON.parse(require('fs').readFileSync(0,'utf8'));
 function el(){const n={textContent:'',children:[],dataset:{},append(...x){this.children.push(...x);},replaceChildren(...x){this.children=x;}};return n;}
@@ -123,4 +126,5 @@ const text=n=>n.textContent+' '+n.children.map(text).join(' ');process.stdout.wr
     assert out.returncode == 0, out.stderr
     assert "Possible reverse shell: shell input/output on the network · ATT&CK T1059" in out.stdout
     assert "Network connection piped into a shell · ATT&CK T1059.004" in out.stdout
+    assert "Program file deleted" in out.stdout and "Program in a temporary folder" in out.stdout
     assert "undefined" not in out.stdout
