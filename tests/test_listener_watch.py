@@ -218,3 +218,21 @@ def test_a_port_with_some_ownerless_sockets_is_a_gap(tmp_path):
     snap = lw.snapshot(root=fake_proc(tmp_path / "p", sockets, {400: ("/usr/bin/caddy", "caddy", [401])}))
     assert snap["listeners"]["tcp:8080"]["owners_known"] is False
     assert snap["gaps"] == ["some sockets have no visible owner on tcp:8080; a change of owner is not checked there"]
+
+
+def test_a_truncated_address_list_is_not_proof_of_new_reach(tmp_path, monkeypatch):
+    monkeypatch.setattr(lw, "MAX_ADDRESSES", 4)
+    owner = {500: ("/usr/bin/caddy", "caddy", list(range(501, 507)))}
+    five = [("tcp", f"10.0.0.{i}", 8080, "0A", 500 + i) for i in range(1, 6)]
+    old = lw.snapshot(root=fake_proc(tmp_path / "old", five, owner))
+    assert old["listeners"]["tcp:8080"]["addresses_complete"] is False
+    narrowed = lw.snapshot(root=fake_proc(tmp_path / "narrow", five[1:], owner))
+    assert lw.compare(old, narrowed)[0] == [], "an address that only moved into view is not new reach"
+    complete = lw.snapshot(root=fake_proc(tmp_path / "complete", five[:3], owner))
+    grown = lw.snapshot(root=fake_proc(tmp_path / "grown", five[:3] + [("tcp", "10.0.0.9", 8080, "0A", 506)], owner))
+    assert by_key(lw.compare(complete, grown)[0])[("LISTENER_EXPOSED", "tcp:8080")]["detail"]["added_addresses"] == \
+        ["10.0.0.9:8080"]
+    legacy = {"listeners": {"tcp:8080": {k: v for k, v in old["listeners"]["tcp:8080"].items()
+                                         if k != "addresses_complete"}}}
+    legacy["listeners"]["tcp:8080"]["addresses"] = [f"10.0.0.{i}:8080" for i in range(10, 26)]
+    assert lw.compare(legacy, grown)[0] == [], "a 16-address legacy baseline may have been truncated"
