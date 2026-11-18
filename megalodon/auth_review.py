@@ -56,6 +56,8 @@ SEVERITY = {
     "PASSWORD_SPRAY": "HIGH", "SUDO_DENIED": "HIGH", "PRIVILEGE_GRANT": "HIGH",
     "SUDO_FAILURES": "MEDIUM", "ACCOUNT_CREATED": "MEDIUM",
 }
+_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+NETWORK_RULES = frozenset({"AUTH_FAILURE_BURST", "PASSWORD_SPRAY", "AUTH_SUCCESS_AFTER_FAILURES"})
 ATTACK = {
     "AUTH_SUCCESS_AFTER_FAILURES": ["T1110", "T1078"], "AUTH_FAILURE_BURST": ["T1110.001"],
     "PASSWORD_SPRAY": ["T1110.003"], "SUDO_DENIED": ["T1548.003"],
@@ -202,7 +204,12 @@ class AuthReviewer:
         self.sudo: OrderedDict[str, deque[datetime]] = OrderedDict()
         self.pending_invalid: OrderedDict[str, tuple[str, str]] = OrderedDict()
         self.emitted: OrderedDict[tuple[str, str], datetime] = OrderedDict()
-        self.findings: list[dict[str, Any]] = []
+        # Retained findings are bounded for display; totals and attacker sources
+        # are tracked for every emitted finding so the cap never hides an attack.
+        self._retained: list[tuple[int, dict[str, Any]]] = []
+        self._sequence = 0
+        self.severity_totals: Counter[str] = Counter()
+        self.sources: OrderedDict[str, str] = OrderedDict()
         self.truncated = False
         self.stats = Counter()
         self.failures_by_source: Counter[str] = Counter()
@@ -388,17 +395,37 @@ class AuthReviewer:
         self.emitted.move_to_end(marker)
         while len(self.emitted) > MAX_TRACKED_KEYS:
             self.emitted.popitem(last=False)
-        if len(self.findings) >= MAX_FINDINGS:
-            self.truncated = True
-            return
-        self.findings.append({
-            "rule_id": rule, "severity": SEVERITY[rule], "observed_at": when.isoformat(),
+        severity = SEVERITY[rule]
+        self.severity_totals[severity] += 1
+        source = evidence.get("source")
+        if rule in NETWORK_RULES and source:
+            parsed = ipaddress.ip_address(source)
+            if not (parsed.is_loopback or parsed.is_unspecified) and source not in self.sources:
+                self.sources[source] = f"auth-review {rule}"
+                while len(self.sources) > MAX_TRACKED_KEYS:
+                    self.sources.popitem(last=False)
+        finding = {
+            "rule_id": rule, "severity": severity, "observed_at": when.isoformat(),
             "subject": subject, "message": message, "evidence": evidence,
             "attack": ATTACK[rule],
-        })
+        }
+        self._sequence += 1
+        if len(self._retained) < MAX_FINDINGS:
+            self._retained.append((self._sequence, finding))
+            return
+        self.truncated = True
+        # Keep the most severe: replace the newest of the least severe retained findings.
+        worst = max(range(len(self._retained)),
+                    key=lambda i: (_RANK[self._retained[i][1]["severity"]], self._retained[i][0]))
+        if _RANK[severity] < _RANK[self._retained[worst][1]["severity"]]:
+            self._retained[worst] = (self._sequence, finding)
+
+    @property
+    def findings(self) -> list[dict[str, Any]]:
+        return [finding for _, finding in sorted(self._retained, key=lambda item: item[0])]
 
     def report(self, source: str) -> dict[str, Any]:
-        severities = Counter(item["severity"] for item in self.findings)
+        severities = self.severity_totals
         return {
             "schema": SCHEMA,
             "source": source,
@@ -431,16 +458,7 @@ class AuthReviewer:
 
     def attacker_sources(self) -> list[tuple[str, str]]:
         """Addresses behind network-attributable findings, for an optional watchlist."""
-        result: dict[str, str] = {}
-        for item in self.findings:
-            source = item["evidence"].get("source")
-            if source and item["rule_id"] in {"AUTH_FAILURE_BURST", "PASSWORD_SPRAY",
-                                              "AUTH_SUCCESS_AFTER_FAILURES"}:
-                parsed = ipaddress.ip_address(source)
-                if parsed.is_loopback or parsed.is_unspecified:
-                    continue
-                result.setdefault(source, f"auth-review {item['rule_id']}")
-        return sorted(result.items())
+        return sorted(self.sources.items())
 
 
 def read_lines(path: str) -> Iterable[bytes]:

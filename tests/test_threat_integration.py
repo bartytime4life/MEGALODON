@@ -182,3 +182,17 @@ def test_configured_watchlist_drives_ioc_and_unreadable_one_refuses_startup(tmp_
 def test_shipped_settings_file_matches_code_defaults():
     shipped = load_settings(Path(__file__).resolve().parents[1] / "config" / "settings.toml")
     assert shipped.threat == ThreatDetectionSettings()
+
+
+def test_legacy_snapshot_detector_counts_keep_their_original_labels():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node unavailable")
+    script = SNAPSHOT_VALIDATOR_JS + (
+        "\nconst out={};for(const n of [3,8,9])out[n]=snapshotDetectorLabels(n);"
+        "process.stdout.write(JSON.stringify(out));")
+    labels = json.loads(subprocess.run([node, "-e", script], check=True, timeout=10, text=True,
+                                       capture_output=True).stdout)
+    assert labels["3"] == ["SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING"]
+    assert labels["8"][-1] == "IOC_MATCH" and "DECOY_TOUCH" not in labels["8"]
+    assert labels["9"] == list(rule_catalog.ALL_RULE_IDS)

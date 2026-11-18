@@ -28,7 +28,7 @@ from .support_services import QWEN_LOCAL_SCRIPT, SURICATA_SCRIPT
 from .desktop_notifications import DesktopNotifications
 from .suricata_rules import SuricataRules
 from .host_security import HostSecurity
-from . import backup_evidence, gateway_review, hardening_review, persistence_review, process_network, recovery_readiness
+from . import backup_evidence, gateway_review, hardening_review, host_tripwires, persistence_review, process_network, recovery_readiness
 from .tool_locations import EXECUTABLES, load_directories, save_directory, valid_directory
 
 
@@ -55,6 +55,8 @@ PERSISTENCE_TTL = 300
 GATEWAY_TTL = 10
 # The process review walks this account's open files, so it also refreshes off the request path.
 PROCESS_TTL = 15
+# Canary checks are stat-only; auth logs are bounded at 64 MiB and read in the background.
+TRIPWIRES_TTL = 120
 ACTION_FIELDS = {
     'startup_check':set(), 'startup_enable':set(), 'startup_disable':set(), 'startup_services':set(),
     'security_audit':set(), 'security_baseline':set(), 'security_check':set(), 'security_refresh':set(),
@@ -246,7 +248,7 @@ class SupportConfiguration:
         self.host_security = HostSecurity(self.home)
         # Cached read-only reviews; one run per TTL window, even when several HUD requests arrive together.
         self._reviews = {}
-        self._review_locks = dict(hardening=Lock(), persistence=Lock(), gateway=Lock(), process=Lock())
+        self._review_locks = dict(hardening=Lock(), persistence=Lock(), gateway=Lock(), process=Lock(), tripwires=Lock())
         # First MAC address seen for each gateway in this HUD session; never written to disk.
         self._gateway_session = {}
         # Reviews that read many files refresh off the request path. A generation bump
@@ -451,6 +453,11 @@ class SupportConfiguration:
         """This account's programs with network sockets, refreshed at most once per PROCESS_TTL seconds in the background."""
         return self._background('process', PROCESS_TTL, process_network.review, process_network.SCHEMA)
 
+    def _tripwires_snapshot(self):
+        """Canary files and auth-log review, refreshed at most once per TRIPWIRES_TTL seconds in the background."""
+        return self._background('tripwires', TRIPWIRES_TTL, lambda: host_tripwires.review(self.home),
+                                host_tripwires.SCHEMA)
+
     def scanner_check_status(self):
         with self._lock:
             return dict(self._scanner_check)
@@ -461,6 +468,7 @@ class SupportConfiguration:
         persistence = self._persistence_snapshot()
         gateway = self._gateway_snapshot()
         process = self._process_snapshot()
+        tripwires = self._tripwires_snapshot()
         try:
             tool_directories = load_directories(self.home)
             tool_directories_status = 'ready'
@@ -480,6 +488,7 @@ class SupportConfiguration:
                          host_security=host_security, recovery_readiness=recovery_readiness.review(host_security),
                          backup_evidence=backups,
                          hardening=hardening, persistence=persistence, gateway=gateway, process_network=process,
+                         host_tripwires=tripwires,
                          tools=deepcopy(list(self._tools.values())), command=COMMAND)
             value['model']['keep_ready'] = self._model_keep_ready
             value['model']['lifecycle'] = self.model_lifecycle.snapshot()
