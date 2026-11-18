@@ -54,8 +54,11 @@ listed as gaps.
 logrotate renames a log (`auth.log` → `auth.log.1` or `auth.log-20261118`),
 compresses it (`auth.log.1.gz`) or copies and truncates it (`copytruncate`).
 A change is reported as *rotated*, not as a finding, when a sibling with one
-of those names is the recorded file or starts with the recorded content.
-Compressed siblings are read transparently.
+of those names still holds the recorded content: at least the recorded size,
+starting with the recorded first bytes. That also covers a `copytruncate` log
+that has grown past its old size again. A rotated copy that was emptied
+afterwards is reported as `LOG_TRUNCATED`, naming the copy. Compressed
+siblings are read transparently.
 
 ## What is stored
 

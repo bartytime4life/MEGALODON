@@ -121,34 +121,60 @@ def snapshot(*, root='/', patterns=LOGS):
 
 
 def _rotated(path, recorded):
-    """A sibling such as name.1 or name.1.gz that is the recorded file or starts with its content."""
+    """A sibling such as name.1 or name.1.gz that still holds the recorded content.
+
+    Being the recorded file (same inode) is not enough: a rotated copy that
+    was emptied afterwards no longer holds anything. The sibling must keep at
+    least the recorded size and start with the recorded first bytes."""
     for candidate in sorted(glob.glob(path + '.*') + glob.glob(path + '-*'))[:64]:
         try:
             info = os.lstat(candidate)
         except OSError:
             continue
-        if not stat.S_ISREG(info.st_mode):
-            continue
-        if (info.st_dev, info.st_ino) == (recorded.get('device'), recorded.get('inode')):
+        if stat.S_ISREG(info.st_mode) and _holds(candidate, info, recorded):
             return os.path.basename(candidate)
-        head = _head(candidate)
-        if head and recorded.get('head_bytes') and head[1] >= recorded['head_bytes']:
-            # Compare the same number of leading bytes as the record.
-            data_digest = _prefix_digest(candidate, recorded['head_bytes'])
-            if data_digest == recorded['head']:
-                return os.path.basename(candidate)
     return None
 
 
-def _prefix_digest(path, length):
+def _shrunk_rotation(path, recorded):
+    """The recorded file under a rotated name, no longer holding the recorded content."""
+    for candidate in sorted(glob.glob(path + '.*') + glob.glob(path + '-*'))[:64]:
+        try:
+            info = os.lstat(candidate)
+        except OSError:
+            continue
+        if (info.st_dev, info.st_ino) == (recorded.get('device'), recorded.get('inode')):
+            return os.path.basename(candidate), info.st_size
+    return None
+
+
+def _holds(path, info, recorded):
+    length, size = recorded.get('head_bytes', 0), recorded.get('size', 0)
+    if not path.endswith('.gz') and info.st_size < size:
+        return False
     try:
         if path.endswith('.gz'):
             with gzip.open(path, 'rb') as stream:
                 data = stream.read(length)
+                total = len(data)
+                while total < size:  # Bounded by the recorded size.
+                    chunk = stream.read(min(1 << 20, size - total))
+                    if not chunk:
+                        return False
+                    total += len(chunk)
         else:
             with open(path, 'rb') as stream:
                 data = stream.read(length)
-    except (OSError, EOFError):
+    except (OSError, EOFError, gzip.BadGzipFile):
+        return False
+    return len(data) == length and hashlib.sha256(data).hexdigest() == recorded['head']
+
+
+def _prefix_digest(path, length):
+    try:
+        with open(path, 'rb') as stream:
+            data = stream.read(length)
+    except OSError:
         return None
     return hashlib.sha256(data).hexdigest()
 
@@ -164,12 +190,19 @@ def compare(old, new, *, root='/'):
         def finding(rule, detail):
             findings.append(dict(rule_id=rule, severity=SEVERITY[rule], log=name, technique=TECHNIQUE,
                                  detail=detail))
+        def lost(rule, detail):
+            """No rotated copy holds the recorded content: say whether the rotated file was cut."""
+            shrunk = _shrunk_rotation(path, before)
+            if shrunk:
+                finding('LOG_TRUNCATED', dict(previous_size=before['size'], rotated_to=shrunk[0], size=shrunk[1]))
+            else:
+                finding(rule, detail)
         if after is None:
             sibling = _rotated(path, before)
             if sibling:
                 rotated.append(dict(log=name, rotated_to=sibling))
             else:
-                finding('LOG_DELETED', dict(previous_size=before['size']))
+                lost('LOG_DELETED', dict(previous_size=before['size']))
             continue
         if after.get('kind') != 'file':
             finding('LOG_REPLACED', dict(now='not a regular file'))
@@ -180,12 +213,18 @@ def compare(old, new, *, root='/'):
             if sibling:
                 rotated.append(dict(log=name, rotated_to=sibling))
             elif not same_file:
-                finding('LOG_REPLACED', dict(previous_size=before['size'], size=after['size']))
+                lost('LOG_REPLACED', dict(previous_size=before['size'], size=after['size']))
             else:
                 finding('LOG_TRUNCATED', dict(previous_size=before['size'], size=after['size']))
         elif (os.path.basename(name) not in IN_PLACE and before['head_bytes']
               and _prefix_digest(path, before['head_bytes']) != before['head']):
-            finding('LOG_REWRITTEN', dict(previous_size=before['size'], size=after['size']))
+            # copytruncate keeps the inode; the log may have grown back past
+            # its recorded size before this check.
+            sibling = _rotated(path, before)
+            if sibling:
+                rotated.append(dict(log=name, rotated_to=sibling))
+            else:
+                finding('LOG_REWRITTEN', dict(previous_size=before['size'], size=after['size']))
         writable = int(after['mode'], 8) & 0o002 and not int(before['mode'], 8) & 0o002
         if writable or after['uid'] != before['uid']:
             finding('LOG_PERMISSIONS', {k: [before[k], after[k]] for k in ('mode', 'uid') if before[k] != after[k]})

@@ -131,3 +131,33 @@ def test_cli_exit_codes(logs, monkeypatch, capsys):
     assert code("logwatch", "check", "--manifest", str(manifest)) == 1
     assert json.loads(capsys.readouterr().out)["findings"][0]["rule_id"] == "LOG_TRUNCATED"
     assert code("logwatch", "check", "--manifest", str(Path(manifest).with_name("none.json"))) == 2
+
+
+@pytest.mark.parametrize("replacement", [True, False])
+def test_a_rotated_copy_that_was_emptied_is_truncation(logs, replacement):
+    folder, options, manifest = logs
+    log = folder / "auth.log"
+    log.rename(folder / "auth.log.1")
+    if replacement:
+        log.write_text("", encoding="utf-8")
+    os.truncate(folder / "auth.log.1", 0)
+    found, report = rules(manifest, options)
+    assert found == {("LOG_TRUNCATED", "/var/log/auth.log")} and report["rotated"] == []
+    detail = report["findings"][0]["detail"]
+    assert detail["rotated_to"] == "auth.log.1" and detail["size"] == 0
+
+
+def test_copytruncate_then_regrowth_past_the_recorded_size_is_rotation(logs):
+    folder, options, manifest = logs
+    log = folder / "auth.log"
+    shutil.copy(log, folder / "auth.log.1")
+    os.truncate(log, 0)
+    later = "".join(f"Nov 18 10:{i // 60:02d}:{i % 60:02d} host service[1]: later entry {i}\n" for i in range(300))
+    with open(log, "a", encoding="utf-8") as out:
+        out.write(later)
+    assert log.stat().st_size > len(LINES)
+    found, report = rules(manifest, options)
+    assert found == set() and report["rotated"] == [dict(log="/var/log/auth.log", rotated_to="auth.log.1")]
+    os.truncate(folder / "auth.log.1", 1000)
+    found, _ = rules(manifest, options)
+    assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}, "a cut-down copy no longer explains the change"
