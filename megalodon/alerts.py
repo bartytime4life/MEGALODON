@@ -340,9 +340,20 @@ class Channel:
             return True
         return False
 
+    def _count(self, **changes):
+        # offer() runs on the capture thread; every counter change shares its lock.
+        with self.condition:
+            for name, amount in changes.items():
+                if name == 'suppressed':
+                    self.suppressed += amount
+                else:
+                    self.stats[name] += amount
+
     def deliver(self, detection):
         """Send one finding now, with retries; True when the destination accepted it."""
-        value = record(detection, self.settings.detail, self.settings.sensor_name, self.suppressed)
+        with self.condition:
+            reported = self.suppressed
+        value = record(detection, self.settings.detail, self.settings.sensor_name, reported)
         for delay in RETRY_DELAYS:
             if delay:
                 self.sleep(delay)
@@ -352,11 +363,10 @@ class Channel:
                 # Only the error class: messages can echo the URL and its token.
                 self.stats['last_error'] = type(exc).__name__
                 continue
-            self.stats['sent'] += 1
-            self.suppressed = 0
+            # Clear only what this alert reported; drops counted meanwhile stay for the next one.
+            self._count(sent=1, suppressed=-reported)
             return True
-        self.stats['failed'] += 1
-        self.suppressed += 1
+        self._count(failed=1, suppressed=1)
         log.warning('alert destination %s did not accept a finding (%s)', self.destination.name,
                     self.stats['last_error'])
         return False
@@ -370,8 +380,7 @@ class Channel:
                     return
                 detection = self.queue.popleft()
             if not self._allow():
-                self.stats['rate_limited'] += 1
-                self.suppressed += 1
+                self._count(rate_limited=1, suppressed=1)
                 continue
             self.deliver(detection)
 
