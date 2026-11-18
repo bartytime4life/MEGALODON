@@ -13,6 +13,7 @@ from .validation import (
     parse_ja3,
     parse_ja4,
     parse_ip,
+    parse_mac,
     parse_nonnegative_int,
     parse_port,
     parse_timestamp,
@@ -46,6 +47,14 @@ class PacketEvent:
     tls_ja3: str | None = None
     tls_ja4: str | None = None
     tls_sni: str | None = None
+    # Transient and opt-in ([threat_detection] lan_integrity): an ARP frame's
+    # opcode and sender hardware address (src_ip/dst_ip are its sender and
+    # target protocol addresses), and a DHCP reply's message type and server
+    # identifier. Never stored; only a flagged binding or server is retained.
+    arp_opcode: int | None = None
+    arp_sender_mac: str | None = None
+    dhcp_message_type: int | None = None
+    dhcp_server_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "observed_at", parse_timestamp(self.observed_at))
@@ -92,6 +101,16 @@ class PacketEvent:
             object.__setattr__(self, "tls_ja4", parse_ja4(self.tls_ja4))
         if self.tls_sni is not None:
             object.__setattr__(self, "tls_sni", parse_dns_name(self.tls_sni))
+        for name, maximum in (("arp_opcode", 65535), ("dhcp_message_type", 255)):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, parse_nonnegative_int(value, name, maximum=maximum))
+        if (self.arp_opcode is None) != (self.arp_sender_mac is None):
+            raise ValidationError("arp_opcode and arp_sender_mac must be given together")
+        if self.arp_sender_mac is not None:
+            object.__setattr__(self, "arp_sender_mac", parse_mac(self.arp_sender_mac))
+        if self.dhcp_server_id is not None:
+            object.__setattr__(self, "dhcp_server_id", parse_ip(self.dhcp_server_id))
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> "PacketEvent":
@@ -111,6 +130,10 @@ class PacketEvent:
             tls_ja3=value.get("tls_ja3"),
             tls_ja4=value.get("tls_ja4"),
             tls_sni=value.get("tls_sni"),
+            arp_opcode=value.get("arp_opcode"),
+            arp_sender_mac=value.get("arp_sender_mac"),
+            dhcp_message_type=value.get("dhcp_message_type"),
+            dhcp_server_id=value.get("dhcp_server_id"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -128,7 +151,8 @@ class PacketEvent:
             "metadata": dict(self.metadata),
         }
         # Opt-in fields appear only when present, so default output is unchanged.
-        for name in ("dns_query_name", "tls_ja3", "tls_ja4", "tls_sni"):
+        for name in ("dns_query_name", "tls_ja3", "tls_ja4", "tls_sni", "arp_opcode",
+                     "arp_sender_mac", "dhcp_message_type", "dhcp_server_id"):
             value = getattr(self, name)
             if value is not None:
                 result[name] = value

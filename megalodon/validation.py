@@ -250,6 +250,17 @@ _JA3 = re.compile(r"[0-9a-f]{32}")
 _JA4 = re.compile(r"[tqd][0-9a-z]{2}[di][0-9]{4}[0-9a-z]{2}_[0-9a-f]{12}_[0-9a-f]{12}")
 
 
+_MAC = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}")
+
+
+def parse_mac(value: Any) -> str:
+    """A canonical unicast Ethernet address: lowercase colon-separated, not all zero."""
+    text = value.strip().lower().replace("-", ":") if isinstance(value, str) else ""
+    if _MAC.fullmatch(text) is None or text == "00:00:00:00:00:00" or int(text[:2], 16) & 1:
+        raise ValidationError("arp_sender_mac must be a unicast Ethernet address")
+    return text
+
+
 def parse_ja3(value: Any) -> str:
     if not isinstance(value, str) or _JA3.fullmatch(value.strip().lower()) is None:
         raise ValidationError("tls_ja3 must be a 32-character hexadecimal MD5")

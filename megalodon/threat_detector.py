@@ -65,6 +65,9 @@ _INTERNAL_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in (
 _LIMITED_BROADCAST = ipaddress.ip_address("255.255.255.255")
 MAX_DECOY_PORTS = 64
 MAX_DECOY_ADDRESSES = 256
+MAX_DHCP_SERVERS = 16
+# DHCP OFFER and ACK: the replies a client acts on.
+_DHCP_REPLIES = frozenset({2, 5})
 
 
 def _microseconds(value: datetime) -> int:
@@ -159,9 +162,29 @@ class ThreatDetectionSettings:
     # Opt-in: read TLS ClientHello JA3/JA4 fingerprints and server names (SNI)
     # from capture. Off by default: server names are a record of sites visited.
     tls_fingerprints: bool = False
+    # Opt-in: read ARP sender bindings and DHCP reply server identities from
+    # capture, for ARP_SPOOFING and ROGUE_DHCP. Off by default: DHCP options
+    # lie past the metadata-only snapshot, so whole packets are captured.
+    lan_integrity: bool = False
+    arp_rebind_seconds: int = 300
+    dhcp_window_seconds: int = 3600
+    # The DHCP servers this network should have. Empty: learn them, and flag
+    # a second server answering within dhcp_window_seconds.
+    dhcp_servers: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         self._validate_decoys()
+        servers = self.dhcp_servers
+        if (not isinstance(servers, tuple) or len(servers) > MAX_DHCP_SERVERS
+                or not all(isinstance(s, str) for s in servers)):
+            raise ValueError(f"threat_detection.dhcp_servers must be up to {MAX_DHCP_SERVERS} addresses")
+        try:
+            canonical = tuple(str(_canonical(s)) for s in servers)
+        except ValueError:
+            raise ValueError("threat_detection.dhcp_servers contains an invalid address") from None
+        if len(set(canonical)) != len(canonical):
+            raise ValueError("threat_detection.dhcp_servers must be distinct")
+        object.__setattr__(self, "dhcp_servers", canonical)
         if self.watchlist_severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
             raise ValueError(
                 "threat_detection.watchlist_severity must be LOW, MEDIUM, HIGH or CRITICAL"
@@ -181,6 +204,8 @@ class ThreatDetectionSettings:
             ("max_tracked_keys", 16, 1_048_576),
             ("dns_churn_window_seconds", 1, 3600),
             ("dns_churn_distinct_subdomains", 2, 4096),
+            ("arp_rebind_seconds", 10, 86400),
+            ("dhcp_window_seconds", 60, 86400),
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int):
@@ -200,6 +225,8 @@ class ThreatDetectionSettings:
             raise ValueError("threat_detection.dns_names must be a boolean")
         if not isinstance(self.tls_fingerprints, bool):
             raise ValueError("threat_detection.tls_fingerprints must be a boolean")
+        if not isinstance(self.lan_integrity, bool):
+            raise ValueError("threat_detection.lan_integrity must be a boolean")
         if not isinstance(self.watchlist_path, str) or len(self.watchlist_path) > 1024:
             raise ValueError("threat_detection.watchlist_path must be text")
 
@@ -335,6 +362,10 @@ class ThreatDetector:
         self.exfil_totals: dict[tuple[str, str], int] = {}
         self.beacon: dict[tuple[str, str, int], deque[int]] = {}
         self.churn: dict[tuple[str, str], OrderedDict[str, int]] = {}
+        # IPv4 address -> (sender MAC, last seen); DHCP server -> last reply seen.
+        self.arp: dict[str, tuple[str, int]] = {}
+        self.dhcp: OrderedDict[str, int] = OrderedDict()
+        self._dhcp_servers = frozenset(self.settings.dhcp_servers)
         self.last_emitted: dict[tuple[str, Any], int] = {}
         self.lru: OrderedDict[tuple[str, Any], None] = OrderedDict()
         # (token, journal) while a preparation is unresolved.
@@ -347,7 +378,8 @@ class ThreatDetector:
             raise RuntimeError("cannot copy a threat detector with a pending preparation")
         clone = ThreatDetector.__new__(ThreatDetector)
         for name, value in self.__dict__.items():
-            if name in {"settings", "allowlist", "watchlist", "_decoy_ports", "_decoy_addresses"}:
+            if name in {"settings", "allowlist", "watchlist", "_decoy_ports", "_decoy_addresses",
+                        "_dhcp_servers"}:
                 setattr(clone, name, value)
             else:
                 setattr(clone, name, deepcopy(value, memo))
@@ -374,6 +406,14 @@ class ThreatDetector:
                 dst = str(_canonical(event.dst_ip))
                 rules = [self._decoy, self._ioc, self._brute_force, self._host_sweep,
                          self._exfiltration, self._beaconing]
+                if event.arp_opcode is not None:
+                    # An ARP frame is not traffic between hosts: only binding
+                    # checks, and decoys for ARP scans of unassigned addresses.
+                    rules = [self._arp_spoofing] if self.settings.lan_integrity else []
+                    if event.arp_opcode == 1:
+                        rules.append(self._decoy)
+                elif self.settings.lan_integrity and event.dhcp_message_type in _DHCP_REPLIES:
+                    rules.append(self._rogue_dhcp)
                 if self.settings.dns_names and event.dns_query_name:
                     rules += [self._domain_ioc, self._generated_domain, self._dns_churn]
                 if self.settings.tls_fingerprints and event.is_client_hello:
@@ -726,6 +766,81 @@ class ThreatDetector:
             evidence,
         )
 
+    def _arp_spoofing(self, event, src, dst, now, journal, touched):
+        """A recently seen IPv4-to-MAC binding replaced by another MAC."""
+        parsed = _canonical(src)
+        if parsed.version != 4 or parsed.is_unspecified or parsed.is_multicast or parsed == _LIMITED_BROADCAST:
+            return None  # ARP probes (sender 0.0.0.0) claim nothing.
+        mac = event.arp_sender_mac
+        touched.append(("arp", src))
+        previous = self.arp.get(src)
+        journal.set_item(self.arp, src, (mac, max(now, previous[1]) if previous else now))
+        if previous is None or previous[0] == mac:
+            return None
+        elapsed = max(0, now - previous[1])
+        if elapsed > self.settings.arp_rebind_seconds * _US:
+            return None  # An old binding: a replaced device or a new DHCP lease.
+        key = ("ARP_SPOOFING", src)
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        return self._result(
+            event, "ARP_SPOOFING", src,
+            f"{src} was claimed by {mac} {elapsed // _US}s after {previous[0]} answered for it, "
+            "as ARP cache poisoning does",
+            {
+                "rebinds": 1,
+                "claimed_address": src,
+                "previous_mac": previous[0],
+                "new_mac": mac,
+                "seconds_since_previous": elapsed // _US,
+                "window_seconds": self.settings.arp_rebind_seconds,
+            },
+        )
+
+    def _rogue_dhcp(self, event, src, dst, now, journal, touched):
+        """A DHCP OFFER/ACK from a server outside the expected or learned set."""
+        if event.src_port != 67:
+            return None
+        server = str(_canonical(event.dhcp_server_id or src))
+        expected = self._dhcp_servers
+        journal.snapshot_ordered(self.dhcp)
+        cutoff = now - self.settings.dhcp_window_seconds * _US
+        while self.dhcp and next(iter(self.dhcp.values())) < cutoff:
+            self.dhcp.popitem(last=False)
+        others = sorted(set(self.dhcp) - {server})
+        self.dhcp[server] = max(now, self.dhcp.get(server, now))
+        self.dhcp.move_to_end(server)
+        while len(self.dhcp) > MAX_DHCP_SERVERS:
+            self.dhcp.popitem(last=False)
+        if expected:
+            if server in expected:
+                return None
+            reason, known = "is not one of the configured DHCP servers", sorted(expected)
+        elif others:
+            reason, known = "answered while another DHCP server was active", others
+        else:
+            return None
+        key = ("ROGUE_DHCP", server)
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        evidence: dict[str, Any] = {
+            "replies": 1,
+            "server": server,
+            "message_type": "offer" if event.dhcp_message_type == 2 else "ack",
+            "known_servers": known[:4],
+            "configured": bool(expected),
+        }
+        if event.dhcp_server_id and server != str(_canonical(src)):
+            evidence["relay_address"] = src
+        return self._result(
+            event, "ROGUE_DHCP", src,
+            f"DHCP server {server} {reason} ({', '.join(known[:4])}); a rogue server can hand out "
+            "its own gateway and DNS",
+            evidence,
+        )
+
     def _dns_churn(self, event, src, dst, now, journal, touched):
         name = event.dns_query_name
         parent = registrable_domain(name)
@@ -803,7 +918,7 @@ class ThreatDetector:
         )
 
     _STATE_MAPS = {"brute": "brute", "sweep": "sweep", "exfil": "exfil", "beacon": "beacon",
-                   "churn": "churn"}
+                   "churn": "churn", "arp": "arp"}
 
     def _touch(self, item: tuple[str, Any]) -> None:
         lru = self.lru
@@ -819,8 +934,8 @@ class ThreatDetector:
                 self.last_emitted.pop((kind, key), None)
 
     def state_size(self) -> int:
-        return (len(self.brute) + len(self.sweep) + len(self.exfil)
-                + len(self.beacon) + len(self.churn) + len(self.last_emitted))
+        return (len(self.brute) + len(self.sweep) + len(self.exfil) + len(self.beacon)
+                + len(self.churn) + len(self.arp) + len(self.dhcp) + len(self.last_emitted))
 
 
 def registry_document() -> dict[str, object]:
@@ -843,7 +958,8 @@ def registry_document() -> dict[str, object]:
         ],
         "default_settings": {
             k: v for k, v in settings.__dict__.items()
-            if k not in {"watchlist_path", "watchlist_severity", "decoy_ports", "decoy_addresses"}
+            if k not in {"watchlist_path", "watchlist_severity", "decoy_ports", "decoy_addresses",
+                         "dhcp_servers"}
             and not isinstance(v, tuple)
         },
         "auth_services": {str(port): name for port, name in sorted(AUTH_SERVICES.items())},

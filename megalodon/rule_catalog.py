@@ -104,6 +104,18 @@ RULES: tuple[RuleDescription, ...] = (
         "Some apps, VPNs, IoT devices and peer-to-peer software connect to bare addresses too.",
         ("T1573", "T1071.001"), "command_and_control", "destination",
     ),
+    RuleDescription(
+        "ARP_SPOOFING", THREAT_LAYER, "HIGH", "rebinds", "ARP address rebinds", False,
+        "A local address was claimed by a different hardware address soon after another answered for it.",
+        "Failover pairs, virtual machines, docking stations and a replaced device can rebind an address.",
+        ("T1557.002",), "credential_access", "source",
+    ),
+    RuleDescription(
+        "ROGUE_DHCP", THREAT_LAYER, "HIGH", "replies", "DHCP replies from an unexpected server", False,
+        "A DHCP server outside the expected set offered or confirmed an address lease.",
+        "Redundant DHCP servers, a new router, mesh Wi-Fi nodes and phone hotspots also answer DHCP.",
+        ("T1557.003",), "credential_access", "source",
+    ),
 )
 
 BY_ID: dict[str, RuleDescription] = {rule.rule_id: rule for rule in RULES}

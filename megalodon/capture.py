@@ -25,6 +25,7 @@ _JSONL_FIELDS = frozenset({
     "observed_at", "timestamp", "src_ip", "dst_ip", "protocol", "src_port",
     "dst_port", "tcp_flags", "dns_query_length", "byte_count", "interface", "metadata",
     "dns_query_name", "tls_ja3", "tls_ja4", "tls_sni",
+    "arp_opcode", "arp_sender_mac", "dhcp_message_type", "dhcp_server_id",
 })
 MAX_SCAPY_QUEUE_EVENTS = 1024
 SCAPY_QUEUE_POLL_SECONDS = 0.25

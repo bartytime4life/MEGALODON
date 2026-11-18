@@ -56,6 +56,14 @@ dns_churn_distinct_subdomains = 30
 # names are a record of sites visited. When on, they stay in memory; only a
 # fingerprint or name that triggers a finding is kept.
 tls_fingerprints = false
+# LAN integrity: ARP spoofing and rogue DHCP server detection. OFF by default.
+# When on, the capture keeps whole packets (DHCP options lie past byte 256);
+# hardware addresses stay in memory unless they trigger a finding.
+lan_integrity = false
+arp_rebind_seconds = 300
+dhcp_window_seconds = 3600
+# The DHCP servers this network should have; empty means learn them.
+dhcp_servers = []
 
 # Off-machine alerts (docs/off-machine-alerts.md). OFF by default. Saved
 # findings at or above min_severity go to each destination from background

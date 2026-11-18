@@ -13,7 +13,7 @@ import tempfile
 import time
 
 from ..models import PacketEvent
-from ..validation import ValidationError, parse_dns_name, parse_ja3, parse_ja4
+from ..validation import ValidationError, parse_dns_name, parse_ip, parse_ja3, parse_ja4, parse_mac
 from .common import (Batch, Limits, OfflineError, ip, open_input,
                      require_unprivileged_linux, timestamp, uint, version)
 
@@ -32,13 +32,49 @@ DNS_NAME_FIELDS = ('dns.flags.response', 'dns.qry.name')
 # so the available subset is probed first (see probe_fields).
 TLS_FIELDS = ('tls.handshake.type', 'tls.handshake.ja3', 'tls.handshake.ja4',
               'tls.handshake.extensions_server_name')
+# Read only when the operator opts in ([threat_detection] lan_integrity): ARP
+# sender bindings and DHCP reply server identities, for spoofing and rogue
+# server detection. Probed like TLS; DHCP fields need Wireshark 3.0+.
+ARP_FIELDS = ('arp.opcode', 'arp.src.hw_mac', 'arp.src.proto_ipv4', 'arp.dst.proto_ipv4')
+DHCP_FIELDS = ('dhcp.option.dhcp', 'dhcp.option.dhcp_server_id')
+LAN_FIELDS = ARP_FIELDS + DHCP_FIELDS
 # A header-only little-endian pcap (Ethernet): TShark validates -e fields
 # before reading, and an empty capture yields no rows.
 EMPTY_PCAP = bytes.fromhex('d4c3b2a1020004000000000000000000ffff000001000000')
 
 
-def fields(dns_names: bool = False, tls: tuple[str, ...] = ()) -> tuple[str, ...]:
-    return FIELDS + (DNS_NAME_FIELDS if dns_names else ()) + tuple(tls)
+def fields(dns_names: bool = False, tls: tuple[str, ...] = (),
+           lan: tuple[str, ...] = ()) -> tuple[str, ...]:
+    return FIELDS + (DNS_NAME_FIELDS if dns_names else ()) + tuple(tls) + tuple(lan)
+
+
+def lan_subset(accepted: tuple[str, ...]) -> tuple[str, ...]:
+    """ARP and DHCP fields are used only as complete groups."""
+    return tuple(name for group in (ARP_FIELDS, DHCP_FIELDS)
+                 if set(group) <= set(accepted) for name in group)
+
+
+def _arp(values: dict[str, str]) -> tuple[int, str, str, str] | None:
+    """(opcode, sender MAC, sender IPv4, target IPv4) from one ARP frame, else None."""
+    opcode, mac, sender, target = (values.get(name, '') for name in ARP_FIELDS)
+    if not opcode or any(',' in v for v in (opcode, mac, sender, target)):
+        return None
+    try:
+        return uint(opcode, 65535), parse_mac(mac), parse_ip(sender), parse_ip(target)
+    except (ValidationError, OfflineError, ValueError):
+        return None
+
+
+def _dhcp(values: dict[str, str]) -> tuple[int | None, str | None]:
+    """(message type, server identifier) from one DHCP message; anything odd yields none."""
+    kind, server = (values.get(name, '') for name in DHCP_FIELDS)
+    if not kind or ',' in kind or ',' in server:
+        return None, None
+    try:
+        number = uint(kind, 255)
+        return number, parse_ip(server) if server else None
+    except (ValidationError, OfflineError, ValueError):
+        return None, None
 
 
 def probe_fields(candidates: tuple[str, ...], popen, env: dict[str, str],
@@ -186,12 +222,12 @@ def _bounded_process(argv: tuple[str, ...], *, env: dict[str, str], cwd: str,
 
 
 def parse_fields(row: str, *, dns_names: bool = False,
-                 tls: tuple[str, ...] = ()) -> PacketEvent | None:
+                 tls: tuple[str, ...] = (), lan: tuple[str, ...] = ()) -> PacketEvent | None:
     """Reject multi-valued/tunnel ambiguity, never silently take the first field."""
     if len(row) > 1024 or any(ord(c) < 32 and c != '\t' or ord(c) > 126 for c in row):
         raise OfflineError('INVALID_FIELD_ROW')
     columns = row.split('\t')
-    if len(columns) != len(fields(dns_names, tls)):
+    if len(columns) != len(fields(dns_names, tls, lan)):
         raise OfflineError('AMBIGUOUS_FIELD_ROW')
     optional = columns[len(FIELDS):]
     columns = columns[:len(FIELDS)]
@@ -200,6 +236,7 @@ def parse_fields(row: str, *, dns_names: bool = False,
         query_name = _dns_name(*optional[:2])
         optional = optional[2:]
     ja3, ja4, sni = _tls(dict(zip(tls, optional))) if tls else (None, None, None)
+    lan_values = dict(zip(lan, optional[len(tls):]))
     if any(',' in value for value in columns):
         raise OfflineError('AMBIGUOUS_FIELD_ROW')
     at, src4, dst4, src6, dst6, proto4, proto6, ts, td, us, ud, flags, size = columns
@@ -208,7 +245,15 @@ def parse_fields(row: str, *, dns_names: bool = False,
     if not any((src4, dst4, src6, dst6, proto4, proto6)):
         if any((ts, td, us, ud, flags)):
             raise OfflineError('INVALID_FIELD_ROW')
-        return None  # Explicitly counted non-IP frame, not a fabricated event.
+        arp = _arp(lan_values) if 'arp.opcode' in lan_values else None
+        if arp is None:
+            return None  # Explicitly counted non-IP frame, not a fabricated event.
+        # An opted-in ARP frame: its sender and target protocol addresses. Stored
+        # as OTHER, so closed protocol sets elsewhere are unchanged.
+        opcode, mac, sender, target = arp
+        return PacketEvent(observed, sender, target, 'OTHER', byte_count=length,
+                           metadata={'source_adapter': ADAPTER},
+                           arp_opcode=opcode, arp_sender_mac=mac)
     if bool(src4 or dst4 or proto4) == bool(src6 or dst6 or proto6):
         raise OfflineError('AMBIGUOUS_FIELD_ROW')
     src, dst, proto = (src4, dst4, proto4) if src4 else (src6, dst6, proto6)
@@ -233,12 +278,16 @@ def parse_fields(row: str, *, dns_names: bool = False,
     elif any((ts, td, us, ud, flags)):
         raise OfflineError('UNSUPPORTED_TRANSPORT')
     protocol = {6: 'TCP', 17: 'UDP', 1: 'ICMP', 58: 'ICMPV6'}.get(number, 'OTHER')
+    dhcp_type = dhcp_server = None
+    if number == 17 and 'dhcp.option.dhcp' in lan_values and {source_port, destination_port} <= {67, 68}:
+        dhcp_type, dhcp_server = _dhcp(lan_values)
     return PacketEvent(observed, src, dst, protocol, source_port, destination_port,
                        tcp_flags=tcp_flags, byte_count=length,
                        metadata={'source_adapter': ADAPTER},
                        # With names opted in, the core length rule sees queries too.
                        dns_query_length=len(query_name) if query_name else None,
-                       dns_query_name=query_name, tls_ja3=ja3, tls_ja4=ja4, tls_sni=sni)
+                       dns_query_name=query_name, tls_ja3=ja3, tls_ja4=ja4, tls_sni=sni,
+                       dhcp_message_type=dhcp_type, dhcp_server_id=dhcp_server)
 
 
 def replay(root: str, relative: str, limits: Limits = Limits()) -> Batch:

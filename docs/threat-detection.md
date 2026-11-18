@@ -177,6 +177,63 @@ When enabled:
 QUIC/HTTP-3 handshakes are not fingerprinted. A fingerprint identifies a TLS
 library and configuration, not a program.
 
+## LAN integrity: ARP spoofing and rogue DHCP (opt-in)
+
+ARP and DHCP have no authentication, so any device on the LAN can claim to be
+the gateway or hand out its own gateway and DNS server. That puts it in the
+middle of everyone's traffic. MEGALODON can watch for both, **off by
+default**:
+
+```toml
+[threat_detection]
+lan_integrity = true
+arp_rebind_seconds = 300
+dhcp_window_seconds = 3600
+dhcp_servers = ["192.168.1.1"]   # optional; empty means learn them
+```
+
+When enabled:
+
+* **Capture.** The HUD's TShark capture adds `arp.opcode`,
+  `arp.src.hw_mac`, `arp.src.proto_ipv4` and `arp.dst.proto_ipv4`, and the
+  DHCP message type and server identifier (`dhcp.option.dhcp`,
+  `dhcp.option.dhcp_server_id`). Each group is probed and used only when the
+  installed TShark accepts all of its fields. The capture keeps whole
+  packets, because DHCP options start after byte 256. Packets go only
+  through a pipe to TShark.
+* **ARP frames become events.** An ARP frame is recorded as an `OTHER` event
+  from its sender address to its target address, so it is counted like any
+  other packet. Only the binding checks and decoys run on it: an ARP request
+  for a decoy address raises `DECOY_TOUCH`, which catches LAN ARP scans. ARP
+  frames never count toward traffic rules such as host sweeps.
+* **`ARP_SPOOFING`** (HIGH, ATT&CK T1557.002) fires when an IPv4 address is
+  claimed by a different hardware address within `arp_rebind_seconds` of the
+  previous one answering for it. Tools such as arpspoof, Ettercap and
+  bettercap repeat their claims every few seconds, so they trip this
+  immediately. ARP probes from `0.0.0.0` claim nothing and are ignored. A
+  binding older than the window is treated as a replaced device or a new
+  lease.
+* **`ROGUE_DHCP`** (HIGH, ATT&CK T1557.003) checks DHCP OFFER and ACK
+  replies from port 67. With `dhcp_servers` set, any other server identifier
+  is flagged. Without it, MEGALODON learns the servers it sees and flags a
+  server that answers while another was active within `dhcp_window_seconds`.
+  The server identifier option is preferred over the packet's source, and a
+  relayed reply records the relay address.
+* **What is kept.** Hardware addresses and server identities stay in memory.
+  A binding or server is retained only inside a finding's evidence. A test
+  checks every database file's raw bytes for a routine binding.
+* **Other inputs.** JSONL may carry `arp_opcode`, `arp_sender_mac`,
+  `dhcp_message_type` and `dhcp_server_id`. The Scapy source does not read
+  them.
+
+**Limits:** The sensor sees only what reaches its interface. On a switched
+network, that is broadcast ARP plus its own traffic, so run it on the
+gateway or a mirror port for full coverage. Learned DHCP mode trusts the
+first server it sees. Set `dhcp_servers` if a rogue server could be present
+when monitoring starts. Failover pairs, virtual machines, docking stations,
+mesh Wi-Fi nodes and phone hotspots can produce look-alike findings. IPv6
+neighbor discovery and DHCPv6 are not covered.
+
 ## Atomicity and bounds
 
 The layer uses the same staged `prepare → commit / rollback` protocol as the core
