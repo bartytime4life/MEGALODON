@@ -100,7 +100,10 @@ def test_dns_over_https_by_address_and_by_server_name():
     by_address = d.analyze(lookup(1, "1.1.1.1", port=443, protocol="TCP"))
     assert rules(by_address) == ["DNS_BYPASS"] and by_address[0].evidence["method"] == "doh"
     assert rules(d.analyze(lookup(2, "2001:4860:4860::8888", port=443, protocol="UDP"))) == ["DNS_BYPASS"]
-    by_name = d.analyze(lookup(3, "104.16.248.249", port=443, protocol="TCP", sni="mozilla.cloudflare-dns.com"))
+    named = lookup(3, "104.16.248.249", port=443, protocol="TCP", sni="mozilla.cloudflare-dns.com")
+    assert rules(d.analyze(named)) == [], "server names are not read without tls_fingerprints"
+    d = detector(tls_fingerprints=True)
+    by_name = d.analyze(named)
     assert rules(by_name) == ["DNS_BYPASS"]
     assert (by_name[0].evidence["server_name"], by_name[0].evidence["provider"]) == (
         "mozilla.cloudflare-dns.com", "Cloudflare")

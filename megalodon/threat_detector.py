@@ -841,7 +841,8 @@ class ThreatDetector:
         server_name = None
         if port == 443:
             provider = public_resolvers.provider_for_address(dst)
-            if provider is None:
+            if provider is None and self.settings.tls_fingerprints:
+                # Server names are read only under their own opt-in, as for every SNI rule.
                 provider = public_resolvers.provider_for_name(event.tls_sni)
                 server_name = event.tls_sni if provider else None
             if provider is None:
