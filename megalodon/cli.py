@@ -202,6 +202,22 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--config", type=Path,
                              help="settings file (default ~/.config/megalodon/settings.toml)")
 
+    persist = sub.add_parser(
+        "persistence", help="baseline and check where attackers hide to survive reboots (exit 1 on changes)")
+    persist_sub = persist.add_subparsers(dest="persistence_command", required=True)
+    for name, text in (("baseline", "record the current state of every persistence location"),
+                       ("check", "report what was added, changed or removed since the baseline"),
+                       ("accept", "after review, record the current state as the new baseline")):
+        command = persist_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/persistence.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send a summary to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
     ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
     ransom_watch = ransom_sub.add_parser(
@@ -1054,6 +1070,44 @@ def _feeds(args: argparse.Namespace) -> int:
     return 1 if any(item["status"] == "failed" for item in result["sources"].values()) else 0
 
 
+def _persistence(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import persistence_watch as watch
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.persistence_command == "baseline":
+            result = watch.baseline(manifest, replace=args.replace)
+        elif args.persistence_command == "accept":
+            result = watch.accept(manifest)
+        else:
+            result = watch.check(manifest)
+    except (watch.PersistenceError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.persistence_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            settings = load_settings(args.config or Path.home() / ".config/megalodon/settings.toml")
+            dispatcher = dispatcher_for(settings.alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            top = findings[0]
+            listed = "; ".join(f"{f['change']} {f['category']} {f['location']}" for f in findings[:5])
+            dispatcher.submit([HostNotice(
+                "PERSISTENCE_CHANGE", top["severity"], datetime.now(timezone.utc),
+                f"{len(findings)} persistence changes since the baseline: {listed}",
+                tuple(sorted({f['technique'] for f in findings}))[:8],
+                "A place attackers use to survive reboots changed since the reviewed baseline.")])
+    return 1 if findings else 0
+
+
 def _ransomware(args: argparse.Namespace) -> int:
     from threading import Event
     import tempfile
@@ -1753,6 +1807,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _alerts(args)
     elif args.command == "ransomware":
         code = _ransomware(args)
+    elif args.command == "persistence":
+        code = _persistence(args)
     elif args.command == "feeds":
         code = _feeds(args)
     elif args.command == "detectors":
