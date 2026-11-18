@@ -204,6 +204,56 @@ def test_redirects_may_not_downgrade_or_carry_the_token(tmp_path, server):
     assert report["sources"]["hop"]["status"] == "failed"
 
 
+def test_a_long_run_of_304s_stays_fresh_but_failures_go_stale(tmp_path, server):
+    settings = settings_for(tmp_path, FeedSource("feodo", server.serve("/feodo", FEODO, ETag='"v1"')), stale_hours=1)
+    threat_feeds.refresh(settings)
+    meta_path = tmp_path / "state" / "feodo.json"
+    meta = json.loads(meta_path.read_text())
+    old = "2026-01-01T00:00:00Z"
+    meta_path.write_text(json.dumps(dict(meta, fetched_at=old, validated_at=old)))
+    report = threat_feeds.refresh(settings)
+    assert report["sources"]["feodo"]["status"] == "not_modified" and report["sources"]["feodo"]["stale"] is False
+    assert threat_feeds.status(settings)["sources"]["feodo"]["stale"] is False, "a confirmed-current feed is fresh"
+    meta_path.write_text(json.dumps(dict(json.loads(meta_path.read_text()), validated_at=old)))
+    server.serve("/feodo", "down", status=500)
+    report = threat_feeds.refresh(settings)
+    assert report["sources"]["feodo"]["status"] == "failed" and report["sources"]["feodo"]["stale"] is True
+
+
+def test_a_changed_url_never_reuses_the_old_sources_copy(tmp_path, server):
+    first = settings_for(tmp_path, FeedSource("feed", server.serve("/a", "203.0.113.66\n", ETag='"v1"')))
+    threat_feeds.refresh(first)
+    # Same name, new endpoint that happens to share the ETag.
+    second = settings_for(tmp_path, FeedSource("feed", server.serve("/b", "198.51.100.7\n", ETag='"v1"')))
+    report = threat_feeds.refresh(second)
+    assert report["sources"]["feed"]["status"] == "updated"
+    assert "If-None-Match" not in server.requests[-1][1], "validators belong to the old URL"
+    watch = load_watchlist(report["output"]["path"])
+    assert watch.match("198.51.100.7") and watch.match("203.0.113.66") is None
+    # A format change on the same URL also starts over.
+    third = settings_for(tmp_path, FeedSource("feed", server.base + "/b", format="ja3"))
+    assert threat_feeds.refresh(third)["sources"]["feed"]["status"] == "failed"
+    assert threat_feeds.build_output(third)["indicators"] == 0
+
+
+def test_the_secret_never_reaches_a_redirect_target_whatever_its_header(tmp_path, server):
+    token = tmp_path / "key"
+    token.write_text("SECRET-KEY\n", encoding="utf-8")
+    token.chmod(0o600)
+    for reserved in ("User-Agent", "accept", "If-None-Match", "Host"):
+        with pytest.raises(FeedError, match="does not set itself"):
+            FeedSource("x", server.base + "/x", header_name=reserved, token_file=str(token))
+    target = server.serve("/real", FEODO)
+    server.serve("/hop", "", status=302, Location=target)
+    for name in ("Auth-Key", "X-Custom-Token", "Authorization"):
+        settings = settings_for(tmp_path / name, FeedSource("hop", server.base + "/hop", header_name=name,
+                                                            token_file=str(token)))
+        assert threat_feeds.refresh(settings)["sources"]["hop"]["status"] == "updated"
+        first, follow = server.requests[-2:]
+        assert first[1].get(name) == "SECRET-KEY"
+        assert "SECRET-KEY" not in json.dumps(follow[1]), f"{name} leaked to the redirect target"
+
+
 def test_size_and_entry_caps(tmp_path, server, monkeypatch):
     many = "\n".join(f"198.51.{i // 250}.{i % 250 + 1}" for i in range(500))
     settings = settings_for(tmp_path, FeedSource("big", server.serve("/many", many), max_entries=100))
