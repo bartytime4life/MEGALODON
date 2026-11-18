@@ -22,11 +22,11 @@ def test_every_layer_passes_and_nothing_is_left_behind():
     before = set(Path(tempfile.gettempdir()).glob("megalodon-drill-*"))
     report = drill.run()
     checks = by_name(report)
-    for name in ("network", "canary", "ransomware", "persistence", "listeners"):
+    for name in ("network", "canary", "ransomware", "persistence", "binaries", "listeners"):
         assert checks[name]["status"] == "passed", checks[name]
     assert checks["network"]["observed"] == drill.NETWORK_RULES
     assert checks["alerts"]["status"] == "skipped"
-    assert (report["passed"], report["failed"], report["skipped"]) == (5, 0, 1)
+    assert (report["passed"], report["failed"], report["skipped"]) == (6, 0, 1)
     assert set(Path(tempfile.gettempdir()).glob("megalodon-drill-*")) == before
 
 

@@ -25,6 +25,7 @@ timer.
 | canary | Plants one bait file in a temporary folder, changes it, then runs `check` | `CANARY_MODIFIED` |
 | ransomware | The ransomware self-test: throwaway files encrypted under a live inotify watch (Linux) | `RANSOMWARE_ENCRYPTION`, `RANSOM_NOTE` |
 | persistence | Baselines a throwaway folder tree, then adds a comment-only cron file and a comment line in a profile | `cron`, `shell_startup` changes |
+| binaries | Baselines a throwaway tree with a one-package dpkg database, then changes its packaged program and adds an unpackaged one | `PACKAGE_MISMATCH`, `PROGRAM_ADDED` |
 | listeners | Baselines this machine's listeners into a temporary manifest, then listens on a loopback port of its own (Linux) | `NEW_LISTENER` for that port |
 | alerts | With `--alerts`: the same labeled test notice as `megalodon alerts test`, sent to every configured destination | Every destination accepts it |
 

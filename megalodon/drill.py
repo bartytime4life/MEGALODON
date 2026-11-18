@@ -12,6 +12,8 @@ MEGALODON's own built-in sample or self-test, and runs in a temporary folder:
   under a real inotify watch.
 * **persistence**: a throwaway folder tree is baselined, then given a new
   comment-only cron file and an extra comment line in a shell startup file.
+* **binaries**: a throwaway tree with a one-package dpkg database is
+  baselined, then its packaged program is changed and an unpackaged one added.
 * **listeners** (Linux): this machine's listeners are baselined into a
   temporary manifest, then the drill listens on a loopback port of its own.
 * **alerts** (with ``--alerts``): one labeled test notice goes to each
@@ -107,6 +109,32 @@ def _persistence(work):
     return sorted({item['category'] for item in report['findings']}), 'throwaway tree: new cron file, edited profile'
 
 
+def _binaries(work):
+    import hashlib
+    import os
+
+    from . import binary_integrity
+    root = work / 'root'
+    (root / 'usr/bin').mkdir(parents=True)
+    (root / 'var/lib/dpkg/info').mkdir(parents=True)
+    program = root / 'usr/bin/drill-tool'
+    program.write_bytes(b'MEGALODON drill program\n')
+    program.chmod(0o755)
+    (root / 'var/lib/dpkg/status').write_text(
+        'Package: drill-tool\nStatus: install ok installed\nArchitecture: all\nVersion: 1.0\n', encoding='utf-8')
+    (root / 'var/lib/dpkg/info/drill-tool.md5sums').write_text(
+        f'{hashlib.md5(program.read_bytes()).hexdigest()}  usr/bin/drill-tool\n', encoding='utf-8')
+    options = dict(root=str(root), owner_uid=os.geteuid())
+    manifest = work / 'binaries.json'
+    binary_integrity.baseline(manifest, **options)
+    program.write_bytes(b'MEGALODON drill program, changed\n')
+    added = root / 'usr/bin/drill-added'
+    added.write_bytes(b'MEGALODON drill addition\n')
+    added.chmod(0o755)
+    report = binary_integrity.check(manifest, **options)
+    return sorted({f['rule_id'] for f in report['findings']}), 'throwaway tree: packaged program changed, one added'
+
+
 def _listeners(work):
     import socket
 
@@ -137,6 +165,7 @@ def run(*, alert_settings=None):
         ('canary', ['CANARY_MODIFIED'], _canary),
         ('ransomware', ['RANSOMWARE_ENCRYPTION', 'RANSOM_NOTE'], _ransomware),
         ('persistence', ['cron', 'shell_startup'], _persistence),
+        ('binaries', ['PACKAGE_MISMATCH', 'PROGRAM_ADDED'], _binaries),
         ('listeners', ['NEW_LISTENER'], _listeners),
     ]
     results = []
