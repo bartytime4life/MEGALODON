@@ -12,6 +12,8 @@ MEGALODON's own built-in sample or self-test, and runs in a temporary folder:
   under a real inotify watch.
 * **persistence**: a throwaway folder tree is baselined, then given a new
   comment-only cron file and an extra comment line in a shell startup file.
+* **listeners** (Linux): this machine's listeners are baselined into a
+  temporary manifest, then the drill listens on a loopback port of its own.
 * **alerts** (with ``--alerts``): one labeled test notice goes to each
   configured destination.
 
@@ -105,6 +107,21 @@ def _persistence(work):
     return sorted({item['category'] for item in report['findings']}), 'throwaway tree: new cron file, edited profile'
 
 
+def _listeners(work):
+    import socket
+
+    from . import listener_watch
+    manifest = work / 'listeners.json'
+    listener_watch.baseline(manifest)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(('127.0.0.1', 0))
+        probe.listen(1)
+        port = probe.getsockname()[1]
+        report = listener_watch.check(manifest)
+    ours = sorted({f['rule_id'] for f in report['findings'] if f['port'] == port and f['protocol'] == 'tcp'})
+    return ours, f'a throwaway loopback listener on port {port}'
+
+
 def _alerts(settings):
     from .alerts import test_destinations
     results = test_destinations(settings)
@@ -120,14 +137,15 @@ def run(*, alert_settings=None):
         ('canary', ['CANARY_MODIFIED'], _canary),
         ('ransomware', ['RANSOMWARE_ENCRYPTION', 'RANSOM_NOTE'], _ransomware),
         ('persistence', ['cron', 'shell_startup'], _persistence),
+        ('listeners', ['NEW_LISTENER'], _listeners),
     ]
     results = []
     with tempfile.TemporaryDirectory(prefix='megalodon-drill-') as base:
         for name, expected, function in checks:
             check = Check(name, expected)
             started = time.monotonic()
-            if name == 'ransomware' and not sys.platform.startswith('linux'):
-                check.status, check.detail = 'skipped', 'needs Linux inotify'
+            if name in ('ransomware', 'listeners') and not sys.platform.startswith('linux'):
+                check.status, check.detail = 'skipped', 'needs Linux'
             else:
                 work = Path(base) / name
                 work.mkdir(mode=0o700)
