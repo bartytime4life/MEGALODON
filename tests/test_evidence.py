@@ -160,3 +160,86 @@ def test_cli(tmp_path, bundle_dir, no_reports, capsys):
     assert code("evidence", "verify", str(bundle_dir), "--expected", digest) == 0
     assert code("evidence", "verify", str(bundle_dir), "--expected", "0" * 64) == 1
     assert code("evidence", "collect", "--output", str(bundle_dir)) == 2
+
+
+# ------------------------------------------------------------------ limits hold while reading
+
+def _claims(size):
+    """An fstat that reports a smaller size than the file really has, as for a file still growing."""
+    real = os.fstat
+
+    def fstat(fd):
+        info = real(fd)
+        return os.stat_result((info.st_mode, info.st_ino, info.st_dev, info.st_nlink, info.st_uid, info.st_gid,
+                               size, int(info.st_atime), int(info.st_mtime), int(info.st_ctime)))
+    return fstat
+
+
+def test_a_file_growing_past_the_hashing_limits_is_skipped(tmp_path, monkeypatch):
+    target = tmp_path / "growing.log"
+    target.write_bytes(b"x" * 300)
+    monkeypatch.setattr(ev.os, "fstat", _claims(5))
+    for size_limit, total, reason in ((50, 1000, "too large"), (1000, 40, "hashing budget reached")):
+        budget = ev._Budget(total)
+        fd = os.open(target, os.O_RDONLY)
+        try:
+            assert ev._sha256_fd(fd, size_limit, budget) == (None, reason)
+            assert os.lseek(fd, 0, os.SEEK_CUR) <= min(size_limit, total) + 1, "read stops at the allowance"
+        finally:
+            os.close(fd)
+        assert 0 <= budget.left < total
+
+
+def test_a_program_growing_past_the_copy_limit_is_not_copied_whole(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    (root / "proc/4242").mkdir(parents=True)
+    (root / "proc/4242/exe").write_bytes(b"y" * 300)
+    (tmp_path / "programs").mkdir()
+    monkeypatch.setattr(ev, "MAX_COPY_FILE", 64)
+    saved = ev.copy_programs([{"pid": 4242, "sha256": "a" * 64, "size": 10}], tmp_path / "programs", root=str(root))
+    assert saved[0]["copied"] is False and "grew past" in saved[0]["reason"]
+    assert (tmp_path / "programs" / f"{'a' * 64}.bin").stat().st_size <= 64
+
+
+def test_recent_file_limits_hold_inside_one_flat_folder(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    (root / "tmp").mkdir(parents=True)
+    for number in range(20):
+        (root / f"tmp/drop-{number}").write_text("new")
+    monkeypatch.setattr(ev, "MAX_RECENT_FILES", 3)
+    found, gaps = ev.recent_files(str(root), hours=24)
+    assert len(found) == 3 and gaps
+    monkeypatch.setattr(ev, "MAX_RECENT_FILES", 5000)
+    monkeypatch.setattr(ev, "MAX_WALK_ENTRIES", 7)
+    found, gaps = ev.recent_files(str(root), hours=24)
+    assert len(found) == 7 and gaps
+
+
+def test_an_explicitly_requested_digest_is_sent_below_the_alert_minimum(tmp_path, bundle_dir, no_reports, monkeypatch,
+                                                                         capsys):
+    from megalodon import alerts
+    from megalodon.cli import main
+    sent, made = [], []
+
+    def dispatcher_for(settings):
+        if not settings.enabled:
+            return None
+        made.append(alerts.AlertDispatcher(settings, transport=sent.append))
+        return made[-1]
+    monkeypatch.setattr(alerts, "dispatcher_for", dispatcher_for)
+    config = tmp_path / "settings.toml"
+    config.write_text('[alerts]\nenabled = true\nmin_severity = "HIGH"\n[[alerts.destination]]\nname = "siem"\n'
+                      'kind = "syslog"\nhost = "127.0.0.1"\n', encoding="utf-8")
+    with pytest.raises(SystemExit) as exit_:
+        main(["evidence", "collect", "--output", str(bundle_dir), "--hours", "1", "--skip-program-verification",
+              "--no-program-copies", "--alert", "--config", str(config)])
+    assert exit_.value.code == 0
+    made[0].close(timeout=5)
+    digest = json.loads(capsys.readouterr().out)["manifest_sha256"]
+    assert [item["rule_id"] for item in sent] == ["EVIDENCE_COLLECTED"] and digest in sent[0]["summary"]
+    config.write_text("[alerts]\nenabled = false\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as exit_:
+        main(["evidence", "collect", "--output", str(tmp_path / "second"), "--hours", "1",
+              "--skip-program-verification", "--no-program-copies", "--alert", "--config", str(config)])
+    assert exit_.value.code == 1 and "digest was not sent" in capsys.readouterr().err
+    unseal(tmp_path / "second")

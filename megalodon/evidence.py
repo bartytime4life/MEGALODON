@@ -98,13 +98,17 @@ def _sha256_fd(fd, size_limit, budget):
         return None, 'too large'
     if info.st_size > budget.left:
         return None, 'hashing budget reached'
-    digest, read = hashlib.sha256(), 0
+    # The size is checked again while reading: a file that grows after fstat must not exceed either allowance.
+    allowance, digest, read = min(size_limit, budget.left), hashlib.sha256(), 0
     while True:
-        chunk = os.read(fd, 1 << 20)
+        chunk = os.read(fd, min(1 << 20, allowance - read + 1))
         if not chunk:
             break
-        digest.update(chunk)
         read += len(chunk)
+        if read > allowance:
+            budget.left -= min(read, budget.left)
+            return None, 'too large' if read > size_limit else 'hashing budget reached'
+        digest.update(chunk)
     budget.left -= read
     return digest.hexdigest(), None
 
@@ -241,11 +245,15 @@ def copy_programs(copies, folder, root='/'):
             continue
         try:
             out = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o400)
-            digest = hashlib.sha256()
+            digest, written, allowance = hashlib.sha256(), 0, min(MAX_COPY_FILE, left)
             try:
-                while True:
-                    chunk = os.read(source, 1 << 20)
+                # Never copy more than the allowance, even if the program grew since it was hashed.
+                while written <= allowance:
+                    chunk = os.read(source, min(1 << 20, allowance - written + 1))
                     if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > allowance:
                         break
                     digest.update(chunk)
                     os.write(out, chunk)
@@ -253,7 +261,11 @@ def copy_programs(copies, folder, root='/'):
                 os.close(out)
         finally:
             os.close(source)
-        left -= item['size']
+        left -= min(written, allowance)
+        if written > allowance:
+            saved.append(dict(item, copied=False, file=f'programs/{target.name}',
+                              reason='the program grew past the copy budget while it was copied'))
+            continue
         copied = digest.hexdigest() == item['sha256']
         saved.append(dict(item, copied=copied, file=f'programs/{target.name}',
                           **({} if copied else dict(reason='the program changed while it was copied'))))
@@ -333,45 +345,49 @@ def recent_files(root='/', *, hours=24, now=None, budget=None):
         while stack and walked < MAX_WALK_ENTRIES and len(found) < MAX_RECENT_FILES:
             directory, level = stack.pop()
             try:
-                entries = list(os.scandir(directory))
+                entries = os.scandir(directory)
             except OSError:
                 continue
-            for entry in entries:
-                walked += 1
-                path = shown(entry.path)
-                if path.startswith(SKIP_PREFIXES):
-                    continue
-                try:
-                    info = entry.stat(follow_symlinks=False)
-                except OSError:
-                    continue
-                if stat.S_ISDIR(info.st_mode):
-                    if level < depth:
-                        stack.append((entry.path, level + 1))
-                    continue
-                if max(info.st_mtime, info.st_ctime) < cutoff:
-                    continue
-                item = dict(path=path, size=info.st_size, mode=oct(stat.S_IMODE(info.st_mode)), uid=info.st_uid,
-                            modified=_iso(datetime.fromtimestamp(info.st_mtime, timezone.utc)),
-                            changed=_iso(datetime.fromtimestamp(info.st_ctime, timezone.utc)))
-                if stat.S_ISLNK(info.st_mode):
+            with entries:
+                for entry in entries:
+                    # Both limits hold inside a single directory too: a flat /tmp can hold millions of entries.
+                    if walked >= MAX_WALK_ENTRIES or len(found) >= MAX_RECENT_FILES:
+                        break
+                    walked += 1
+                    path = shown(entry.path)
+                    if path.startswith(SKIP_PREFIXES):
+                        continue
                     try:
-                        item['link'] = os.readlink(entry.path)
+                        info = entry.stat(follow_symlinks=False)
                     except OSError:
-                        pass
-                elif stat.S_ISREG(info.st_mode):
-                    try:
-                        fd = os.open(entry.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+                        continue
+                    if stat.S_ISDIR(info.st_mode):
+                        if level < depth:
+                            stack.append((entry.path, level + 1))
+                        continue
+                    if max(info.st_mtime, info.st_ctime) < cutoff:
+                        continue
+                    item = dict(path=path, size=info.st_size, mode=oct(stat.S_IMODE(info.st_mode)), uid=info.st_uid,
+                                modified=_iso(datetime.fromtimestamp(info.st_mtime, timezone.utc)),
+                                changed=_iso(datetime.fromtimestamp(info.st_ctime, timezone.utc)))
+                    if stat.S_ISLNK(info.st_mode):
                         try:
-                            digest, reason = _sha256_fd(fd, MAX_RECENT_HASH, budget)
-                        finally:
-                            os.close(fd)
-                        item.update(dict(sha256=digest) if digest else dict(hash_skipped=reason))
-                    except OSError:
-                        item['hash_skipped'] = 'unreadable'
-                else:
-                    item['kind'] = 'special'
-                found.append(item)
+                            item['link'] = os.readlink(entry.path)
+                        except OSError:
+                            pass
+                    elif stat.S_ISREG(info.st_mode):
+                        try:
+                            fd = os.open(entry.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+                            try:
+                                digest, reason = _sha256_fd(fd, MAX_RECENT_HASH, budget)
+                            finally:
+                                os.close(fd)
+                            item.update(dict(sha256=digest) if digest else dict(hash_skipped=reason))
+                        except OSError:
+                            item['hash_skipped'] = 'unreadable'
+                    else:
+                        item['kind'] = 'special'
+                    found.append(item)
     if len(found) >= MAX_RECENT_FILES or walked >= MAX_WALK_ENTRIES:
         gaps.append('the recent-file scan reached its limit; older or deeper changes were not listed')
     return sorted(found, key=lambda f: f['changed'], reverse=True), gaps
