@@ -15,6 +15,7 @@ adds the five detections a defender most often expects from a network sensor:
 | `IOC_MATCH` | the source or destination matches an operator-supplied **local watchlist** indicator (an address, or with `dns_names` a looked-up domain) | HIGH (configurable) | matched address, or the querying host | T1071 |
 | `DGA_DOMAIN` | *(opt-in `dns_names`)* a looked-up domain has two or more machine-generated spelling signals | MEDIUM | querying host | T1568.002 |
 | `DNS_TUNNEL_CHURN` | *(opt-in `dns_names`)* one host queries 30 distinct subdomains of one domain within 60 s | HIGH | querying host | T1071.004, T1048.003 |
+| `TLS_WITHOUT_SNI` | *(opt-in `tls_fingerprints`)* an internal host opens TLS directly to a public address without a server name | LOW | the bare server | T1573, T1071.001 |
 
 Every finding is a **heuristic for human review**, not a malware verdict. Each
 row in the table above has well-known legitimate look-alikes, which the
@@ -123,6 +124,51 @@ When enabled:
 * DNS over HTTPS or TLS, and resolver caching, hide queries from the sensor.
 * The sensor must see the client's queries: run it on that computer, or
   between it and its resolver.
+
+## TLS client fingerprints (opt-in)
+
+TLS ClientHellos travel in clear text. A **JA3** or **JA4** fingerprint
+summarizes the client's TLS stack (versions, ciphers, extensions, ALPN), so a
+malware family or offensive tool can be recognized even when it changes IP
+addresses. The **server name (SNI)** names the site being visited, so this is
+**off by default**:
+
+```toml
+[threat_detection]
+tls_fingerprints = true
+```
+
+When enabled:
+
+* **Capture.** The HUD's TShark capture reads `tls.handshake.type`,
+  `tls.handshake.ja3`, `tls.handshake.ja4` and
+  `tls.handshake.extensions_server_name`, from single ClientHellos only.
+* **Field probing.** TShark refuses to start on an unknown field, and JA4
+  needs Wireshark 4.2 or later. Each capture therefore first probes which of
+  these fields the installed TShark accepts, using a header-only pcap on stdin,
+  and uses that subset. With JA3 only, everything except JA4 matching still
+  works.
+* **Other inputs.** JSONL input may carry `tls_ja3`, `tls_ja4` and `tls_sni`
+  (for example exported from Zeek or Suricata). The Scapy source does not
+  compute fingerprints.
+* **What is kept.** Fingerprints and names stay in memory. Only one that
+  triggers a finding is kept, in that finding's evidence. A test checks the
+  raw database bytes.
+* **Fingerprint watchlist.** Add lines such as
+  `ja3:72a589da586844d7f0818ce684948eea # known C2 client` or
+  `ja4:t13d1516h2_8daaf6152771_02713d6af862`. A match raises `IOC_MATCH`
+  against the client host. Published fingerprint lists (for example
+  abuse.ch SSLBL) go stale and collide with legitimate software, so verify
+  before acting.
+* **SNI checks.** The SNI goes through the same domain-watchlist and
+  generated-name (`DGA_DOMAIN`) checks as DNS names. These still work when
+  DNS itself is encrypted (DNS over HTTPS or TLS).
+* **`TLS_WITHOUT_SNI`** (LOW) flags an internal host opening TLS straight to
+  a public IP without naming a server, a common command-and-control trait.
+
+**Limits:** Encrypted Client Hello (ECH) hides the real server name, and
+QUIC/HTTP-3 handshakes are not fingerprinted. A fingerprint identifies a TLS
+library and configuration, not a program.
 
 ## Atomicity and bounds
 

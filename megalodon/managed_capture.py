@@ -17,7 +17,7 @@ import time
 
 from .capture import _jsonl_event
 from .config import BlockingSettings
-from .offline.tshark import fields as tshark_fields, parse_fields
+from .offline.tshark import TLS_FIELDS, fields as tshark_fields, parse_fields, probe_fields
 from .storage import Store, StorageCapacityError
 from .buffered_recording import BufferedRecording
 from .validation import ValidationError
@@ -45,13 +45,13 @@ def now():
     return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
-def capture_commands(interface, dns_names=False):
+def capture_commands(interface, dns_names=False, tls=()):
     capture = ['/usr/bin/dumpcap', '-i', interface, '-p', '-s', '256', '-q',
                '-a', f'duration:{MAX_SECONDS}', '-c', str(MAX_PACKETS), '-P', '-w', '-']
     decode = ['/usr/bin/tshark', '-n', '-l', '-r', '-', '-T', 'fields',
               '-E', 'header=n', '-E', 'separator=/t', '-E', 'quote=n',
               '-E', 'occurrence=a', '-E', 'aggregator=,']
-    for field in tshark_fields(dns_names):
+    for field in tshark_fields(dns_names, tls):
         decode.extend(['-e', field])
     return capture, decode
 
@@ -125,8 +125,16 @@ class ManagedCapture:
                                         run_id=run_id,on_status=recording_status)
             if self.on_ready:
                 self.on_ready()
-            dns_names = bool(getattr(getattr(self.settings, 'threat', None), 'dns_names', False))
-            cap_argv, decode_argv = capture_commands(interface, dns_names)
+            threat = getattr(self.settings, 'threat', None)
+            dns_names = bool(getattr(threat, 'dns_names', False))
+            tls = ()
+            if getattr(threat, 'tls_fingerprints', False):
+                # Older TShark lacks some fields (JA4 needs 4.2+); use what it accepts.
+                tls = probe_fields(TLS_FIELDS, self.popen, env)
+                if 'tls.handshake.type' not in tls or len(tls) < 2:
+                    tls = ()
+            self.tls_fields = tls
+            cap_argv, decode_argv = capture_commands(interface, dns_names, tls)
             try:
                 cap = self.popen(cap_argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, env=env, start_new_session=True)
@@ -172,7 +180,7 @@ class ManagedCapture:
                             with self._lock:
                                 self._state['received'] += 1
                             try:
-                                event = parse_fields(row.decode('ascii'), dns_names=dns_names)
+                                event = parse_fields(row.decode('ascii'), dns_names=dns_names, tls=tls)
                                 if event is not None:
                                     event = _jsonl_event(json.dumps(replace(event, interface=interface).to_dict()))
                             except (ValueError, UnicodeError):

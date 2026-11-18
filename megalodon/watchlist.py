@@ -7,6 +7,7 @@ Format (UTF-8 text, one indicator per line)::
     203.0.113.0/24          # known scanner range
     2001:db8:dead::/48
     evil.example            # domain: also matches every subdomain
+    ja3:72a589da586844d7f0818ce684948eea   # TLS client fingerprint (JA3 or ja4:...)
 
 The file must be an owner-private regular file (no symlink, not group- or
 world-writable) because a watchlist decides which addresses are flagged.
@@ -32,7 +33,7 @@ import tempfile
 import unicodedata
 from typing import Iterable
 
-from .validation import ValidationError, parse_dns_name
+from .validation import ValidationError, parse_dns_name, parse_ja3, parse_ja4
 
 MAX_WATCHLIST_BYTES = 8 * 1024 * 1024
 MAX_INDICATORS = 200_000
@@ -66,7 +67,14 @@ def parse_domain(text: str) -> str:
 
 
 def parse_any(text: str):
-    """An IP/CIDR network, or a domain name when the text is not an address."""
+    """An IP/CIDR network, a ja3:/ja4: TLS fingerprint, or a domain name."""
+    lowered = text.lower()
+    for kind, parse in (("ja3", parse_ja3), ("ja4", parse_ja4)):
+        if lowered.startswith(kind + ":"):
+            try:
+                return (kind, parse(lowered[len(kind) + 1:]))
+            except ValidationError:
+                raise ValidationError(f"invalid {kind.upper()} fingerprint") from None
     if ":" in text or "/" in text or text.replace(".", "").isdigit():
         return parse_indicator(text)
     return parse_domain(text)
@@ -107,8 +115,16 @@ class Watchlist:
         self.source = source
         self._tables: dict[tuple[int, int], dict[int, tuple[str, str]]] = {}
         self._domains: dict[str, str] = {}
+        self._fingerprints: dict[tuple[str, str], str] = {}
         count = 0
         for network, label in entries:
+            if isinstance(network, tuple):
+                if network not in self._fingerprints:
+                    count += 1
+                    if count > MAX_INDICATORS:
+                        raise ValidationError(f"watchlist exceeds {MAX_INDICATORS} indicators")
+                self._fingerprints[network] = label
+                continue
             if isinstance(network, str):
                 if network not in self._domains:
                     count += 1
@@ -150,6 +166,16 @@ class Watchlist:
     def has_domains(self) -> bool:
         return bool(self._domains)
 
+    @property
+    def has_fingerprints(self) -> bool:
+        return bool(self._fingerprints)
+
+    def match_fingerprint(self, kind: str, value: str | None) -> tuple[str, str] | None:
+        if value is None:
+            return None
+        label = self._fingerprints.get((kind, value))
+        return None if label is None else (f"{kind}:{value}", label)
+
     def match_domain(self, name: str) -> tuple[str, str] | None:
         """Most specific domain indicator covering ``name`` (itself or a parent)."""
         if not self._domains:
@@ -172,6 +198,7 @@ class Watchlist:
             "ipv4": by_version[4],
             "ipv6": by_version[6],
             "domains": len(self._domains),
+            "tls_fingerprints": len(self._fingerprints),
             "prefix_lengths": len(self._tables),
             "severity": self.severity,
             "network_access_performed": False,
@@ -286,7 +313,9 @@ def render(entries: Iterable[tuple[ipaddress._BaseNetwork, str]], header: str) -
     lines = [f"# {_label(header)}"]
     seen: set[str] = set()
     for network, label in entries:
-        if isinstance(network, str):
+        if isinstance(network, tuple):
+            text = f"{network[0]}:{network[1]}"
+        elif isinstance(network, str):
             text = network
         else:
             text = network.with_prefixlen if network.num_addresses > 1 else str(network.network_address)

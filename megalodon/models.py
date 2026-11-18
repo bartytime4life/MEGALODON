@@ -10,6 +10,8 @@ from typing import Any, Mapping
 from .validation import (
     parse_flags,
     parse_dns_name,
+    parse_ja3,
+    parse_ja4,
     parse_ip,
     parse_nonnegative_int,
     parse_port,
@@ -39,6 +41,11 @@ class PacketEvent:
     # memory; storage never writes it, and only a flagged domain is retained,
     # inside that finding's evidence.
     dns_query_name: str | None = None
+    # Transient and opt-in ([threat_detection] tls_fingerprints): one TLS
+    # ClientHello's JA3/JA4 fingerprints and server name. Never stored.
+    tls_ja3: str | None = None
+    tls_ja4: str | None = None
+    tls_sni: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "observed_at", parse_timestamp(self.observed_at))
@@ -79,6 +86,12 @@ class PacketEvent:
         )
         if self.dns_query_name is not None:
             object.__setattr__(self, "dns_query_name", parse_dns_name(self.dns_query_name))
+        if self.tls_ja3 is not None:
+            object.__setattr__(self, "tls_ja3", parse_ja3(self.tls_ja3))
+        if self.tls_ja4 is not None:
+            object.__setattr__(self, "tls_ja4", parse_ja4(self.tls_ja4))
+        if self.tls_sni is not None:
+            object.__setattr__(self, "tls_sni", parse_dns_name(self.tls_sni))
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> "PacketEvent":
@@ -95,6 +108,9 @@ class PacketEvent:
             interface=value.get("interface"),
             metadata=value.get("metadata"),
             dns_query_name=value.get("dns_query_name"),
+            tls_ja3=value.get("tls_ja3"),
+            tls_ja4=value.get("tls_ja4"),
+            tls_sni=value.get("tls_sni"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -111,10 +127,16 @@ class PacketEvent:
             "interface": self.interface,
             "metadata": dict(self.metadata),
         }
-        if self.dns_query_name is not None:
-            # Present only for opted-in name capture, so default output is unchanged.
-            result["dns_query_name"] = self.dns_query_name
+        # Opt-in fields appear only when present, so default output is unchanged.
+        for name in ("dns_query_name", "tls_ja3", "tls_ja4", "tls_sni"):
+            value = getattr(self, name)
+            if value is not None:
+                result[name] = value
         return result
+
+    @property
+    def is_client_hello(self) -> bool:
+        return self.tls_ja3 is not None or self.tls_ja4 is not None
 
 
 @dataclass(frozen=True)

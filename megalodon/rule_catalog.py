@@ -98,6 +98,12 @@ RULES: tuple[RuleDescription, ...] = (
         "Some telemetry, anti-spam and CDN services encode data in subdomains on purpose.",
         ("T1071.004", "T1048.003"), "dns", "source",
     ),
+    RuleDescription(
+        "TLS_WITHOUT_SNI", THREAT_LAYER, "LOW", "handshakes", "handshakes without SNI", False,
+        "An internal host opened TLS directly to a public address without naming a server.",
+        "Some apps, VPNs, IoT devices and peer-to-peer software connect to bare addresses too.",
+        ("T1573", "T1071.001"), "command_and_control", "destination",
+    ),
 )
 
 BY_ID: dict[str, RuleDescription] = {rule.rule_id: rule for rule in RULES}

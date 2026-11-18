@@ -13,7 +13,7 @@ import tempfile
 import time
 
 from ..models import PacketEvent
-from ..validation import ValidationError, parse_dns_name
+from ..validation import ValidationError, parse_dns_name, parse_ja3, parse_ja4
 from .common import (Batch, Limits, OfflineError, ip, open_input,
                      require_unprivileged_linux, timestamp, uint, version)
 
@@ -27,8 +27,58 @@ FIELDS = ('frame.time_epoch', 'ip.src', 'ip.dst', 'ipv6.src', 'ipv6.dst',
 DNS_NAME_FIELDS = ('dns.flags.response', 'dns.qry.name')
 
 
-def fields(dns_names: bool = False) -> tuple[str, ...]:
-    return FIELDS + DNS_NAME_FIELDS if dns_names else FIELDS
+# Read only when the operator opts in ([threat_detection] tls_fingerprints).
+# JA4 needs Wireshark 4.2+, and TShark refuses to start on an unknown field,
+# so the available subset is probed first (see probe_fields).
+TLS_FIELDS = ('tls.handshake.type', 'tls.handshake.ja3', 'tls.handshake.ja4',
+              'tls.handshake.extensions_server_name')
+# A header-only little-endian pcap (Ethernet): TShark validates -e fields
+# before reading, and an empty capture yields no rows.
+EMPTY_PCAP = bytes.fromhex('d4c3b2a1020004000000000000000000ffff000001000000')
+
+
+def fields(dns_names: bool = False, tls: tuple[str, ...] = ()) -> tuple[str, ...]:
+    return FIELDS + (DNS_NAME_FIELDS if dns_names else ()) + tuple(tls)
+
+
+def probe_fields(candidates: tuple[str, ...], popen, env: dict[str, str],
+                 executable: str = EXECUTABLE) -> tuple[str, ...]:
+    """The subset of optional fields this TShark accepts; never raises."""
+    def accepted(names: tuple[str, ...]) -> bool:
+        argv = [executable, '-n', '-r', '-', '-T', 'fields']
+        for name in names:
+            argv.extend(('-e', name))
+        try:
+            process = popen(argv, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+        except OSError:
+            return False
+        try:
+            process.communicate(EMPTY_PCAP, timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            return False
+        return process.returncode == 0
+
+    if accepted(tuple(candidates)):
+        return tuple(candidates)
+    return tuple(name for name in candidates if accepted((name,)))
+
+
+def _tls(values: dict[str, str]) -> tuple[str | None, str | None, str | None]:
+    """JA3, JA4 and SNI from a single ClientHello; anything else yields none."""
+    if values.get('tls.handshake.type') != '1':
+        return None, None, None
+    out = []
+    for name, parse in (('tls.handshake.ja3', parse_ja3), ('tls.handshake.ja4', parse_ja4),
+                        ('tls.handshake.extensions_server_name', parse_dns_name)):
+        value = values.get(name, '')
+        try:
+            out.append(parse(value) if value and ',' not in value else None)
+        except ValidationError:
+            out.append(None)
+    return out[0], out[1], out[2]
 
 
 def _dns_name(response: str, name: str) -> str | None:
@@ -135,17 +185,21 @@ def _bounded_process(argv: tuple[str, ...], *, env: dict[str, str], cwd: str,
                     raise cleanup_error
 
 
-def parse_fields(row: str, *, dns_names: bool = False) -> PacketEvent | None:
+def parse_fields(row: str, *, dns_names: bool = False,
+                 tls: tuple[str, ...] = ()) -> PacketEvent | None:
     """Reject multi-valued/tunnel ambiguity, never silently take the first field."""
     if len(row) > 1024 or any(ord(c) < 32 and c != '\t' or ord(c) > 126 for c in row):
         raise OfflineError('INVALID_FIELD_ROW')
     columns = row.split('\t')
-    if len(columns) != len(fields(dns_names)):
+    if len(columns) != len(fields(dns_names, tls)):
         raise OfflineError('AMBIGUOUS_FIELD_ROW')
+    optional = columns[len(FIELDS):]
+    columns = columns[:len(FIELDS)]
     query_name = None
     if dns_names:
-        query_name = _dns_name(*columns[len(FIELDS):])
-        columns = columns[:len(FIELDS)]
+        query_name = _dns_name(*optional[:2])
+        optional = optional[2:]
+    ja3, ja4, sni = _tls(dict(zip(tls, optional))) if tls else (None, None, None)
     if any(',' in value for value in columns):
         raise OfflineError('AMBIGUOUS_FIELD_ROW')
     at, src4, dst4, src6, dst6, proto4, proto6, ts, td, us, ud, flags, size = columns
@@ -184,7 +238,7 @@ def parse_fields(row: str, *, dns_names: bool = False) -> PacketEvent | None:
                        metadata={'source_adapter': ADAPTER},
                        # With names opted in, the core length rule sees queries too.
                        dns_query_length=len(query_name) if query_name else None,
-                       dns_query_name=query_name)
+                       dns_query_name=query_name, tls_ja3=ja3, tls_ja4=ja4, tls_sni=sni)
 
 
 def replay(root: str, relative: str, limits: Limits = Limits()) -> Batch:
