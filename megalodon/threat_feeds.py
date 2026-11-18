@@ -39,6 +39,9 @@ SCHEMA = 'megalodon-feed-state-v1'
 FORMATS = ('ip', 'domain', 'hosts', 'ja3')
 NAME = re.compile(r'[a-z0-9][a-z0-9_-]{0,31}')
 HEADER = re.compile(r'[A-Za-z0-9-]{1,40}')
+# Headers the client sets itself; a secret under one of these would be overwritten or forwarded.
+RESERVED_HEADERS = frozenset({'accept', 'accept-encoding', 'connection', 'content-length', 'content-type', 'host',
+                              'if-modified-since', 'if-none-match', 'transfer-encoding', 'user-agent'})
 MAX_SOURCES = 16
 MAX_FEED_BYTES = 16 * 1024 * 1024
 MAX_LINE_CHARS = 512
@@ -79,8 +82,9 @@ class FeedSource:
             raise FeedError(f'feed {self.name}: max_entries must be 1-{MAX_INDICATORS}')
         if bool(self.header_name) != bool(self.token_file):
             raise FeedError(f'feed {self.name}: header_name and token_file go together')
-        if self.header_name and not HEADER.fullmatch(self.header_name):
-            raise FeedError(f'feed {self.name}: header_name must be an HTTP header name')
+        if self.header_name and (not HEADER.fullmatch(self.header_name)
+                                 or self.header_name.lower() in RESERVED_HEADERS):
+            raise FeedError(f'feed {self.name}: header_name must be an HTTP header name the client does not set itself')
 
 
 @dataclass(frozen=True)
@@ -205,9 +209,10 @@ def fetch(source, previous=None, *, timeout=TIMEOUT_SECONDS):
             headers['If-None-Match'] = previous['etag']
         if previous.get('last_modified'):
             headers['If-Modified-Since'] = previous['last_modified']
-    if source.token_file:
-        headers[source.header_name] = read_secret(source.token_file)
     request = urllib.request.Request(source.url, headers=headers)
+    if source.token_file:
+        # Unredirected: urllib never copies these onto a redirect, whatever the header name.
+        request.add_unredirected_header(source.header_name.capitalize(), read_secret(source.token_file))
     opener = urllib.request.build_opener(_Redirect())
     try:
         with opener.open(request, timeout=timeout) as response:
@@ -260,13 +265,16 @@ def _write_atomic(path, data):
         raise
 
 
-def _read_state(directory, name):
+def _read_state(directory, source):
+    """A source's cached copy, only if it was fetched from this URL in this format."""
     try:
-        meta = json.loads((directory / f'{name}.json').read_text(encoding='utf-8'))
-        lines = (directory / f'{name}.txt').read_text(encoding='utf-8').splitlines()
+        meta = json.loads((directory / f'{source.name}.json').read_text(encoding='utf-8'))
+        lines = (directory / f'{source.name}.txt').read_text(encoding='utf-8').splitlines()
     except (OSError, ValueError):
         return None, []
-    if type(meta) is not dict or meta.get('schema') != SCHEMA:
+    if (type(meta) is not dict or meta.get('schema') != SCHEMA
+            or meta.get('url') != source.url or meta.get('format') != source.format):
+        # A renamed URL or format must not reuse another endpoint's indicators or validators.
         return None, []
     try:
         entries = [value for value, _ in parse_lines(lines)]
@@ -296,11 +304,12 @@ def refresh(settings, *, fetcher=fetch, only_if_older_minutes=None):
     state = _private_dir(settings.state_dir)
     report = dict(schema='megalodon-feed-refresh-v1', refreshed_at=_now(), sources={})
     for source in settings.sources:
-        meta, entries = _read_state(state, source.name)
+        meta, entries = _read_state(state, source)
         item = dict(format=source.format, url_host=urllib.parse.urlsplit(source.url).hostname)
         if (only_if_older_minutes is not None and meta
                 and (_age_hours(meta.get('checked_at')) or 1e9) * 60 < only_if_older_minutes):
-            item.update(status='skipped_recent', indicators=len(entries), fetched_at=meta.get('fetched_at'))
+            item.update(status='skipped_recent', indicators=len(entries), fetched_at=meta.get('fetched_at'),
+                        validated_at=meta.get('validated_at'))
             report['sources'][source.name] = item
             continue
         try:
@@ -308,7 +317,8 @@ def refresh(settings, *, fetcher=fetch, only_if_older_minutes=None):
             if status == 304:
                 if meta is None:
                     raise FeedError('server reported no change but no earlier copy exists')
-                meta = dict(meta, checked_at=_now())
+                stamp = _now()
+                meta = dict(meta, checked_at=stamp, validated_at=stamp)
                 item.update(status='not_modified', indicators=len(entries))
             else:
                 try:
@@ -323,20 +333,22 @@ def refresh(settings, *, fetcher=fetch, only_if_older_minutes=None):
                 truncated = max(0, len(unique) - source.max_entries)
                 entries = unique[:source.max_entries]
                 stamp = _now()
-                meta = dict(schema=SCHEMA, fetched_at=stamp, checked_at=stamp, etag=etag, last_modified=modified,
+                meta = dict(schema=SCHEMA, url=source.url, format=source.format, fetched_at=stamp, checked_at=stamp,
+                            validated_at=stamp, etag=etag, last_modified=modified,
                             sha256=hashlib.sha256(body).hexdigest(), indicators=len(entries), invalid_lines=invalid,
                             truncated=truncated)
                 _write_atomic(state / f'{source.name}.txt',
                               render(((v, '') for v in entries), f'feed {source.name}').encode('utf-8'))
                 item.update(status='updated', indicators=len(entries), invalid_lines=invalid, truncated=truncated)
             _write_atomic(state / f'{source.name}.json', json.dumps(meta, sort_keys=True).encode('utf-8'))
-            item['fetched_at'] = meta.get('fetched_at')
+            item.update(fetched_at=meta.get('fetched_at'), validated_at=meta.get('validated_at'))
         except (FeedError, AlertConfigError, OSError, urllib.error.URLError) as exc:
             # Keep the last good copy; a failed download never empties coverage.
             reason = str(exc) if isinstance(exc, (FeedError, AlertConfigError)) else type(exc).__name__
             item.update(status='failed', error=reason[:200], indicators=len(entries),
-                        fetched_at=meta.get('fetched_at') if meta else None)
-        age = _age_hours(item.get('fetched_at'))
+                        fetched_at=meta.get('fetched_at') if meta else None,
+                        validated_at=meta.get('validated_at') if meta else None)
+        age = _age_hours(item.get('validated_at'))
         item['stale'] = age is None or age > settings.stale_hours
         report['sources'][source.name] = item
     report['output'] = build_output(settings)
@@ -374,7 +386,7 @@ def build_output(settings):
         base = len(entries)
     counts = {}
     for source in settings.sources:
-        _, items = _read_state(state, source.name)
+        _, items = _read_state(state, source)
         before = len(entries)
         for indicator in items:
             add(indicator, _label(f'feed:{source.name}'))
@@ -392,10 +404,11 @@ def status(settings):
     state = Path(settings.state_dir).expanduser()
     result = dict(schema='megalodon-feed-status-v1', output=str(Path(settings.output).expanduser()), sources={})
     for source in settings.sources:
-        meta, entries = _read_state(state, source.name) if state.is_dir() else (None, [])
-        age = _age_hours(meta.get('fetched_at')) if meta else None
+        meta, entries = _read_state(state, source) if state.is_dir() else (None, [])
+        age = _age_hours(meta.get('validated_at')) if meta else None
         result['sources'][source.name] = dict(
             format=source.format, indicators=len(entries), fetched_at=meta.get('fetched_at') if meta else None,
             checked_at=meta.get('checked_at') if meta else None,
+            validated_at=meta.get('validated_at') if meta else None,
             stale=age is None or age > settings.stale_hours)
     return result

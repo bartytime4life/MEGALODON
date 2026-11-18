@@ -50,7 +50,10 @@ provider's current address and terms of use before relying on it.
 
 A feed that needs a key takes `header_name = "Auth-Key"` and
 `token_file = "~/.config/megalodon/feeds/abusech.key"`. The token file holds
-one line, is owned by you and has mode 600, and the key is never logged.
+one line, is owned by you and has mode 600, and the key is never logged. The
+key is never sent on a redirect, whatever its header name. Header names the
+client sets itself (`User-Agent`, `Accept`, `Host`, `If-None-Match` and
+similar) are refused.
 
 ## Run on a schedule
 
@@ -90,7 +93,9 @@ so a refreshed list applies from the next start.
   UTF-8, it yields no indicators, or more of its lines are unreadable than
   readable, such as an HTML error page. A failed source keeps its last good
   copy in `state_dir`, so a bad download never empties coverage. `status`
-  reports each source's age.
+  reports each source's age since its last successful check, a download or a
+  304 confirming nothing changed; failed attempts do not count. A cached copy
+  belongs to one URL and format: changing either starts the source over.
 * **Bounds.** Each source keeps at most `max_entries` (default 50,000)
   indicators, and the report counts the rest as `truncated`. The output stays
   under the watchlist's limits of 200,000 indicators and 8 MiB. The base list
