@@ -229,6 +229,19 @@ def test_a_rename_onto_an_existing_document_counts_its_history(tmp_path):
     assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
 
 
+def test_staged_encrypted_files_renamed_to_new_enc_names_are_not_new_encryption(tmp_path):
+    d, clock = detector(min_files=3)
+    d.seed([tmp_path])
+    found = []
+    for i in range(6):
+        temp = write(tmp_path / f"part{i}.tmp", os.urandom(8000))
+        found += d.written(temp)
+        target = str(tmp_path / f"archive-{i}.enc")
+        os.replace(temp, target)
+        found += d.written(target, previous_path=temp)
+    assert "RANSOMWARE_ENCRYPTION" not in [f.rule_id for f in found]
+
+
 def test_a_renamed_folder_keeps_its_files_history(tmp_path):
     d, _ = detector(min_files=2)
     (tmp_path / "old").mkdir()

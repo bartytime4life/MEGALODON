@@ -242,7 +242,9 @@ class RansomwareDetector:
         replaced = recognized or any(
             f == folder and (name == g or name.startswith(g + '.') or (stem != name and g.startswith(stem + '.')))
             for _, f, g in self.gone)
-        if replaced or (_RANSOM_EXT.search(name) and before != 'encrypted'):
+        # Encrypted data that only moved (a staged .tmp renamed to .enc) is not new encryption.
+        already = 'encrypted' in (before, source)
+        if replaced or (_RANSOM_EXT.search(name) and not already):
             self.strong.append((now, path))
         else:
             self.weak.append((now, path))
