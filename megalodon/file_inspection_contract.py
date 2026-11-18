@@ -17,6 +17,10 @@ BUNDLE_SCHEMA = 'megalodon-yara-bundle-v1'
 MAX_RULE_FILES = 64
 MAX_RULE_FILE = 1024 * 1024
 MAX_BUNDLE = 4 * 1024 * 1024
+# Rule text may hold only tab/newline controls, so JSON escaping at most
+# doubles it (\\ and \" are two bytes); plus framing for 64 namespaces.
+MAX_BUNDLE_BYTES = 2 * MAX_BUNDLE + 65536
+_RULE_CONTROLS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 MAX_RULE_MATCHES = 32
 MAX_RULE_COUNT = 100000
 NAMESPACE = r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}'
@@ -102,7 +106,7 @@ def validate_identification(value):
 
 def parse_bundle(raw):
     """The rules bundle the host built: {namespace: rule source}, bounded."""
-    if type(raw) is not bytes or len(raw) > MAX_BUNDLE + 65536:
+    if type(raw) is not bytes or len(raw) > MAX_BUNDLE_BYTES:
         raise ValueError('Rules bundle exceeds its limit.')
     value = json.loads(raw.decode('utf-8'), object_pairs_hook=pairs,
                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Invalid number.')))
@@ -112,7 +116,7 @@ def parse_bundle(raw):
         raise ValueError('Unsupported rules bundle.')
     total = 0
     for name, text in sources.items():
-        if not re.fullmatch(NAMESPACE, name) or type(text) is not str or '\x00' in text:
+        if not re.fullmatch(NAMESPACE, name) or type(text) is not str or _RULE_CONTROLS.search(text):
             raise ValueError('Invalid rules bundle entry.')
         size = len(text.encode('utf-8'))
         total += size

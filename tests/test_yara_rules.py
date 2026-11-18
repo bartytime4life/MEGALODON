@@ -109,6 +109,20 @@ def test_bundle_count_and_total_size_are_bounded(tmp_path):
         yara_rules.load(big)
 
 
+def test_worst_case_escaping_still_fits_the_worker_bound(tmp_path):
+    # Backslashes and quotes double when JSON-escaped; the host bound must
+    # never accept rules the worker then refuses.
+    filler = '\\"' * ((contract.MAX_RULE_FILE - 64) // 2)
+    path = folder(tmp_path, {f'r{i}.yar': f'/* {filler} */ rule A{i} {{ condition: true }}' for i in range(4)})
+    bundle = yara_rules.load(path)
+    raw = yara_rules.bundle_bytes(bundle['sources'])
+    assert len(raw) > contract.MAX_BUNDLE and len(raw) <= contract.MAX_BUNDLE_BYTES
+    assert contract.parse_bundle(raw) == bundle['sources']
+    (path / 'ctl.yar').write_text('rule C { condition: true } \x1b[31m', encoding='utf-8')
+    with pytest.raises(yara_rules.RulesError, match='control character'):
+        yara_rules.load(path)
+
+
 def test_parse_bundle_refuses_shapes_the_host_never_builds():
     good = yara_rules.bundle_bytes({'a': 'rule A {condition:true}'})
     assert contract.parse_bundle(good) == {'a': 'rule A {condition:true}'}
