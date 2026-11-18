@@ -87,7 +87,8 @@ def _auth(paths: tuple[str, ...], now: datetime | None) -> dict[str, Any]:
                  "attack": list(f["attack"])}
                 for f in findings[:MAX_FINDINGS]
             ],
-            "findings_total": len(report["findings"]),
+            # Every emitted finding, including any beyond the retained cap.
+            "findings_total": sum(report["severity_counts"].values()),
             "truncated": report["truncated"],
         }
     return {"state": "unreadable", "reason": errors[0]}

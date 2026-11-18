@@ -186,3 +186,20 @@ def test_read_lines_refuses_fifo_symlink_and_directory(tmp_path):
 def test_settings_are_bounded(field, value):
     with pytest.raises(ValueError):
         AuthReviewSettings(**{field: value})
+
+
+def test_finding_cap_never_hides_a_later_attack():
+    from megalodon.auth_review import MAX_FINDINGS
+    lines = [f"Nov 17 20:{(i // 60) % 60:02d}:{i % 60:02d} web useradd[{i}]: new user: name=u{i}, UID={2000 + i}, GID=1"
+             for i in range(MAX_FINDINGS + 20)]
+    lines += [ssh_fail(10, s, pid=9000 + s) for s in range(6)]
+    lines.append(f"Nov 17 22:11:00 web sshd[9999]: Accepted password for root from {ATTACKER} port 1 ssh2")
+    report, reviewer = run(lines)
+    assert report["truncated"] is True
+    assert len(report["findings"]) == MAX_FINDINGS
+    assert report["severity_counts"] == {"CRITICAL": 1, "HIGH": 1, "MEDIUM": MAX_FINDINGS + 20, "LOW": 0}
+    kept = [f["rule_id"] for f in report["findings"]]
+    assert "AUTH_SUCCESS_AFTER_FAILURES" in kept and "AUTH_FAILURE_BURST" in kept
+    stamps = [f["observed_at"] for f in report["findings"]]
+    assert stamps == sorted(stamps), "retained findings stay chronological"
+    assert reviewer.attacker_sources() == [(ATTACKER, "auth-review AUTH_FAILURE_BURST")]

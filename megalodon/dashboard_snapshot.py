@@ -7,6 +7,9 @@ const snapshotLabels = {
   sources:['JSONL import','Scapy'], severities:['LOW','MEDIUM','HIGH','CRITICAL'],
   detectors:__RULE_IDS__, lanes:['Normal · no linked finding','Review · LOW / MEDIUM','Danger · HIGH / CRITICAL']
 };
+// Earlier exports used shorter detector lists in their own order; label each by length.
+const snapshotLegacyDetectors={3:__CORE_IDS__,8:__PRE_DECOY_IDS__};
+function snapshotDetectorLabels(length){return snapshotLegacyDetectors[length]||snapshotLabels.detectors;}
 function validateHudSnapshot(text, now=Date.now()) {
   if(typeof text!=='string'||new TextEncoder().encode(text).byteLength>16384)throw new Error('Choose a HUD summary smaller than 16 KiB.');
   let data; try {
@@ -48,17 +51,20 @@ function validateHudSnapshot(text, now=Date.now()) {
   if(!count(data.events,500)||data.events<1||!count(data.findings,200)||typeof data.reported_bytes!=='string'||!/^(0|[1-9][0-9]{0,21})$/.test(data.reported_bytes)||BigInt(data.reported_bytes)>BigInt(data.events)*9223372036854775807n||typeof data.limited!=='boolean'||!['unknown','degraded'].includes(data.quality))throw new Error('Invalid snapshot counts or quality.');
   for(const [key,length,total] of [['lanes',3,data.events],['timeline',12,data.events],['protocols',8,data.events],['sources',2,data.events],['severities',4,data.findings],['detectors',snapshotLabels.detectors.length,data.findings]]){
     // Earlier exports carry fewer detector counts: 3 (core only) or 8 (before DECOY_TOUCH).
-    const legacy=key==='detectors'&&Array.isArray(data[key])&&[3,8].includes(data[key].length);
+    const legacy=key==='detectors'&&Array.isArray(data[key])&&Object.hasOwn(snapshotLegacyDetectors,data[key].length);
     if(!Array.isArray(data[key])||(data[key].length!==length&&!legacy)||!data[key].every(v=>count(v,total))||data[key].reduce((a,b)=>a+b,0)!==total)throw new Error('Inconsistent snapshot totals.');
   }
   if(data.lanes[1]>data.severities[0]+data.severities[1]||data.lanes[2]>data.severities[2]+data.severities[3]||data.findings>0&&data.lanes[1]+data.lanes[2]===0)throw new Error('Inconsistent traffic lanes.');
   return data;
 }
-if(typeof module!=='undefined')module.exports={validateHudSnapshot,snapshotLabels};
+if(typeof module!=='undefined')module.exports={validateHudSnapshot,snapshotLabels,snapshotDetectorLabels};
 '''
 import json as _json
 from .rule_catalog import ALL_RULE_IDS as _RULE_IDS
-SNAPSHOT_VALIDATOR_JS = SNAPSHOT_VALIDATOR_JS.replace('__RULE_IDS__', _json.dumps(list(_RULE_IDS)).replace('"', "'"))
+_PRE_DECOY_IDS = [rule for rule in _RULE_IDS if rule != 'DECOY_TOUCH']
+for _marker, _ids in (('__RULE_IDS__', list(_RULE_IDS)), ('__CORE_IDS__', list(_RULE_IDS[:3])),
+                      ('__PRE_DECOY_IDS__', _PRE_DECOY_IDS)):
+    SNAPSHOT_VALIDATOR_JS = SNAPSHOT_VALIDATOR_JS.replace(_marker, _json.dumps(_ids).replace('"', "'"))
 
 SNAPSHOT_HOSTED_JS = r'''
 if(typeof document!=='undefined'){
@@ -73,7 +79,7 @@ if(typeof document!=='undefined'){
     el('snapshot-events').textContent=data?String(data.events):'—';el('snapshot-findings').textContent=data?String(data.findings):'—';
     el('snapshot-bytes').textContent=data?data.reported_bytes:'—';el('snapshot-sources').textContent=data?String(data.sources.filter(n=>n>0).length):'—';
     el('snapshot-range').textContent=data?`${data.start} → ${data.end} · ${data.limited?'limited candidate window':'bounded returned set'} · quality ${data.quality}`:'No summary loaded. Charts show only imported, qualified metadata.';
-    for(const name of ['protocols','sources','severities','detectors','lanes'])chart('snapshot-'+name+'-chart',snapshotLabels[name].slice(0,data?.[name]?.length??snapshotLabels[name].length),data?.[name],['severities','detectors'].includes(name)?'findings':'records');
+    for(const name of ['protocols','sources','severities','detectors','lanes'])chart('snapshot-'+name+'-chart',name==='detectors'&&data?snapshotDetectorLabels(data.detectors.length):snapshotLabels[name],data?.[name],['severities','detectors'].includes(name)?'findings':'records');
     const timeline=el('snapshot-timeline');timeline.replaceChildren();
     if(data){const peak=Math.max(1,...data.timeline);data.timeline.forEach((value,index)=>{const column=document.createElement('div');const bar=document.createElement('span');bar.style.height=`${value/peak*120}px`;const label=document.createElement('small');label.textContent=String(index+1);column.setAttribute('aria-label',`Interval ${index+1}: ${value} records`);column.title=`Interval ${index+1}: ${value} records`;const count=document.createElement('b');count.textContent=String(value);column.append(count,bar,label);timeline.append(column);});}
     else timeline.textContent='No saved time series loaded.';
