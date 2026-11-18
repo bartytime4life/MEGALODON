@@ -242,6 +242,22 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    listeners = sub.add_parser(
+        "listeners", help="baseline and check which programs listen for connections (exit 1 on changes, Linux)")
+    listeners_sub = listeners.add_subparsers(dest="listeners_command", required=True)
+    for name, text in (("baseline", "record every listening port, where it is reachable and which program owns it"),
+                       ("check", "report new listeners, ports taken over by another program and wider exposure"),
+                       ("accept", "after review, record the current listeners as the new baseline")):
+        command = listeners_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/listeners.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send a summary to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
     ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
     ransom_watch = ransom_sub.add_parser(
@@ -1187,6 +1203,46 @@ def _persistence(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _listeners(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import listener_watch as watch
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.listeners_command == "baseline":
+            result = watch.baseline(manifest, replace=args.replace)
+        elif args.listeners_command == "accept":
+            result = watch.accept(manifest)
+        else:
+            result = watch.check(manifest)
+    except (watch.ListenerError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.listeners_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            top = findings[0]
+            listed = "; ".join(
+                f"{f['rule_id']} {f['listener']} ({', '.join(p['path'] for p in f['programs'][:2]) or 'owner unknown'})"
+                for f in findings[:5])
+            dispatcher.submit([HostNotice(
+                top["rule_id"], top["severity"], datetime.now(timezone.utc),
+                f"{len(findings)} listener changes since the baseline: {listed}",
+                tuple(sorted({t for f in findings for t in f['techniques']}))[:8],
+                "A program started listening for connections, took over a port, or became reachable more widely.")])
+    return 1 if findings else 0
+
+
 def _ransomware(args: argparse.Namespace) -> int:
     from threading import Event
     import tempfile
@@ -1888,6 +1944,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _ransomware(args)
     elif args.command == "persistence":
         code = _persistence(args)
+    elif args.command == "listeners":
+        code = _listeners(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":

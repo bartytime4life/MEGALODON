@@ -25,15 +25,19 @@ timer.
 | canary | Plants one bait file in a temporary folder, changes it, then runs `check` | `CANARY_MODIFIED` |
 | ransomware | The ransomware self-test: throwaway files encrypted under a live inotify watch (Linux) | `RANSOMWARE_ENCRYPTION`, `RANSOM_NOTE` |
 | persistence | Baselines a throwaway folder tree, then adds a comment-only cron file and a comment line in a profile | `cron`, `shell_startup` changes |
+| listeners | Baselines this machine's listeners into a temporary manifest, then listens on a loopback port of its own (Linux) | `NEW_LISTENER` for that port |
 | alerts | With `--alerts`: the same labeled test notice as `megalodon alerts test`, sent to every configured destination | Every destination accepts it |
 
 ## What it never touches
 
 * **Your data.** Every check runs in a fresh temporary folder that is
   removed afterwards. Your audit database, canaries, watched folders,
-  persistence baseline and system files are not read or changed.
+  persistence and listener baselines and system files are not changed. The
+  listeners check reads the kernel's socket tables, as `megalodon listeners
+  check` does.
 * **Your network.** No packet is sent or captured. The network check feeds
-  stored sample metadata through the detector.
+  stored sample metadata through the detector. The listeners check opens one
+  loopback port for a moment, reachable only from this machine.
 * **Destinations, without `--alerts`.** Nothing is sent to an alert
   destination unless you pass `--alerts`. The notice then says plainly that it
   is a test.
