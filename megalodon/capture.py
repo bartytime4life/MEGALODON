@@ -11,7 +11,7 @@ from typing import Iterator, TextIO
 
 from .capabilities import runtime_platform
 from .models import PacketEvent
-from .validation import SQLITE_INTEGER_MAX, ValidationError
+from .validation import SQLITE_INTEGER_MAX, ValidationError, parse_dns_name
 
 
 class CaptureError(RuntimeError):
@@ -24,6 +24,7 @@ MAX_JSONL_INPUT_BYTES = 256 * 1024 * 1024
 _JSONL_FIELDS = frozenset({
     "observed_at", "timestamp", "src_ip", "dst_ip", "protocol", "src_port",
     "dst_port", "tcp_flags", "dns_query_length", "byte_count", "interface", "metadata",
+    "dns_query_name",
 })
 MAX_SCAPY_QUEUE_EVENTS = 1024
 SCAPY_QUEUE_POLL_SECONDS = 0.25
@@ -374,7 +375,7 @@ def iter_sample(*, include_demo_threat: bool = False) -> Iterator[PacketEvent]:
             )
 
 
-def iter_scapy(interface: str) -> Iterator[PacketEvent]:
+def iter_scapy(interface: str, *, dns_names: bool = False) -> Iterator[PacketEvent]:
     if runtime_platform() != "linux":
         raise CaptureError("live Scapy capture is supported only on Linux")
     if not interface:
@@ -415,6 +416,7 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
                 src_port, dst_port = int(layer.sport), int(layer.dport)
 
             query_length = None
+            query_name = None
             if DNS in packet and DNSQR in packet:
                 protocol = "DNS"
                 # A response (qr=1) echoes the client's question; measuring it
@@ -424,6 +426,13 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
                     # Scapy keeps the root label's trailing dot; other adapters
                     # report the name without it.
                     query_length = len(query.rstrip(b"." if isinstance(query, bytes) else "."))
+                    if dns_names:
+                        # Opt-in only; an unparseable name is dropped, not the packet.
+                        try:
+                            text = query.decode("ascii") if isinstance(query, bytes) else query
+                            query_name = parse_dns_name(text)
+                        except (UnicodeDecodeError, ValidationError):
+                            query_name = None
 
             last_observed = max(last_observed, datetime.now(timezone.utc))
             events.offer(
@@ -438,6 +447,7 @@ def iter_scapy(interface: str) -> Iterator[PacketEvent]:
                     dns_query_length=query_length,
                     byte_count=len(packet),
                     interface=interface,
+                    dns_query_name=query_name,
                 )
             )
         except (KeyError, TypeError, ValueError, ValidationError):

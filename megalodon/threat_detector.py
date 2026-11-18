@@ -29,11 +29,13 @@ from __future__ import annotations
 
 from collections import OrderedDict, deque
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import ipaddress
 from typing import Any
 
+from . import domain_signals
 from .models import DetectionResult, PacketEvent
 from .rule_catalog import BY_ID, THREAT_RULE_IDS
 
@@ -93,6 +95,33 @@ def is_public(address: str) -> bool:
     return parsed.is_global and not parsed.is_multicast
 
 
+# Approximate registrable domains without a fetched public-suffix list: the
+# last two labels, or three under these common two-label public suffixes.
+_TWO_LABEL_SUFFIXES = frozenset({
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "net.uk", "com.au", "net.au", "org.au",
+    "edu.au", "gov.au", "co.nz", "org.nz", "co.jp", "ne.jp", "or.jp", "ac.jp", "com.br",
+    "net.br", "org.br", "com.cn", "net.cn", "org.cn", "com.mx", "co.in", "net.in", "org.in",
+    "co.za", "com.tr", "com.tw", "com.hk", "co.kr", "com.sg", "com.ar", "co.id", "com.my",
+    "com.ph", "com.vn", "co.il", "com.ua", "com.pl", "com.ru",
+})
+
+
+def registrable_domain(name: str) -> str:
+    labels = name.split(".")
+    if len(labels) <= 2:
+        return name
+    if ".".join(labels[-2:]) in _TWO_LABEL_SUFFIXES:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
+
+
+def _churn_exempt(name: str) -> bool:
+    # Reverse lookups, local service discovery and CDNs generate many names by design.
+    if name.endswith((".local", ".arpa", ".lan", ".internal")):
+        return True
+    return any(name == s or name.endswith("." + s) for s in domain_signals.GENERATED_SUFFIXES)
+
+
 def _connection_start(event: PacketEvent) -> bool:
     """A TCP connection-attempt candidate: SYN without ACK, or a flagless flow record."""
     if event.protocol != "TCP":
@@ -122,6 +151,11 @@ class ThreatDetectionSettings:
     # internal addresses. Any contact is a near-certain sign of scanning.
     decoy_ports: tuple[int, ...] = ()
     decoy_addresses: tuple[str, ...] = ()
+    # Opt-in: read DNS query names from capture. Off by default because names
+    # are a record of every site visited; only a flagged domain is retained.
+    dns_names: bool = False
+    dns_churn_window_seconds: int = 60
+    dns_churn_distinct_subdomains: int = 30
 
     def __post_init__(self) -> None:
         self._validate_decoys()
@@ -142,6 +176,8 @@ class ThreatDetectionSettings:
             ("beacon_jitter_percent", 0, 50),
             ("alert_cooldown_seconds", 0, 86400),
             ("max_tracked_keys", 16, 1_048_576),
+            ("dns_churn_window_seconds", 1, 3600),
+            ("dns_churn_distinct_subdomains", 2, 4096),
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int):
@@ -157,6 +193,8 @@ class ThreatDetectionSettings:
             )
         if not isinstance(self.enabled, bool):
             raise ValueError("threat_detection.enabled must be a boolean")
+        if not isinstance(self.dns_names, bool):
+            raise ValueError("threat_detection.dns_names must be a boolean")
         if not isinstance(self.watchlist_path, str) or len(self.watchlist_path) > 1024:
             raise ValueError("threat_detection.watchlist_path must be text")
 
@@ -291,10 +329,24 @@ class ThreatDetector:
         self.exfil: dict[tuple[str, str], deque[list[int]]] = {}
         self.exfil_totals: dict[tuple[str, str], int] = {}
         self.beacon: dict[tuple[str, str, int], deque[int]] = {}
+        self.churn: dict[tuple[str, str], OrderedDict[str, int]] = {}
         self.last_emitted: dict[tuple[str, Any], int] = {}
         self.lru: OrderedDict[tuple[str, Any], None] = OrderedDict()
         # (token, journal) while a preparation is unresolved.
         self._pending: tuple[object, _Journal] | None = None
+
+    def __deepcopy__(self, memo):
+        """Copy mutable state only; settings, allowlist and watchlist are immutable
+        and may be large (a watchlist holds up to 200 000 indicators)."""
+        if self._pending is not None:
+            raise RuntimeError("cannot copy a threat detector with a pending preparation")
+        clone = ThreatDetector.__new__(ThreatDetector)
+        for name, value in self.__dict__.items():
+            if name in {"settings", "allowlist", "watchlist", "_decoy_ports", "_decoy_addresses"}:
+                setattr(clone, name, value)
+            else:
+                setattr(clone, name, deepcopy(value, memo))
+        return clone
 
     # ------------------------------------------------------------------ API
     def analyze(self, event: PacketEvent) -> list[DetectionResult]:
@@ -315,8 +367,11 @@ class ThreatDetector:
                 now = _microseconds(event.observed_at)
                 src = str(_canonical(event.src_ip))
                 dst = str(_canonical(event.dst_ip))
-                for rule in (self._decoy, self._ioc, self._brute_force, self._host_sweep,
-                             self._exfiltration, self._beaconing):
+                rules = [self._decoy, self._ioc, self._brute_force, self._host_sweep,
+                         self._exfiltration, self._beaconing]
+                if self.settings.dns_names and event.dns_query_name:
+                    rules += [self._domain_ioc, self._generated_domain, self._dns_churn]
+                for rule in rules:
                     found = rule(event, src, dst, now, journal, touched)
                     if found is not None:
                         results.append(found)
@@ -553,6 +608,91 @@ class ThreatDetector:
             },
         )
 
+    # ------------------------------------------------------------ DNS names
+    def _domain_ioc(self, event, src, dst, now, journal, touched):
+        if self.watchlist is None or not self.watchlist.has_domains:
+            return None
+        name = event.dns_query_name
+        hit = self.watchlist.match_domain(name)
+        if hit is None:
+            return None
+        indicator, label = hit
+        key = ("IOC_MATCH", ("domain", src, indicator))
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        evidence: dict[str, Any] = {
+            "matches": 1, "matched_domain": name, "matched_direction": "dns_query",
+            "indicator": indicator,
+        }
+        if label:
+            evidence["indicator_label"] = label
+        return self._result(
+            event, "IOC_MATCH", src,
+            f"{src} looked up {name}, which matches watchlist domain {indicator}",
+            evidence, severity=self.watchlist.severity,
+        )
+
+    def _generated_domain(self, event, src, dst, now, journal, touched):
+        review = domain_signals.assess(event.dns_query_name)
+        if review is None or review["level"] != "review":
+            return None
+        parent = registrable_domain(review["name"])
+        key = ("DGA_DOMAIN", (src, parent))
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        signals = [item["id"] for item in review["signals"]]
+        return self._result(
+            event, "DGA_DOMAIN", src,
+            f"{src} looked up {review['name']}, which reads like a machine-generated or "
+            f"encoded name ({', '.join(signals)})",
+            {
+                "signals": len(signals), "threshold": 2, "domain": review["name"],
+                "registrable_domain": parent, "signal_ids": signals,
+            },
+        )
+
+    def _dns_churn(self, event, src, dst, now, journal, touched):
+        name = event.dns_query_name
+        parent = registrable_domain(name)
+        if name == parent or _churn_exempt(name):
+            return None
+        settings = self.settings
+        key = (src, parent)
+        touched.append(("churn", key))
+        children = journal.get_or_create(self.churn, key, OrderedDict)
+        journal.snapshot_ordered(children)
+        if children:
+            now = max(now, next(reversed(children.values())))
+        child = name[: -(len(parent) + 1)]
+        children[child] = now
+        children.move_to_end(child)
+        cutoff = now - settings.dns_churn_window_seconds * _US
+        while children and next(iter(children.values())) < cutoff:
+            children.popitem(last=False)
+        while len(children) > settings.dns_churn_distinct_subdomains:
+            children.popitem(last=False)
+        if len(children) < settings.dns_churn_distinct_subdomains:
+            return None
+        emit_key = ("DNS_TUNNEL_CHURN", key)
+        if not self._can_emit(emit_key, now, journal):
+            return None
+        touched.append(emit_key)
+        longest = max(len(label) for label in children)
+        return self._result(
+            event, "DNS_TUNNEL_CHURN", src,
+            f"{src} queried {len(children)} distinct subdomains of {parent} within "
+            f"{settings.dns_churn_window_seconds}s, as DNS tunnels and exfiltration do",
+            {
+                "distinct_subdomains": len(children),
+                "threshold": settings.dns_churn_distinct_subdomains,
+                "window_seconds": settings.dns_churn_window_seconds,
+                "registrable_domain": parent,
+                "longest_subdomain_chars": longest,
+            },
+        )
+
     # -------------------------------------------------------------- helpers
     def _can_emit(self, key: tuple[str, Any], now: int, journal: _Journal) -> bool:
         previous = self.last_emitted.get(key)
@@ -589,7 +729,8 @@ class ThreatDetector:
             suppressed_reason=suppressed,
         )
 
-    _STATE_MAPS = {"brute": "brute", "sweep": "sweep", "exfil": "exfil", "beacon": "beacon"}
+    _STATE_MAPS = {"brute": "brute", "sweep": "sweep", "exfil": "exfil", "beacon": "beacon",
+                   "churn": "churn"}
 
     def _touch(self, item: tuple[str, Any]) -> None:
         lru = self.lru
@@ -606,7 +747,7 @@ class ThreatDetector:
 
     def state_size(self) -> int:
         return (len(self.brute) + len(self.sweep) + len(self.exfil)
-                + len(self.beacon) + len(self.last_emitted))
+                + len(self.beacon) + len(self.churn) + len(self.last_emitted))
 
 
 def registry_document() -> dict[str, object]:
@@ -630,6 +771,7 @@ def registry_document() -> dict[str, object]:
         "default_settings": {
             k: v for k, v in settings.__dict__.items()
             if k not in {"watchlist_path", "watchlist_severity", "decoy_ports", "decoy_addresses"}
+            and not isinstance(v, tuple)
         },
         "auth_services": {str(port): name for port, name in sorted(AUTH_SERVICES.items())},
         "state": {

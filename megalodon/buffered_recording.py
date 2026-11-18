@@ -23,6 +23,7 @@ class BufferedRecording:
         self.pending_bytes = 0
         self.started = None
         self.staged = None
+        self.staged_threat = None
         self.committed = self.commits = self.failures = self.unconfirmed = 0
 
     def snapshot(self):
@@ -47,17 +48,23 @@ class BufferedRecording:
             if len(self.pending) >= self.QUEUE_RECORDS or self.pending_bytes + size > self.QUEUE_BYTES:
                 raise ValueError('Recording queue is full; intake must stop.')
             if self.staged is None:
-                # Only this bounded provisional detector advances before persistence.
-                # The committed detector is left untouched on any failed transaction.
+                # Only these bounded provisional detectors advance before persistence.
+                # The committed detectors are left untouched on any failed transaction.
                 self.staged = deepcopy(self.service.detector)
+                self.staged_threat = deepcopy(self.service.threat_detector)
             prepared = self.staged.prepare(event)
+            threat = None
             try:
-                detections = list(prepared.results)
+                threat = self.staged_threat.prepare(event)
+                detections = list(prepared.results) + list(threat.results)
                 actions = [self.service._action_for_detection(item) for item in detections]
             except BaseException:
+                if threat is not None:
+                    threat.rollback()
                 prepared.rollback()
                 raise
             prepared.commit()
+            threat.commit()
             if not self.pending:
                 self.started = self.monotonic()
             self.pending.append((event, detections, actions))
@@ -85,13 +92,14 @@ class BufferedRecording:
                 self.unconfirmed += count
                 self.pending.clear()
                 self.pending_bytes = 0
-                self.started = self.staged = None
+                self.started = self.staged = self.staged_threat = None
                 self._notify()
                 raise
             self.service.detector = self.staged
+            self.service.threat_detector = self.staged_threat
             self.committed += count
             self.commits += 1
             self.pending.clear()
             self.pending_bytes = 0
-            self.started = self.staged = None
+            self.started = self.staged = self.staged_threat = None
             self._notify()

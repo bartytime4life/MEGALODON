@@ -13,6 +13,7 @@ import tempfile
 import time
 
 from ..models import PacketEvent
+from ..validation import ValidationError, parse_dns_name
 from .common import (Batch, Limits, OfflineError, ip, open_input,
                      require_unprivileged_linux, timestamp, uint, version)
 
@@ -21,6 +22,25 @@ ADAPTER = 'tshark-fields-v1'
 FIELDS = ('frame.time_epoch', 'ip.src', 'ip.dst', 'ipv6.src', 'ipv6.dst',
           'ip.proto', 'ipv6.nxt', 'tcp.srcport', 'tcp.dstport', 'udp.srcport',
           'udp.dstport', 'tcp.flags', 'frame.len')
+# Read only when the operator opts in ([threat_detection] dns_names). By
+# default no DNS name leaves the packet, and FIELDS never contains one.
+DNS_NAME_FIELDS = ('dns.flags.response', 'dns.qry.name')
+
+
+def fields(dns_names: bool = False) -> tuple[str, ...]:
+    return FIELDS + DNS_NAME_FIELDS if dns_names else FIELDS
+
+
+def _dns_name(response: str, name: str) -> str | None:
+    """One question name from a query; responses and multi-question rows yield none."""
+    if not name or ',' in name or ',' in response or response not in {'0', 'False', 'false'}:
+        return None
+    try:
+        return parse_dns_name(name)
+    except ValidationError:
+        return None
+
+
 MAGIC = {b'\xd4\xc3\xb2\xa1', b'\xa1\xb2\xc3\xd4', b'\x4d\x3c\xb2\xa1',
          b'\xa1\xb2\x3c\x4d', b'\x0a\x0d\x0d\x0a'}
 FLAG_NAMES = ('FIN', 'SYN', 'RST', 'PSH', 'ACK', 'URG', 'ECE', 'CWR')
@@ -115,12 +135,18 @@ def _bounded_process(argv: tuple[str, ...], *, env: dict[str, str], cwd: str,
                     raise cleanup_error
 
 
-def parse_fields(row: str) -> PacketEvent | None:
+def parse_fields(row: str, *, dns_names: bool = False) -> PacketEvent | None:
     """Reject multi-valued/tunnel ambiguity, never silently take the first field."""
     if len(row) > 1024 or any(ord(c) < 32 and c != '\t' or ord(c) > 126 for c in row):
         raise OfflineError('INVALID_FIELD_ROW')
     columns = row.split('\t')
-    if len(columns) != len(FIELDS) or any(',' in value for value in columns):
+    if len(columns) != len(fields(dns_names)):
+        raise OfflineError('AMBIGUOUS_FIELD_ROW')
+    query_name = None
+    if dns_names:
+        query_name = _dns_name(*columns[len(FIELDS):])
+        columns = columns[:len(FIELDS)]
+    if any(',' in value for value in columns):
         raise OfflineError('AMBIGUOUS_FIELD_ROW')
     at, src4, dst4, src6, dst6, proto4, proto6, ts, td, us, ud, flags, size = columns
     observed = timestamp(at)
@@ -155,7 +181,10 @@ def parse_fields(row: str) -> PacketEvent | None:
     protocol = {6: 'TCP', 17: 'UDP', 1: 'ICMP', 58: 'ICMPV6'}.get(number, 'OTHER')
     return PacketEvent(observed, src, dst, protocol, source_port, destination_port,
                        tcp_flags=tcp_flags, byte_count=length,
-                       metadata={'source_adapter': ADAPTER})
+                       metadata={'source_adapter': ADAPTER},
+                       # With names opted in, the core length rule sees queries too.
+                       dns_query_length=len(query_name) if query_name else None,
+                       dns_query_name=query_name)
 
 
 def replay(root: str, relative: str, limits: Limits = Limits()) -> Batch:

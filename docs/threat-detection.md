@@ -12,7 +12,9 @@ adds the five detections a defender most often expects from a network sensor:
 | `DATA_EXFILTRATION` | an internal host sends ≥ 100 MiB of reported bytes to **one public address** within 300 s | HIGH | destination | T1041, T1048 |
 | `BEACONING` | 8 consecutive connection starts from an internal host to one public `address:port` at a near-constant interval (≤ 10 % deviation from the median, 5 s – 3600 s) | MEDIUM | destination | T1071, T1573 |
 | `DECOY_TOUCH` | anything contacts a configured **decoy port** or **unassigned decoy address** | CRITICAL | source | T1046, T1018 |
-| `IOC_MATCH` | the source or destination matches an operator-supplied **local watchlist** indicator | HIGH (configurable) | matched address | T1071 |
+| `IOC_MATCH` | the source or destination matches an operator-supplied **local watchlist** indicator (an address, or with `dns_names` a looked-up domain) | HIGH (configurable) | matched address, or the querying host | T1071 |
+| `DGA_DOMAIN` | *(opt-in `dns_names`)* a looked-up domain has two or more machine-generated spelling signals | MEDIUM | querying host | T1568.002 |
+| `DNS_TUNNEL_CHURN` | *(opt-in `dns_names`)* one host queries 30 distinct subdomains of one domain within 60 s | HIGH | querying host | T1071.004, T1048.003 |
 
 Every finding is a **heuristic for human review**, not a malware verdict. Each
 row in the table above has well-known legitimate look-alikes, which the
@@ -73,6 +75,54 @@ capture sees: put the sensor where the traffic to them flows.
 
 For host-side tripwires (bait files) and authentication-log review, see
 [host tripwires and login review](host-tripwires.md).
+
+## DNS domain names (opt-in)
+
+MEGALODON's capture **does not read DNS query names by default**: they are a
+record of every site the computer visits. Turn it on only if you want
+domain-based detection:
+
+```toml
+[threat_detection]
+dns_names = true
+dns_churn_window_seconds = 60
+dns_churn_distinct_subdomains = 30
+```
+
+When enabled:
+
+* **Where names come from.** The HUD's TShark capture adds `dns.qry.name` and
+  `dns.flags.response`, and `megalodon run --source scapy` reads the query
+  name. Only *queries* count: responses echo the client's question, and rows
+  with several questions are ambiguous, so neither yields a name. JSONL input
+  may carry a `dns_query_name` field.
+* **What is kept.** Names stay in memory for detection. The events table
+  never stores them. A domain is retained only when it triggers a finding,
+  inside that finding's evidence. A test checks the raw database bytes for
+  routine lookups.
+* **`DGA_DOMAIN`** reuses the reviewed spelling scorer in `domain_signals.py`
+  (entropy, length, digit mixing, consonant runs, hexadecimal, stacked or
+  deep labels). It fires at its `review` level: two or more signals, and not
+  under a provider that generates names by design (CloudFront, Akamai,
+  Fastly, Azure, Google user content, reverse-lookup zones).
+* **`DNS_TUNNEL_CHURN`** counts distinct subdomains per (host, registrable
+  domain), the pattern used by iodine and dnscat2 and by DNS exfiltration.
+  Reverse lookups, `.local`, `.lan`, `.internal` and generated-name
+  providers are exempt.
+* **Domain watchlist entries** (for example `evil.example`) match the name
+  and every subdomain. A bare TLD is refused. `import-stix` converts
+  `[domain-name:value = '…']` patterns too.
+* **The core `DNS_TUNNELING` length rule** also receives the query length
+  from TShark capture once names are enabled.
+
+**Limits:**
+
+* The registrable domain is approximated (the last two labels, or three under
+  common two-label suffixes such as `co.uk`), not taken from the full public
+  suffix list.
+* DNS over HTTPS or TLS, and resolver caching, hide queries from the sensor.
+* The sensor must see the client's queries: run it on that computer, or
+  between it and its resolver.
 
 ## Atomicity and bounds
 

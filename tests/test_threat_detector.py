@@ -49,7 +49,8 @@ def state(detector):
 def test_catalog_core_rules_match_the_specification_registry():
     assert set(rule_catalog.CORE_RULE_IDS) == set(RULE_IDS)
     assert set(rule_catalog.THREAT_RULE_IDS) == {
-        "BRUTE_FORCE", "HOST_SWEEP", "DATA_EXFILTRATION", "BEACONING", "DECOY_TOUCH", "IOC_MATCH"}
+        "BRUTE_FORCE", "HOST_SWEEP", "DATA_EXFILTRATION", "BEACONING", "DECOY_TOUCH", "IOC_MATCH",
+        "DGA_DOMAIN", "DNS_TUNNEL_CHURN"}
     assert not set(rule_catalog.THREAT_RULE_IDS) & set(RULE_IDS)
     assert '"BEACONING"' in rule_catalog.browser_constants()
 
@@ -314,9 +315,9 @@ def test_stix_conversion_accepts_only_ip_equality_patterns():
     ]
     entries, counts = stix_indicators(objects, now=now)
     assert [str(network) for network, _ in entries] == [
-        "203.0.113.5/32", "198.51.100.0/24", "2001:db8::5/128"]
+        "203.0.113.5/32", "198.51.100.0/24", "2001:db8::5/128", "example.com"]
     assert entries[0][1] == "c2 host"
-    assert counts == {"converted": 2, "skipped_pattern": 2, "skipped_revoked": 1,
+    assert counts == {"converted": 3, "skipped_pattern": 1, "skipped_revoked": 1,
                       "skipped_expired": 1, "skipped_invalid": 2}
 
 

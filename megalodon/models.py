@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 from .validation import (
     parse_flags,
+    parse_dns_name,
     parse_ip,
     parse_nonnegative_int,
     parse_port,
@@ -34,6 +35,10 @@ class PacketEvent:
     byte_count: int = 0
     interface: str | None = None
     metadata: Mapping[str, str] = field(default_factory=dict)
+    # Transient and opt-in ([threat_detection] dns_names). Detectors read it in
+    # memory; storage never writes it, and only a flagged domain is retained,
+    # inside that finding's evidence.
+    dns_query_name: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "observed_at", parse_timestamp(self.observed_at))
@@ -72,6 +77,8 @@ class PacketEvent:
             "metadata",
             MappingProxyType(validate_packet_metadata(self.metadata)),
         )
+        if self.dns_query_name is not None:
+            object.__setattr__(self, "dns_query_name", parse_dns_name(self.dns_query_name))
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> "PacketEvent":
@@ -87,10 +94,11 @@ class PacketEvent:
             byte_count=value.get("byte_count", 0),
             interface=value.get("interface"),
             metadata=value.get("metadata"),
+            dns_query_name=value.get("dns_query_name"),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "observed_at": self.observed_at.isoformat(),
             "src_ip": self.src_ip,
             "dst_ip": self.dst_ip,
@@ -103,6 +111,10 @@ class PacketEvent:
             "interface": self.interface,
             "metadata": dict(self.metadata),
         }
+        if self.dns_query_name is not None:
+            # Present only for opted-in name capture, so default output is unchanged.
+            result["dns_query_name"] = self.dns_query_name
+        return result
 
 
 @dataclass(frozen=True)
