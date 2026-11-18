@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, deque
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import ipaddress
@@ -333,6 +334,19 @@ class ThreatDetector:
         self.lru: OrderedDict[tuple[str, Any], None] = OrderedDict()
         # (token, journal) while a preparation is unresolved.
         self._pending: tuple[object, _Journal] | None = None
+
+    def __deepcopy__(self, memo):
+        """Copy mutable state only; settings, allowlist and watchlist are immutable
+        and may be large (a watchlist holds up to 200 000 indicators)."""
+        if self._pending is not None:
+            raise RuntimeError("cannot copy a threat detector with a pending preparation")
+        clone = ThreatDetector.__new__(ThreatDetector)
+        for name, value in self.__dict__.items():
+            if name in {"settings", "allowlist", "watchlist", "_decoy_ports", "_decoy_addresses"}:
+                setattr(clone, name, value)
+            else:
+                setattr(clone, name, deepcopy(value, memo))
+        return clone
 
     # ------------------------------------------------------------------ API
     def analyze(self, event: PacketEvent) -> list[DetectionResult]:
