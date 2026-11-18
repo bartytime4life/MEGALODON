@@ -37,7 +37,16 @@ TLS_FIELDS = ('tls.handshake.type', 'tls.handshake.ja3', 'tls.handshake.ja4',
 # server detection. Probed like TLS; DHCP fields need Wireshark 3.0+.
 ARP_FIELDS = ('arp.opcode', 'arp.src.hw_mac', 'arp.src.proto_ipv4', 'arp.dst.proto_ipv4')
 DHCP_FIELDS = ('dhcp.option.dhcp', 'dhcp.option.dhcp_server_id')
-LAN_FIELDS = ARP_FIELDS + DHCP_FIELDS
+# The IPv6 counterparts: neighbour-discovery claims (router advertisements,
+# neighbour solicitations and advertisements, with the link-layer address
+# each carries) and DHCPv6 message types.
+ND_FIELDS = ('icmpv6.type', 'icmpv6.nd.ra.router_lifetime', 'icmpv6.nd.na.target_address',
+             'icmpv6.opt.src_linkaddr', 'icmpv6.opt.target_linkaddr')
+DHCPV6_FIELDS = ('dhcpv6.msgtype',)
+LAN_FIELDS = ARP_FIELDS + DHCP_FIELDS + ND_FIELDS + DHCPV6_FIELDS
+LAN_GROUPS = (ARP_FIELDS, DHCP_FIELDS, ND_FIELDS, DHCPV6_FIELDS)
+# Router advertisement, neighbour solicitation, neighbour advertisement.
+ND_TYPES = frozenset({134, 135, 136})
 # A header-only little-endian pcap (Ethernet): TShark validates -e fields
 # before reading, and an empty capture yields no rows.
 EMPTY_PCAP = bytes.fromhex('d4c3b2a1020004000000000000000000ffff000001000000')
@@ -49,9 +58,8 @@ def fields(dns_names: bool = False, tls: tuple[str, ...] = (),
 
 
 def lan_subset(accepted: tuple[str, ...]) -> tuple[str, ...]:
-    """ARP and DHCP fields are used only as complete groups."""
-    return tuple(name for group in (ARP_FIELDS, DHCP_FIELDS)
-                 if set(group) <= set(accepted) for name in group)
+    """ARP, DHCP, neighbour-discovery and DHCPv6 fields are used only as complete groups."""
+    return tuple(name for group in LAN_GROUPS if set(group) <= set(accepted) for name in group)
 
 
 def _arp(values: dict[str, str]) -> tuple[int, str, str, str] | None:
@@ -75,6 +83,34 @@ def _dhcp(values: dict[str, str]) -> tuple[int | None, str | None]:
         return number, parse_ip(server) if server else None
     except (ValidationError, OfflineError, ValueError):
         return None, None
+
+
+def _dhcpv6(kind: str) -> int | None:
+    """One DHCPv6 message type; relayed or odd rows yield none."""
+    try:
+        return uint(kind, 255) if kind and ',' not in kind else None
+    except (OfflineError, ValueError):
+        return None
+
+
+def _ndp(values: dict[str, str]) -> tuple[int | None, str | None, str | None, int | None]:
+    """(type, claimed link-layer address, NA target, RA router lifetime) from one
+    neighbour-discovery message; other ICMPv6 and anything odd yield none."""
+    kind, lifetime, target, source_mac, target_mac = (values.get(name, '') for name in ND_FIELDS)
+    if not kind or any(',' in v for v in (kind, lifetime, target, source_mac, target_mac)):
+        return None, None, None, None
+    try:
+        number = uint(kind, 255)
+        if number not in ND_TYPES:
+            return None, None, None, None
+        # A router advertisement or solicitation claims its sender's address;
+        # an advertisement claims its target's.
+        mac = target_mac if number == 136 else source_mac
+        return (number, parse_mac(mac) if mac else None,
+                parse_ip(target) if number == 136 else None,
+                uint(lifetime, 65535) if number == 134 else None)
+    except (ValidationError, OfflineError, ValueError):
+        return None, None, None, None
 
 
 def probe_fields(candidates: tuple[str, ...], popen, env: dict[str, str],
@@ -281,13 +317,19 @@ def parse_fields(row: str, *, dns_names: bool = False,
     dhcp_type = dhcp_server = None
     if number == 17 and 'dhcp.option.dhcp' in lan_values and {source_port, destination_port} <= {67, 68}:
         dhcp_type, dhcp_server = _dhcp(lan_values)
+    elif number == 17 and 'dhcpv6.msgtype' in lan_values and {source_port, destination_port} <= {546, 547}:
+        dhcp_type = _dhcpv6(lan_values['dhcpv6.msgtype'])
+    nd_type = nd_mac = nd_target = ra_lifetime = None
+    if number == 58 and 'icmpv6.type' in lan_values:
+        nd_type, nd_mac, nd_target, ra_lifetime = _ndp(lan_values)
     return PacketEvent(observed, src, dst, protocol, source_port, destination_port,
                        tcp_flags=tcp_flags, byte_count=length,
                        metadata={'source_adapter': ADAPTER},
                        # With names opted in, the core length rule sees queries too.
                        dns_query_length=len(query_name) if query_name else None,
                        dns_query_name=query_name, tls_ja3=ja3, tls_ja4=ja4, tls_sni=sni,
-                       dhcp_message_type=dhcp_type, dhcp_server_id=dhcp_server)
+                       dhcp_message_type=dhcp_type, dhcp_server_id=dhcp_server,
+                       nd_type=nd_type, nd_mac=nd_mac, nd_target=nd_target, ra_router_lifetime=ra_lifetime)
 
 
 def replay(root: str, relative: str, limits: Limits = Limits()) -> Batch:

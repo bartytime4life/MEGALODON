@@ -177,12 +177,13 @@ When enabled:
 QUIC/HTTP-3 handshakes are not fingerprinted. A fingerprint identifies a TLS
 library and configuration, not a program.
 
-## LAN integrity: ARP spoofing and rogue DHCP (opt-in)
+## LAN integrity: ARP, neighbour discovery, rogue DHCP and routers (opt-in)
 
-ARP and DHCP have no authentication, so any device on the LAN can claim to be
-the gateway or hand out its own gateway and DNS server. That puts it in the
-middle of everyone's traffic. MEGALODON can watch for both, **off by
-default**:
+ARP, IPv6 neighbour discovery, DHCP and DHCPv6 have no authentication, so
+any device on the LAN can claim to be the gateway or hand out its own gateway
+and DNS server. That puts it in the middle of everyone's traffic. IPv6 is on
+by default on most home and office networks, even where nobody uses it, so it
+is an easy way in. MEGALODON can watch for all of these, **off by default**:
 
 ```toml
 [threat_detection]
@@ -190,6 +191,8 @@ lan_integrity = true
 arp_rebind_seconds = 300
 dhcp_window_seconds = 3600
 dhcp_servers = ["192.168.1.1"]   # optional; empty means learn them
+ipv6_routers = ["fe80::1"]       # optional; empty means learn them
+router_window_seconds = 3600
 ```
 
 When enabled:
@@ -197,7 +200,12 @@ When enabled:
 * **Capture.** The HUD's TShark capture adds `arp.opcode`,
   `arp.src.hw_mac`, `arp.src.proto_ipv4` and `arp.dst.proto_ipv4`, and the
   DHCP message type and server identifier (`dhcp.option.dhcp`,
-  `dhcp.option.dhcp_server_id`). Each group is probed and used only when the
+  `dhcp.option.dhcp_server_id`). For IPv6 it adds the neighbour-discovery
+  type, router lifetime, advertised target and link-layer address options
+  (`icmpv6.type`, `icmpv6.nd.ra.router_lifetime`,
+  `icmpv6.nd.na.target_address`, `icmpv6.opt.src_linkaddr`,
+  `icmpv6.opt.target_linkaddr`) and the DHCPv6 message type
+  (`dhcpv6.msgtype`). Each group is probed and used only when the
   installed TShark accepts all of its fields. The capture keeps whole
   packets, because DHCP options start after byte 256. Packets go only
   through a pipe to TShark.
@@ -213,26 +221,53 @@ When enabled:
   immediately. ARP probes from `0.0.0.0` claim nothing and are ignored. A
   binding older than the window is treated as a replaced device or a new
   lease.
+* **`NDP_SPOOFING`** (HIGH, ATT&CK T1557) is the IPv6 counterpart. A
+  neighbour advertisement claims its target address, and a neighbour
+  solicitation or router advertisement claims its sender's address, through
+  the link-layer address option it carries. The rule fires when an IPv6
+  address is claimed by a different hardware address within
+  `arp_rebind_seconds` of the previous claim. Duplicate address detection
+  (sender `::`) and messages without a link-layer address claim nothing.
 * **`ROGUE_DHCP`** (HIGH, ATT&CK T1557.003) checks DHCP OFFER and ACK
-  replies from port 67. With `dhcp_servers` set, any other server identifier
-  is flagged. Without it, MEGALODON learns the servers it sees and flags a
-  server that answers while another was active within `dhcp_window_seconds`.
-  The server identifier option is preferred over the packet's source, and a
-  relayed reply records the relay address.
+  replies from port 67, and DHCPv6 ADVERTISE and REPLY messages from port
+  547. With `dhcp_servers` set, any other server is flagged. Without it,
+  MEGALODON learns the servers it sees and flags a server that answers while
+  another was active within `dhcp_window_seconds`. IPv4 and IPv6 are checked
+  separately: listing only IPv4 servers leaves DHCPv6 in learned mode. A
+  DHCPv6 server is known by the address its replies come from, usually a
+  link-local `fe80::` address. For DHCP, the server identifier option is
+  preferred over the packet's source, and a relayed reply records the relay
+  address. Rogue DHCPv6 replies are how tools such as mitm6 make themselves
+  the DNS server for Windows hosts that never use IPv6 otherwise.
+* **`ROGUE_IPV6_ROUTER`** (HIGH, ATT&CK T1557) checks every router
+  advertisement. With `ipv6_routers` set, an advertisement from any other
+  address is flagged. Without it, MEGALODON learns the routers it sees and
+  flags one that advertises while another was active within
+  `router_window_seconds`. A rogue advertisement can make its sender every
+  IPv6 host's default gateway and hand out its own prefixes and DNS. An
+  advertisement with a router lifetime of 0 withdraws a default route
+  instead, which is how a router-advertisement flood cuts hosts off. The
+  finding records the lifetime and the advertised hardware address.
 * **What is kept.** Hardware addresses and server identities stay in memory.
   A binding or server is retained only inside a finding's evidence. A test
   checks every database file's raw bytes for a routine binding.
 * **Other inputs.** JSONL may carry `arp_opcode`, `arp_sender_mac`,
-  `dhcp_message_type` and `dhcp_server_id`. The Scapy source does not read
-  them.
+  `dhcp_message_type`, `dhcp_server_id`, `nd_type` (134, 135 or 136),
+  `nd_mac`, `nd_target` and `ra_router_lifetime`. The Scapy source does not
+  read them.
 
 **Limits:** The sensor sees only what reaches its interface. On a switched
 network, that is broadcast ARP plus its own traffic, so run it on the
 gateway or a mirror port for full coverage. Learned DHCP mode trusts the
-first server it sees. Set `dhcp_servers` if a rogue server could be present
+first server it sees, and learned router mode the first router. Set
+`dhcp_servers` and `ipv6_routers` if a rogue server or router could be present
 when monitoring starts. Failover pairs, virtual machines, docking stations,
-mesh Wi-Fi nodes and phone hotspots can produce look-alike findings. IPv6
-neighbor discovery and DHCPv6 are not covered.
+mesh Wi-Fi nodes and phone hotspots can produce look-alike findings. A router
+advertisement that spoofs the real router's address passes the router check,
+but its different hardware address raises `NDP_SPOOFING` when it carries one.
+Neighbour-discovery messages are checked only without IPv6 extension headers.
+Switch-level defences (RA Guard, DHCPv6 Guard, dynamic ARP inspection) stop
+these attacks; MEGALODON only reports them.
 
 ## Atomicity and bounds
 

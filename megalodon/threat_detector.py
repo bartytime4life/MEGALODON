@@ -66,8 +66,10 @@ _LIMITED_BROADCAST = ipaddress.ip_address("255.255.255.255")
 MAX_DECOY_PORTS = 64
 MAX_DECOY_ADDRESSES = 256
 MAX_DHCP_SERVERS = 16
-# DHCP OFFER and ACK: the replies a client acts on.
+MAX_IPV6_ROUTERS = 16
+# The replies a client acts on: DHCP OFFER and ACK, DHCPv6 ADVERTISE and REPLY.
 _DHCP_REPLIES = frozenset({2, 5})
+_DHCPV6_REPLIES = frozenset({2, 7})
 
 
 def _microseconds(value: datetime) -> int:
@@ -169,8 +171,16 @@ class ThreatDetectionSettings:
     arp_rebind_seconds: int = 300
     dhcp_window_seconds: int = 3600
     # The DHCP servers this network should have. Empty: learn them, and flag
-    # a second server answering within dhcp_window_seconds.
+    # a second server answering within dhcp_window_seconds. Each address
+    # family is checked on its own: DHCPv6 servers are listed by the address
+    # their replies come from, usually a link-local fe80:: address.
     dhcp_servers: tuple[str, ...] = ()
+    # The same opt-in covers IPv6: neighbour-discovery bindings (NDP_SPOOFING,
+    # within arp_rebind_seconds) and router advertisements (ROGUE_IPV6_ROUTER).
+    # The routers this network should have, by their link-local address.
+    # Empty: learn them, and flag a second router within router_window_seconds.
+    ipv6_routers: tuple[str, ...] = ()
+    router_window_seconds: int = 3600
 
     def __post_init__(self) -> None:
         self._validate_decoys()
@@ -185,6 +195,19 @@ class ThreatDetectionSettings:
         if len(set(canonical)) != len(canonical):
             raise ValueError("threat_detection.dhcp_servers must be distinct")
         object.__setattr__(self, "dhcp_servers", canonical)
+        routers = self.ipv6_routers
+        if (not isinstance(routers, tuple) or len(routers) > MAX_IPV6_ROUTERS
+                or not all(isinstance(r, str) for r in routers)):
+            raise ValueError(f"threat_detection.ipv6_routers must be up to {MAX_IPV6_ROUTERS} addresses")
+        try:
+            canonical = tuple(_canonical(r) for r in routers)
+        except ValueError:
+            raise ValueError("threat_detection.ipv6_routers contains an invalid address") from None
+        if any(r.version != 6 for r in canonical):
+            raise ValueError("threat_detection.ipv6_routers must be IPv6 addresses")
+        if len(set(canonical)) != len(canonical):
+            raise ValueError("threat_detection.ipv6_routers must be distinct")
+        object.__setattr__(self, "ipv6_routers", tuple(str(r) for r in canonical))
         if self.watchlist_severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
             raise ValueError(
                 "threat_detection.watchlist_severity must be LOW, MEDIUM, HIGH or CRITICAL"
@@ -206,6 +229,7 @@ class ThreatDetectionSettings:
             ("dns_churn_distinct_subdomains", 2, 4096),
             ("arp_rebind_seconds", 10, 86400),
             ("dhcp_window_seconds", 60, 86400),
+            ("router_window_seconds", 60, 86400),
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int):
@@ -366,6 +390,10 @@ class ThreatDetector:
         self.arp: dict[str, tuple[str, int]] = {}
         self.dhcp: OrderedDict[str, int] = OrderedDict()
         self._dhcp_servers = frozenset(self.settings.dhcp_servers)
+        # IPv6 address -> (claimed MAC, last seen); router -> last advertisement seen.
+        self.nd: dict[str, tuple[str, int]] = {}
+        self.routers: OrderedDict[str, int] = OrderedDict()
+        self._ipv6_routers = frozenset(self.settings.ipv6_routers)
         self.last_emitted: dict[tuple[str, Any], int] = {}
         self.lru: OrderedDict[tuple[str, Any], None] = OrderedDict()
         # (token, journal) while a preparation is unresolved.
@@ -379,7 +407,7 @@ class ThreatDetector:
         clone = ThreatDetector.__new__(ThreatDetector)
         for name, value in self.__dict__.items():
             if name in {"settings", "allowlist", "watchlist", "_decoy_ports", "_decoy_addresses",
-                        "_dhcp_servers"}:
+                        "_dhcp_servers", "_ipv6_routers"}:
                 setattr(clone, name, value)
             else:
                 setattr(clone, name, deepcopy(value, memo))
@@ -412,8 +440,12 @@ class ThreatDetector:
                     rules = [self._arp_spoofing] if self.settings.lan_integrity else []
                     if event.arp_opcode == 1:
                         rules.append(self._decoy)
-                elif self.settings.lan_integrity and event.dhcp_message_type in _DHCP_REPLIES:
+                elif self.settings.lan_integrity and _is_dhcp_reply(event):
                     rules.append(self._rogue_dhcp)
+                elif self.settings.lan_integrity and event.nd_type is not None:
+                    rules.append(self._ndp_spoofing)
+                    if event.nd_type == 134:
+                        rules.append(self._rogue_router)
                 if self.settings.dns_names and event.dns_query_name:
                     rules += [self._domain_ioc, self._generated_domain, self._dns_churn]
                 if self.settings.tls_fingerprints and event.is_client_hello:
@@ -771,26 +803,45 @@ class ThreatDetector:
         parsed = _canonical(src)
         if parsed.version != 4 or parsed.is_unspecified or parsed.is_multicast or parsed == _LIMITED_BROADCAST:
             return None  # ARP probes (sender 0.0.0.0) claim nothing.
-        mac = event.arp_sender_mac
-        touched.append(("arp", src))
-        previous = self.arp.get(src)
-        journal.set_item(self.arp, src, (mac, max(now, previous[1]) if previous else now))
+        return self._rebinding(event, "ARP_SPOOFING", "arp", src, src, event.arp_sender_mac, now, journal, touched,
+                               "as ARP cache poisoning does")
+
+    def _ndp_spoofing(self, event, src, dst, now, journal, touched):
+        """A recently seen IPv6-to-MAC binding replaced by another MAC.
+
+        A neighbour advertisement claims its target address; a solicitation or
+        router advertisement claims its sender's, through the link-layer
+        address option it carries. Messages without one claim nothing."""
+        if event.nd_mac is None:
+            return None
+        address = str(_canonical(event.nd_target)) if event.nd_type == 136 else src
+        parsed = _canonical(address)
+        if parsed.version != 6 or parsed.is_unspecified or parsed.is_multicast:
+            return None  # Duplicate address detection (sender ::) claims nothing.
+        return self._rebinding(event, "NDP_SPOOFING", "nd", address, src, event.nd_mac, now, journal, touched,
+                               "as neighbour-discovery spoofing does")
+
+    def _rebinding(self, event, rule_id, kind, address, src, mac, now, journal, touched, how):
+        """The claimed address keys the binding; the sender is the party a response targets."""
+        table = getattr(self, self._STATE_MAPS[kind])
+        touched.append((kind, address))
+        previous = table.get(address)
+        journal.set_item(table, address, (mac, max(now, previous[1]) if previous else now))
         if previous is None or previous[0] == mac:
             return None
         elapsed = max(0, now - previous[1])
         if elapsed > self.settings.arp_rebind_seconds * _US:
-            return None  # An old binding: a replaced device or a new DHCP lease.
-        key = ("ARP_SPOOFING", src)
+            return None  # An old binding: a replaced device or a new address lease.
+        key = (rule_id, address)
         touched.append(key)
         if not self._can_emit(key, now, journal):
             return None
         return self._result(
-            event, "ARP_SPOOFING", src,
-            f"{src} was claimed by {mac} {elapsed // _US}s after {previous[0]} answered for it, "
-            "as ARP cache poisoning does",
+            event, rule_id, src,
+            f"{address} was claimed by {mac} {elapsed // _US}s after {previous[0]} answered for it, {how}",
             {
                 "rebinds": 1,
-                "claimed_address": src,
+                "claimed_address": address,
                 "previous_mac": previous[0],
                 "new_mac": mac,
                 "seconds_since_previous": elapsed // _US,
@@ -798,47 +849,88 @@ class ThreatDetector:
             },
         )
 
-    def _rogue_dhcp(self, event, src, dst, now, journal, touched):
-        """A DHCP OFFER/ACK from a server outside the expected or learned set."""
-        if event.src_port != 67:
-            return None
-        server = str(_canonical(event.dhcp_server_id or src))
-        expected = self._dhcp_servers
-        journal.snapshot_ordered(self.dhcp)
-        cutoff = now - self.settings.dhcp_window_seconds * _US
-        while self.dhcp and next(iter(self.dhcp.values())) < cutoff:
-            self.dhcp.popitem(last=False)
-        others = sorted(set(self.dhcp) - {server})
-        self.dhcp[server] = max(now, self.dhcp.get(server, now))
-        self.dhcp.move_to_end(server)
-        while len(self.dhcp) > MAX_DHCP_SERVERS:
-            self.dhcp.popitem(last=False)
+    def _unexpected(self, table, identity, expected, window_seconds, now, journal):
+        """Record identity as active; the reason it is unexpected and the known set, else None.
+
+        Configured identities of the same address family win; without them, a
+        second identity active within the window is unexpected."""
+        version = _canonical(identity).version
+        expected = sorted(e for e in expected if _canonical(e).version == version)
+        journal.snapshot_ordered(table)
+        cutoff = now - window_seconds * _US
+        while table and next(iter(table.values())) < cutoff:
+            table.popitem(last=False)
+        others = sorted(k for k in table if k != identity and _canonical(k).version == version)
+        table[identity] = max(now, table.get(identity, now))
+        table.move_to_end(identity)
+        while len(table) > MAX_DHCP_SERVERS:
+            table.popitem(last=False)
         if expected:
-            if server in expected:
-                return None
-            reason, known = "is not one of the configured DHCP servers", sorted(expected)
-        elif others:
-            reason, known = "answered while another DHCP server was active", others
-        else:
+            return None if identity in expected else ("configured", expected)
+        return ("learned", others) if others else None
+
+    def _rogue_dhcp(self, event, src, dst, now, journal, touched):
+        """A DHCP OFFER/ACK or DHCPv6 ADVERTISE/REPLY from a server outside the expected or learned set."""
+        v6 = event.src_port == 547
+        server = str(_canonical(event.dhcp_server_id or src))
+        found = self._unexpected(self.dhcp, server, self._dhcp_servers,
+                                 self.settings.dhcp_window_seconds, now, journal)
+        if found is None:
             return None
+        mode, known = found
+        label = "DHCPv6" if v6 else "DHCP"
+        reason = (f"is not one of the configured {label} servers" if mode == "configured"
+                  else f"answered while another {label} server was active")
         key = ("ROGUE_DHCP", server)
         touched.append(key)
         if not self._can_emit(key, now, journal):
             return None
+        kind = event.dhcp_message_type
         evidence: dict[str, Any] = {
             "replies": 1,
             "server": server,
-            "message_type": "offer" if event.dhcp_message_type == 2 else "ack",
+            "message_type": ({2: "advertise", 7: "reply"} if v6 else {2: "offer", 5: "ack"})[kind],
             "known_servers": known[:4],
-            "configured": bool(expected),
+            "configured": mode == "configured",
         }
+        if v6:
+            evidence["protocol"] = "dhcpv6"
         if event.dhcp_server_id and server != str(_canonical(src)):
             evidence["relay_address"] = src
         return self._result(
             event, "ROGUE_DHCP", src,
-            f"DHCP server {server} {reason} ({', '.join(known[:4])}); a rogue server can hand out "
+            f"{label} server {server} {reason} ({', '.join(known[:4])}); a rogue server can hand out "
             "its own gateway and DNS",
             evidence,
+        )
+
+    def _rogue_router(self, event, src, dst, now, journal, touched):
+        """An IPv6 router advertisement from a router outside the expected or learned set."""
+        found = self._unexpected(self.routers, src, self._ipv6_routers,
+                                 self.settings.router_window_seconds, now, journal)
+        if found is None:
+            return None
+        mode, known = found
+        reason = ("is not one of the configured IPv6 routers" if mode == "configured"
+                  else "advertised while another IPv6 router was active")
+        key = ("ROGUE_IPV6_ROUTER", src)
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        lifetime = event.ra_router_lifetime
+        effect = ("withdraws its default route" if lifetime == 0
+                  else "can make itself the default gateway and hand out its own prefixes and DNS")
+        return self._result(
+            event, "ROGUE_IPV6_ROUTER", src,
+            f"Router {src} {reason} ({', '.join(known[:4])}); a rogue router advertisement {effect}",
+            {
+                "advertisements": 1,
+                "router": src,
+                "router_lifetime_seconds": lifetime,
+                "router_mac": event.nd_mac,
+                "known_routers": known[:4],
+                "configured": mode == "configured",
+            },
         )
 
     def _dns_churn(self, event, src, dst, now, journal, touched):
@@ -918,7 +1010,7 @@ class ThreatDetector:
         )
 
     _STATE_MAPS = {"brute": "brute", "sweep": "sweep", "exfil": "exfil", "beacon": "beacon",
-                   "churn": "churn", "arp": "arp"}
+                   "churn": "churn", "arp": "arp", "nd": "nd"}
 
     def _touch(self, item: tuple[str, Any]) -> None:
         lru = self.lru
@@ -935,7 +1027,19 @@ class ThreatDetector:
 
     def state_size(self) -> int:
         return (len(self.brute) + len(self.sweep) + len(self.exfil) + len(self.beacon)
-                + len(self.churn) + len(self.arp) + len(self.dhcp) + len(self.last_emitted))
+                + len(self.churn) + len(self.arp) + len(self.dhcp) + len(self.nd) + len(self.routers)
+                + len(self.last_emitted))
+
+
+def _is_dhcp_reply(event: PacketEvent) -> bool:
+    """A DHCP OFFER/ACK from port 67, or a DHCPv6 ADVERTISE/REPLY from port 547."""
+    if event.dhcp_message_type is None:
+        return False
+    if event.src_port == 67:
+        return event.dhcp_message_type in _DHCP_REPLIES and ":" not in event.src_ip
+    if event.src_port == 547:
+        return event.dhcp_message_type in _DHCPV6_REPLIES and ":" in event.src_ip
+    return False
 
 
 def registry_document() -> dict[str, object]:

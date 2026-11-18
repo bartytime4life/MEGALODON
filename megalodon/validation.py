@@ -257,7 +257,7 @@ def parse_mac(value: Any) -> str:
     """A canonical unicast Ethernet address: lowercase colon-separated, not all zero."""
     text = value.strip().lower().replace("-", ":") if isinstance(value, str) else ""
     if _MAC.fullmatch(text) is None or text == "00:00:00:00:00:00" or int(text[:2], 16) & 1:
-        raise ValidationError("arp_sender_mac must be a unicast Ethernet address")
+        raise ValidationError("a hardware address must be a unicast Ethernet address")
     return text
 
 

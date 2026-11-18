@@ -55,6 +55,15 @@ class PacketEvent:
     arp_sender_mac: str | None = None
     dhcp_message_type: int | None = None
     dhcp_server_id: str | None = None
+    # The IPv6 counterparts, under the same opt-in: a neighbour-discovery
+    # message's type (134 router advertisement, 135 neighbour solicitation,
+    # 136 neighbour advertisement), the link-layer address it claims, an
+    # advertisement's target address and a router advertisement's router
+    # lifetime. A DHCPv6 message's type uses dhcp_message_type. Never stored.
+    nd_type: int | None = None
+    nd_mac: str | None = None
+    nd_target: str | None = None
+    ra_router_lifetime: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "observed_at", parse_timestamp(self.observed_at))
@@ -111,6 +120,33 @@ class PacketEvent:
             object.__setattr__(self, "arp_sender_mac", parse_mac(self.arp_sender_mac))
         if self.dhcp_server_id is not None:
             object.__setattr__(self, "dhcp_server_id", parse_ip(self.dhcp_server_id))
+        self._validate_neighbour_discovery()
+
+    def _validate_neighbour_discovery(self) -> None:
+        if self.nd_type is None:
+            if any(v is not None for v in (self.nd_mac, self.nd_target, self.ra_router_lifetime)):
+                raise ValidationError("nd_mac, nd_target and ra_router_lifetime need nd_type")
+            return
+        kind = parse_nonnegative_int(self.nd_type, "nd_type", maximum=255)
+        if kind not in {134, 135, 136}:
+            raise ValidationError("nd_type must be 134, 135 or 136")
+        if self.protocol != "ICMPV6" or ":" not in self.src_ip:
+            raise ValidationError("neighbour discovery fields need an IPv6 ICMPV6 event")
+        object.__setattr__(self, "nd_type", kind)
+        if self.nd_mac is not None:
+            object.__setattr__(self, "nd_mac", parse_mac(self.nd_mac))
+        if (kind == 136) != (self.nd_target is not None):
+            raise ValidationError("nd_target is given with, and only with, a neighbour advertisement")
+        if self.nd_target is not None:
+            target = parse_ip(self.nd_target)
+            if ":" not in target:
+                raise ValidationError("nd_target must be an IPv6 address")
+            object.__setattr__(self, "nd_target", target)
+        if (kind == 134) != (self.ra_router_lifetime is not None):
+            raise ValidationError("ra_router_lifetime is given with, and only with, a router advertisement")
+        if self.ra_router_lifetime is not None:
+            object.__setattr__(self, "ra_router_lifetime", parse_nonnegative_int(
+                self.ra_router_lifetime, "ra_router_lifetime", maximum=65535))
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> "PacketEvent":
@@ -134,6 +170,10 @@ class PacketEvent:
             arp_sender_mac=value.get("arp_sender_mac"),
             dhcp_message_type=value.get("dhcp_message_type"),
             dhcp_server_id=value.get("dhcp_server_id"),
+            nd_type=value.get("nd_type"),
+            nd_mac=value.get("nd_mac"),
+            nd_target=value.get("nd_target"),
+            ra_router_lifetime=value.get("ra_router_lifetime"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -152,7 +192,8 @@ class PacketEvent:
         }
         # Opt-in fields appear only when present, so default output is unchanged.
         for name in ("dns_query_name", "tls_ja3", "tls_ja4", "tls_sni", "arp_opcode",
-                     "arp_sender_mac", "dhcp_message_type", "dhcp_server_id"):
+                     "arp_sender_mac", "dhcp_message_type", "dhcp_server_id", "nd_type", "nd_mac",
+                     "nd_target", "ra_router_lifetime"):
             value = getattr(self, name)
             if value is not None:
                 result[name] = value
