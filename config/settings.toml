@@ -65,6 +65,15 @@ dhcp_window_seconds = 3600
 # The DHCP servers this network should have; empty means learn them.
 dhcp_servers = []
 
+# Threat-feed refresh (docs/threat-feeds.md): `megalodon feeds refresh` writes
+# feeds into one watchlist; point threat_detection.watchlist_path at its output.
+# [feeds]
+# output = "~/.config/megalodon/feeds.watchlist"
+# [[feeds.source]]
+# name = "feodo"
+# url = "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"
+# format = "ip"
+
 # Off-machine alerts (docs/off-machine-alerts.md). OFF by default. Saved
 # findings at or above min_severity go to each destination from background
 # threads; webhook URLs live in owner-private files (mode 600), never here.

@@ -191,6 +191,17 @@ def build_parser() -> argparse.ArgumentParser:
     yara_check.add_argument("--dir", type=Path,
                             help="rules folder (default ~/.config/megalodon/yara-rules)")
     yara_sub.add_parser("install", help="download and verify the pinned YARA runtime (non-root Linux)")
+    feeds = sub.add_parser("feeds", help="refresh threat feeds into one local watchlist (run from a timer)")
+    feeds_sub = feeds.add_subparsers(dest="feeds_command", required=True)
+    feeds_refresh = feeds_sub.add_parser(
+        "refresh", help="download each [[feeds.source]] and rebuild the feeds watchlist (exit 1 if any failed)")
+    feeds_refresh.add_argument("--if-older", type=_bounded_cli_integer("minutes", 1, 525600), metavar="MINUTES",
+                               help="skip sources checked within this many minutes")
+    feeds_status = feeds_sub.add_parser("status", help="show each source's indicator count and age (exit 1 if stale)")
+    for command in (feeds_refresh, feeds_status):
+        command.add_argument("--config", type=Path,
+                             help="settings file (default ~/.config/megalodon/settings.toml)")
+
     alerts = sub.add_parser("alerts", help="off-machine alerts: webhooks (JSON, Slack, Discord, ntfy) and syslog")
     alerts_sub = alerts.add_subparsers(dest="alerts_command", required=True)
     alerts_test = alerts_sub.add_parser(
@@ -1009,6 +1020,25 @@ def _yara(args: argparse.Namespace) -> int:
     return 0 if result["compile"] in ("completed", "not_configured") or result["runtime"] != "ready" else 1
 
 
+def _feeds(args: argparse.Namespace) -> int:
+    from . import threat_feeds
+    from .validation import ValidationError
+
+    path = args.config or Path.home() / ".config/megalodon/settings.toml"
+    try:
+        settings = load_settings(path).feeds
+        if args.feeds_command == "status":
+            result = threat_feeds.status(settings)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 1 if any(item["stale"] for item in result["sources"].values()) else 0
+        result = threat_feeds.refresh(settings, only_if_older_minutes=args.if_older)
+    except (ValidationError, threat_feeds.FeedError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 1 if any(item["status"] == "failed" for item in result["sources"].values()) else 0
+
+
 def _alerts(args: argparse.Namespace) -> int:
     from .alerts import test_destinations
     from .validation import ValidationError
@@ -1650,6 +1680,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _yara(args)
     elif args.command == "alerts":
         code = _alerts(args)
+    elif args.command == "feeds":
+        code = _feeds(args)
     elif args.command == "detectors":
         code = _detectors()
     elif args.command == "watchlist":
