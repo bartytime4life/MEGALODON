@@ -306,6 +306,29 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--interval", type=_bounded_cli_integer("interval", 30, 86400), default=300,
                                  help="seconds between passes (default 300)")
 
+    evidence = sub.add_parser(
+        "evidence", help="collect a read-only, hashed evidence snapshot of this machine, or verify one")
+    evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
+    collect = evidence_sub.add_parser(
+        "collect", help="save processes, sockets, sessions, recent files and watch reports into a sealed bundle")
+    collect.add_argument("--output", type=Path,
+                         help="new bundle folder (default ~/.local/share/megalodon/evidence/<time>)")
+    collect.add_argument("--hours", type=_bounded_cli_integer("hours", 1, 720), default=24,
+                         help="list files changed in the last N hours (default 24)")
+    collect.add_argument("--with-command-lines", action="store_true",
+                         help="also record process command lines (they can contain passwords and tokens)")
+    collect.add_argument("--skip-program-verification", action="store_true",
+                         help="skip the package check of installed programs (faster)")
+    collect.add_argument("--no-program-copies", action="store_true",
+                         help="do not copy deleted, in-memory or temporary-folder programs into the bundle")
+    collect.add_argument("--alert", action="store_true",
+                         help="also send the bundle's manifest digest to the [alerts] destinations")
+    collect.add_argument("--config", type=Path,
+                         help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+    verify_bundle = evidence_sub.add_parser("verify", help="re-check every file of a bundle against its manifest")
+    verify_bundle.add_argument("bundle", type=Path)
+    verify_bundle.add_argument("--expected", help="the manifest SHA-256 recorded when the bundle was collected")
+
     ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
     ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
     ransom_watch = ransom_sub.add_parser(
@@ -1372,6 +1395,41 @@ def _respond(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evidence(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import evidence
+    from .validation import ValidationError
+
+    try:
+        if args.evidence_command == "verify":
+            result = evidence.verify(args.bundle, expected=args.expected)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0 if result["intact"] else 1
+        result = evidence.collect(output=args.output, hours=args.hours, command_lines=args.with_command_lines,
+                                  verify_programs=not args.skip_program_verification,
+                                  copy_suspicious=not args.no_program_copies)
+    except (evidence.EvidenceError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if args.alert:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            # An off-machine copy of the digest is what lets a later verify prove the bundle unchanged.
+            dispatcher.submit([HostNotice(
+                "EVIDENCE_COLLECTED", "LOW", datetime.now(timezone.utc),
+                f"Evidence bundle {result['bundle']} collected; manifest SHA-256 {result['manifest_sha256']}",
+                (), "A read-only evidence snapshot was taken. Keep this digest to verify the bundle later.")])
+    return 0
+
+
 def _ransomware(args: argparse.Namespace) -> int:
     from threading import Event
     import tempfile
@@ -2077,6 +2135,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _listeners(args)
     elif args.command == "respond":
         code = _respond(args)
+    elif args.command == "evidence":
+        code = _evidence(args)
     elif args.command == "binaries":
         code = _binaries(args)
     elif args.command == "drill":
