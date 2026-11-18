@@ -37,7 +37,7 @@ RULES = frozenset({
     "PORT_SCAN", "SYN_FLOOD", "DNS_TUNNELING", "BRUTE_FORCE", "HOST_SWEEP",
     "DATA_EXFILTRATION", "BEACONING", "DECOY_TOUCH", "IOC_MATCH", "DGA_DOMAIN",
     "DNS_TUNNEL_CHURN", "TLS_WITHOUT_SNI", "ARP_SPOOFING", "ROGUE_DHCP",
-    "NDP_SPOOFING", "ROGUE_IPV6_ROUTER",
+    "NDP_SPOOFING", "ROGUE_IPV6_ROUTER", "DNS_BYPASS",
 })
 FACTS = frozenset({"protocol", "src_port", "dst_port", "tcp_flags", "findings"})
 MISSING_REASONS = frozenset({"not_collected", "not_qualified", "not_applicable"})

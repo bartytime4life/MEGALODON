@@ -51,7 +51,7 @@ def test_catalog_core_rules_match_the_specification_registry():
     assert set(rule_catalog.THREAT_RULE_IDS) == {
         "BRUTE_FORCE", "HOST_SWEEP", "DATA_EXFILTRATION", "BEACONING", "DECOY_TOUCH", "IOC_MATCH",
         "DGA_DOMAIN", "DNS_TUNNEL_CHURN", "TLS_WITHOUT_SNI", "ARP_SPOOFING", "ROGUE_DHCP",
-        "NDP_SPOOFING", "ROGUE_IPV6_ROUTER"}
+        "NDP_SPOOFING", "ROGUE_IPV6_ROUTER", "DNS_BYPASS"}
     assert not set(rule_catalog.THREAT_RULE_IDS) & set(RULE_IDS)
     assert '"BEACONING"' in rule_catalog.browser_constants()
 
