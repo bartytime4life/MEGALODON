@@ -1,0 +1,381 @@
+"""Baseline and check the places attackers use to survive reboots and password changes.
+
+``megalodon persistence baseline`` records the state of each persistence
+location into an owner-private manifest. ``megalodon persistence check``
+compares the current state and reports every entry that was added, changed or
+removed, each mapped to its ATT&CK technique:
+
+* **systemd** units, timers and enablement links: system and user (T1543.002, T1053.006)
+* **cron** tables and the hourly, daily, weekly and monthly folders (T1053.003)
+* **at** jobs (T1053.002)
+* **autostart** desktop entries (T1547.013)
+* **shell startup** files: user and system (T1546.004)
+* **SSH** ``authorized_keys`` and the server configuration (T1098.004)
+* **dynamic-linker preload** files (T1574.006)
+* **sudoers** (T1548.003) and **PAM** (T1556.003)
+* **init scripts**: rc.local, init.d and udev rules (T1037.004, T1546)
+* **kernel modules**: loaded, and configured to load (T1547.006)
+* **setuid/setgid programs** in system program folders (T1548.001)
+* **local accounts**: new accounts, a new UID 0, a login shell given to a
+  service account (T1136.001)
+
+Only metadata is kept: content digests, sizes, modes, owners, link targets and
+line counts. For SSH keys, the key type, a SHA-256 fingerprint and the comment
+are kept; for accounts, name, UID, GID, home and shell. File contents are
+never copied into the manifest or the report. Locations the current user
+cannot read are listed as coverage gaps, never silently skipped. Nothing is
+changed or removed: ``accept`` records the reviewed state as the new baseline.
+"""
+from __future__ import annotations
+
+import base64
+from datetime import datetime, timezone
+import glob
+import hashlib
+import json
+import os
+from pathlib import Path
+import stat
+import tempfile
+
+SCHEMA = 'megalodon-persistence-manifest-v1'
+REPORT_SCHEMA = 'megalodon-persistence-check-v1'
+MAX_FILE_BYTES = 4 * 1024 * 1024
+MAX_ENTRIES = 50_000
+MAX_SETUID_WALK = 400_000
+MAX_MANIFEST_BYTES = 32 * 1024 * 1024
+DEFAULT_MANIFEST = '~/.config/megalodon/persistence.json'
+SETUID_DIRS = ('/usr/bin', '/usr/sbin', '/bin', '/sbin', '/usr/local/bin', '/usr/local/sbin', '/usr/lib',
+               '/usr/libexec', '/opt')
+_SHELLS_NOLOGIN = ('nologin', 'false', 'sync', 'shutdown', 'halt')
+
+# (category, ATT&CK technique, severity when added/changed, glob patterns; ~ is the home folder)
+LOCATIONS = (
+    ('systemd', 'T1543.002', 'MEDIUM', (
+        '/etc/systemd/system/*', '/etc/systemd/system/*/*', '/usr/local/lib/systemd/system/*',
+        '/etc/systemd/user/*', '/etc/systemd/user/*/*', '~/.config/systemd/user/*', '~/.config/systemd/user/*/*')),
+    ('cron', 'T1053.003', 'MEDIUM', (
+        '/etc/crontab', '/etc/cron.d/*', '/etc/cron.hourly/*', '/etc/cron.daily/*', '/etc/cron.weekly/*',
+        '/etc/cron.monthly/*', '/var/spool/cron/*', '/var/spool/cron/crontabs/*', '/etc/anacrontab')),
+    ('at', 'T1053.002', 'MEDIUM', ('/var/spool/cron/atjobs/*', '/var/spool/at/*')),
+    ('autostart', 'T1547.013', 'MEDIUM', ('/etc/xdg/autostart/*', '~/.config/autostart/*')),
+    ('shell_startup', 'T1546.004', 'MEDIUM', (
+        '~/.bashrc', '~/.bash_profile', '~/.bash_login', '~/.profile', '~/.bash_logout', '~/.zshrc', '~/.zprofile',
+        '~/.zshenv', '~/.zlogin', '~/.config/fish/config.fish', '/etc/profile', '/etc/profile.d/*',
+        '/etc/bash.bashrc', '/etc/bashrc', '/etc/zsh/*', '/etc/environment')),
+    ('ssh', 'T1098.004', 'HIGH', (
+        '~/.ssh/authorized_keys', '~/.ssh/authorized_keys2', '~/.ssh/rc', '/etc/ssh/sshd_config',
+        '/etc/ssh/sshd_config.d/*', '/etc/ssh/sshrc', '/root/.ssh/authorized_keys')),
+    ('preload', 'T1574.006', 'CRITICAL', ('/etc/ld.so.preload', '/etc/ld.so.conf', '/etc/ld.so.conf.d/*')),
+    ('sudoers', 'T1548.003', 'HIGH', ('/etc/sudoers', '/etc/sudoers.d/*')),
+    ('pam', 'T1556.003', 'HIGH', ('/etc/pam.d/*', '/etc/security/pam_env.conf')),
+    ('init', 'T1037.004', 'MEDIUM', ('/etc/rc.local', '/etc/init.d/*', '/etc/udev/rules.d/*')),
+    ('module_config', 'T1547.006', 'MEDIUM', ('/etc/modules', '/etc/modules-load.d/*', '/etc/modprobe.d/*')),
+)
+TECHNIQUES = {category: technique for category, technique, _, _ in LOCATIONS} | {
+    'kernel_module': 'T1547.006', 'setuid': 'T1548.001', 'account': 'T1136.001'}
+SEVERITY = {category: severity for category, _, severity, _ in LOCATIONS} | {
+    'kernel_module': 'HIGH', 'setuid': 'HIGH', 'account': 'MEDIUM'}
+RANK = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2, 'CRITICAL': 3}
+
+
+class PersistenceError(ValueError):
+    pass
+
+
+def _now():
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _expand(pattern, root, home):
+    if pattern.startswith('~/'):
+        return os.path.join(home, pattern[2:])
+    return os.path.join(root, pattern.lstrip('/')) if root != '/' else pattern
+
+
+def _display(path, root, home):
+    """A stable key for a path: ~/... under the home folder, otherwise its system path."""
+    if path == home or path.startswith(home.rstrip('/') + '/'):
+        return '~/' + os.path.relpath(path, home)
+    return '/' + os.path.relpath(path, root) if root != '/' else path
+
+
+def _ssh_keys(data):
+    """(type, SHA256 fingerprint, comment) for each key line; options are not kept."""
+    keys = []
+    for line in data.decode('utf-8', 'replace').splitlines():
+        parts = line.strip().split()
+        for i, part in enumerate(parts):
+            if part.startswith(('ssh-', 'ecdsa-', 'sk-')) and i + 1 < len(parts):
+                try:
+                    blob = base64.b64decode(parts[i + 1], validate=True)
+                except ValueError:
+                    break
+                fingerprint = base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip('=')
+                keys.append(dict(type=part, fingerprint='SHA256:' + fingerprint,
+                                 comment=' '.join(parts[i + 2:])[:80]))
+                break
+    return keys
+
+
+def _describe(path, category):
+    """Metadata for one path, never following links; None if absent; 'unreadable' if not readable."""
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return 'unreadable'
+    entry = dict(mode=oct(stat.S_IMODE(info.st_mode)), uid=info.st_uid)
+    if stat.S_ISLNK(info.st_mode):
+        try:
+            entry.update(kind='link', target=os.readlink(path)[:1024])
+        except OSError:
+            return 'unreadable'
+        return entry
+    if stat.S_ISDIR(info.st_mode):
+        return None  # Folders are covered by the patterns that list their files.
+    if not stat.S_ISREG(info.st_mode):
+        entry.update(kind='special')
+        return entry
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except PermissionError:
+        return 'unreadable'
+    except OSError:
+        return None
+    try:
+        data = os.read(fd, MAX_FILE_BYTES)
+    finally:
+        os.close(fd)
+    entry.update(kind='file', size=info.st_size, sha256=hashlib.sha256(data).hexdigest(),
+                 lines=data.count(b'\n') + (1 if data and not data.endswith(b'\n') else 0))
+    if category == 'ssh' and os.path.basename(path).startswith('authorized_keys'):
+        entry['keys'] = _ssh_keys(data)
+    return entry
+
+
+def _accounts(root):
+    try:
+        lines = Path(_expand('/etc/passwd', root, '')).read_text(encoding='utf-8', errors='replace').splitlines()
+    except OSError:
+        return None
+    accounts = {}
+    for line in lines[:MAX_ENTRIES]:
+        parts = line.split(':')
+        if len(parts) >= 7 and parts[0] and not parts[0].startswith(('#', '+', '-')):
+            try:
+                accounts[parts[0]] = dict(uid=int(parts[2]), gid=int(parts[3]), home=parts[5][:256],
+                                          shell=parts[6][:256])
+            except ValueError:
+                continue
+    return accounts
+
+
+def _modules(root):
+    try:
+        text = Path(_expand('/proc/modules', root, '')).read_text(encoding='ascii', errors='replace')
+    except OSError:
+        return None
+    return sorted({line.split()[0] for line in text.splitlines() if line.split()})[:MAX_ENTRIES]
+
+
+def _setuid(root, directories):
+    found, walked = {}, 0
+    for directory in directories:
+        top = _expand(directory, root, '')
+        for folder, dirs, files in os.walk(top, followlinks=False):
+            for name in files:
+                walked += 1
+                if walked > MAX_SETUID_WALK:
+                    return found, True
+                path = os.path.join(folder, name)
+                try:
+                    info = os.lstat(path)
+                except OSError:
+                    continue
+                if stat.S_ISREG(info.st_mode) and info.st_mode & (stat.S_ISUID | stat.S_ISGID):
+                    described = _describe(path, 'setuid')
+                    if isinstance(described, dict):
+                        found[_display(path, root, '/nonexistent-home')] = described
+    return found, False
+
+
+def snapshot(*, root='/', home=None, setuid_dirs=SETUID_DIRS):
+    """The current state of every location, and the locations that could not be read."""
+    home = home or str(Path.home())
+    entries, gaps = {}, []
+    for category, _, _, patterns in LOCATIONS:
+        for pattern in patterns:
+            expanded = _expand(pattern, root, home)
+            parent = os.path.dirname(expanded)
+            if any(ch in expanded for ch in '*?[') and os.path.isdir(parent) and not os.access(parent, os.R_OK | os.X_OK):
+                gaps.append(dict(category=category, location=pattern))
+                continue
+            matches = glob.glob(expanded) if any(ch in expanded for ch in '*?[') else [expanded]
+            for path in sorted(matches)[:2000]:
+                described = _describe(path, category)
+                if described is None:
+                    continue
+                key = _display(path, root, home)
+                if described == 'unreadable':
+                    gaps.append(dict(category=category, location=key))
+                    continue
+                entries[f'{category}:{key}'] = dict(described, category=category)
+                if len(entries) > MAX_ENTRIES:
+                    raise PersistenceError('too many persistence entries to record')
+    accounts = _accounts(root)
+    if accounts is None:
+        gaps.append(dict(category='account', location='/etc/passwd'))
+    modules = _modules(root)
+    if modules is None:
+        gaps.append(dict(category='kernel_module', location='/proc/modules'))
+    setuid, truncated = _setuid(root, setuid_dirs)
+    if truncated:
+        gaps.append(dict(category='setuid', location='walk limit reached'))
+    return dict(entries=entries, accounts=accounts or {}, modules=modules or [], setuid=setuid, gaps=gaps)
+
+
+def _write(path, value):
+    path = Path(path).expanduser()
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(prefix='.persistence-', dir=path.parent)
+    try:
+        os.fchmod(handle, 0o600)
+        with os.fdopen(handle, 'w', encoding='utf-8') as stream:
+            json.dump(value, stream, sort_keys=True, separators=(',', ':'))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+        raise
+
+
+def _read(path):
+    path = Path(path).expanduser()
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except FileNotFoundError:
+        raise PersistenceError(f'no persistence baseline at {path}; run megalodon persistence baseline') from None
+    except OSError as exc:
+        raise PersistenceError(f'persistence baseline {path} cannot be opened: {exc.strerror}') from None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise PersistenceError(f'persistence baseline {path} must be a mode-600 file owned by you')
+        raw = os.read(fd, MAX_MANIFEST_BYTES + 1)
+    finally:
+        os.close(fd)
+    if len(raw) > MAX_MANIFEST_BYTES:
+        raise PersistenceError('persistence baseline is too large')
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        raise PersistenceError('persistence baseline is not valid JSON') from None
+    if type(value) is not dict or value.get('schema') != SCHEMA:
+        raise PersistenceError('persistence baseline has an unsupported format')
+    return value
+
+
+def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, **options):
+    path = Path(manifest).expanduser()
+    if path.exists() and not replace:
+        raise PersistenceError(f'{path} exists; use accept to record the reviewed state')
+    state = snapshot(**options)
+    _write(path, dict(schema=SCHEMA, recorded_at=_now(), user=os.geteuid(), **state))
+    return dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), entries=len(state['entries']),
+                accounts=len(state['accounts']), modules=len(state['modules']), setuid=len(state['setuid']),
+                gaps=state['gaps'])
+
+
+def _finding(change, category, location, severity, detail=None):
+    item = dict(change=change, category=category, location=location, technique=TECHNIQUES[category],
+                severity=severity if change != 'removed' else 'LOW')
+    if detail:
+        item['detail'] = detail
+    return item
+
+
+def _compare_entry(key, old, new):
+    category, location = key.split(':', 1)
+    severity = SEVERITY[category]
+    if old is None:
+        detail = {'kind': new.get('kind')}
+        if new.get('keys'):
+            detail['keys_added'] = new['keys'][:20]
+        if new.get('kind') == 'link':
+            detail['target'] = new['target']
+        return _finding('added', category, location, severity, detail)
+    if new is None:
+        return _finding('removed', category, location, severity)
+    changes = {k: [old.get(k), new.get(k)] for k in ('kind', 'sha256', 'mode', 'uid', 'target') if old.get(k) != new.get(k)}
+    if not changes:
+        return None
+    detail = dict(changed=sorted(changes))
+    if 'sha256' in changes:
+        detail['lines'] = [old.get('lines'), new.get('lines')]
+    if 'mode' in changes or 'uid' in changes:
+        detail.update({k: changes[k] for k in ('mode', 'uid') if k in changes})
+    if 'target' in changes:
+        detail['target'] = changes['target']
+    if new.get('keys') is not None:
+        before = {k['fingerprint'] for k in old.get('keys', [])}
+        added = [k for k in new['keys'] if k['fingerprint'] not in before]
+        if added:
+            detail['keys_added'] = added[:20]
+            severity = 'CRITICAL'
+    return _finding('changed', category, location, severity, detail)
+
+
+def _interactive(shell):
+    return bool(shell) and not os.path.basename(shell).startswith(_SHELLS_NOLOGIN)
+
+
+def compare(old, new):
+    findings = []
+    for key in sorted(set(old['entries']) | set(new['entries'])):
+        item = _compare_entry(key, old['entries'].get(key), new['entries'].get(key))
+        if item:
+            findings.append(item)
+    for path in sorted(set(old['setuid']) | set(new['setuid'])):
+        before, after = old['setuid'].get(path), new['setuid'].get(path)
+        if before is None:
+            findings.append(_finding('added', 'setuid', path, 'HIGH', dict(mode=after['mode'], uid=after['uid'])))
+        elif after is None:
+            findings.append(_finding('removed', 'setuid', path, 'HIGH'))
+        elif before.get('sha256') != after.get('sha256') or before.get('mode') != after.get('mode'):
+            findings.append(_finding('changed', 'setuid', path, 'HIGH', dict(mode=[before['mode'], after['mode']])))
+    for name in sorted(set(new['modules']) - set(old['modules'])):
+        findings.append(_finding('added', 'kernel_module', name, 'HIGH'))
+    for name in sorted(set(old['accounts']) | set(new['accounts'])):
+        before, after = old['accounts'].get(name), new['accounts'].get(name)
+        if before is None:
+            findings.append(_finding('added', 'account', name, 'CRITICAL' if after['uid'] == 0 else 'MEDIUM',
+                                     dict(uid=after['uid'], shell=after['shell'])))
+        elif after is None:
+            findings.append(_finding('removed', 'account', name, 'MEDIUM'))
+        elif before != after:
+            severity = ('CRITICAL' if after['uid'] == 0 and before['uid'] != 0 else
+                        'HIGH' if _interactive(after['shell']) and not _interactive(before['shell']) else 'MEDIUM')
+            findings.append(_finding('changed', 'account', name, severity,
+                                     {k: [before[k], after[k]] for k in before if before[k] != after.get(k)}))
+    findings.sort(key=lambda item: (-RANK[item['severity']], item['category'], item['location']))
+    return findings
+
+
+def check(manifest=DEFAULT_MANIFEST, **options):
+    old = _read(manifest)
+    new = snapshot(**options)
+    findings = compare(old, new)
+    counts = {level: sum(1 for f in findings if f['severity'] == level) for level in RANK}
+    return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
+                baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
+                severity_counts=counts, gaps=new['gaps'],
+                note='Review each change; accept records the reviewed state. Nothing was changed.')
+
+
+def accept(manifest=DEFAULT_MANIFEST, **options):
+    _read(manifest)  # Only an existing, private baseline can be replaced.
+    return dict(baseline(manifest, replace=True, **options), action='accept')

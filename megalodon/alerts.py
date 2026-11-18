@@ -191,14 +191,28 @@ def check_url(url, name):
 
 # ---------------------------------------------------------------- payloads
 
+@dataclass(frozen=True)
+class HostNotice:
+    """A host-side finding (no address pair), e.g. from the ransomware watch."""
+    rule_id: str
+    severity: str
+    detected_at: datetime
+    message: str
+    attack: tuple[str, ...] = ()
+    summary: str = ''
+    src_ip: None = None
+    dst_ip: None = None
+
+
 def record(detection, detail='standard', sensor='', suppressed=0):
     rule = rule_catalog.BY_ID.get(detection.rule_id)
+    attack = list(rule.attack) if rule else list(getattr(detection, 'attack', ()))
+    summary = rule.summary if rule else getattr(detection, 'summary', '')
     value = dict(schema=SCHEMA, sensor=sensor or socket.gethostname()[:253] or 'megalodon',
                  rule_id=detection.rule_id, severity=detection.severity,
                  detected_at=detection.detected_at.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-                 attack=list(rule.attack) if rule else [], summary=rule.summary if rule else '',
-                 suppressed_before=suppressed)
-    if detail in ('standard', 'full'):
+                 attack=attack, summary=summary, suppressed_before=suppressed)
+    if detail in ('standard', 'full') and detection.src_ip is not None:
         value.update(src_ip=detection.src_ip, dst_ip=detection.dst_ip)
     if detail == 'full':
         value['message'] = detection.message

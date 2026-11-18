@@ -202,6 +202,37 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--config", type=Path,
                              help="settings file (default ~/.config/megalodon/settings.toml)")
 
+    persist = sub.add_parser(
+        "persistence", help="baseline and check where attackers hide to survive reboots (exit 1 on changes)")
+    persist_sub = persist.add_subparsers(dest="persistence_command", required=True)
+    for name, text in (("baseline", "record the current state of every persistence location"),
+                       ("check", "report what was added, changed or removed since the baseline"),
+                       ("accept", "after review, record the current state as the new baseline")):
+        command = persist_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/persistence.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send a summary to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
+    ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
+    ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
+    ransom_watch = ransom_sub.add_parser(
+        "watch", help="watch folders until stopped; print each finding as JSON and send it to configured alerts")
+    ransom_watch.add_argument("--dir", type=Path, action="append", required=True,
+                              help="folder to watch, recursively (repeat for more)")
+    ransom_watch.add_argument("--min-files", type=_bounded_cli_integer("min-files", 2, 10000), default=10,
+                              help="encrypted files within the window that raise the alarm (default 10)")
+    ransom_watch.add_argument("--window", type=_bounded_cli_integer("window", 5, 3600), default=60,
+                              help="seconds (default 60)")
+    ransom_watch.add_argument("--config", type=Path,
+                              help="settings file whose [alerts] receive findings "
+                                   "(default ~/.config/megalodon/settings.toml when present)")
+    ransom_sub.add_parser("selftest", help="encrypt throwaway files in a temporary folder and confirm the alarm")
+
     alerts = sub.add_parser("alerts", help="off-machine alerts: webhooks (JSON, Slack, Discord, ntfy) and syslog")
     alerts_sub = alerts.add_subparsers(dest="alerts_command", required=True)
     alerts_test = alerts_sub.add_parser(
@@ -1039,6 +1070,100 @@ def _feeds(args: argparse.Namespace) -> int:
     return 1 if any(item["status"] == "failed" for item in result["sources"].values()) else 0
 
 
+def _persistence(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import persistence_watch as watch
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.persistence_command == "baseline":
+            result = watch.baseline(manifest, replace=args.replace)
+        elif args.persistence_command == "accept":
+            result = watch.accept(manifest)
+        else:
+            result = watch.check(manifest)
+    except (watch.PersistenceError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.persistence_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            settings = load_settings(args.config or Path.home() / ".config/megalodon/settings.toml")
+            dispatcher = dispatcher_for(settings.alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            top = findings[0]
+            listed = "; ".join(f"{f['change']} {f['category']} {f['location']}" for f in findings[:5])
+            dispatcher.submit([HostNotice(
+                "PERSISTENCE_CHANGE", top["severity"], datetime.now(timezone.utc),
+                f"{len(findings)} persistence changes since the baseline: {listed}",
+                tuple(sorted({f['technique'] for f in findings}))[:8],
+                "A place attackers use to survive reboots changed since the reviewed baseline.")])
+    return 1 if findings else 0
+
+
+def _ransomware(args: argparse.Namespace) -> int:
+    from threading import Event
+    import tempfile
+
+    from . import ransomware_watch as watch
+    from .alerts import HostNotice, dispatcher_for
+    from .validation import ValidationError
+
+    if args.ransomware_command == "selftest":
+        with tempfile.TemporaryDirectory(prefix="megalodon-ransomware-selftest-") as base:
+            try:
+                found = watch.selftest(os.path.join(base, "files"))
+            except watch.WatchError as exc:
+                print(f"megalodon: {exc}", file=sys.stderr)
+                return 2
+        rules = sorted({item.rule_id for item in found})
+        ok = {"RANSOMWARE_ENCRYPTION", "RANSOM_NOTE"} <= set(rules)
+        print(json.dumps(dict(schema="megalodon-ransomware-selftest-v1", detected=rules, ok=ok), indent=2))
+        return 0 if ok else 1
+    path = args.config or Path.home() / ".config/megalodon/settings.toml"
+    dispatcher = None
+    try:
+        if args.config or path.exists():
+            dispatcher = dispatcher_for(load_settings(path).alerts)
+        detector = watch.RansomwareDetector(min_files=args.min_files, window_seconds=args.window)
+        roots = [str(item) for item in args.dir]
+        seeded = 0
+        for root in roots:
+            seeded += detector.seed([root])
+        watcher = watch.Watcher(roots, detector, lambda finding: None)
+    except (ValidationError, watch.WatchError, OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+
+    def emit(finding):
+        print(json.dumps(finding.to_dict(), sort_keys=True), flush=True)
+        if dispatcher is not None:
+            dispatcher.submit([HostNotice(finding.rule_id, finding.severity, finding.detected_at,
+                                          finding.message, watch.ATTACK,
+                                          "Files are being rewritten as encrypted data, as ransomware does.")])
+    watcher.emit = emit
+    print(f"megalodon: watching {watcher.watched} folders ({seeded} files recorded)"
+          + ("; folder limit reached, some subfolders are not watched" if watcher.truncated else "")
+          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else "; no alerts configured"),
+          file=sys.stderr, flush=True)
+    stop = Event()
+    try:
+        watcher.run(stop)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        watcher.close()
+    return 0
+
+
 def _alerts(args: argparse.Namespace) -> int:
     from .alerts import test_destinations
     from .validation import ValidationError
@@ -1680,6 +1805,10 @@ def main(argv: list[str] | None = None) -> None:
         code = _yara(args)
     elif args.command == "alerts":
         code = _alerts(args)
+    elif args.command == "ransomware":
+        code = _ransomware(args)
+    elif args.command == "persistence":
+        code = _persistence(args)
     elif args.command == "feeds":
         code = _feeds(args)
     elif args.command == "detectors":
