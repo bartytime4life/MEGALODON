@@ -189,10 +189,12 @@ def test_legacy_snapshot_detector_counts_keep_their_original_labels():
     if not node:
         pytest.skip("Node unavailable")
     script = SNAPSHOT_VALIDATOR_JS + (
-        "\nconst out={};for(const n of [3,8,9])out[n]=snapshotDetectorLabels(n);"
+        "\nconst out={};for(const n of [3,8,9,11])out[n]=snapshotDetectorLabels(n);"
         "process.stdout.write(JSON.stringify(out));")
     labels = json.loads(subprocess.run([node, "-e", script], check=True, timeout=10, text=True,
                                        capture_output=True).stdout)
     assert labels["3"] == ["SYN_FLOOD", "PORT_SCAN", "DNS_TUNNELING"]
     assert labels["8"][-1] == "IOC_MATCH" and "DECOY_TOUCH" not in labels["8"]
-    assert labels["9"] == list(rule_catalog.ALL_RULE_IDS)
+    # DNS rules were appended, so a 9-count export is the catalog's prefix.
+    assert labels["9"] == list(rule_catalog.ALL_RULE_IDS[:9]) and labels["9"][-1] == "IOC_MATCH"
+    assert labels["11"] == list(rule_catalog.ALL_RULE_IDS)

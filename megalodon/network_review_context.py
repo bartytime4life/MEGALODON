@@ -15,6 +15,8 @@ CONTEXT = {
     'DATA_EXFILTRATION': 'This detector sums reported bytes from an internal source to one public destination. Reported bytes include headers and retransmissions and do not reveal content (RFC 9293).',
     'BEACONING': 'This detector compares intervals between connection starts to one public address and port. NAT keep-alives, QUIC and TCP keep-alive timers can produce regular timing (RFC 4787, RFC 9000, RFC 9293).',
     'DECOY_TOUCH': 'A decoy is a port or unassigned address that no service uses, so contact implies discovery. Address spoofing, broadcast-to-unicast relays and stale ARP or DNS entries can still produce stray packets (RFC 1918, RFC 826).',
+    'DGA_DOMAIN': 'This detector scores the spelling of a queried name (entropy, length, digit mixing, consonant runs, stacked or deep labels). A name is not an identity; DNS-over-HTTPS and DNS-over-TLS queries are invisible to it (RFC 8484, RFC 7858).',
+    'DNS_TUNNEL_CHURN': 'This detector counts distinct subdomains per source under one registrable domain, approximated without a public-suffix list. Resolver caching hides repeats, and encrypted DNS is invisible to it (RFC 1035, RFC 8484).',
     'IOC_MATCH': 'An indicator matches an address, not an actor. Address reassignment, NAT and shared hosting make IP indicators decay quickly (RFC 4787).',
     'PORT_53_BURST': 'DNS can use UDP, TCP, TLS or HTTPS. Port 53 observations are not a count of parsed DNS questions (RFC 7766, RFC 7858, RFC 8484).',
     'NEW_DESTINATION_PORT': 'A transport port is not an application identity. QUIC uses UDP, while TLS protects application data (RFC 9000, RFC 8446).',

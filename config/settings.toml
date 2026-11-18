@@ -46,6 +46,12 @@ watchlist_severity = "HIGH"
 # Example: decoy_ports = [2222, 3390, 4455]; decoy_addresses = ["192.168.1.250"]
 decoy_ports = []
 decoy_addresses = []
+# DNS domain-name detection (generated names, tunnel-style subdomain churn and
+# domain watchlist hits). OFF by default: query names are a record of every
+# site visited. When on, names stay in memory; only a flagged domain is kept.
+dns_names = false
+dns_churn_window_seconds = 60
+dns_churn_distinct_subdomains = 30
 
 [blocking]
 # Keep this false; this evaluation-release candidate produces firewall plans only.

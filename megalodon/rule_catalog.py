@@ -85,6 +85,19 @@ RULES: tuple[RuleDescription, ...] = (
         "Indicator lists go stale; shared hosting and reassigned addresses cause false matches.",
         ("T1071",), "threat_intelligence", "matched",
     ),
+    # Appended, never inserted: earlier HUD snapshot exports label by position.
+    RuleDescription(
+        "DGA_DOMAIN", THREAT_LAYER, "MEDIUM", "signals", "name signals", False,
+        "A looked-up domain reads like a machine-generated or encoded name.",
+        "CDNs, trackers, ad networks and some cloud services also use random-looking names.",
+        ("T1568.002",), "dns", "source",
+    ),
+    RuleDescription(
+        "DNS_TUNNEL_CHURN", THREAT_LAYER, "HIGH", "distinct_subdomains", "distinct subdomains", True,
+        "One host queried many distinct subdomains of one domain in a short window.",
+        "Some telemetry, anti-spam and CDN services encode data in subdomains on purpose.",
+        ("T1071.004", "T1048.003"), "dns", "source",
+    ),
 )
 
 BY_ID: dict[str, RuleDescription] = {rule.rule_id: rule for rule in RULES}

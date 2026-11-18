@@ -20,7 +20,7 @@ FAMILIES = {
     'REGULAR_INTERVAL': 'cadence', 'BEACONING': 'cadence',
     'BRUTE_FORCE': 'credential_access', 'HOST_SWEEP': 'discovery',
     'DATA_EXFILTRATION': 'traffic_volume', 'IOC_MATCH': 'threat_intelligence',
-    'DECOY_TOUCH': 'discovery',
+    'DECOY_TOUCH': 'discovery', 'DGA_DOMAIN': 'dns', 'DNS_TUNNEL_CHURN': 'dns',
     'NEW_DESTINATION_PORT': 'baseline_change',
     'PROTOCOL_SHIFT': 'baseline_change', 'SERVICE_SHIFT': 'baseline_change',
 }

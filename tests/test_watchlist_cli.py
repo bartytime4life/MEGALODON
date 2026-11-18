@@ -83,8 +83,9 @@ def test_import_stix_writes_private_watchlist(tmp_path, capsys, monkeypatch):
     code, out, err = run(argv, capsys)
     assert code == 0, err
     receipt = json.loads(out)
-    assert receipt["converted"] == 1 and receipt["skipped_pattern"] == 1
-    assert receipt["indicators_written"] == 1
+    # Domain-name equality patterns now become domain indicators.
+    assert receipt["converted"] == 2 and receipt["skipped_pattern"] == 0
+    assert receipt["indicators_written"] == 2
     assert os.stat(output).st_mode & 0o777 == 0o600
     assert "203.0.113.5  # lab c2" in output.read_text()
     code, _, err = run(argv, capsys)

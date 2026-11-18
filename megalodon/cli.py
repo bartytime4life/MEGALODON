@@ -448,7 +448,7 @@ def _events_for(args: argparse.Namespace, settings):
             return _jsonl_file_events(args.input)
         return iter_jsonl(sys.stdin)
     if source == "scapy":
-        return iter_scapy(args.interface or settings.interface)
+        return iter_scapy(args.interface or settings.interface, dns_names=settings.threat.dns_names)
     raise CaptureError(f"unsupported source: {source}")
 
 

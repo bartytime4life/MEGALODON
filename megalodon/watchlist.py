@@ -6,11 +6,15 @@ Format (UTF-8 text, one indicator per line)::
     198.51.100.7            # optional label shown with the finding
     203.0.113.0/24          # known scanner range
     2001:db8:dead::/48
+    evil.example            # domain: also matches every subdomain
 
 The file must be an owner-private regular file (no symlink, not group- or
 world-writable) because a watchlist decides which addresses are flagged.
 Networks broader than IPv4 /8 or IPv6 /16 are refused so that a mistaken
 ``0.0.0.0/0`` cannot flag every event. Matching is longest-prefix first.
+Domain indicators need at least two labels (a bare ``com`` is refused) and
+match the name itself and every subdomain; they apply to DNS query names,
+which are read only when ``[threat_detection] dns_names`` is enabled.
 
 ``stix_indicators`` converts only whole-pattern IP equality comparisons from a
 digest-pinned STIX 2.1 bundle (read by :mod:`megalodon.threat_context`); every
@@ -28,7 +32,7 @@ import tempfile
 import unicodedata
 from typing import Iterable
 
-from .validation import ValidationError
+from .validation import ValidationError, parse_dns_name
 
 MAX_WATCHLIST_BYTES = 8 * 1024 * 1024
 MAX_INDICATORS = 200_000
@@ -37,7 +41,7 @@ MIN_PREFIX = {4: 8, 6: 16}
 SEVERITIES = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 
 _LABEL_SAFE = re.compile(r"[^\w .,:;/@()+\-\[\]#]")
-_COMPARISON = r"(ipv4-addr|ipv6-addr):value\s*=\s*'([0-9A-Fa-f:./]{2,49})'"
+_COMPARISON = r"(ipv4-addr|ipv6-addr|domain-name):value\s*=\s*'([0-9A-Za-z_:./-]{2,253})'"
 _STIX_PATTERN = re.compile(
     r"\[\s*" + _COMPARISON + r"(?:\s+OR\s+" + _COMPARISON + r")*\s*\]"
 )
@@ -48,6 +52,24 @@ def _label(text: str) -> str:
     text = unicodedata.normalize("NFKC", text).strip()
     text = "".join(ch for ch in text if ch.isprintable())
     return _LABEL_SAFE.sub("", text)[:MAX_LABEL_CHARS].strip()
+
+
+def parse_domain(text: str) -> str:
+    """A domain indicator with at least two labels; a bare TLD would match too much."""
+    try:
+        name = parse_dns_name(text)
+    except ValidationError:
+        raise ValidationError("invalid indicator") from None
+    if "." not in name:
+        raise ValidationError("domain indicator needs at least two labels")
+    return name
+
+
+def parse_any(text: str):
+    """An IP/CIDR network, or a domain name when the text is not an address."""
+    if ":" in text or "/" in text or text.replace(".", "").isdigit():
+        return parse_indicator(text)
+    return parse_domain(text)
 
 
 def parse_indicator(text: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
@@ -84,8 +106,16 @@ class Watchlist:
         self.severity = severity
         self.source = source
         self._tables: dict[tuple[int, int], dict[int, tuple[str, str]]] = {}
+        self._domains: dict[str, str] = {}
         count = 0
         for network, label in entries:
+            if isinstance(network, str):
+                if network not in self._domains:
+                    count += 1
+                    if count > MAX_INDICATORS:
+                        raise ValidationError(f"watchlist exceeds {MAX_INDICATORS} indicators")
+                self._domains[network] = label
+                continue
             table = self._tables.setdefault((network.version, network.prefixlen), {})
             key = int(network.network_address)
             if key not in table:
@@ -116,6 +146,22 @@ class Watchlist:
                 return hit
         return None
 
+    @property
+    def has_domains(self) -> bool:
+        return bool(self._domains)
+
+    def match_domain(self, name: str) -> tuple[str, str] | None:
+        """Most specific domain indicator covering ``name`` (itself or a parent)."""
+        if not self._domains:
+            return None
+        labels = name.split(".")
+        for start in range(len(labels) - 1):
+            candidate = ".".join(labels[start:])
+            label = self._domains.get(candidate)
+            if label is not None:
+                return candidate, label
+        return None
+
     def summary(self) -> dict[str, object]:
         by_version = {4: 0, 6: 0}
         for (version, _), table in self._tables.items():
@@ -125,6 +171,7 @@ class Watchlist:
             "indicators": self._count,
             "ipv4": by_version[4],
             "ipv6": by_version[6],
+            "domains": len(self._domains),
             "prefix_lengths": len(self._tables),
             "severity": self.severity,
             "network_access_performed": False,
@@ -141,7 +188,7 @@ def parse_lines(lines: Iterable[str]) -> list[tuple[ipaddress._BaseNetwork, str]
         if len(text.split()) != 1:
             raise ValidationError(f"watchlist line {number}: one indicator per line")
         try:
-            entries.append((parse_indicator(text), _label(comment)))
+            entries.append((parse_any(text), _label(comment)))
         except ValidationError as exc:
             raise ValidationError(f"watchlist line {number}: {exc}") from None
     return entries
@@ -220,6 +267,9 @@ def stix_indicators(
         parts = []
         try:
             for kind, value in _STIX_PART.findall(pattern):
+                if kind == "domain-name":
+                    parts.append(parse_domain(value))
+                    continue
                 network = parse_indicator(value)
                 if network.version != (4 if kind == "ipv4-addr" else 6):
                     raise ValidationError("address family mismatch")
@@ -236,7 +286,10 @@ def render(entries: Iterable[tuple[ipaddress._BaseNetwork, str]], header: str) -
     lines = [f"# {_label(header)}"]
     seen: set[str] = set()
     for network, label in entries:
-        text = network.with_prefixlen if network.num_addresses > 1 else str(network.network_address)
+        if isinstance(network, str):
+            text = network
+        else:
+            text = network.with_prefixlen if network.num_addresses > 1 else str(network.network_address)
         if text in seen:
             continue
         seen.add(text)

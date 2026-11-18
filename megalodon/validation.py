@@ -225,6 +225,26 @@ def validate_packet_metadata(value: Any) -> dict[str, str]:
     return {"source_adapter": adapter}
 
 
+_DNS_LABEL = re.compile(r"[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?")
+
+
+def parse_dns_name(value: Any) -> str:
+    """A canonical DNS query name: lowercase, no root dot, valid labels, <= 253 chars.
+
+    Names are bounded, printable ASCII and never resolved here.
+    """
+    if not isinstance(value, str):
+        raise ValidationError("dns_query_name must be text")
+    name = value.strip().lower()
+    if name.endswith("."):
+        name = name[:-1]
+    if not name or len(name) > 253 or not name.isascii():
+        raise ValidationError("dns_query_name is not a valid DNS name")
+    if not all(_DNS_LABEL.fullmatch(label) for label in name.split(".")):
+        raise ValidationError("dns_query_name is not a valid DNS name")
+    return name
+
+
 def is_global_unicast(value: str) -> bool:
     address = ipaddress.ip_address(value)
     return address.is_global and not address.is_multicast
