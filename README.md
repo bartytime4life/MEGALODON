@@ -21,7 +21,9 @@ have their own dependencies, licenses and operational requirements.
 
 **Optional file inspection:** choose a downloaded Linux, Windows or macOS
 program in the Linux HUD, then select **Inspect** for local structural and
-identification clues. [Setup, coverage and safety boundaries](docs/file-inspection.md).
+identification clues. Your own YARA rules in `~/.config/megalodon/yara-rules/`
+are compiled and matched in the same sandbox and reported as rule names only.
+[Setup, coverage and safety boundaries](docs/file-inspection.md).
 The program is never launched or unpacked; results give no safety verdict.
 
 <p>
@@ -76,7 +78,7 @@ or recovery capability of a particular installed PC.
 | History and reporting | Segmented evidence, indexed baseline comparisons, selection-bound visual reports and fixed schedules | Missing intervals remain missing; packet and flow units stay separate; resource averages round at the final display step |
 | Optional sources | TShark, closed Zeek logs, strict Suricata admission and separate background observations | Importer, installed tool and qualified producer are distinct |
 | Host review | Lynis, AIDE, hardening posture, persistence, passive gateway review and own-account program/socket review | Scoped observations; root-only and unobserved activity can be missed |
-| File inspection | Explicit signed-in submission, bounded structural and identification clues, partial-coverage reports | Optional confined runtime; no launch, unpacking or malware/safety verdict |
+| File inspection | Explicit signed-in submission, bounded structural and identification clues, your own YARA rules matched in the sandbox, partial-coverage reports | Optional confined runtime; no launch, unpacking or malware/safety verdict |
 | Local AI preparation | Installed-model selection, explicit file verification, pinned staging and a separate fixed response diagnostic | Operational inference remains **UNBOUND**; maintenance or a diagnostic response does not accept a model |
 | Recovery readiness | AIDE evidence gaps; backup/test receipt hashes checked against separate operator trust | **No host-file restore; `restore_eligible` remains false** |
 | Explicit Linux workflows | Protected configuration, bounded scans, temporary IP containment and [host input protection](docs/host-protection.md) | Host policy automatically drops unsolicited inbound traffic only during an explicitly authorized finite lease; core detector responses remain plans |

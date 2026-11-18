@@ -12,6 +12,7 @@ from .file_inspection_contract import (MAX_INPUT, STATUS_SCHEMA, decode, fields,
     report, validate_identification, validate_structure)
 from . import file_inspection_runtime as runtime
 from . import file_inspection_sandbox as sandbox
+from . import yara_rules
 
 
 class InspectionBusy(ValueError):
@@ -50,9 +51,11 @@ def normalize_die(raw):
 
 
 class FileInspection:
-    def __init__(self, home=None, *, runner=sandbox.run, validator=runtime.validate):
+    def __init__(self, home=None, *, runner=sandbox.run, validator=runtime.validate,
+                 rules_loader=yara_rules.load, yara_validator=None):
         self.home = home
         self._runner, self._validator = runner, validator
+        self._rules_loader, self._yara_validator = rules_loader, yara_validator
         self._lock = Lock()
         self._availability_lock = Lock()
         self._state, self._job, self._report = 'idle', None, None
@@ -139,7 +142,7 @@ class FileInspection:
         return True
 
     def _work(self, job, fd, size, root, cancelled):
-        results = []
+        results, rules = [], None
         deadline = time.monotonic() + 30
         try:
             # Probe the exact confinement before a native parser sees input.
@@ -148,6 +151,7 @@ class FileInspection:
             if not admitted:
                 state = state if state in ('cancelled', 'timed_out') else 'unavailable'
                 results = [dict(state=state), dict(state=state)]
+                rules = dict(state=state) if self._rules_configured() else None
             else:
                 for tool, normalizer in (('lief', normalize_lief), ('die', normalize_die)):
                     if cancelled.is_set():
@@ -162,18 +166,28 @@ class FileInspection:
                     except (ValueError, TypeError, KeyError, RecursionError, UnicodeError):
                         result = dict(state='failed')
                     results.append(result)
-            value = report(size, results)
+                # Operator rules read bytes, not structure, so they also cover
+                # files the structural tools do not support. Own deadline.
+                rules = yara_rules.scan(self.home, fd, cancelled, runner=self._runner,
+                                        loader=self._rules_loader, validator=self._yara_validator)
+            value = report(size, results, rules)
         except Exception:
-            value = report(size, [dict(state='failed'), dict(state='failed')])
+            value = report(size, [dict(state='failed'), dict(state='failed')], dict(state='failed'))
         finally:
             os.close(fd)
         with self._lock:
             if self._job == job:
                 if cancelled.is_set():
                     # A late Cancel wins over publication of completed output.
-                    value = report(size, [dict(state='cancelled'), dict(state='cancelled')])
+                    value = report(size, [dict(state='cancelled'), dict(state='cancelled')], dict(state='cancelled'))
                 self._report = value
                 self._state = value['state'] if value['state'] != 'unsupported' else 'failed'
+
+    def _rules_configured(self):
+        try:
+            return self._rules_loader(None, home=self.home) is not None
+        except (OSError, ValueError):
+            return True
 
     def cancel(self):
         with self._lock:

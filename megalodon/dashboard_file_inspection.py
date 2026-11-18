@@ -12,7 +12,7 @@ FILE_INSPECTION_HTML = r'''
   <label class="fi-file-label" for="file-inspection-input">Choose one program to inspect</label>
   <input type="file" id="file-inspection-input" aria-describedby="file-inspection-limits file-inspection-selection" disabled>
   <p id="file-inspection-selection" class="fi-selection">No file selected.</p>
-  <p id="file-inspection-limits" class="fi-note">ELF, Windows EXE/DLL or macOS Mach-O · up to 64 MiB · 30-second analysis limit.</p>
+  <p id="file-inspection-limits" class="fi-note">ELF, Windows EXE/DLL or macOS Mach-O · up to 64 MiB · 30-second analysis limit. Your own YARA rules, when configured, also check any file type.</p>
   <div class="fi-actions"><button type="button" id="file-inspection-run" disabled>Inspect</button><button type="button" id="file-inspection-cancel" hidden disabled>Cancel inspection</button><button type="button" id="file-inspection-check" disabled>Check inspector</button></div>
   <p id="file-inspection-status" class="fi-status" role="status" aria-live="polite" aria-atomic="true">File inspection is available in the authenticated local Linux HUD.</p>
   <p id="file-inspection-sign-in" class="fi-note fi-sign-in" hidden><a href="#setup-account-title">Open Local sign-in in Setup →</a> Prepare a protected launch there, then open and sign in to that HUD. You choose when to start the protected launch.</p>
@@ -55,7 +55,7 @@ FILE_INSPECTION_CSS = r'''
 .fi-panel[data-state=error] .fi-status,.fi-panel[data-state=partial] .fi-status,.fi-panel[data-state=failed] .fi-status{border-color:#edc883;color:#f3d69f}
 .fi-runtime{font-size:.78rem;color:#bdd1db;margin:.65rem 0}.fi-runtime p{margin:.5rem 0}.fi-runtime a{display:inline-block;padding:.5rem 0;color:#a3e8e0;line-height:1.6}.fi-runtime button{margin:.4rem .7rem .4rem 0}
 .fi-result{border-top:1px solid #426270;margin:1.2rem 0 .8rem;padding-top:1rem}.fi-result-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.fi-result-head p{font-size:.78rem;color:#bdd0db;margin:0;flex:1 1 22rem}.fi-result-head button{flex:0 0 auto}
-.fi-tools{display:flex;gap:.5rem;flex-wrap:wrap;list-style:none;padding:0;margin:.8rem 0 1.2rem}.fi-tools li{padding:.35rem .55rem;border:1px solid #4b6c78;color:#d6e6ed;font-size:.75rem}.fi-tools li[data-state=completed]{border-color:#498575;color:#b8f4df}.fi-tools li[data-state=failed],.fi-tools li[data-state=timed_out],.fi-tools li[data-state=unavailable]{color:#f3d69f;border-color:#88744c}
+.fi-tools{display:flex;gap:.5rem;flex-wrap:wrap;list-style:none;padding:0;margin:.8rem 0 1.2rem}.fi-tools li{padding:.35rem .55rem;border:1px solid #4b6c78;color:#d6e6ed;font-size:.75rem}.fi-tools li[data-state=completed]{border-color:#498575;color:#b8f4df}.fi-tools li[data-state=failed],.fi-tools li[data-state=timed_out],.fi-tools li[data-state=unavailable],.fi-tools li[data-state=invalid_rules]{color:#f3d69f;border-color:#88744c}
 .fi-result>section{margin:1rem 0}.fi-result h4{color:#f0f8fa;font-size:.95rem;margin:.3rem 0 .4rem}.fi-result p,.fi-result li{font-size:.83rem;line-height:1.65;overflow-wrap:anywhere}.fi-result ul:not(.fi-tools){margin:.45rem 0;padding-left:1.3rem}.fi-result li+li{margin-top:.6rem}.fi-clues,.fi-limits{padding:.4rem 0 .4rem .9rem;border-left:2px solid #6c8b97}.fi-clues{border-left-color:#edc883}.fi-limits{border-left-color:#87e8dc}.fi-result li strong{display:block;margin-bottom:.15rem;color:#e6f1f5}
 .fi-result .fi-tools li+li{margin-top:0}
 .fi-result .fi-evidence-source{margin:.4rem 0 0;color:#bdd0db;font-size:.75rem}.fi-result .fi-evidence{margin-top:.35rem}.fi-result .fi-evidence dd p{margin:0 0 .4rem;font-size:inherit}.fi-result .fi-evidence-gap{color:#f3d69f}
@@ -69,20 +69,29 @@ function validFileInspectionReport(p) {
   const keys=(v,names)=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===names.slice().sort().join();
   const text=(v,max=512)=>typeof v==='string'&&v.length>0&&v.length<=max&&!/[\x00-\x1f\x7f]/.test(v);
   const count=(v,max=2147483647)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
+  const ident=v=>typeof v==='string'&&/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(v);
+  const rules=r=>keys(r,['state','rule_count','matched','matches'])&&['completed','not_configured','unavailable','invalid_rules','failed','timed_out','cancelled'].includes(r.state)
+    &&count(r.rule_count,100000)&&count(r.matched,r.rule_count)&&(r.state==='completed'||(r.rule_count===0&&r.matched===0))
+    &&Array.isArray(r.matches)&&r.matches.length===Math.min(r.matched,32)&&new Set(r.matches.map(m=>m&&m.namespace+':'+m.rule)).size===r.matches.length
+    &&r.matches.every(m=>keys(m,['namespace','rule','tags'])&&typeof m.namespace==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(m.namespace)&&ident(m.rule)&&Array.isArray(m.tags)&&m.tags.length<=16&&m.tags.every(ident)&&new Set(m.tags).size===m.tags.length);
   const slice=s=>keys(s,['architecture','bits','sections','imports','writable_executable'])&&text(s.architecture,120)&&[32,64].includes(s.bits)&&count(s.sections)&&count(s.imports)&&count(s.writable_executable);
-  const shape=keys(p,['schema','inspected_at','size_bytes','state','structure','identification','tools','clues','unknowns','next_step'])
-    &&p.schema==='megalodon-file-inspection-report-v1'&&typeof p.inspected_at==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(p.inspected_at)&&Number.isFinite(Date.parse(p.inspected_at))
+  const shape=keys(p,['schema','inspected_at','size_bytes','state','structure','identification','tools','rules','clues','unknowns','next_step'])
+    &&p.schema==='megalodon-file-inspection-report-v2'&&typeof p.inspected_at==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(p.inspected_at)&&Number.isFinite(Date.parse(p.inspected_at))
     &&count(p.size_bytes,67108864)&&p.size_bytes>0&&['completed','partial','failed','cancelled','unsupported'].includes(p.state)
     &&(p.structure===null||(keys(p.structure,['format','slices_detected','slices'])&&['ELF','PE','Mach-O'].includes(p.structure.format)&&count(p.structure.slices_detected,16)&&p.structure.slices_detected>0&&Array.isArray(p.structure.slices)&&p.structure.slices.length>0&&p.structure.slices.length<=16&&p.structure.slices.length===p.structure.slices_detected&&p.structure.slices.every(slice)&&(p.structure.format==='Mach-O'||p.structure.slices_detected===1)))
     &&Array.isArray(p.identification)&&p.identification.length<=32&&p.identification.every(v=>keys(v,['kind','name'])&&['compiler','packer','protector','linker'].includes(v.kind)&&text(v.name,120))
     &&Array.isArray(p.tools)&&p.tools.length===2&&p.tools.every((v,i)=>keys(v,['id','state'])&&v.id===['lief','die'][i]&&['completed','unavailable','unsupported','failed','timed_out','cancelled'].includes(v.state))
+    &&rules(p.rules)
     &&Array.isArray(p.clues)&&p.clues.length<=16&&p.clues.every(v=>keys(v,['code','title','meaning'])&&typeof v.code==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(v.code)&&text(v.title)&&text(v.meaning))
     &&Array.isArray(p.unknowns)&&p.unknowns.length<=16&&p.unknowns.every(v=>text(v))&&text(p.next_step)
     &&new TextEncoder().encode(JSON.stringify(p)).length<=65536;
   if(!shape)return false;
   // Match the existing server contract before using metadata as explanation evidence.
-  const states=p.tools.map(t=>t.state),expected=states.includes('cancelled')?'cancelled':states.every(s=>s==='completed')?'completed':states.includes('completed')?'partial':states.every(s=>s==='unsupported')?'unsupported':'failed';
-  return (p.structure!==null)===(states[0]==='completed')&&(states[1]==='completed'||p.identification.length===0)&&p.state===expected;
+  // Operator rules count toward coverage only once they are configured.
+  const states=p.tools.map(t=>t.state),considered=p.rules.state==='not_configured'?states:[...states,p.rules.state];
+  const expected=considered.includes('cancelled')?'cancelled':considered.every(s=>s==='completed')?'completed':considered.includes('completed')?'partial':states.every(s=>s==='unsupported')?'unsupported':'failed';
+  return (p.structure!==null)===(states[0]==='completed')&&(states[1]==='completed'||p.identification.length===0)&&p.state===expected
+    &&p.clues.some(c=>c.code==='rule_match')===(p.rules.matched>0);
 }
 function validFileInspectionStatus(p) {
   const keys=(v,names)=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===names.slice().sort().join();
@@ -95,7 +104,8 @@ function validFileInspectionStatus(p) {
   const el=id=>document.getElementById('file-inspection'+(id?'-'+id:'')),panel=el('');
   if(!panel||typeof localHudLaunch==='undefined')return;
   const state={payload:null,valid:false,signInRequired:false,file:null,selection:0,ownedJob:null,ownedSelection:null,report:null,reportJob:null,uploading:false,cancelling:false,checking:false,inView:false,timer:null,upload:null,epoch:0,rendered:null};
-  const names={lief:'LIEF · structure',die:'Detect It Easy · identification'},labels={completed:'Completed',partial:'Partial coverage',unavailable:'Unavailable',unsupported:'Unsupported',failed:'Failed',timed_out:'Time limit reached',cancelled:'Cancelled'};
+  const names={lief:'LIEF · structure',die:'Detect It Easy · identification',yara:'YARA · your rules'},labels={completed:'Completed',partial:'Partial coverage',unavailable:'Unavailable',unsupported:'Unsupported',failed:'Failed',timed_out:'Time limit reached',cancelled:'Cancelled',not_configured:'No rules configured',invalid_rules:'Rules refused or did not compile'};
+  const toolState=(report,id)=>id==='yara'?report.rules.state:report.tools.find(t=>t.id===id).state;
   const node=(tag,text)=>{const n=document.createElement(tag);n.textContent=text;return n;};
   const active=()=>state.uploading||['receiving','running'].includes(state.payload?.state);
   const visible=()=>state.inView&&!document.hidden;
@@ -124,7 +134,7 @@ function validFileInspectionStatus(p) {
     installControls();
   }
   function renderClues(report){
-    const clues=[],gaps=[],source=id=>names[id]+': '+labels[report.tools.find(t=>t.id===id).state];
+    const clues=[],gaps=[],source=id=>names[id]+': '+labels[toolState(report,id)];
     const add=(title,meaning,id,facts,limit)=>{
       const item=node('li',''),coverage=node('p',source(id));coverage.className='fi-evidence-source';
       item.append(node('strong',facts.length?title:'Supporting evidence unavailable'));
@@ -151,9 +161,15 @@ function validFileInspectionStatus(p) {
       const matches=identified.filter(i=>i.kind===kind);if(!matches.length)continue;
       add('Reported '+kind+' clue','This label suggests a tool used to build the program. Legitimate and malicious programs can use the same build tools.','die',matches.map(i=>'Reported '+kind+' label: '+i.name),identificationLimit);
     }
-    if(report.clues.some(c=>!['writable_executable','packed'].includes(c.code)))gaps.push('A reported clue has no reviewed explanation. No meaning has been inferred for it.');
+    if(report.clues.some(c=>c.code==='rule_match')){
+      const r=report.rules,facts=r.matches.map(m=>'Rule '+m.namespace+' / '+m.rule+(m.tags.length?' · tags: '+m.tags.join(', '):''));
+      if(facts.length&&r.matched>r.matches.length)facts.push('And '+(r.matched-r.matches.length)+' more matching '+(r.matched-r.matches.length===1?'rule':'rules')+' not listed.');
+      add('Your YARA rule matched','The file contains what one or more of your own YARA rules describe. A match is as good as the rule; it is a lead, not a malware verdict.','yara',facts,'A rule match shows only that the rule’s patterns are present. Rules can be broad or mistaken, and no matched text or location is shown here.');
+    }
+    if(report.clues.some(c=>!['writable_executable','packed','rule_match'].includes(c.code)))gaps.push('A reported clue has no reviewed explanation. No meaning has been inferred for it.');
     if(!clues.length&&!report.clues.length)clues.push(node('li','No review clues were returned within this inspection’s coverage. This does not establish that the file is safe.'));
     report.tools.filter(t=>t.state!=='completed').forEach(t=>gaps.push(source(t.id)+'. '+(t.id==='lief'?'Structural details are unavailable.':'Identification clues are unavailable.')));
+    if(!['completed','not_configured'].includes(report.rules.state))gaps.push(source('yara')+'. Your rules were not applied to this file.');
     gaps.forEach(text=>{const item=node('li',text);item.className='fi-evidence-gap';clues.push(item);});
     el('clues').replaceChildren(...clues);
   }
@@ -162,7 +178,7 @@ function validFileInspectionStatus(p) {
     const owned=currentReport();
     el('report-scope').textContent=(owned?'Report for the file you submitted. ':'Earlier report in this HUD session; not associated with the current file selection. ')+report.inspected_at.replace('T',' ').replace('Z',' UTC')+' · '+labels[report.state];
     const key=JSON.stringify(report);if(state.rendered===key)return;state.rendered=key;
-    el('tools').replaceChildren(...report.tools.map(t=>{const item=node('li',names[t.id]+': '+labels[t.state]);item.dataset.state=t.state;return item;}));
+    el('tools').replaceChildren(...[...report.tools,{id:'yara',state:report.rules.state}].map(t=>{const item=node('li',names[t.id]+': '+labels[t.state]);item.dataset.state=t.state;return item;}));
     const structure=report.structure;
     const formats={ELF:'Linux / Unix executable (ELF)',PE:'Windows executable or library (PE)','Mach-O':'macOS executable or library (Mach-O)'};
     el('what').textContent=structure?formats[structure.format]+'. '+[...new Set(structure.slices.map(s=>s.architecture+' · '+s.bits+'-bit'))].join('; ')+'.':'The available tools could not establish a supported executable structure.';
@@ -173,6 +189,7 @@ function validFileInspectionStatus(p) {
     if(structure){technical.append(node('dt','Slice coverage'),node('dd',structure.slices.length+' of '+structure.slices_detected+' reported executable slices'));
       structure.slices.forEach((s,i)=>technical.append(node('dt','Slice '+(i+1)),node('dd',s.architecture+' · '+s.bits+'-bit · '+s.sections+' sections · '+s.imports+' imports · '+s.writable_executable+' writable/executable regions')));}
     report.identification.forEach(i=>technical.append(node('dt','Reported '+i.kind+' clue'),node('dd',i.name)));
+    if(report.rules.state==='completed')technical.append(node('dt','Your YARA rules'),node('dd',report.rules.matched+' of '+report.rules.rule_count+' compiled '+(report.rules.rule_count===1?'rule':'rules')+' matched'));
     el('technical').replaceChildren(technical);
   }
   function accept(p){
