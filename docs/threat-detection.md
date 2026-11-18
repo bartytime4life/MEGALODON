@@ -277,7 +277,9 @@ Every value is bounded and validated; out-of-range values refuse to load.
 
 ## Local IOC watchlist
 
-The watchlist is a plain text file you control. No feed is fetched.
+The watchlist is a plain text file you control. Detection never fetches anything. To keep it current
+from threat feeds you choose, `megalodon feeds refresh` builds a labeled watchlist on a schedule
+(see [threat-feed refresh](threat-feeds.md)).
 
 ```text
 # one IP or CIDR per line; text after # is a label shown with the finding

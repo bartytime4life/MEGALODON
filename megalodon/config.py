@@ -9,6 +9,7 @@ import tomllib
 
 from .alerts import AlertConfigError, AlertSettings, parse_settings as _alert_settings
 from .threat_detector import ThreatDetectionSettings
+from .threat_feeds import FeedError, FeedSettings, parse_settings as _feed_settings
 from .validation import ValidationError, parse_network, safe_text
 
 
@@ -88,6 +89,7 @@ class Settings:
     ai: AISettings = field(default_factory=AISettings)
     threat: ThreatDetectionSettings = field(default_factory=ThreatDetectionSettings)
     alerts: AlertSettings = field(default_factory=AlertSettings)
+    feeds: FeedSettings = field(default_factory=FeedSettings)
 
 
 def _threat_settings(raw: dict[str, object]) -> ThreatDetectionSettings:
@@ -351,7 +353,15 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
         ),
         threat=_threat_settings(_table(raw.get("threat_detection", {}), "threat_detection")),
         alerts=_alerts(raw.get("alerts", {})),
+        feeds=_feeds(raw.get("feeds", {})),
     )
+
+
+def _feeds(raw: object) -> FeedSettings:
+    try:
+        return _feed_settings(raw)
+    except FeedError as exc:
+        raise ValidationError(str(exc)) from None
 
 
 def _alerts(raw: object) -> AlertSettings:
