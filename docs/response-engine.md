@@ -70,7 +70,7 @@ The same finding is decided at most once a day.
 
 | Action | Target | What it would do |
 | --- | --- | --- |
-| `collect_evidence` | — | Save a hashed, read-only snapshot of the programs, sockets and files involved, before anything else |
+| `collect_evidence` | — | Save a hashed, read-only snapshot of the programs, sockets and files involved, before anything else: what [`megalodon evidence collect`](evidence-collection.md) does |
 | `notify` | — | Send a summary to the [off-machine alerts](off-machine-alerts.md) |
 | `block_address` | address | Drop traffic to and from the address for `block_minutes` |
 | `suspend_process` | program | Pause (SIGSTOP) its processes, keeping them for investigation |
