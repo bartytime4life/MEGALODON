@@ -182,6 +182,7 @@ or source basis.
 | [Ransomware watch: live file-encryption alarm](ransomware-watch.md) | `docs/ransomware-watch.md` |
 | [Persistence watch: services, jobs, keys and startup files](persistence-watch.md) | `docs/persistence-watch.md` |
 | [Self-test drill: prove the detections fire](self-test-drill.md) | `docs/self-test-drill.md` |
+| [Log integrity: wiped, truncated or rewritten logs](log-integrity.md) | `docs/log-integrity.md` |
 | [Threat-feed refresh into the IOC watchlist](threat-feeds.md) | `docs/threat-feeds.md` |
 | [Tool heartbeat and one-click install](tool-heartbeat.md) | `docs/tool-heartbeat.md` |
 | [Local tool readiness receipt](tool-readiness.md) | `docs/tool-readiness.md` |

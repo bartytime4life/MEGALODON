@@ -209,6 +209,23 @@ def build_parser() -> argparse.ArgumentParser:
     drill.add_argument("--config", type=Path,
                        help="settings file for --alerts (default ~/.config/megalodon/settings.toml)")
 
+    logwatch = sub.add_parser(
+        "logwatch", help="baseline and check system logs for wiping, truncation or rewriting (exit 1 on findings)")
+    logwatch_sub = logwatch.add_subparsers(dest="logwatch_command", required=True)
+    for name, text in (("baseline", "record each log file's identity"),
+                       ("check", "report logs deleted, truncated, rewritten or replaced since the baseline"),
+                       ("accept", "after review or rotation, record the current logs as the new baseline")):
+        command = logwatch_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path,
+                             help="baseline file (default ~/.config/megalodon/log-integrity.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send a summary to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     persist = sub.add_parser(
         "persistence", help="baseline and check where attackers hide to survive reboots (exit 1 on changes)")
     persist_sub = persist.add_subparsers(dest="persistence_command", required=True)
@@ -1077,6 +1094,42 @@ def _feeds(args: argparse.Namespace) -> int:
     return 1 if any(item["status"] == "failed" for item in result["sources"].values()) else 0
 
 
+def _logwatch(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import log_integrity
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(log_integrity.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.logwatch_command == "baseline":
+            result = log_integrity.baseline(manifest, replace=args.replace)
+        elif args.logwatch_command == "accept":
+            result = log_integrity.accept(manifest)
+        else:
+            result = log_integrity.check(manifest)
+    except (log_integrity.LogIntegrityError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.logwatch_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f"{f['rule_id']} {f['log']}" for f in findings[:5])
+            dispatcher.submit([HostNotice(
+                findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                f"{len(findings)} log integrity findings: {listed}", (log_integrity.TECHNIQUE,),
+                "A system log was deleted, cut short, replaced or rewritten since the baseline.")])
+    return 1 if findings else 0
+
+
 def _drill(args: argparse.Namespace) -> int:
     from . import drill
     from .validation import ValidationError
@@ -1837,6 +1890,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _persistence(args)
     elif args.command == "drill":
         code = _drill(args)
+    elif args.command == "logwatch":
+        code = _logwatch(args)
     elif args.command == "feeds":
         code = _feeds(args)
     elif args.command == "detectors":
