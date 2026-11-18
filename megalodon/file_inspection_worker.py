@@ -7,9 +7,11 @@ import struct
 import sys
 
 sys.path.insert(0, '/worker')
-from file_inspection_contract import MAX_SLICES, validate_structure  # noqa: E402
+from file_inspection_contract import (MAX_BUNDLE, MAX_RULE_MATCHES, MAX_SLICES,  # noqa: E402
+    parse_bundle, validate_rules, validate_structure)
 
 INPUT = '/input/program'
+RULES = '/rules/bundle.json'
 
 
 def classify():
@@ -111,9 +113,43 @@ def inspect_lief():
     return {'state': 'completed', 'structure': validate_structure(structure)}
 
 
+def inspect_yara(bundle=RULES, target=INPUT, library='/runtime/python'):
+    """Compile the operator's rules and match them against the input bytes.
+
+    Only rule identifiers, namespaces and tags leave: never matched strings,
+    offsets or rule metadata, which can hold arbitrary text.
+    """
+    with open(bundle, 'rb') as stream:
+        sources = parse_bundle(stream.read(MAX_BUNDLE + 65537))
+    if library:
+        sys.path.insert(0, library)
+    import yara
+    try:
+        # includes=False: a rule cannot pull in other files from inside the sandbox.
+        rules = yara.compile(sources=sources, includes=False)
+    except yara.Error:
+        return {'state': 'invalid_rules'}
+    total = sum(1 for _ in rules)
+    try:
+        found = rules.match(target, timeout=10, fast=True, console_callback=lambda _message: None)
+    except yara.TimeoutError:
+        return {'state': 'timed_out'}
+    matches = []
+    # Stable order, so the listed subset of many matches does not depend on rule load order.
+    for match in sorted(found, key=lambda item: (item.namespace, item.rule)):
+        if len(matches) >= MAX_RULE_MATCHES:
+            break
+        tags = []
+        for tag in match.tags:
+            if tag not in tags and len(tags) < 16:
+                tags.append(tag)
+        matches.append(dict(namespace=match.namespace, rule=match.rule, tags=tags))
+    return validate_rules(dict(state='completed', rule_count=total, matched=len(found), matches=matches))
+
+
 def main():
     try:
-        result = inspect_lief()
+        result = inspect_yara() if sys.argv[1:] == ['yara'] else inspect_lief()
     except Exception:
         # Native diagnostics and filenames never cross the normalized boundary.
         result = {'state': 'failed'}
