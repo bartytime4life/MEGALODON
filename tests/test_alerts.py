@@ -206,6 +206,26 @@ def test_rate_limit_and_queue_bound_are_counted_and_reported_on_the_next_alert(t
     assert channel.stats["dropped"] == 1 and channel.suppressed == 1
 
 
+def test_drops_during_an_in_flight_delivery_are_reported_on_the_next_alert(tmp_path):
+    sent = []
+    channel = Channel(webhook(tmp_path, "https://example.test/h"), AlertSettings(), transport=sent.append)
+    channel.suppressed = 2
+
+    def slow(value):
+        # While this alert is in flight, the capture thread drops three more.
+        for _ in range(3):
+            channel.queue.extend([finding()] * (alerts.MAX_QUEUE - len(channel.queue)))
+            channel.offer(finding())
+        sent.append(value)
+    channel.transport = slow
+    assert channel.deliver(finding())
+    assert sent[-1]["suppressed_before"] == 2 and channel.suppressed == 3
+    channel.transport = sent.append
+    channel.queue.clear()
+    channel.deliver(finding())
+    assert sent[-1]["suppressed_before"] == 3 and channel.suppressed == 0
+
+
 def test_one_failing_destination_does_not_hold_back_another(tmp_path, receiver):
     stuck = threading.Event()
 

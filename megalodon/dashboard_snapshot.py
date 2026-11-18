@@ -8,7 +8,7 @@ const snapshotLabels = {
   detectors:__RULE_IDS__, lanes:['Normal · no linked finding','Review · LOW / MEDIUM','Danger · HIGH / CRITICAL']
 };
 // Earlier exports used shorter detector lists in their own order; label each by length.
-const snapshotLegacyDetectors={3:__CORE_IDS__,8:__PRE_DECOY_IDS__,9:__PRE_DNS_IDS__,11:__PRE_TLS_IDS__};
+const snapshotLegacyDetectors={3:__CORE_IDS__,8:__PRE_DECOY_IDS__,9:__PRE_DNS_IDS__,11:__PRE_TLS_IDS__,12:__PRE_LAN_IDS__};
 function snapshotDetectorLabels(length){return snapshotLegacyDetectors[length]||snapshotLabels.detectors;}
 function validateHudSnapshot(text, now=Date.now()) {
   if(typeof text!=='string'||new TextEncoder().encode(text).byteLength>16384)throw new Error('Choose a HUD summary smaller than 16 KiB.');
@@ -66,7 +66,7 @@ _PRE_DECOY_IDS = [rule for rule in _RULE_IDS[:9] if rule != 'DECOY_TOUCH']
 # Rules after the first nine were appended, so a 9-count export is a prefix.
 for _marker, _ids in (('__RULE_IDS__', list(_RULE_IDS)), ('__CORE_IDS__', list(_RULE_IDS[:3])),
                       ('__PRE_DECOY_IDS__', _PRE_DECOY_IDS), ('__PRE_DNS_IDS__', list(_RULE_IDS[:9])),
-                      ('__PRE_TLS_IDS__', list(_RULE_IDS[:11]))):
+                      ('__PRE_TLS_IDS__', list(_RULE_IDS[:11])), ('__PRE_LAN_IDS__', list(_RULE_IDS[:12]))):
     SNAPSHOT_VALIDATOR_JS = SNAPSHOT_VALIDATOR_JS.replace(_marker, _json.dumps(_ids).replace('"', "'"))
 
 SNAPSHOT_HOSTED_JS = r'''

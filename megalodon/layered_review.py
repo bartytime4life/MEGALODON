@@ -22,6 +22,7 @@ FAMILIES = {
     'DATA_EXFILTRATION': 'traffic_volume', 'IOC_MATCH': 'threat_intelligence',
     'DECOY_TOUCH': 'discovery', 'DGA_DOMAIN': 'dns', 'DNS_TUNNEL_CHURN': 'dns',
     'TLS_WITHOUT_SNI': 'command_and_control',
+    'ARP_SPOOFING': 'credential_access', 'ROGUE_DHCP': 'credential_access',
     'NEW_DESTINATION_PORT': 'baseline_change',
     'PROTOCOL_SHIFT': 'baseline_change', 'SERVICE_SHIFT': 'baseline_change',
 }
