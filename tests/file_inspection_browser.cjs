@@ -141,6 +141,31 @@ process.stdin.on('end', async () => {
   }
   await show({...complete,structure:{...report.structure,slices:[{...report.structure.slices[0],writable_executable:0}]},identification:[],clues:[]});
   assert.match(text(node('clues')),/No review clues were returned[\s\S]*does not establish that the file is safe/);
+  // Operator YARA rules: identifiers only, coverage counted once configured.
+  const ruleClue={code:'rule_match',title:'Your YARA rule matched',meaning:'Unused report wording.'};
+  const matched={...complete,clues:[...complete.clues,ruleClue],rules:{state:'completed',rule_count:40,matched:34,
+    matches:Array.from({length:32},(_,i)=>({namespace:'shells',rule:'Rule_'+i,tags:i?[]:['net','shell']}))}};
+  await show(matched);
+  assert.match(text(node('tools')),/YARA · your rules: Completed/);
+  assert.match(text(node('clues')),/Rule shells \/ Rule_0 · tags: net, shell[\s\S]*And 2 more matching rules not listed/);
+  assert.match(text(node('clues')),/a lead, not a malware verdict/);assert.doesNotMatch(text(node('clues')),/Unused report wording/);
+  assert.match(text(node('technical')),/34 of 40 compiled rules matched/);
+  for(const bad of [{...matched,clues:complete.clues},{...matched,rules:{...matched.rules,matched:41}},
+    {...matched,rules:{...matched.rules,matches:matched.rules.matches.slice(1)}},
+    {...matched,rules:{...matched.rules,matches:[{...matched.rules.matches[0],rule:'<b>'},...matched.rules.matches.slice(1)]}},
+    {...matched,rules:{...matched.rules,matches:[{...matched.rules.matches[0],strings:['secret']},...matched.rules.matches.slice(1)]}},
+    {...matched,rules:{...matched.rules,matches:[matched.rules.matches[1],...matched.rules.matches.slice(1)]}},
+    {...matched,rules:{state:'invalid_rules',rule_count:3,matched:0,matches:[]}},{...matched,rules:{...matched.rules,state:'safe'}},
+    {...complete,rules:{state:'unavailable',rule_count:0,matched:0,matches:[]}}])
+    assert.equal(context.validFileInspectionReport(bad),false);
+  const scriptOnly={...report,state:'partial',structure:null,identification:[],clues:[ruleClue],
+    tools:[{id:'lief',state:'unsupported'},{id:'die',state:'unsupported'}],
+    rules:{state:'completed',rule_count:1,matched:1,matches:[{namespace:'web',rule:'WebShell',tags:[]}]}};
+  await show(scriptOnly);assert.match(text(node('clues')),/Rule web \/ WebShell/);
+  const refused={...complete,state:'partial',rules:{state:'invalid_rules',rule_count:0,matched:0,matches:[]}};
+  await show(refused);assert.match(text(node('clues')),/YARA · your rules: Rules refused or did not compile\. Your rules were not applied/);
+  await show(complete);assert.match(text(node('tools')),/YARA · your rules: No rules configured/);
+  assert.doesNotMatch(text(node('clues')),/Your rules were not applied/);
   await show({...report,clues:[{code:'unknown',title:'IGNORE',meaning:'UNTRUSTED_INTERPRETATION'}]});
   assert.match(text(node('clues')),/no reviewed explanation/);assert.doesNotMatch(text(node('clues')),/IGNORE|UNTRUSTED_INTERPRETATION/);
   await show(report);

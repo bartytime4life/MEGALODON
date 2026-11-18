@@ -113,8 +113,8 @@ def supported():
         return False
 
 
-def command(runtime, input_fd, filter_fd, tool, *, probe=None):
-    """Only compiled workers, fixed libraries, and the selected FD are mounted."""
+def command(runtime, input_fd, filter_fd, tool, *, probe=None, rules_fd=None):
+    """Only compiled workers, fixed libraries, and the selected FDs are mounted."""
     if not supported():
         raise SandboxUnavailable('File inspection requires a supported non-root Linux runtime.')
     python = Path(sys.executable).resolve()
@@ -133,6 +133,8 @@ def command(runtime, input_fd, filter_fd, tool, *, probe=None):
             '--ro-bind', str(package / 'file_inspection_worker.py'), '/worker/file_inspection_worker.py',
             '--ro-bind', str(package / 'file_inspection_contract.py'), '/worker/file_inspection_contract.py',
             '--perms', '0400', '--ro-bind-data', str(input_fd), '/input/program',
+            *(('--perms', '0400', '--ro-bind-data', str(rules_fd), '/rules/bundle.json')
+              if tool == 'yara' and probe is None else ()),
             '--proc', '/proc', '--dev', '/dev', '--size', '1048576', '--tmpfs', '/tmp',
             '--dir', '/empty', '--clearenv', '--setenv', 'HOME', '/tmp',
             '--setenv', 'LC_ALL', 'C', '--setenv', 'LD_LIBRARY_PATH', '/runtime/lib',
@@ -145,6 +147,12 @@ def command(runtime, input_fd, filter_fd, tool, *, probe=None):
         argv += [str(python), '-I', '-c', PROBE]
     elif tool == 'lief':
         argv += [str(python), '-I', '/worker/file_inspection_worker.py']
+    elif tool == 'yara':
+        # The separately pinned YARA runtime is mounted at /runtime; the rules
+        # bundle is a sealed copy the host read, never a host directory.
+        if type(rules_fd) is not int or rules_fd < 0:
+            raise ValueError('Rules bundle unavailable.')
+        argv += [str(python), '-I', '/worker/file_inspection_worker.py', 'yara']
     elif tool == 'die':
         argv += ['/runtime/die/diec', '--json', '--database', '/runtime/die/db',
                  '--extradatabase', '/empty', '--customdatabase', '/empty', '/input/program']
@@ -166,14 +174,14 @@ print(json.dumps(checks))
 '''
 
 
-def run(runtime, fd, tool, *, deadline, cancelled, probe=None):
+def run(runtime, fd, tool, *, deadline, cancelled, probe=None, rules=None):
     filter_fd = None
     process = None
     try:
         # Filter admission can fail before a child exists. Return this adapter's
         # unavailable state so an earlier completed adapter keeps its evidence.
         filter_fd = _filter(threads=tool == 'die' and probe is None)
-        argv = command(runtime, fd, filter_fd, tool, probe=probe)
+        argv = command(runtime, fd, filter_fd, tool, probe=probe, rules_fd=rules)
         # Limits and parent-death supervision live in a fresh single-threaded
         # helper, never preexec_fn in the multithreaded HUD.
         launch = [sys.executable, '-I', str(Path(__file__).resolve()), str(os.getpid()), *argv]
@@ -183,9 +191,12 @@ def run(runtime, fd, tool, *, deadline, cancelled, probe=None):
                       '--property=MemoryMax=512M', '--property=MemorySwapMax=0',
                       '--property=TasksMax=32', *launch]
         os.lseek(fd, 0, os.SEEK_SET)
+        if rules is not None:
+            os.lseek(rules, 0, os.SEEK_SET)
         process = subprocess.Popen(launch,
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                   pass_fds=(fd, filter_fd), start_new_session=True,
+                                   pass_fds=(fd, filter_fd, *(() if rules is None else (rules,))),
+                                   start_new_session=True,
                                    env={'PATH': '/usr/bin', 'LC_ALL': 'C',
                                         'XDG_RUNTIME_DIR': f'/run/user/{os.geteuid()}',
                                         'DBUS_SESSION_BUS_ADDRESS': f'unix:path=/run/user/{os.geteuid()}/bus'})
@@ -253,10 +264,13 @@ def _launch():
     argv = sys.argv[2:]
     if not argv or argv[0] != BWRAP:
         raise SystemExit(2)
-    input_fd = int(argv[argv.index('--ro-bind-data') + 1])
+    # The input and, for YARA, the rules bundle are the only data descriptors.
+    data_fds = [int(argv[i + 1]) for i, item in enumerate(argv[:-1]) if item == '--ro-bind-data']
     filter_fd = int(argv[argv.index('--seccomp') + 1])
+    if not 1 <= len(data_fds) <= 2:
+        raise SystemExit(2)
     process = subprocess.Popen(argv, stdin=subprocess.DEVNULL,
-                               pass_fds=(input_fd, filter_fd),
+                               pass_fds=(*data_fds, filter_fd),
                                env={'PATH': '/usr/bin', 'LC_ALL': 'C'})
     raise SystemExit(process.wait())
 

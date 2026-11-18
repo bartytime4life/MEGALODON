@@ -1,0 +1,22 @@
+{
+  "schema": "megalodon-yara-runtime-v1",
+  "versions": {
+    "yara-python": "4.5.4"
+  },
+  "artifacts": {
+    "cp311": {
+      "url": "https://files.pythonhosted.org/packages/ad/1e/8846d6c37e3cc5328ac90d888ac60599ed62f1ffcb7d68054ad60954df4a/yara_python-4.5.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "size": 2329563,
+      "sha256": "1a1721b61ee4e625a143e8e5bf32fa6774797c06724c45067f3e8919a8e5f8f3"
+    },
+    "cp312": {
+      "url": "https://files.pythonhosted.org/packages/52/06/104c4daa22e34a7edb49051798126c37f6280d4f1ea7e8888b043314e72d/yara_python-4.5.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "size": 2332343,
+      "sha256": "e5eae935b05a9f8dc71df55a79c38f52abd93f8840310fe4e0d75fbd78284f24"
+    }
+  },
+  "trees": {
+    "cp311": "68cc4688950ccb00fe6ce37f0c0c5d8a123c2d59132043c0a2115c4f194f1ecf",
+    "cp312": "e0311bb62d3725b715191423ba8d7f1ff89d426d3c209023f944c8c27806d200"
+  }
+}

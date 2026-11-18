@@ -8,14 +8,26 @@ import re
 MAX_INPUT = 64 * 1024 * 1024
 MAX_OUTPUT = 64 * 1024
 MAX_SLICES = 16
-REPORT_SCHEMA = 'megalodon-file-inspection-report-v1'
+REPORT_SCHEMA = 'megalodon-file-inspection-report-v2'
 STATUS_SCHEMA = 'megalodon-file-inspection-status-v1'
 TOOL_STATES = {'completed', 'unavailable', 'unsupported', 'failed', 'timed_out', 'cancelled'}
+# Operator YARA rules: not_configured means no rules folder or no rule files.
+RULE_STATES = {'completed', 'not_configured', 'unavailable', 'invalid_rules', 'failed', 'timed_out', 'cancelled'}
+BUNDLE_SCHEMA = 'megalodon-yara-bundle-v1'
+MAX_RULE_FILES = 64
+MAX_RULE_FILE = 1024 * 1024
+MAX_BUNDLE = 4 * 1024 * 1024
+MAX_RULE_MATCHES = 32
+MAX_RULE_COUNT = 100000
+NAMESPACE = r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}'
+IDENTIFIER = r'[A-Za-z_][A-Za-z0-9_]{0,127}'
 CLUES = {
     'writable_executable': ('Writable and executable region',
         'A region can be both written and executed. Some legitimate runtimes need this; review the publisher and purpose.'),
     'packed': ('Packing or protection identified',
         'Packing can make a program harder to inspect. Legitimate software also uses it. This is a clue, not a malware verdict.'),
+    'rule_match': ('Your YARA rule matched',
+        'The file contains what one or more of your own YARA rules describe. A match is as good as the rule; it is a lead, not a malware verdict.'),
 }
 UNKNOWNS = [
     'Static inspection cannot establish whether a file is safe or malicious.',
@@ -88,9 +100,73 @@ def validate_identification(value):
     return value
 
 
+def parse_bundle(raw):
+    """The rules bundle the host built: {namespace: rule source}, bounded."""
+    if type(raw) is not bytes or len(raw) > MAX_BUNDLE + 65536:
+        raise ValueError('Rules bundle exceeds its limit.')
+    value = json.loads(raw.decode('utf-8'), object_pairs_hook=pairs,
+                       parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Invalid number.')))
+    fields(value, ('schema', 'sources'))
+    sources = value['sources']
+    if value['schema'] != BUNDLE_SCHEMA or type(sources) is not dict or not 1 <= len(sources) <= MAX_RULE_FILES:
+        raise ValueError('Unsupported rules bundle.')
+    total = 0
+    for name, text in sources.items():
+        if not re.fullmatch(NAMESPACE, name) or type(text) is not str or '\x00' in text:
+            raise ValueError('Invalid rules bundle entry.')
+        size = len(text.encode('utf-8'))
+        total += size
+        if size > MAX_RULE_FILE or total > MAX_BUNDLE:
+            raise ValueError('Rules bundle exceeds its limit.')
+    return sources
+
+
+def validate_rules(value):
+    """Rule identifiers, namespaces and tags only: no strings, offsets or metadata."""
+    fields(value, ('state', 'rule_count', 'matched', 'matches'))
+    if value['state'] not in RULE_STATES:
+        raise ValueError('Unsupported rules state.')
+    count(value['rule_count'], MAX_RULE_COUNT)
+    count(value['matched'], value['rule_count'])
+    matches = value['matches']
+    if type(matches) is not list or len(matches) != min(value['matched'], MAX_RULE_MATCHES):
+        raise ValueError('Invalid rule match coverage.')
+    if value['state'] != 'completed' and (value['rule_count'] or value['matched']):
+        raise ValueError('Rule counts without a completed rule scan.')
+    seen = set()
+    for item in matches:
+        fields(item, ('namespace', 'rule', 'tags'))
+        if (type(item['namespace']) is not str or not re.fullmatch(NAMESPACE, item['namespace'])
+                or type(item['rule']) is not str or not re.fullmatch(IDENTIFIER, item['rule'])
+                or type(item['tags']) is not list or len(item['tags']) > 16
+                or any(type(t) is not str or not re.fullmatch(IDENTIFIER, t) for t in item['tags'])
+                or len(set(item['tags'])) != len(item['tags'])
+                or (item['namespace'], item['rule']) in seen):
+            raise ValueError('Invalid rule match.')
+        seen.add((item['namespace'], item['rule']))
+    return value
+
+
+def rules_result(value=None):
+    """A complete rules section from a worker result or a bare state."""
+    value = value or dict(state='not_configured')
+    if value.get('state') != 'completed':
+        return dict(state=value.get('state'), rule_count=0, matched=0, matches=[])
+    return value
+
+
+def overall_state(states, rule_state):
+    """Rules count toward coverage only once an operator configured them."""
+    considered = states + ([rule_state] if rule_state != 'not_configured' else [])
+    return ('cancelled' if 'cancelled' in considered else
+            'completed' if all(s == 'completed' for s in considered) else
+            'partial' if 'completed' in considered else
+            'unsupported' if states == ['unsupported', 'unsupported'] else 'failed')
+
+
 def validate_report(value):
     fields(value, ('schema', 'inspected_at', 'size_bytes', 'state', 'structure',
-                   'identification', 'tools', 'clues', 'unknowns', 'next_step'))
+                   'identification', 'tools', 'rules', 'clues', 'unknowns', 'next_step'))
     if value['schema'] != REPORT_SCHEMA or value['state'] not in {
             'completed', 'partial', 'failed', 'cancelled', 'unsupported'}:
         raise ValueError('Unsupported inspection report.')
@@ -102,6 +178,7 @@ def validate_report(value):
     if value['structure'] is not None:
         validate_structure(value['structure'])
     validate_identification(value['identification'])
+    validate_rules(value['rules'])
     if type(value['tools']) is not list or len(value['tools']) != 2:
         raise ValueError('Invalid tool coverage.')
     for item, identifier in zip(value['tools'], ('lief', 'die')):
@@ -122,31 +199,30 @@ def validate_report(value):
         raise ValueError('Structure does not match tool coverage.')
     if states[1] != 'completed' and value['identification']:
         raise ValueError('Identification does not match tool coverage.')
-    expected = ('cancelled' if 'cancelled' in states else
-                'completed' if states == ['completed', 'completed'] else
-                'partial' if 'completed' in states else
-                'unsupported' if states == ['unsupported', 'unsupported'] else 'failed')
-    if value['state'] != expected:
+    if ('rule_match' in [c['code'] for c in value['clues']]) != bool(value['rules']['matched']):
+        raise ValueError('Rule clue does not match rule coverage.')
+    if value['state'] != overall_state(states, value['rules']['state']):
         raise ValueError('Report does not match tool coverage.')
     return value
 
 
-def report(size, results):
+def report(size, results, rules=None):
     structure = results[0].get('structure') if results[0]['state'] == 'completed' else None
     identification = results[1].get('identification', []) if results[1]['state'] == 'completed' else []
     states = [r['state'] for r in results]
-    state = ('cancelled' if 'cancelled' in states else
-             'completed' if states == ['completed', 'completed'] else
-             'partial' if 'completed' in states else
-             'unsupported' if states == ['unsupported', 'unsupported'] else 'failed')
+    rules = rules_result(rules)
+    state = overall_state(states, rules['state'])
     clues = []
     if structure and any(s['writable_executable'] for s in structure['slices']):
         clues.append('writable_executable')
     if any(item['kind'] in ('packer', 'protector') for item in identification):
         clues.append('packed')
+    if rules['matched']:
+        clues.append('rule_match')
     value = dict(schema=REPORT_SCHEMA, inspected_at=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
                  size_bytes=size, state=state, structure=structure, identification=identification,
                  tools=[dict(id=k, state=r['state']) for k, r in zip(('lief', 'die'), results)],
+                 rules=rules,
                  clues=[dict(code=k, title=CLUES[k][0], meaning=CLUES[k][1]) for k in clues],
                  unknowns=list(UNKNOWNS), next_step=NEXT_STEP)
     return validate_report(value)

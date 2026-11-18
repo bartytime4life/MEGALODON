@@ -20,7 +20,8 @@ labels. Packing and protection share one explanation. Missing tool results stay
 visible as information gaps; a clue without supporting metadata receives no
 inferred explanation. These disclosures use only the current report already in
 the browser: opening them starts no request, analysis or AI operation. JSON export
-remains the unchanged version-1 metadata report.
+is the version-2 metadata report, which adds the `rules` section described in
+[Your own YARA rules](#your-own-yara-rules).
 
 File inspection requires a signed-in local HUD. In the HUD's **Local sign-in**
 section, select **Prepare protected launch** and copy the command. **Stop the
@@ -61,6 +62,64 @@ is:
 That is an explicit download/install action. Ordinary HUD startup, page loads,
 status checks and restarts never download the inspector or scan a file.
 
+## Your own YARA rules
+
+The inspector can also apply YARA rules you write or choose. Put `.yar` or
+`.yara` files in `~/.config/megalodon/yara-rules/`; each file becomes a
+namespace named after the file. Install the pinned YARA runtime once, then
+check the folder:
+
+```bash
+megalodon yara install
+```
+
+```bash
+megalodon yara check
+```
+
+`check` reports the rule files, their combined digest and, when the runtime is
+ready, whether the rules compile inside the sandbox (exit 1 when configured
+rules cannot be used). The HUD then shows **YARA · your rules** beside the other
+tools and a **Your YARA rule matched** clue that lists each matching
+`namespace / rule` and its tags.
+
+- Rules are read on the host into one bounded bundle (at most 64 files, 1 MiB
+  each, 4 MiB together; UTF-8 text). The folder and each file must be owned by
+  you and not writable by others. Links, FIFOs, devices, unsafe names and
+  duplicate namespaces refuse the whole bundle rather than silently dropping a
+  rule. Hidden files and other extensions are ignored.
+- The bundle is copied into sealed anonymous memory. Compilation and matching
+  happen only inside the same confined sandbox as the sample, with the same
+  limits, no threads and a separate 15-second deadline (10-second match
+  timeout). `include` is disabled, so a rule cannot read other files, and
+  `console` module output is discarded. Nothing on the host imports YARA.
+- Only rule identifiers, namespaces and up to 16 tags per match leave the
+  sandbox, with the compiled rule count and the number matched (at most 32
+  matches are listed, in a stable order). Matched strings, offsets and rule
+  metadata are never reported, because they can carry arbitrary text.
+- Rules read bytes, not structure, so they also check scripts, documents and
+  other files the structural tools do not support. Such a file with a completed
+  rule scan is reported as **Partial coverage**.
+- The rules section's state is `completed`, `not_configured` (no folder or no
+  rule files), `unavailable` (runtime missing or changed), `invalid_rules`
+  (refused folder or a rule that does not compile), `failed`, `timed_out` or
+  `cancelled`. Configured rules that cannot run make the inspection partial;
+  an empty or absent folder changes nothing.
+
+A match is as good as the rule that produced it: it is a lead to review, not a
+malware verdict, and no match does not mean the file is safe.
+
+The YARA runtime is pinned separately in `megalodon/assets/yara-runtime.json`
+(yara-python 4.5.4 wheels for CPython 3.11 and 3.12, by size, SHA-256 and
+extracted file-set digest) and installs to
+`~/.local/share/megalodon/support/file-inspector/yara-v1-cpXY`. Only the
+extension module, its bundled crypto library and the license are extracted;
+the LIEF and Detect It Easy pins are unchanged. yara-python is Apache-2.0 (its
+license file is retained); the YARA engine it embeds is BSD-3-Clause, and the
+wheel bundles an OpenSSL 1.1 `libcrypto`, which upstream no longer maintains and
+which runs only inside the sandbox
+([yara-python 4.5.4](https://pypi.org/project/yara-python/4.5.4/)).
+
 ## Coverage and limits
 
 The first version supports ELF executable/shared objects, PE EXE/DLL, and thin
@@ -72,7 +131,8 @@ Mach-O is limited to 16 non-overlapping, complete executable slices; incomplete
 structural coverage is refused rather than silently reporting only one slice.
 
 - One file/job per HUD; input 1 byte–64 MiB; upload deadline 10 seconds with a
-  0.5-second socket inactivity limit; analysis deadline 30 seconds total.
+  0.5-second socket inactivity limit; analysis deadline 30 seconds total, plus
+  15 seconds for your YARA rules when configured.
 - Separate confined adapters, 15 CPU seconds each and 64 KiB output each;
   normalized report at most 64 KiB. LIEF address space is capped at 512 MiB.
 - Detect It Easy's QtScript engine reserves 2 GiB of virtual address space.

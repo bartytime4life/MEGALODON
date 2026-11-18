@@ -182,6 +182,16 @@ def build_parser() -> argparse.ArgumentParser:
         command = canary_sub.add_parser(name, help=text)
         command.add_argument("--manifest", type=Path, required=True)
 
+    yara = sub.add_parser(
+        "yara", help="your own YARA rules for the optional file inspector"
+    )
+    yara_sub = yara.add_subparsers(dest="yara_command", required=True)
+    yara_check = yara_sub.add_parser(
+        "check", help="check the rules folder and, when the YARA runtime is ready, compile it in the sandbox")
+    yara_check.add_argument("--dir", type=Path,
+                            help="rules folder (default ~/.config/megalodon/yara-rules)")
+    yara_sub.add_parser("install", help="download and verify the pinned YARA runtime (non-root Linux)")
+
     auth = sub.add_parser(
         "auth-review",
         help="review an auth log for brute force, spraying and suspicious logins (exit 1 on HIGH+)",
@@ -977,6 +987,22 @@ def _canary(args: argparse.Namespace) -> int:
     return 1 if result.get("tripped") else 0
 
 
+def _yara(args: argparse.Namespace) -> int:
+    if args.yara_command == "install":
+        from .yara_runtime import main
+        return main()
+    from . import yara_rules
+
+    try:
+        result = yara_rules.check(args.dir)
+    except (ValueError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    # Exit 1 when configured rules cannot be used; an unconfigured folder is not an error.
+    return 0 if result["compile"] in ("completed", "not_configured") or result["runtime"] != "ready" else 1
+
+
 def _auth_review(args: argparse.Namespace) -> int:
     from datetime import timezone
 
@@ -1596,6 +1622,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _canary(args)
     elif args.command == "auth-review":
         code = _auth_review(args)
+    elif args.command == "yara":
+        code = _yara(args)
     elif args.command == "detectors":
         code = _detectors()
     elif args.command == "watchlist":
