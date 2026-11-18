@@ -129,6 +129,13 @@ RULES: tuple[RuleDescription, ...] = (
         "A new router, mesh Wi-Fi nodes, phone hotspots and virtual machine hosts also advertise IPv6 routes.",
         ("T1557",), "credential_access", "source",
     ),
+    RuleDescription(
+        "DNS_BYPASS", THREAT_LAYER, "MEDIUM", "connections", "DNS connections that skip the local resolvers",
+        False,
+        "An internal host sent DNS, DNS over TLS or DNS over HTTPS to a resolver outside the expected set.",
+        "Browsers with secure DNS turned on, VPN clients, some phones and smart TVs use public resolvers too.",
+        ("T1071.004", "T1572"), "dns", "destination",
+    ),
 )
 
 BY_ID: dict[str, RuleDescription] = {rule.rule_id: rule for rule in RULES}

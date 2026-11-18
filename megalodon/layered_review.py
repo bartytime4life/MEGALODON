@@ -24,6 +24,7 @@ FAMILIES = {
     'TLS_WITHOUT_SNI': 'command_and_control',
     'ARP_SPOOFING': 'credential_access', 'ROGUE_DHCP': 'credential_access',
     'NDP_SPOOFING': 'credential_access', 'ROGUE_IPV6_ROUTER': 'credential_access',
+    'DNS_BYPASS': 'dns',
     'NEW_DESTINATION_PORT': 'baseline_change',
     'PROTOCOL_SHIFT': 'baseline_change', 'SERVICE_SHIFT': 'baseline_change',
 }

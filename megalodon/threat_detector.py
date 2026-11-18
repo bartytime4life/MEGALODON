@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 import ipaddress
 from typing import Any
 
-from . import domain_signals
+from . import domain_signals, public_resolvers
 from .models import DetectionResult, PacketEvent
 from .rule_catalog import BY_ID, THREAT_RULE_IDS
 
@@ -67,6 +67,9 @@ MAX_DECOY_PORTS = 64
 MAX_DECOY_ADDRESSES = 256
 MAX_DHCP_SERVERS = 16
 MAX_IPV6_ROUTERS = 16
+MAX_DNS_RESOLVERS = 16
+# Plain DNS, DNS over TLS/QUIC, and DNS over HTTPS to a known public resolver.
+_DNS_BYPASS_PORTS = frozenset({53, 853, 443})
 # The replies a client acts on: DHCP OFFER and ACK, DHCPv6 ADVERTISE and REPLY.
 _DHCP_REPLIES = frozenset({2, 5})
 _DHCPV6_REPLIES = frozenset({2, 7})
@@ -181,6 +184,15 @@ class ThreatDetectionSettings:
     # Empty: learn them, and flag a second router within router_window_seconds.
     ipv6_routers: tuple[str, ...] = ()
     router_window_seconds: int = 3600
+    # Opt-in: flag name resolution that skips this network's resolvers
+    # (DNS_BYPASS): plain DNS or DNS over TLS/QUIC to an outside server, and
+    # DNS over HTTPS to a well-known public resolver. Uses addresses and ports
+    # only; with tls_fingerprints on, DoH host names are recognized too.
+    dns_bypass: bool = False
+    # The resolvers hosts here should use. Empty: any internal resolver is
+    # fine and only public ones are flagged. Listed resolvers may forward
+    # upstream without being flagged themselves.
+    dns_resolvers: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         self._validate_decoys()
@@ -208,6 +220,17 @@ class ThreatDetectionSettings:
         if len(set(canonical)) != len(canonical):
             raise ValueError("threat_detection.ipv6_routers must be distinct")
         object.__setattr__(self, "ipv6_routers", tuple(str(r) for r in canonical))
+        resolvers = self.dns_resolvers
+        if (not isinstance(resolvers, tuple) or len(resolvers) > MAX_DNS_RESOLVERS
+                or not all(isinstance(r, str) for r in resolvers)):
+            raise ValueError(f"threat_detection.dns_resolvers must be up to {MAX_DNS_RESOLVERS} addresses")
+        try:
+            canonical_resolvers = tuple(str(_canonical(r)) for r in resolvers)
+        except ValueError:
+            raise ValueError("threat_detection.dns_resolvers contains an invalid address") from None
+        if len(set(canonical_resolvers)) != len(canonical_resolvers):
+            raise ValueError("threat_detection.dns_resolvers must be distinct")
+        object.__setattr__(self, "dns_resolvers", canonical_resolvers)
         if self.watchlist_severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
             raise ValueError(
                 "threat_detection.watchlist_severity must be LOW, MEDIUM, HIGH or CRITICAL"
@@ -251,6 +274,8 @@ class ThreatDetectionSettings:
             raise ValueError("threat_detection.tls_fingerprints must be a boolean")
         if not isinstance(self.lan_integrity, bool):
             raise ValueError("threat_detection.lan_integrity must be a boolean")
+        if not isinstance(self.dns_bypass, bool):
+            raise ValueError("threat_detection.dns_bypass must be a boolean")
         if not isinstance(self.watchlist_path, str) or len(self.watchlist_path) > 1024:
             raise ValueError("threat_detection.watchlist_path must be text")
 
@@ -394,6 +419,7 @@ class ThreatDetector:
         self.nd: dict[str, tuple[str, int]] = {}
         self.routers: OrderedDict[str, int] = OrderedDict()
         self._ipv6_routers = frozenset(self.settings.ipv6_routers)
+        self._dns_resolvers = frozenset(self.settings.dns_resolvers)
         self.last_emitted: dict[tuple[str, Any], int] = {}
         self.lru: OrderedDict[tuple[str, Any], None] = OrderedDict()
         # (token, journal) while a preparation is unresolved.
@@ -407,7 +433,7 @@ class ThreatDetector:
         clone = ThreatDetector.__new__(ThreatDetector)
         for name, value in self.__dict__.items():
             if name in {"settings", "allowlist", "watchlist", "_decoy_ports", "_decoy_addresses",
-                        "_dhcp_servers", "_ipv6_routers"}:
+                        "_dhcp_servers", "_ipv6_routers", "_dns_resolvers"}:
                 setattr(clone, name, value)
             else:
                 setattr(clone, name, deepcopy(value, memo))
@@ -451,6 +477,9 @@ class ThreatDetector:
                 if self.settings.tls_fingerprints and event.is_client_hello:
                     rules += [self._tls_ioc, self._sni_ioc, self._sni_generated,
                               self._tls_without_sni]
+                if (self.settings.dns_bypass and event.protocol in {"TCP", "UDP"}
+                        and event.dst_port in _DNS_BYPASS_PORTS):
+                    rules.append(self._dns_bypass)
                 for rule in rules:
                     found = rule(event, src, dst, now, journal, touched)
                     if found is not None:
@@ -795,6 +824,55 @@ class ThreatDetector:
             event, "TLS_WITHOUT_SNI", dst,
             f"{src} opened TLS directly to public address {dst}:{event.dst_port} without a "
             "server name, as many command-and-control clients do",
+            evidence,
+        )
+
+    _DNS_METHODS = {"dns": "plain DNS", "dot": "DNS over TLS", "doq": "DNS over QUIC",
+                    "doh": "DNS over HTTPS"}
+
+    def _dns_bypass(self, event, src, dst, now, journal, touched):
+        """Name resolution from an internal host that skips this network's resolvers."""
+        resolvers = self._dns_resolvers
+        target = _canonical(dst)
+        if (not is_internal(src) or src in resolvers or dst in resolvers
+                or target.is_multicast or target.is_loopback or target.is_unspecified):
+            return None  # A listed resolver forwarding upstream, or not a lookup leaving a host.
+        port = event.dst_port
+        server_name = None
+        if port == 443:
+            provider = public_resolvers.provider_for_address(dst)
+            if provider is None:
+                provider = public_resolvers.provider_for_name(event.tls_sni)
+                server_name = event.tls_sni if provider else None
+            if provider is None:
+                return None  # Ordinary HTTPS.
+            method = "doh"
+        else:
+            if not resolvers and not is_public(dst):
+                return None  # No resolvers listed: any internal resolver is fine.
+            method = "dns" if port == 53 else ("dot" if event.protocol == "TCP" else "doq")
+            provider = public_resolvers.provider_for_address(dst)
+        key = ("DNS_BYPASS", (src, dst, method))
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        evidence: dict[str, Any] = {
+            "connections": 1,
+            "resolver": dst,
+            "method": method,
+            "service_port": port,
+            "configured_resolvers": sorted(resolvers)[:4],
+        }
+        if provider:
+            evidence["provider"] = provider
+        if server_name:
+            evidence["server_name"] = server_name
+        where = f"{provider} resolver {dst}" if provider else f"resolver {dst}"
+        skipped = "the configured resolvers" if resolvers else "this network's own resolvers"
+        return self._result(
+            event, "DNS_BYPASS", dst,
+            f"{src} used {self._DNS_METHODS[method]} to {where} on port {port}, skipping {skipped}; "
+            "those lookups escape resolver filtering and MEGALODON's DNS rules",
             evidence,
         )
 

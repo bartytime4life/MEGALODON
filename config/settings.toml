@@ -69,6 +69,13 @@ dhcp_servers = []
 # empty means learn them.
 ipv6_routers = []
 router_window_seconds = 3600
+# DNS bypass: hosts resolving names outside this network's resolvers (plain
+# DNS or DNS over TLS to an outside server, DNS over HTTPS to a well-known
+# public resolver). OFF by default; uses addresses and ports only.
+dns_bypass = false
+# The resolvers hosts should use; empty means any internal resolver is fine.
+# List a local forwarder (Pi-hole, the router) so its upstream lookups pass.
+dns_resolvers = []
 
 # Threat-feed refresh (docs/threat-feeds.md): `megalodon feeds refresh` writes
 # feeds into one watchlist; point threat_detection.watchlist_path at its output.

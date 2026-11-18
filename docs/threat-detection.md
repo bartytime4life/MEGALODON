@@ -16,6 +16,11 @@ adds the five detections a defender most often expects from a network sensor:
 | `DGA_DOMAIN` | *(opt-in `dns_names`)* a looked-up domain has two or more machine-generated spelling signals | MEDIUM | querying host | T1568.002 |
 | `DNS_TUNNEL_CHURN` | *(opt-in `dns_names`)* one host queries 30 distinct subdomains of one domain within 60 s | HIGH | querying host | T1071.004, T1048.003 |
 | `TLS_WITHOUT_SNI` | *(opt-in `tls_fingerprints`)* an internal host opens TLS directly to a public address without a server name | LOW | the bare server | T1573, T1071.001 |
+| `ARP_SPOOFING` | *(opt-in `lan_integrity`)* an IPv4 address claimed by a different hardware address soon after another | HIGH | source | T1557.002 |
+| `ROGUE_DHCP` | *(opt-in `lan_integrity`)* a DHCP or DHCPv6 reply from a server outside the expected set | HIGH | source | T1557.003 |
+| `NDP_SPOOFING` | *(opt-in `lan_integrity`)* an IPv6 address claimed by a different hardware address soon after another | HIGH | the advertising host | T1557 |
+| `ROGUE_IPV6_ROUTER` | *(opt-in `lan_integrity`)* a router advertisement from a router outside the expected set | HIGH | source | T1557 |
+| `DNS_BYPASS` | *(opt-in `dns_bypass`)* an internal host sends DNS, DNS over TLS/QUIC or DNS over HTTPS to a resolver outside the expected set | MEDIUM | the outside resolver | T1071.004, T1572 |
 
 Every finding is a **heuristic for human review**, not a malware verdict. Each
 row in the table above has well-known legitimate look-alikes, which the
@@ -27,6 +32,7 @@ Findings view shows next to the finding:
 * `BEACONING` — update checks, telemetry, keep-alives, monitoring agents.
 * `DECOY_TOUCH` — a misconfigured client, a stale DNS or ARP entry, or your own test.
 * `IOC_MATCH` — stale indicators, shared hosting, reassigned addresses.
+* `DNS_BYPASS` — browsers with secure DNS turned on, VPN clients, phones and smart TVs with built-in resolvers.
 
 ## Exact semantics
 
@@ -268,6 +274,51 @@ but its different hardware address raises `NDP_SPOOFING` when it carries one.
 Neighbour-discovery messages are checked only without IPv6 extension headers.
 Switch-level defences (RA Guard, DHCPv6 Guard, dynamic ARP inspection) stop
 these attacks; MEGALODON only reports them.
+
+## DNS bypass (opt-in)
+
+MEGALODON's DNS rules, resolver blocklists and parental filters only see
+lookups that go through this network's resolvers. Malware often skips them:
+it sends plain DNS straight to a public resolver, or hides lookups in DNS over
+TLS or DNS over HTTPS (ATT&CK T1071.004, T1572). `DNS_BYPASS` flags that.
+It is **off by default**:
+
+```toml
+[threat_detection]
+dns_bypass = true
+dns_resolvers = ["192.168.1.2"]   # optional; empty means any internal resolver is fine
+```
+
+It uses addresses and ports only, so it needs no extra capture fields:
+
+* **Plain DNS (port 53) and DNS over TLS or QUIC (port 853)** from an
+  internal host are flagged when they go to a resolver outside the expected
+  set. Without `dns_resolvers`, any internal resolver is expected and only
+  public ones are flagged. With `dns_resolvers`, anything not listed is
+  flagged, including a second internal resolver.
+* **DNS over HTTPS** looks like ordinary HTTPS, so it is recognized by where
+  it goes: port 443 (TCP or QUIC) to the published addresses of well-known
+  public resolvers (Cloudflare, Google, Quad9, OpenDNS, AdGuard,
+  CleanBrowsing, NextDNS, Mullvad; see `megalodon/public_resolvers.py`). With
+  `tls_fingerprints` on, their DoH host names (such as
+  `mozilla.cloudflare-dns.com` or `dns.google`) are recognized on any address
+  too.
+* **Forwarders pass.** A listed resolver is never flagged as a source, so a
+  Pi-hole or router forwarding to an upstream resolver stays quiet. List it if
+  the sensor sees its upstream traffic.
+* **One finding** per host, resolver and method per `alert_cooldown_seconds`.
+  The response party is the outside resolver; block planning stays plan-only.
+  The finding records the method (`dns`, `dot`, `doq`, `doh`), port, provider
+  and, for a name match, the server name.
+
+**Limits:** DNS over HTTPS to a provider that is not on the built-in list,
+or to a private DoH server, is indistinguishable from other HTTPS; add such
+servers to the IOC watchlist if you know them. Only internal (private,
+link-local, unique-local or CGNAT) sources are checked, so hosts with public
+IPv6 addresses are not covered. Firefox turns on DNS over HTTPS to Cloudflare
+by default in some countries, and Chrome upgrades to it when the system
+resolver supports it. Expect these findings until secure DNS is configured,
+or list the resolvers you accept.
 
 ## Atomicity and bounds
 
