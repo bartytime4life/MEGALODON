@@ -205,6 +205,71 @@ def test_selftest_and_cli(tmp_path, capsys):
                 str(tmp_path / "none.toml")) == 2
 
 
+def test_relative_and_linked_roots_seed_the_same_keys_events_use(tmp_path, monkeypatch):
+    (tmp_path / "real").mkdir()
+    os.symlink(tmp_path / "real", tmp_path / "link")
+    path = write(tmp_path / "real" / "a.pdf", b"%PDF-1.7" + os.urandom(8000))
+    monkeypatch.chdir(tmp_path)
+    for root in ("real", "link"):
+        d, _ = detector(min_files=2)
+        d.seed([root])
+        assert d.baseline.get(os.path.realpath(path)) == "known", root
+
+
+def test_a_rename_onto_an_existing_document_counts_its_history(tmp_path):
+    d, clock = detector(min_files=3)
+    targets = [write(tmp_path / f"doc{i}.docx", b"PK\x03\x04" + os.urandom(8000)) for i in range(3)]
+    d.seed([tmp_path])
+    found = []
+    for i, target in enumerate(targets):
+        temp = write(tmp_path / f".tmp{i}", os.urandom(8000))
+        d.written(temp)
+        os.replace(temp, target)
+        found += d.written(target, previous_path=temp)
+    assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
+
+
+def test_a_renamed_folder_keeps_its_files_history(tmp_path):
+    d, _ = detector(min_files=2)
+    (tmp_path / "old").mkdir()
+    for i in range(2):
+        write(tmp_path / "old" / f"f{i}.pdf", b"%PDF-1.7" + os.urandom(8000))
+    d.seed([tmp_path])
+    os.rename(tmp_path / "old", tmp_path / "new")
+    d.rename_tree(str(tmp_path / "old"), str(tmp_path / "new"))
+    found = []
+    for i in range(2):
+        found += d.written(write(tmp_path / "new" / f"f{i}.pdf", os.urandom(8000)))
+    assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
+
+
+@linux
+def test_real_watch_follows_a_folder_rename(tmp_path):
+    (tmp_path / "old").mkdir()
+    for i in range(2):
+        write(tmp_path / "old" / f"f{i}.pdf", b"%PDF-1.7" + os.urandom(8000))
+    d = RansomwareDetector(min_files=2, window_seconds=60)
+    d.seed([tmp_path])
+    found = []
+    watcher = rw.Watcher([tmp_path], d, found.append, suspects_fn=lambda roots: [])
+    stop = Event()
+    thread = Thread(target=watcher.run, args=(stop,), kwargs=dict(poll=0.05), daemon=True)
+    thread.start()
+    try:
+        os.rename(tmp_path / "old", tmp_path / "new")
+        time.sleep(0.3)
+        for i in range(2):
+            write(tmp_path / "new" / f"f{i}.pdf", os.urandom(8000))
+        deadline = time.monotonic() + 5
+        while not found and time.monotonic() < deadline:
+            time.sleep(0.05)
+    finally:
+        stop.set()
+        thread.join(2)
+        watcher.close()
+    assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
+
+
 def test_suspects_names_a_process_holding_watched_files(tmp_path):
     held = open(write(tmp_path / "victim.docx", b"x" * 10), "rb")
     try:

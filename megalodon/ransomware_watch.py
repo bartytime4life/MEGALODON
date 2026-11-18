@@ -175,6 +175,8 @@ class RansomwareDetector:
         """Record what existing files look like, so a later rewrite can be compared."""
         seen = 0
         for root in roots:
+            # The watcher reports resolved absolute paths; the baseline must use the same keys.
+            root = os.path.realpath(root)
             for folder, dirs, files in os.walk(root, followlinks=False):
                 dirs[:] = [d for d in dirs if not d.startswith('.')]
                 for name in files:
@@ -196,6 +198,15 @@ class RansomwareDetector:
         self.last[key] = now
         return True
 
+    def rename_tree(self, old, new):
+        """A watched folder was renamed: its files keep their recorded history."""
+        prefix = old.rstrip('/') + '/'
+        if not any(key.startswith(prefix) for key in self.baseline):
+            return
+        self.baseline = OrderedDict(
+            (new.rstrip('/') + '/' + key[len(prefix):] if key.startswith(prefix) else key, kind)
+            for key, kind in self.baseline.items())
+
     def deleted(self, path):
         now = self.clock()
         self._prune(now)
@@ -216,7 +227,10 @@ class RansomwareDetector:
             findings.append(Finding('RANSOM_NOTE', 'HIGH', self.wallclock(),
                                     f'A ransom-note-like file {name} appeared in {folder}',
                                     dict(file=name, folder=folder)))
-        before = self.baseline.get(previous_path or path)
+        # A rename onto an existing file replaces that file: either history counts.
+        before = self.baseline.get(path)
+        source = self.baseline.get(previous_path) if previous_path else None
+        recognized = before in ('known', 'text') or source in ('known', 'text')
         kind = self.classifier(path)
         self.remember(path, kind)
         if previous_path:
@@ -225,7 +239,7 @@ class RansomwareDetector:
             return findings
         stem = name.rsplit('.', 1)[0]
         # Same name, the old name plus an added extension, or the same stem with a swapped one.
-        replaced = before in ('known', 'text') or any(
+        replaced = recognized or any(
             f == folder and (name == g or name.startswith(g + '.') or (stem != name and g.startswith(stem + '.')))
             for _, f, g in self.gone)
         if replaced or (_RANSOM_EXT.search(name) and before != 'encrypted'):
@@ -307,8 +321,9 @@ class _Inotify:
             if code == errno.ENOSPC:
                 raise WatchError(code, 'inotify watch limit reached; raise fs.inotify.max_user_watches')
             return False
-        self.paths[wd] = path
-        return True
+        fresh = wd not in self.paths
+        self.paths[wd] = path  # Re-adding a moved folder's inode updates its path.
+        return fresh
 
     def events(self, timeout):
         ready, _, _ = select.select([self.fd], [], [], timeout)
@@ -361,6 +376,7 @@ class Watcher:
 
     def run(self, stop, *, poll=0.5):
         moves: dict[int, str] = {}
+        folder_moves: dict[int, str] = {}
         while not stop.is_set():
             for mask, cookie, folder, name in self.notify.events(poll):
                 if mask & IN_Q_OVERFLOW:
@@ -371,8 +387,15 @@ class Watcher:
                 path = os.path.join(folder, name)
                 findings = []
                 if mask & IN_ISDIR:
+                    if mask & IN_MOVED_FROM:
+                        folder_moves[cookie] = path
                     if mask & (IN_CREATE | IN_MOVED_TO) and not name.startswith('.'):
+                        old = folder_moves.pop(cookie, None) if mask & IN_MOVED_TO else None
+                        if old:
+                            self.detector.rename_tree(old, path)
                         self._watch_tree(path)
+                    if len(folder_moves) > 4096:
+                        folder_moves.clear()
                     continue
                 if mask & IN_DELETE:
                     findings = self.detector.deleted(path)

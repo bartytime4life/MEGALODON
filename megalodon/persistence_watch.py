@@ -345,8 +345,11 @@ def compare(old, new):
             findings.append(_finding('added', 'setuid', path, 'HIGH', dict(mode=after['mode'], uid=after['uid'])))
         elif after is None:
             findings.append(_finding('removed', 'setuid', path, 'HIGH'))
-        elif before.get('sha256') != after.get('sha256') or before.get('mode') != after.get('mode'):
-            findings.append(_finding('changed', 'setuid', path, 'HIGH', dict(mode=[before['mode'], after['mode']])))
+        elif any(before.get(k) != after.get(k) for k in ('sha256', 'mode', 'uid')):
+            # A new owner changes whose privileges a setuid program runs with.
+            findings.append(_finding('changed', 'setuid', path, 'HIGH', {
+                k: [before.get(k), after.get(k)] for k in ('mode', 'uid') if before.get(k) != after.get(k)}
+                | ({'content': 'changed'} if before.get('sha256') != after.get('sha256') else {})))
     for name in sorted(set(new['modules']) - set(old['modules'])):
         findings.append(_finding('added', 'kernel_module', name, 'HIGH'))
     for name in sorted(set(old['accounts']) | set(new['accounts'])):
