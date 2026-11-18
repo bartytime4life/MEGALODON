@@ -32,7 +32,8 @@ For synthetic review workload and provenance measurements, use the
 [offline layered evaluation](layered-evaluation.md). Operational detection accuracy
 remains unmeasured.
 For the mathematical changes, primary sources and next experiments, read
-[science and mathematics](science-and-math.md).
+[science and mathematics](science-and-math.md). For a proposed synthetic review comparison,
+see the [agent harness playbook](agent-harness-playbook.md).
 
 ## Read the architecture
 
