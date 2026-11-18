@@ -193,3 +193,28 @@ def test_cli_exit_codes(tmp_path, monkeypatch, capsys):
     assert code("listeners", "check", "--manifest", manifest) == 1
     report = json.loads(capsys.readouterr().out)
     assert [(f["rule_id"], f["severity"]) for f in report["findings"]] == [("NEW_LISTENER", "HIGH")]
+
+
+def test_new_reach_within_the_same_scope_is_exposure(tmp_path):
+    base = [("tcp", "192.168.1.5", 8080, "0A", 301)]
+    owner = {300: ("/usr/bin/caddy", "caddy", [301, 302, 303])}
+    old = lw.snapshot(root=fake_proc(tmp_path / "old", base, owner))
+    second = lw.snapshot(root=fake_proc(tmp_path / "second", base + [("tcp", "10.0.0.5", 8080, "0A", 302)], owner))
+    found = by_key(lw.compare(old, second)[0])[("LISTENER_EXPOSED", "tcp:8080")]
+    assert found["scope"] == "specific" and found["detail"]["added_addresses"] == ["10.0.0.5:8080"]
+    v4 = [("tcp", "0.0.0.0", 8080, "0A", 301)]
+    wide = lw.snapshot(root=fake_proc(tmp_path / "v4", v4, owner))
+    both = lw.snapshot(root=fake_proc(tmp_path / "v6", v4 + [("tcp6", "::", 8080, "0A", 302)], owner))
+    assert by_key(lw.compare(wide, both)[0])[("LISTENER_EXPOSED", "tcp:8080")]["detail"]["added_addresses"] == \
+        ["[::]:8080"], "IPv6 added next to an IPv4 wildcard"
+    covered = lw.snapshot(root=fake_proc(tmp_path / "covered", v4 + [("tcp", "192.168.1.5", 8080, "0A", 303)], owner))
+    assert lw.compare(wide, covered)[0] == [], "an address the IPv4 wildcard already covered"
+    local = lw.snapshot(root=fake_proc(tmp_path / "local", v4 + [("tcp", "127.0.0.1", 8080, "0A", 303)], owner))
+    assert lw.compare(wide, local)[0] == []
+
+
+def test_a_port_with_some_ownerless_sockets_is_a_gap(tmp_path):
+    sockets = [("tcp", "0.0.0.0", 8080, "0A", 401), ("tcp6", "::", 8080, "0A", 402)]
+    snap = lw.snapshot(root=fake_proc(tmp_path / "p", sockets, {400: ("/usr/bin/caddy", "caddy", [401])}))
+    assert snap["listeners"]["tcp:8080"]["owners_known"] is False
+    assert snap["gaps"] == ["some sockets have no visible owner on tcp:8080; a change of owner is not checked there"]

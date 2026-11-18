@@ -43,7 +43,7 @@ Adjust the program path to where MEGALODON is installed for root.
 | --- | --- | --- | --- |
 | `NEW_LISTENER` | HIGH, MEDIUM or LOW | A port that was not listening at the baseline | T1571, plus T1059 for a shell or relay tool |
 | `LISTENER_PROGRAM_CHANGED` | MEDIUM, or HIGH | A known port is now served by a different program | T1543 |
-| `LISTENER_EXPOSED` | MEDIUM, or HIGH | A known port became reachable more widely: from loopback to a network address, or to every interface | T1133 |
+| `LISTENER_EXPOSED` | MEDIUM, or HIGH | A known port became reachable more widely: from loopback to a network address, to every interface, or on another address or address family (such as IPv6) that it did not listen on before | T1133 |
 
 The ATT&CK mappings are the closest fit; none of these is proof of an attack.
 
@@ -71,7 +71,8 @@ traffic are never read or stored. Nothing is stopped, closed or changed.
 
 * **Root sees every owner.** Without root, sockets of other accounts' and
   system services' processes have no visible owner. The report lists that as
-  a coverage gap, and a change of owner is not reported for those ports.
+  a coverage gap, and a change of owner is not reported for those ports. A
+  port where only some sockets have a visible owner is listed too.
 * **This network namespace only.** Containers in their own network namespace
   are not covered. A port Docker publishes appears only while `docker-proxy`
   listens for it on the host; with Docker's userland proxy turned off,
