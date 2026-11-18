@@ -803,7 +803,7 @@ class ThreatDetector:
         parsed = _canonical(src)
         if parsed.version != 4 or parsed.is_unspecified or parsed.is_multicast or parsed == _LIMITED_BROADCAST:
             return None  # ARP probes (sender 0.0.0.0) claim nothing.
-        return self._rebinding(event, "ARP_SPOOFING", "arp", src, event.arp_sender_mac, now, journal, touched,
+        return self._rebinding(event, "ARP_SPOOFING", "arp", src, src, event.arp_sender_mac, now, journal, touched,
                                "as ARP cache poisoning does")
 
     def _ndp_spoofing(self, event, src, dst, now, journal, touched):
@@ -818,10 +818,11 @@ class ThreatDetector:
         parsed = _canonical(address)
         if parsed.version != 6 or parsed.is_unspecified or parsed.is_multicast:
             return None  # Duplicate address detection (sender ::) claims nothing.
-        return self._rebinding(event, "NDP_SPOOFING", "nd", address, event.nd_mac, now, journal, touched,
+        return self._rebinding(event, "NDP_SPOOFING", "nd", address, src, event.nd_mac, now, journal, touched,
                                "as neighbour-discovery spoofing does")
 
-    def _rebinding(self, event, rule_id, kind, address, mac, now, journal, touched, how):
+    def _rebinding(self, event, rule_id, kind, address, src, mac, now, journal, touched, how):
+        """The claimed address keys the binding; the sender is the party a response targets."""
         table = getattr(self, self._STATE_MAPS[kind])
         touched.append((kind, address))
         previous = table.get(address)
@@ -836,7 +837,7 @@ class ThreatDetector:
         if not self._can_emit(key, now, journal):
             return None
         return self._result(
-            event, rule_id, address,
+            event, rule_id, src,
             f"{address} was claimed by {mac} {elapsed // _US}s after {previous[0]} answered for it, {how}",
             {
                 "rebinds": 1,

@@ -93,7 +93,20 @@ def test_a_rebound_neighbour_advertisement_is_ndp_spoofing():
     assert (evidence["claimed_address"], evidence["previous_mac"], evidence["new_mac"]) == (
         ROUTER, ROUTER_MAC, OTHER_MAC)
     assert evidence["seconds_since_previous"] == 8
+    # The sender, not the multicast destination, is the party a response targets.
+    assert evidence["response_target"] == OTHER and found[0].suppressed_reason is None
     assert rules(d.analyze(na(9, ROUTER, ROUTER_MAC))) == [], "one finding per address per cooldown"
+
+
+def test_allowlisting_the_sender_suppresses_and_the_claimed_address_does_not():
+    import ipaddress as ip
+
+    def found_with(allowed):
+        d = ThreatDetector(ThreatDetectionSettings(lan_integrity=True), allowlist=(ip.ip_network(allowed),))
+        d.analyze(na(0, ROUTER, ROUTER_MAC))
+        return d.analyze(na(1, ROUTER, OTHER_MAC, src=OTHER))[0]
+    assert found_with(OTHER + "/128").suppressed_reason == "source_allowlisted"
+    assert found_with(ROUTER + "/128").suppressed_reason is None
 
 
 def test_solicitations_and_router_advertisements_also_bind_their_sender():
