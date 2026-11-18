@@ -269,6 +269,10 @@ def plant(directory: str, manifest_path: str, *, count: int = 3, replace: bool =
     }
 
 
+_CHANGE_LABELS = {"size": "size", "mtime_ns": "modification time", "ctime_ns": "metadata change time",
+                  "mode": "permissions", "content": "content"}
+
+
 def _finding(rule: str, severity: str, path: str, detail: str) -> dict[str, str]:
     return {"rule_id": rule, "severity": severity, "path": path, "detail": detail}
 
@@ -302,7 +306,7 @@ def check(manifest_path: str) -> dict[str, Any]:
             changed.append("content")
         if changed:
             findings.append(_finding("CANARY_MODIFIED", "CRITICAL", path,
-                                     "Changed: " + ", ".join(changed) + "."))
+                                     "Changed: " + ", ".join(_CHANGE_LABELS[c] for c in changed) + "."))
         elif current["atime_ns"] != recorded["atime_ns"]:
             findings.append(_finding("CANARY_READ", "HIGH", path,
                                      "The canary was opened and read since it was armed."))

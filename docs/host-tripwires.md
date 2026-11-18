@@ -4,6 +4,24 @@ Two host-side checks complement the network detectors. Both are explicit
 operator commands that read local state, write nothing outside the paths you
 name, contact no network service and take no action.
 
+## In the HUD
+
+**Setup → Tripwires and login review** shows both checks without running any
+command. The HUD refreshes them in the background at most every two minutes:
+
+- **Canary files:** reads the manifest at the conventional path
+  `~/.config/megalodon/canary.json` (plant there to see it in the HUD). It
+  reports intact, tripped or not planted. Only file names are shown, never
+  your directory layout.
+- **Login review:** reviews the first readable of `/var/log/auth.log` or
+  `/var/log/secure`. It shows the most severe findings (up to 16) and the
+  addresses with the most failed logins. When the log is unreadable it says
+  so, which usually means the account is not in the `adm` group.
+
+The panel is read-only. Planting, rearming, writing watchlists and any
+response stay explicit commands. Like the other Setup reviews, it needs the
+HUD running as your ordinary (non-root) user.
+
 ## Canary files
 
 Canaries are bait files placed where an intruder or ransomware would look.

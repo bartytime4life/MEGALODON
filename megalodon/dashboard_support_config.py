@@ -4,6 +4,7 @@ from .dashboard_host_findings import HOST_FINDINGS_HTML, HOST_FINDINGS_CSS, HOST
 from .dashboard_persistence import PERSISTENCE_HTML, PERSISTENCE_CSS, PERSISTENCE_JS
 from .dashboard_gateway import GATEWAY_HTML, GATEWAY_CSS, GATEWAY_JS
 from .dashboard_process_network import PROCESS_NETWORK_HTML, PROCESS_NETWORK_CSS, PROCESS_NETWORK_JS
+from .dashboard_host_tripwires import HOST_TRIPWIRES_HTML, HOST_TRIPWIRES_CSS, HOST_TRIPWIRES_JS
 from .dashboard_recovery_readiness import RECOVERY_READINESS_HTML, RECOVERY_READINESS_CSS, RECOVERY_READINESS_JS
 from .dashboard_refresh import REFRESH_JS
 from .dashboard_startup import STARTUP_HTML, STARTUP_CSS, STARTUP_JS
@@ -87,6 +88,7 @@ SUPPORT_CONFIG_HTML = r'''
     <!-- PERSISTENCE -->
     <!-- GATEWAY -->
     <!-- PROCESS_NETWORK -->
+    <!-- HOST_TRIPWIRES -->
     <p class="support-config-note">Audits run as your user and cover readable files only. The initial baseline is an observation, not a clean-system certificate. Checks preserve that baseline. Refresh downloads fixed Spamhaus DROP and IPsum references at most once per day; IP observations stay on this PC. Stale references stop matching. A match supplies context and never authorizes blocking or identifies an attacker.</p>
   </section>
   <details class="support-config-locations"><summary>Installed tool directories</summary>
@@ -99,9 +101,9 @@ SUPPORT_CONFIG_HTML = r'''
   </details>
   <details class="support-config-results"><summary>Latest tool results</summary><p class="support-config-note">Each result keeps its own check time. Setup and availability do not prove a tool is feeding the HUD.</p><ul id="support-config-tools"><li>No tool checks returned yet.</li></ul></details>
 </section>
-'''.replace('  <!-- STARTUP -->', STARTUP_HTML).replace('      <!-- MODEL_LIBRARY -->', MODEL_LIBRARY_HTML).replace('    <!-- HOST_FINDINGS -->', HOST_FINDINGS_HTML).replace('    <!-- RECOVERY_READINESS -->', RECOVERY_READINESS_HTML).replace('    <!-- HARDENING -->', HARDENING_HTML).replace('    <!-- PERSISTENCE -->', PERSISTENCE_HTML).replace('    <!-- GATEWAY -->', GATEWAY_HTML).replace('    <!-- PROCESS_NETWORK -->', PROCESS_NETWORK_HTML)
+'''.replace('  <!-- STARTUP -->', STARTUP_HTML).replace('      <!-- MODEL_LIBRARY -->', MODEL_LIBRARY_HTML).replace('    <!-- HOST_FINDINGS -->', HOST_FINDINGS_HTML).replace('    <!-- RECOVERY_READINESS -->', RECOVERY_READINESS_HTML).replace('    <!-- HARDENING -->', HARDENING_HTML).replace('    <!-- PERSISTENCE -->', PERSISTENCE_HTML).replace('    <!-- GATEWAY -->', GATEWAY_HTML).replace('    <!-- PROCESS_NETWORK -->', PROCESS_NETWORK_HTML).replace('    <!-- HOST_TRIPWIRES -->', HOST_TRIPWIRES_HTML)
 
-SUPPORT_CONFIG_CSS = STARTUP_CSS + MODEL_LIBRARY_CSS + HOST_FINDINGS_CSS + RECOVERY_READINESS_CSS + HARDENING_CSS + PERSISTENCE_CSS + GATEWAY_CSS + PROCESS_NETWORK_CSS + r'''
+SUPPORT_CONFIG_CSS = STARTUP_CSS + MODEL_LIBRARY_CSS + HOST_FINDINGS_CSS + RECOVERY_READINESS_CSS + HARDENING_CSS + PERSISTENCE_CSS + GATEWAY_CSS + PROCESS_NETWORK_CSS + HOST_TRIPWIRES_CSS + r'''
 .support-apps #support-apps-configure { border-color:#75e6e1; box-shadow:inset 0 0 0 1px #75e6e1; }
 .support-apps #support-apps-configure[aria-expanded="true"] { background:#244955; }
 .support-config { border-top:1px solid #4b6b79; margin-top:1rem; padding-top:1.25rem; }
@@ -133,13 +135,14 @@ SUPPORT_CONFIG_CSS = STARTUP_CSS + MODEL_LIBRARY_CSS + HOST_FINDINGS_CSS + RECOV
 @media(max-width:640px) { .support-capture-steps,.support-capture-destinations { grid-template-columns:1fr; gap:1rem; } .support-capture { padding:.9rem; } .support-config-actions button { flex:1 1 12rem; } .support-config select,.support-config input { max-width:none; } .support-config-results li { grid-template-columns:minmax(0,1fr) auto; } }
 '''
 
-SUPPORT_CONFIG_JS = REFRESH_JS + HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PERSISTENCE_JS + GATEWAY_JS + PROCESS_NETWORK_JS + r'''
+SUPPORT_CONFIG_JS = REFRESH_JS + HOST_FINDINGS_JS + RECOVERY_READINESS_JS + HARDENING_JS + PERSISTENCE_JS + GATEWAY_JS + PROCESS_NETWORK_JS + HOST_TRIPWIRES_JS + r'''
 renderHostFindings = stableReview(renderHostFindings);
 renderRecoveryReadiness = stableReview(renderRecoveryReadiness);
 renderHardening = stableReview(renderHardening);
 renderPersistence = stableReview(renderPersistence);
 renderGateway = stableReview(renderGateway);
 renderProcessNetwork = stableReview(renderProcessNetwork);
+renderHostTripwires = stableReview(renderHostTripwires);
 (() => {
   const el=id=>document.getElementById(id);
   if(typeof localHudLaunch==='undefined' || !el('support-config') || !el('support-apps-configure'))return;
@@ -300,6 +303,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     renderPersistence(el('persistence-review'),v.persistence);
     renderGateway(el('gateway-review'),v.gateway);
     renderProcessNetwork(el('process-network-review'),v.process_network);
+    renderHostTripwires(el('host-tripwires-review'),v.host_tripwires);
     el('host-security-status').textContent='Host security status unavailable.';
     el('host-security-results').replaceChildren();
     if(h&&h.schema==='megalodon-host-security-v1'&&Array.isArray(h.feeds)&&h.feeds.length<=3){
@@ -377,7 +381,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     if(!viewVisible())feedback('Status updates paused while this view is hidden. Local actions and capture continue.','stale');
   }
   function cancel(){if(state.timer!==null)clearTimeout(state.timer);state.timer=null;}
-  function schedule(){cancel();if(!viewVisible())return;if(!state.valid){state.timer=setTimeout(()=>read(true),5000);return;}const active=working()||capturing()||state.payload?.background?.enabled||persistencePending(state.payload?.persistence)||processPending(state.payload?.process_network);if(active||state.open||setupVisible())state.timer=setTimeout(read,active?2000:10000);}
+  function schedule(){cancel();if(!viewVisible())return;if(!state.valid){state.timer=setTimeout(()=>read(true),5000);return;}const active=working()||capturing()||state.payload?.background?.enabled||persistencePending(state.payload?.persistence)||processPending(state.payload?.process_network)||hostTripwiresPending(state.payload?.host_tripwires);if(active||state.open||setupVisible())state.timer=setTimeout(read,active?2000:10000);}
   async function body(response){
     if(Number(response.headers.get('content-length'))>65536)throw Error('Response too large');
     if(response.body&&response.body.getReader){const reader=response.body.getReader(),parts=[];let size=0;try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>65536)throw Error('Response too large');parts.push(part.value);}}catch(error){await reader.cancel();throw error;}
@@ -409,7 +413,7 @@ renderProcessNetwork = stableReview(renderProcessNetwork);
     el('support-model-status').textContent='Unable to read Local AI status. Use Retry model status to check again.';
     el('support-model-metrics').textContent='';el('support-model-adopt').hidden=true;
   }
-  function fail(error){modelUnavailable();renderRecoveryReadiness(el('recovery-readiness'),null);renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);renderPersistence(el('persistence-review'),null);renderGateway(el('gateway-review'),null);renderProcessNetwork(el('process-network-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;if(typeof window!=='undefined'&&typeof window.dispatchEvent==='function')window.dispatchEvent(new CustomEvent('megalodon-support-state',{detail:{status:'unavailable'}}));}
+  function fail(error){modelUnavailable();renderRecoveryReadiness(el('recovery-readiness'),null);renderHostFindings(el('host-findings'),null);renderHardening(el('hardening-review'),null);renderPersistence(el('persistence-review'),null);renderGateway(el('gateway-review'),null);renderProcessNetwork(el('process-network-review'),null);renderHostTripwires(el('host-tripwires-review'),null);el('host-security-status').textContent='Host security status unavailable.';el('host-security-results').replaceChildren();state.valid=false;state.token=null;if(!state.payload){if(el('live-interface-name'))el('live-interface-name').textContent='Saved interface unavailable';if(el('live-geography-opt-in'))el('live-geography-opt-in').textContent='Location-update setting unavailable';}el('support-capture-state').textContent='Status unavailable';el('support-capture-state').dataset.state='failed';const prefix=error.status===400?'The settings were rejected. Check the target, folder and interface.':error.status===403?'The action could not pass its local permission or session check.':'Unable to confirm configuration status.';feedback(document.hidden?'Status updates paused while this tab is hidden. The last request failed; check again when you return.':prefix+' Check again before retrying.',document.hidden?'stale':'failed');el('support-config-retry').hidden=false;if(state.liveAction&&el('live-action-retry'))el('live-action-retry').hidden=false;if(typeof window!=='undefined'&&typeof window.dispatchEvent==='function')window.dispatchEvent(new CustomEvent('megalodon-support-state',{detail:{status:'unavailable'}}));}
   async function read(force=false){if(state.pending||!workspaceVisible()||(!force&&!viewVisible()))return;cancel();let finished;state.readDone=new Promise(resolve=>{finished=resolve;});state.pending=true;if(!state.hydrated)feedback('Checking available tools and capture settings…','checking');controls();try{accept(await request());}catch(error){fail(error);}finally{state.pending=false;state.readDone=null;controls();schedule();finished();}}
   function payloadFor(action){
     const value={action};
