@@ -259,3 +259,49 @@ def test_cli_ingest_decides_each_line_as_it_arrives(paths, monkeypatch, capsys):
         main(["respond", "ingest", *files])
     assert exit_.value.code == 0 and decided == [1, 1]
     assert [json.loads(line)["decisions"] for line in capsys.readouterr().out.splitlines()] == [1, 1]
+
+
+def test_a_large_state_is_read_back(paths):
+    signals = [network_signal("HOST_SWEEP", f"203.0.{110 + i // 250}.{i % 250 + 1}", row=i, severity="LOW",
+                              src=f"10.{i // 250}.{i % 250}.9") for i in range(1500)]
+    re_.run(signals=signals, now=NOW, **paths)
+    assert Path(paths["state_path"]).stat().st_size > re_.MAX_POLICY_BYTES
+    assert re_.run(signals=process_signal(), now=NOW, **paths)["decisions"] == 1
+
+
+def test_gaps_reported_by_the_source_checks_are_kept(paths, monkeypatch):
+    from megalodon import listener_watch, process_network
+    monkeypatch.setattr(listener_watch, "check", lambda manifest: {
+        "findings": [], "gaps": ["no visible program owns tcp:2024"], "checked_at": ""})
+    monkeypatch.setattr(process_network, "review", lambda root="/": {
+        "programs": [], "gaps": ["A socket table was not fully read"]})
+    policy = re_.load_policy(paths["policy_path"])
+    policy = re_.Policy(**{**policy.__dict__, "sources": {"audit_db": "", "process_review": True,
+                                                         "listeners_manifest": "/x/listeners.json"}})
+    signals, gaps = re_.collect(policy, {}, NOW)
+    assert gaps == ["process_review: A socket table was not fully read",
+                    "listeners: no visible program owns tcp:2024"]
+
+
+def test_a_finding_that_links_two_incidents_corroborates_both(paths):
+    other = "203.0.114.78"
+    signals = [network_signal("BEACONING", C2, row=1, src="192.168.1.21"),
+               network_signal("BEACONING", other, row=2, src="192.168.1.22"),
+               *process_signal(remotes=[f"{C2}:443", f"{other}:443"])]
+    re_.run(signals=signals, now=NOW, **paths)
+    beacons = [d for d in ledger(paths) if d["signal"]["rule_id"] == "BEACONING"]
+    assert [d["incident"]["corroborated"] for d in beacons] == [True, True]
+    assert len({d["incident"]["id"] for d in ledger(paths)}) == 1
+    assert {a[1] for d in beacons for a in actions(d) if a[0] == "block_address" and a[2] == "would_apply"} == \
+        {C2, other}
+
+
+def test_a_host_finding_still_present_keeps_its_incident_open(paths):
+    host = process_signal(remotes=[f"{C2}:443"])
+    re_.run(signals=host, now=NOW, **paths)
+    later = NOW + timedelta(minutes=31)
+    re_.run(signals=host + [network_signal("BEACONING", C2, row=9)], now=later, **paths)
+    beacon = ledger(paths)[-1]
+    assert beacon["signal"]["rule_id"] == "BEACONING" and beacon["incident"]["corroborated"] is True
+    assert ("block_address", C2, "would_apply") in actions(beacon)
+    assert len(ledger(paths)) == 2, "the repeated host finding is not decided again"
