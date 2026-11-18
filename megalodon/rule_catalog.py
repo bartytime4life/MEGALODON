@@ -116,6 +116,19 @@ RULES: tuple[RuleDescription, ...] = (
         "Redundant DHCP servers, a new router, mesh Wi-Fi nodes and phone hotspots also answer DHCP.",
         ("T1557.003",), "credential_access", "source",
     ),
+    RuleDescription(
+        "NDP_SPOOFING", THREAT_LAYER, "HIGH", "rebinds", "IPv6 neighbour rebinds", False,
+        "A local IPv6 address was claimed by a different hardware address soon after another answered for it.",
+        "Failover pairs, virtual machines, docking stations and a replaced device can rebind an address.",
+        ("T1557",), "credential_access", "source",
+    ),
+    RuleDescription(
+        "ROGUE_IPV6_ROUTER", THREAT_LAYER, "HIGH", "advertisements",
+        "Router advertisements from an unexpected router", False,
+        "An IPv6 router advertisement came from a router outside the expected set.",
+        "A new router, mesh Wi-Fi nodes, phone hotspots and virtual machine hosts also advertise IPv6 routes.",
+        ("T1557",), "credential_access", "source",
+    ),
 )
 
 BY_ID: dict[str, RuleDescription] = {rule.rule_id: rule for rule in RULES}

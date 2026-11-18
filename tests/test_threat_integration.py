@@ -189,7 +189,7 @@ def test_legacy_snapshot_detector_counts_keep_their_original_labels():
     if not node:
         pytest.skip("Node unavailable")
     script = SNAPSHOT_VALIDATOR_JS + (
-        "\nconst out={};for(const n of [3,8,9,11,12,14])out[n]=snapshotDetectorLabels(n);"
+        "\nconst out={};for(const n of [3,8,9,11,12,14,16])out[n]=snapshotDetectorLabels(n);"
         "process.stdout.write(JSON.stringify(out));")
     labels = json.loads(subprocess.run([node, "-e", script], check=True, timeout=10, text=True,
                                        capture_output=True).stdout)
@@ -199,4 +199,5 @@ def test_legacy_snapshot_detector_counts_keep_their_original_labels():
     assert labels["9"] == list(rule_catalog.ALL_RULE_IDS[:9]) and labels["9"][-1] == "IOC_MATCH"
     assert labels["11"] == list(rule_catalog.ALL_RULE_IDS[:11]) and labels["11"][-1] == "DNS_TUNNEL_CHURN"
     assert labels["12"] == list(rule_catalog.ALL_RULE_IDS[:12]) and labels["12"][-1] == "TLS_WITHOUT_SNI"
-    assert labels["14"] == list(rule_catalog.ALL_RULE_IDS)
+    assert labels["14"] == list(rule_catalog.ALL_RULE_IDS[:14]) and labels["14"][-1] == "ROGUE_DHCP"
+    assert labels["16"] == list(rule_catalog.ALL_RULE_IDS)

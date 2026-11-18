@@ -56,14 +56,19 @@ dns_churn_distinct_subdomains = 30
 # names are a record of sites visited. When on, they stay in memory; only a
 # fingerprint or name that triggers a finding is kept.
 tls_fingerprints = false
-# LAN integrity: ARP spoofing and rogue DHCP server detection. OFF by default.
-# When on, the capture keeps whole packets (DHCP options lie past byte 256);
-# hardware addresses stay in memory unless they trigger a finding.
+# LAN integrity: ARP and IPv6 neighbour spoofing, rogue DHCP/DHCPv6 servers
+# and rogue IPv6 routers. OFF by default. When on, the capture keeps whole
+# packets (DHCP options lie past byte 256); hardware addresses stay in memory
+# unless they trigger a finding.
 lan_integrity = false
 arp_rebind_seconds = 300
 dhcp_window_seconds = 3600
-# The DHCP servers this network should have; empty means learn them.
+# The DHCP and DHCPv6 servers this network should have; empty means learn them.
 dhcp_servers = []
+# The IPv6 routers (link-local fe80:: addresses) this network should have;
+# empty means learn them.
+ipv6_routers = []
+router_window_seconds = 3600
 
 # Threat-feed refresh (docs/threat-feeds.md): `megalodon feeds refresh` writes
 # feeds into one watchlist; point threat_detection.watchlist_path at its output.

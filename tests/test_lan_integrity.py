@@ -149,7 +149,7 @@ def test_window_and_relays():
 def test_capture_profile_reads_lan_fields_with_whole_packets():
     capture, decode = capture_commands("eth0", lan=tshark.LAN_FIELDS)
     assert capture[capture.index("-s") + 1] == "65535"
-    assert decode[-12:] == [x for f in tshark.LAN_FIELDS for x in ("-e", f)]
+    assert decode[-2 * len(tshark.LAN_FIELDS):] == [x for f in tshark.LAN_FIELDS for x in ("-e", f)]
     assert "arp.opcode" not in capture_commands("eth0")[1]
     assert tshark.lan_subset(tshark.ARP_FIELDS + ("dhcp.option.dhcp",)) == tshark.ARP_FIELDS
 
