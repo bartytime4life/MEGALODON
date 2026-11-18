@@ -23,6 +23,7 @@ records the reviewed state as the new baseline.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -197,18 +198,23 @@ def snapshot(*, root='/'):
             item['programs'].update(owners[inode])
         else:
             item['unknown'] += 1
-    listeners, ownerless = {}, []
+    listeners, ownerless, partly = {}, [], []
     for key, item in grouped.items():
-        if item['unknown'] and not item['programs']:
-            ownerless.append(key)
+        if item['unknown']:
+            (partly if item['programs'] else ownerless).append(key)
         listeners[key] = dict(
             protocol=item['protocol'], port=item['port'], scope=_scope(item['addresses']),
             addresses=sorted(_shown(a, item['port']) for a in item['addresses'])[:MAX_ADDRESSES],
             programs=[item['programs'][p] for p in sorted(item['programs'])][:MAX_PROGRAMS],
             owners_known=not item['unknown'])
-    if ownerless and not owner_gaps:
-        # Readable processes hold none of these: another network namespace's process, or the kernel.
-        owner_gaps.append(f"no visible program owns {', '.join(sorted(ownerless)[:8])}")
+    if not owner_gaps:
+        # Readable processes hold none of these sockets: another network namespace's process, or the kernel.
+        # A port with any such socket gets no owner-change check, so it is listed even when partly owned.
+        if ownerless:
+            owner_gaps.append(f"no visible program owns {', '.join(sorted(ownerless)[:8])}")
+        if partly:
+            owner_gaps.append(f"some sockets have no visible owner on {', '.join(sorted(partly)[:8])}; "
+                              "a change of owner is not checked there")
     return dict(listeners=listeners, gaps=gaps + owner_gaps)
 
 
@@ -297,6 +303,25 @@ def _finding(rule, key, entry, severity, detail):
                 techniques=techniques, detail=detail)
 
 
+def _address(shown):
+    host = shown.rsplit(':', 1)[0]
+    return ipaddress.ip_address(host[1:-1] if host.startswith('[') else host)
+
+
+def _newly_reachable(before, after):
+    """Bind addresses in `after` that reach networks `before` did not: neither loopback nor
+    already covered by a wildcard of the same address family."""
+    old = {_address(a) for a in before}
+    wildcard = {a.version for a in old if a.is_unspecified}
+    added = []
+    for shown in after:
+        address = _address(shown)
+        if address in old or _loopback(address) or (address.version in wildcard and not address.is_unspecified):
+            continue
+        added.append(shown)
+    return added
+
+
 def compare(old, new):
     findings, closed = [], []
     before_all, after_all = old['listeners'], new['listeners']
@@ -316,10 +341,11 @@ def compare(old, new):
         if before.get('owners_known') and after.get('owners_known') and old_paths != new_paths:
             findings.append(_finding('LISTENER_PROGRAM_CHANGED', key, after, 'HIGH' if strong else 'MEDIUM',
                                      dict(previous_programs=sorted(old_paths), reasons=reasons)))
-        if SCOPES.index(after['scope']) > SCOPES.index(before['scope']):
+        added = _newly_reachable(before['addresses'], after['addresses'])
+        if SCOPES.index(after['scope']) > SCOPES.index(before['scope']) or added:
             findings.append(_finding('LISTENER_EXPOSED', key, after, 'HIGH' if strong else 'MEDIUM',
                                      dict(previous_scope=before['scope'], previous_addresses=before['addresses'],
-                                          reasons=reasons)))
+                                          added_addresses=added, reasons=reasons)))
     findings.sort(key=lambda item: (-RANK[item['severity']], item['protocol'], item['port'], item['rule_id']))
     return findings, closed
 
