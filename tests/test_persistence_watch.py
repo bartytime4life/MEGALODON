@@ -85,6 +85,26 @@ def test_each_kind_of_change_is_found_with_its_technique(tree):
     assert "ADDED=1" not in json.dumps(report), "file contents are never copied"
 
 
+def test_a_new_owner_of_a_setuid_program_is_reported(tree):
+    root, _, options, manifest = tree
+    (root / "usr/bin/tool").chmod(0o4755)
+    pw.baseline(manifest, **options)
+    real = pw._describe
+
+    def described(path, category):
+        value = real(path, category)
+        if isinstance(value, dict) and path.endswith("usr/bin/tool"):
+            value = dict(value, uid=value["uid"] + 1)
+        return value
+    pw._describe, restore = described, real
+    try:
+        found = check(manifest, options)
+    finally:
+        pw._describe = restore
+    item = found[("changed", "setuid", "/usr/bin/tool")]
+    assert item["severity"] == "HIGH" and item["detail"]["uid"][1] == item["detail"]["uid"][0] + 1
+
+
 def test_accept_records_the_reviewed_state(tree):
     root, _, options, manifest = tree
     pw.baseline(manifest, **options)
