@@ -258,6 +258,27 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    binaries = sub.add_parser(
+        "binaries", help="detect trojaned system programs and libraries (exit 1 on findings)")
+    binaries_sub = binaries.add_subparsers(dest="binaries_command", required=True)
+    for name, text in (("verify", "compare installed programs with their package checksums now; no baseline needed"),
+                       ("baseline", "record a SHA-256 of every program, packaged or not"),
+                       ("check", "verify packages and report programs added or changed since the baseline"),
+                       ("accept", "after review, record the current programs as the new baseline")):
+        command = binaries_sub.add_parser(name, help=text)
+        command.add_argument("--all-libraries", action="store_true",
+                             help="verify every packaged shared library, not only the commonly backdoored ones")
+        if name != "verify":
+            command.add_argument("--manifest", type=Path,
+                                 help="baseline file (default ~/.config/megalodon/binaries.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name in ("verify", "check"):
+            command.add_argument("--alert", action="store_true",
+                                 help="also send a summary to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
     ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
     ransom_watch = ransom_sub.add_parser(
@@ -1243,6 +1264,48 @@ def _listeners(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _binaries(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import binary_integrity as integrity
+    from .validation import ValidationError
+
+    options = dict(all_libraries=args.all_libraries)
+    try:
+        if args.binaries_command == "verify":
+            result = integrity.verify(**options)
+        else:
+            manifest = args.manifest or Path(integrity.DEFAULT_MANIFEST).expanduser()
+            if args.binaries_command == "baseline":
+                result = integrity.baseline(manifest, replace=args.replace, **options)
+            elif args.binaries_command == "accept":
+                result = integrity.accept(manifest, **options)
+            else:
+                result = integrity.check(manifest, **options)
+    except (integrity.BinaryIntegrityError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.binaries_command in ("verify", "check") and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            top = findings[0]
+            listed = "; ".join(f"{f['rule_id']} {f['path']}" for f in findings[:5])
+            dispatcher.submit([HostNotice(
+                top["rule_id"], top["severity"], datetime.now(timezone.utc),
+                f"{len(findings)} program integrity findings: {listed}",
+                tuple(sorted({t for f in findings for t in f['techniques']}))[:8],
+                "A system program or library no longer matches its package or the reviewed baseline.")])
+    return 1 if findings else 0
+
+
 def _ransomware(args: argparse.Namespace) -> int:
     from threading import Event
     import tempfile
@@ -1946,6 +2009,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _persistence(args)
     elif args.command == "listeners":
         code = _listeners(args)
+    elif args.command == "binaries":
+        code = _binaries(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":

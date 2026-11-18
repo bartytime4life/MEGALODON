@@ -182,6 +182,7 @@ or source basis.
 | [Ransomware watch: live file-encryption alarm](ransomware-watch.md) | `docs/ransomware-watch.md` |
 | [Persistence watch: services, jobs, keys and startup files](persistence-watch.md) | `docs/persistence-watch.md` |
 | [Listener watch: new listening ports and bind shells](listener-watch.md) | `docs/listener-watch.md` |
+| [Program integrity: trojaned programs and libraries](binary-integrity.md) | `docs/binary-integrity.md` |
 | [Self-test drill: prove the detections fire](self-test-drill.md) | `docs/self-test-drill.md` |
 | [Log integrity: wiped, truncated or rewritten logs](log-integrity.md) | `docs/log-integrity.md` |
 | [Threat-feed refresh into the IOC watchlist](threat-feeds.md) | `docs/threat-feeds.md` |
