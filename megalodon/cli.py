@@ -279,6 +279,33 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    respond = sub.add_parser(
+        "respond", help="automated response engine in shadow mode: decide and record, never carry out")
+    respond_sub = respond.add_subparsers(dest="respond_command", required=True)
+    for name, text in (("init", "write the default response policy (owner-only) to edit and review"),
+                       ("run", "collect findings once, decide under the policy, and record the decisions"),
+                       ("watch", "repeat run every --interval seconds until stopped"),
+                       ("ingest", "decide on findings read as JSON lines from standard input"),
+                       ("report", "summarize what would have been done")):
+        command = respond_sub.add_parser(name, help=text)
+        if name != "report":
+            command.add_argument("--policy", type=Path,
+                                 help="policy file (default ~/.config/megalodon/response-policy.toml)")
+        if name == "init":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing policy")
+            continue
+        command.add_argument("--ledger", type=Path,
+                             help="decision ledger (default ~/.local/state/megalodon/response-shadow.jsonl)")
+        if name == "report":
+            command.add_argument("--hours", type=_bounded_cli_integer("hours", 1, 8784), default=168,
+                                 help="how far back to look (default 168, one week)")
+            continue
+        command.add_argument("--state", type=Path,
+                             help="engine state (default ~/.local/state/megalodon/response-state.json)")
+        if name == "watch":
+            command.add_argument("--interval", type=_bounded_cli_integer("interval", 30, 86400), default=300,
+                                 help="seconds between passes (default 300)")
+
     ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
     ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
     ransom_watch = ransom_sub.add_parser(
@@ -1306,6 +1333,45 @@ def _binaries(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _respond(args: argparse.Namespace) -> int:
+    from . import response_engine as engine
+
+    def paths():
+        return dict(policy_path=args.policy or Path(engine.DEFAULT_POLICY).expanduser(),
+                    ledger=args.ledger or Path(engine.DEFAULT_LEDGER).expanduser(),
+                    state_path=args.state or Path(engine.DEFAULT_STATE).expanduser())
+    try:
+        if args.respond_command == "init":
+            result = engine.write_default_policy(args.policy or Path(engine.DEFAULT_POLICY).expanduser(),
+                                                 replace=args.replace)
+        elif args.respond_command == "report":
+            result = engine.report(ledger=args.ledger or Path(engine.DEFAULT_LEDGER).expanduser(), hours=args.hours)
+        elif args.respond_command == "ingest":
+            # One decision pass per line, so a live pipe (the ransomware watch) is decided as it arrives.
+            for line in sys.stdin:
+                if line.strip():
+                    print(json.dumps(engine.ingest([line], **paths()), sort_keys=True), flush=True)
+            return 0
+        elif args.respond_command == "run":
+            result = engine.run(**paths())
+        else:
+            import time
+            try:
+                while True:
+                    result = engine.run(**paths())
+                    print(f"{result['decisions']} decisions, {result['would_apply']} actions would apply, "
+                          f"{result['refused']} refused, {len(result['gaps'])} gaps (shadow mode: none carried out)",
+                          file=sys.stderr, flush=True)
+                    time.sleep(args.interval)
+            except KeyboardInterrupt:
+                return 0
+    except (engine.ResponseError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
 def _ransomware(args: argparse.Namespace) -> int:
     from threading import Event
     import tempfile
@@ -2009,6 +2075,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _persistence(args)
     elif args.command == "listeners":
         code = _listeners(args)
+    elif args.command == "respond":
+        code = _respond(args)
     elif args.command == "binaries":
         code = _binaries(args)
     elif args.command == "drill":
