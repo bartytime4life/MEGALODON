@@ -7,13 +7,22 @@ import logging
 from pathlib import Path
 from threading import RLock
 
+from .alerts import AlertConfigError, dispatcher_for
 from .config import Settings
 from .detector import Detector
 from .firewall import FirewallError, NftablesFirewall
 from .models import ActionRecord, DetectionResult, PacketEvent
 from .storage import Store
 from .threat_detector import ThreatDetector
+from .validation import ValidationError
 from .watchlist import load_watchlist
+
+
+class _Disabled:
+    enabled = False
+
+
+_NO_ALERTS = _Disabled()
 
 
 class MegalodonService:
@@ -41,6 +50,12 @@ class MegalodonService:
         )
         self.logger = logging.getLogger("megalodon.service")
         self._process_lock = RLock()
+        try:
+            # Configured destinations whose secret files are missing or unsafe
+            # refuse startup rather than silently sending nothing.
+            self.alerts = dispatcher_for(getattr(settings, "alerts", None) or _NO_ALERTS)
+        except AlertConfigError as exc:
+            raise ValidationError(str(exc)) from None
 
     def process(
         self, event: PacketEvent, *, run_id: int | None = None
@@ -80,6 +95,9 @@ class MegalodonService:
             raise
         prepared.commit()
         threat_prepared.commit()
+        if self.alerts is not None and detections:
+            # Only after the audit bundle is saved; queued, never blocking.
+            self.alerts.submit(detections)
         for detection, action in zip(detections, actions, strict=True):
             if action.status == "failed":
                 self.logger.error("firewall action refused: %s", action.reason)

@@ -7,7 +7,7 @@ import struct
 import sys
 
 sys.path.insert(0, '/worker')
-from file_inspection_contract import (MAX_BUNDLE, MAX_RULE_MATCHES, MAX_SLICES,  # noqa: E402
+from file_inspection_contract import (MAX_BUNDLE_BYTES, MAX_RULE_MATCHES, MAX_SLICES,  # noqa: E402
     parse_bundle, validate_rules, validate_structure)
 
 INPUT = '/input/program'
@@ -120,7 +120,7 @@ def inspect_yara(bundle=RULES, target=INPUT, library='/runtime/python'):
     offsets or rule metadata, which can hold arbitrary text.
     """
     with open(bundle, 'rb') as stream:
-        sources = parse_bundle(stream.read(MAX_BUNDLE + 65537))
+        sources = parse_bundle(stream.read(MAX_BUNDLE_BYTES + 1))
     if library:
         sys.path.insert(0, library)
     import yara

@@ -567,8 +567,12 @@ controls. It does not authenticate feed content, fetch TAXII, persist context,
 evaluate patterns, invoke a model, or grant detection, attribution, or action
 authority. Bounded local ECS/OCSF output remains contract-only, and the SOAR
 lane still has no destination, endpoint, credential, retry, automation, or
-action. Live TAXII, SIEM delivery, webhooks, provider credentials, background
-jobs, and SOAR mutation remain unimplemented and unauthorized.
+action. Live TAXII, SIEM export delivery, provider credentials, background
+jobs, and SOAR mutation remain unimplemented and unauthorized. The one exception
+is the opt-in, best-effort [off-machine alert notifier](docs/off-machine-alerts.md):
+after a finding is saved it can post a bounded notice to an operator-configured
+webhook or syslog collector, with URLs and tokens in owner-private files. It has
+no receipts, acknowledgement or action authority.
 
 The core demonstration needs neither root nor Administrator. Windows evaluation
 must use synthetic inputs until native compatibility and privacy gates pass.

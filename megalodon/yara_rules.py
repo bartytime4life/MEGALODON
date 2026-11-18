@@ -19,7 +19,7 @@ from threading import Event
 import time
 
 from .file_inspection_contract import (BUNDLE_SCHEMA, MAX_BUNDLE, MAX_RULE_FILE, MAX_RULE_FILES,
-                                       NAMESPACE, decode, rules_result, validate_rules)
+                                       NAMESPACE, _RULE_CONTROLS, decode, rules_result, validate_rules)
 
 RULES_DIR = Path('.config/megalodon/yara-rules')
 SUFFIXES = ('.yar', '.yara')
@@ -59,8 +59,9 @@ def _read(directory_fd, name):
         text = data.decode('utf-8')
     except UnicodeDecodeError:
         raise RulesError(f'{name} is not UTF-8 text.') from None
-    if '\x00' in text:
-        raise RulesError(f'{name} contains a NUL byte.')
+    if _RULE_CONTROLS.search(text):
+        # Tab and line breaks only, which also bounds the escaped bundle size.
+        raise RulesError(f'{name} contains a control character other than tab or a line break.')
     return text
 
 

@@ -178,6 +178,7 @@ or source basis.
 | [Offline threat-context reader v1](threat-context-reader.md) | `docs/threat-context-reader.md` |
 | [Threat-signal detection layer and IOC watchlist](threat-detection.md) | `docs/threat-detection.md` |
 | [Host tripwires: canary files and login review](host-tripwires.md) | `docs/host-tripwires.md` |
+| [Off-machine alerts: webhooks and syslog](off-machine-alerts.md) | `docs/off-machine-alerts.md` |
 | [Tool heartbeat and one-click install](tool-heartbeat.md) | `docs/tool-heartbeat.md` |
 | [Local tool readiness receipt](tool-readiness.md) | `docs/tool-readiness.md` |
 | [Ubuntu candidate evidence coverage index](ubuntu-candidate-coverage.md) | `docs/ubuntu-candidate-coverage.md` |
