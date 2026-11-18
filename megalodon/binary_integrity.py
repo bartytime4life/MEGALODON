@@ -102,6 +102,13 @@ class _Paths:
         joined = path if self.root == '/' else os.path.join(self.root, path.lstrip('/'))
         return os.path.realpath(joined)
 
+    def placed(self, path):
+        """Where a listed file lives: its folder resolved (merged /usr), its own name kept, so
+        a file replaced by a link is still checked at its listed place."""
+        joined = path if self.root == '/' else os.path.join(self.root, path.lstrip('/'))
+        folder, name = os.path.split(joined)
+        return os.path.join(os.path.realpath(folder), name)
+
     def shown(self, real):
         return real if self.root == '/' else '/' + os.path.relpath(real, self.root)
 
@@ -195,7 +202,7 @@ def _package_files(paths, installed, all_libraries, gaps):
             target = original
             if original in diversions and diversions[original][1] not in (owner, package):
                 target = diversions[original][0]  # Another package diverted this file away.
-            real = paths.real(target)
+            real = paths.placed(target)
             try:
                 mode = os.lstat(real).st_mode
             except FileNotFoundError:
@@ -205,6 +212,20 @@ def _package_files(paths, installed, all_libraries, gaps):
                     entry['md5'].add(digest.lower())
                 continue
             except OSError:
+                continue
+            if stat.S_ISLNK(mode):
+                # dpkg lists only regular files here: a link in a listed file's place replaced it.
+                try:
+                    pointed = os.readlink(real)
+                    resolved = os.stat(real)
+                    runnable = stat.S_ISREG(resolved.st_mode) and resolved.st_mode & 0o111
+                except OSError:
+                    pointed, runnable = '?', False
+                if _missing_matters(paths.shown(real)) or runnable or _wanted(
+                        real, paths.shown(real), stat.S_IFREG | (0o755 if runnable else 0o644), all_libraries):
+                    entry = expected.setdefault(real, dict(md5=set(), package=label, missing=False))
+                    entry.update(link=pointed)
+                    entry['md5'].add(digest.lower())
                 continue
             if not _wanted(real, paths.shown(real), mode, all_libraries):
                 continue
@@ -324,6 +345,10 @@ def snapshot(*, root='/', all_libraries=False, owner_uid=0):
         record = expected.get(real)
         if record and record['missing']:
             findings.append(_finding('PACKAGE_FILE_MISSING', shown, dict(package=record['package'])))
+            continue
+        if record and 'link' in record:
+            findings.append(_finding('PACKAGE_MISMATCH', shown,
+                                     dict(package=record['package'], replaced_by_link=record['link'])))
             continue
         result = _hash(real, budget)
         if result is None:

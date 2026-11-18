@@ -81,6 +81,10 @@ version each program came from.
   `libcrypt`, `libnss_*`, `libaudit`, `libselinux`, `libsystemd`, `libssl`,
   `libcrypto`, `liblzma`, Kerberos and GSSAPI libraries, and every packaged
   library with `--all-libraries`.
+* **Links.** A packaged program is checked at the path its package lists.
+  dpkg installs it as a regular file, so if it has been replaced by a link,
+  even one to a file outside the system folders, that is `PACKAGE_MISMATCH`,
+  with the link's target in the finding.
 * **dpkg diversions** are followed: a file another package diverted away is
   checked at its new name. A packaged file that is missing is reported only
   for programs and critical libraries, since container images often strip
