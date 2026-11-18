@@ -40,7 +40,9 @@ MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_PROCESSES = 65536
 MAX_FD_LINKS = 1_000_000
 MAX_PROGRAMS = 8
-MAX_ADDRESSES = 16
+MAX_ADDRESSES = 64
+# Baselines written before addresses_complete existed kept at most this many addresses.
+_LEGACY_MAX_ADDRESSES = 16
 RANK = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2, 'CRITICAL': 3}
 SCOPES = ('loopback', 'specific', 'all')  # Increasing reach.
 # Relays that turn a port into a shell or a tunnel.
@@ -205,6 +207,7 @@ def snapshot(*, root='/'):
         listeners[key] = dict(
             protocol=item['protocol'], port=item['port'], scope=_scope(item['addresses']),
             addresses=sorted(_shown(a, item['port']) for a in item['addresses'])[:MAX_ADDRESSES],
+            addresses_complete=len(item['addresses']) <= MAX_ADDRESSES,
             programs=[item['programs'][p] for p in sorted(item['programs'])][:MAX_PROGRAMS],
             owners_known=not item['unknown'])
     if not owner_gaps:
@@ -341,7 +344,10 @@ def compare(old, new):
         if before.get('owners_known') and after.get('owners_known') and old_paths != new_paths:
             findings.append(_finding('LISTENER_PROGRAM_CHANGED', key, after, 'HIGH' if strong else 'MEDIUM',
                                      dict(previous_programs=sorted(old_paths), reasons=reasons)))
-        added = _newly_reachable(before['addresses'], after['addresses'])
+        # A truncated earlier list is not a complete record of earlier reach: an address
+        # that only moved into the retained part is not proven new.
+        complete = before.get('addresses_complete', len(before['addresses']) < _LEGACY_MAX_ADDRESSES)
+        added = _newly_reachable(before['addresses'], after['addresses']) if complete else []
         if SCOPES.index(after['scope']) > SCOPES.index(before['scope']) or added:
             findings.append(_finding('LISTENER_EXPOSED', key, after, 'HIGH' if strong else 'MEDIUM',
                                      dict(previous_scope=before['scope'], previous_addresses=before['addresses'],
