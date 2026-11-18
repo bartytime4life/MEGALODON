@@ -97,6 +97,9 @@ class BufferedRecording:
                 raise
             self.service.detector = self.staged
             self.service.threat_detector = self.staged_threat
+            if self.service.alerts is not None:
+                # The batch is durable now; forward its findings off-machine.
+                self.service.alerts.submit([d for _, detections, _ in self.pending for d in detections])
             self.committed += count
             self.commits += 1
             self.pending.clear()

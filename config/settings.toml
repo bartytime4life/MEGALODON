@@ -57,6 +57,20 @@ dns_churn_distinct_subdomains = 30
 # fingerprint or name that triggers a finding is kept.
 tls_fingerprints = false
 
+# Off-machine alerts (docs/off-machine-alerts.md). OFF by default. Saved
+# findings at or above min_severity go to each destination from background
+# threads; webhook URLs live in owner-private files (mode 600), never here.
+# [alerts]
+# enabled = true
+# min_severity = "HIGH"
+# detail = "standard"
+#
+# [[alerts.destination]]
+# name = "phone"
+# kind = "webhook"
+# format = "ntfy"
+# url_file = "~/.config/megalodon/alerts/ntfy.url"
+
 [blocking]
 # Keep this false; this evaluation-release candidate produces firewall plans only.
 enabled = false

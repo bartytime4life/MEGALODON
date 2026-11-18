@@ -191,6 +191,12 @@ def build_parser() -> argparse.ArgumentParser:
     yara_check.add_argument("--dir", type=Path,
                             help="rules folder (default ~/.config/megalodon/yara-rules)")
     yara_sub.add_parser("install", help="download and verify the pinned YARA runtime (non-root Linux)")
+    alerts = sub.add_parser("alerts", help="off-machine alerts: webhooks (JSON, Slack, Discord, ntfy) and syslog")
+    alerts_sub = alerts.add_subparsers(dest="alerts_command", required=True)
+    alerts_test = alerts_sub.add_parser(
+        "test", help="send one labeled test alert to every configured destination (exit 1 if any fails)")
+    alerts_test.add_argument("--config", type=Path,
+                             help="settings file (default ~/.config/megalodon/settings.toml)")
 
     auth = sub.add_parser(
         "auth-review",
@@ -1003,6 +1009,24 @@ def _yara(args: argparse.Namespace) -> int:
     return 0 if result["compile"] in ("completed", "not_configured") or result["runtime"] != "ready" else 1
 
 
+def _alerts(args: argparse.Namespace) -> int:
+    from .alerts import test_destinations
+    from .validation import ValidationError
+
+    path = args.config or Path.home() / ".config/megalodon/settings.toml"
+    try:
+        settings = load_settings(path)
+    except (ValidationError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    if not settings.alerts.destinations:
+        print("megalodon: no [[alerts.destination]] is configured in " + str(path), file=sys.stderr)
+        return 2
+    results = test_destinations(settings.alerts)
+    print(json.dumps(dict(enabled=settings.alerts.enabled, destinations=results), indent=2, sort_keys=True))
+    return 0 if all(item["ok"] for item in results.values()) else 1
+
+
 def _auth_review(args: argparse.Namespace) -> int:
     from datetime import timezone
 
@@ -1624,6 +1648,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _auth_review(args)
     elif args.command == "yara":
         code = _yara(args)
+    elif args.command == "alerts":
+        code = _alerts(args)
     elif args.command == "detectors":
         code = _detectors()
     elif args.command == "watchlist":

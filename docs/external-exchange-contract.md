@@ -1,6 +1,6 @@
 # Threat context and SIEM/SOAR exchange contract
 
-Status: **offline STIX reader implemented; SIEM projection and bounded local writer implemented; SOAR handoff remains contract-only; no network client, notifier, scheduler, or executor.**
+Status: **offline STIX reader implemented; SIEM projection and bounded local writer implemented; SOAR handoff remains contract-only; no network client, notifier, scheduler, or executor for these exchanges.** The separate, opt-in best-effort finding notifier is described in [off-machine alerts](off-machine-alerts.md); it changes none of these contracts.
 
 ## Decision
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import ipaddress
 import tomllib
 
+from .alerts import AlertConfigError, AlertSettings, parse_settings as _alert_settings
 from .threat_detector import ThreatDetectionSettings
 from .validation import ValidationError, parse_network, safe_text
 
@@ -86,6 +87,7 @@ class Settings:
     dashboard: DashboardSettings = field(default_factory=DashboardSettings)
     ai: AISettings = field(default_factory=AISettings)
     threat: ThreatDetectionSettings = field(default_factory=ThreatDetectionSettings)
+    alerts: AlertSettings = field(default_factory=AlertSettings)
 
 
 def _threat_settings(raw: dict[str, object]) -> ThreatDetectionSettings:
@@ -348,4 +350,12 @@ def _settings_from_mapping(raw: dict[str, object]) -> Settings:
             keep_warm=_boolean(ai.get("keep_warm", False), "ai.keep_warm"),
         ),
         threat=_threat_settings(_table(raw.get("threat_detection", {}), "threat_detection")),
+        alerts=_alerts(raw.get("alerts", {})),
     )
+
+
+def _alerts(raw: object) -> AlertSettings:
+    try:
+        return _alert_settings(raw)
+    except AlertConfigError as exc:
+        raise ValidationError(str(exc)) from None
