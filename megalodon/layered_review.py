@@ -21,6 +21,7 @@ FAMILIES = {
     'BRUTE_FORCE': 'credential_access', 'HOST_SWEEP': 'discovery',
     'DATA_EXFILTRATION': 'traffic_volume', 'IOC_MATCH': 'threat_intelligence',
     'DECOY_TOUCH': 'discovery', 'DGA_DOMAIN': 'dns', 'DNS_TUNNEL_CHURN': 'dns',
+    'TLS_WITHOUT_SNI': 'command_and_control',
     'NEW_DESTINATION_PORT': 'baseline_change',
     'PROTOCOL_SHIFT': 'baseline_change', 'SERVICE_SHIFT': 'baseline_change',
 }

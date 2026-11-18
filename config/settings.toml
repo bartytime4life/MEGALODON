@@ -52,6 +52,10 @@ decoy_addresses = []
 dns_names = false
 dns_churn_window_seconds = 60
 dns_churn_distinct_subdomains = 30
+# TLS client fingerprinting (JA3/JA4 and server name). OFF by default: server
+# names are a record of sites visited. When on, they stay in memory; only a
+# fingerprint or name that triggers a finding is kept.
+tls_fingerprints = false
 
 [blocking]
 # Keep this false; this evaluation-release candidate produces firewall plans only.

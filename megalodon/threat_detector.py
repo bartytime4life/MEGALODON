@@ -156,6 +156,9 @@ class ThreatDetectionSettings:
     dns_names: bool = False
     dns_churn_window_seconds: int = 60
     dns_churn_distinct_subdomains: int = 30
+    # Opt-in: read TLS ClientHello JA3/JA4 fingerprints and server names (SNI)
+    # from capture. Off by default: server names are a record of sites visited.
+    tls_fingerprints: bool = False
 
     def __post_init__(self) -> None:
         self._validate_decoys()
@@ -195,6 +198,8 @@ class ThreatDetectionSettings:
             raise ValueError("threat_detection.enabled must be a boolean")
         if not isinstance(self.dns_names, bool):
             raise ValueError("threat_detection.dns_names must be a boolean")
+        if not isinstance(self.tls_fingerprints, bool):
+            raise ValueError("threat_detection.tls_fingerprints must be a boolean")
         if not isinstance(self.watchlist_path, str) or len(self.watchlist_path) > 1024:
             raise ValueError("threat_detection.watchlist_path must be text")
 
@@ -371,6 +376,9 @@ class ThreatDetector:
                          self._exfiltration, self._beaconing]
                 if self.settings.dns_names and event.dns_query_name:
                     rules += [self._domain_ioc, self._generated_domain, self._dns_churn]
+                if self.settings.tls_fingerprints and event.is_client_hello:
+                    rules += [self._tls_ioc, self._sni_ioc, self._sni_generated,
+                              self._tls_without_sni]
                 for rule in rules:
                     found = rule(event, src, dst, now, journal, touched)
                     if found is not None:
@@ -610,9 +618,16 @@ class ThreatDetector:
 
     # ------------------------------------------------------------ DNS names
     def _domain_ioc(self, event, src, dst, now, journal, touched):
+        return self._named_ioc(event, event.dns_query_name, "dns_query", src, now, journal, touched)
+
+    def _sni_ioc(self, event, src, dst, now, journal, touched):
+        if event.tls_sni is None:
+            return None
+        return self._named_ioc(event, event.tls_sni, "tls_sni", src, now, journal, touched)
+
+    def _named_ioc(self, event, name, via, src, now, journal, touched):
         if self.watchlist is None or not self.watchlist.has_domains:
             return None
-        name = event.dns_query_name
         hit = self.watchlist.match_domain(name)
         if hit is None:
             return None
@@ -622,19 +637,28 @@ class ThreatDetector:
         if not self._can_emit(key, now, journal):
             return None
         evidence: dict[str, Any] = {
-            "matches": 1, "matched_domain": name, "matched_direction": "dns_query",
+            "matches": 1, "matched_domain": name, "matched_direction": via,
             "indicator": indicator,
         }
         if label:
             evidence["indicator_label"] = label
+        verb = "looked up" if via == "dns_query" else "opened a TLS session to"
         return self._result(
             event, "IOC_MATCH", src,
-            f"{src} looked up {name}, which matches watchlist domain {indicator}",
+            f"{src} {verb} {name}, which matches watchlist domain {indicator}",
             evidence, severity=self.watchlist.severity,
         )
 
     def _generated_domain(self, event, src, dst, now, journal, touched):
-        review = domain_signals.assess(event.dns_query_name)
+        return self._generated_name(event, event.dns_query_name, "dns_query", src, now, journal, touched)
+
+    def _sni_generated(self, event, src, dst, now, journal, touched):
+        if event.tls_sni is None:
+            return None
+        return self._generated_name(event, event.tls_sni, "tls_sni", src, now, journal, touched)
+
+    def _generated_name(self, event, name, via, src, now, journal, touched):
+        review = domain_signals.assess(name)
         if review is None or review["level"] != "review":
             return None
         parent = registrable_domain(review["name"])
@@ -643,14 +667,63 @@ class ThreatDetector:
         if not self._can_emit(key, now, journal):
             return None
         signals = [item["id"] for item in review["signals"]]
+        verb = "looked up" if via == "dns_query" else "opened a TLS session to"
         return self._result(
             event, "DGA_DOMAIN", src,
-            f"{src} looked up {review['name']}, which reads like a machine-generated or "
+            f"{src} {verb} {review['name']}, which reads like a machine-generated or "
             f"encoded name ({', '.join(signals)})",
             {
                 "signals": len(signals), "threshold": 2, "domain": review["name"],
-                "registrable_domain": parent, "signal_ids": signals,
+                "registrable_domain": parent, "signal_ids": signals, "name_source": via,
             },
+        )
+
+    # ------------------------------------------------------ TLS fingerprints
+    def _tls_ioc(self, event, src, dst, now, journal, touched):
+        if self.watchlist is None or not self.watchlist.has_fingerprints:
+            return None
+        for kind, value in (("ja3", event.tls_ja3), ("ja4", event.tls_ja4)):
+            hit = self.watchlist.match_fingerprint(kind, value)
+            if hit is None:
+                continue
+            indicator, label = hit
+            key = ("IOC_MATCH", ("tls", src, indicator))
+            touched.append(key)
+            if not self._can_emit(key, now, journal):
+                continue
+            evidence: dict[str, Any] = {
+                "matches": 1, "matched_direction": "tls_client", "indicator": indicator,
+                "fingerprint_kind": kind, "server": dst,
+            }
+            if event.tls_sni:
+                evidence["server_name"] = event.tls_sni
+            if label:
+                evidence["indicator_label"] = label
+            return self._result(
+                event, "IOC_MATCH", src,
+                f"{src} opened TLS to {dst} with client fingerprint {indicator}, which is on the watchlist",
+                evidence, severity=self.watchlist.severity,
+            )
+        return None
+
+    def _tls_without_sni(self, event, src, dst, now, journal, touched):
+        if event.tls_sni is not None or not is_internal(src) or not is_public(dst):
+            return None
+        key = ("TLS_WITHOUT_SNI", (src, dst))
+        touched.append(key)
+        if not self._can_emit(key, now, journal):
+            return None
+        evidence: dict[str, Any] = {"handshakes": 1, "server": dst,
+                                    "service_port": event.dst_port or 0}
+        if event.tls_ja3:
+            evidence["ja3"] = event.tls_ja3
+        if event.tls_ja4:
+            evidence["ja4"] = event.tls_ja4
+        return self._result(
+            event, "TLS_WITHOUT_SNI", dst,
+            f"{src} opened TLS directly to public address {dst}:{event.dst_port} without a "
+            "server name, as many command-and-control clients do",
+            evidence,
         )
 
     def _dns_churn(self, event, src, dst, now, journal, touched):

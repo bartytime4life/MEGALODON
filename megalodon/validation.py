@@ -245,6 +245,23 @@ def parse_dns_name(value: Any) -> str:
     return name
 
 
+_JA3 = re.compile(r"[0-9a-f]{32}")
+# JA4: protocol, TLS version, SNI flag, cipher and extension counts, ALPN, two hashes.
+_JA4 = re.compile(r"[tqd][0-9a-z]{2}[di][0-9]{4}[0-9a-z]{2}_[0-9a-f]{12}_[0-9a-f]{12}")
+
+
+def parse_ja3(value: Any) -> str:
+    if not isinstance(value, str) or _JA3.fullmatch(value.strip().lower()) is None:
+        raise ValidationError("tls_ja3 must be a 32-character hexadecimal MD5")
+    return value.strip().lower()
+
+
+def parse_ja4(value: Any) -> str:
+    if not isinstance(value, str) or _JA4.fullmatch(value.strip().lower()) is None:
+        raise ValidationError("tls_ja4 is not a valid JA4 fingerprint")
+    return value.strip().lower()
+
+
 def is_global_unicast(value: str) -> bool:
     address = ipaddress.ip_address(value)
     return address.is_global and not address.is_multicast
