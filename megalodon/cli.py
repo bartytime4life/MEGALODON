@@ -202,6 +202,13 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--config", type=Path,
                              help="settings file (default ~/.config/megalodon/settings.toml)")
 
+    drill = sub.add_parser(
+        "drill", help="self-test every detection layer end to end in throwaway places (exit 1 if one failed)")
+    drill.add_argument("--alerts", action="store_true",
+                       help="also send one labeled test notice to each configured alert destination")
+    drill.add_argument("--config", type=Path,
+                       help="settings file for --alerts (default ~/.config/megalodon/settings.toml)")
+
     persist = sub.add_parser(
         "persistence", help="baseline and check where attackers hide to survive reboots (exit 1 on changes)")
     persist_sub = persist.add_subparsers(dest="persistence_command", required=True)
@@ -1070,6 +1077,25 @@ def _feeds(args: argparse.Namespace) -> int:
     return 1 if any(item["status"] == "failed" for item in result["sources"].values()) else 0
 
 
+def _drill(args: argparse.Namespace) -> int:
+    from . import drill
+    from .validation import ValidationError
+
+    alert_settings = None
+    if args.alerts:
+        try:
+            alert_settings = load_settings(args.config or Path.home() / ".config/megalodon/settings.toml").alerts
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+    report = drill.run(alert_settings=alert_settings)
+    for check in report["checks"]:
+        missing = f" (missing: {', '.join(check['missing'])})" if check["missing"] and check["status"] == "failed" else ""
+        print(f"{check['status'].upper():8} {check['name']:12} {check['detail']}{missing}", file=sys.stderr)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 1 if report["failed"] else 0
+
+
 def _persistence(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -1809,6 +1835,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _ransomware(args)
     elif args.command == "persistence":
         code = _persistence(args)
+    elif args.command == "drill":
+        code = _drill(args)
     elif args.command == "feeds":
         code = _feeds(args)
     elif args.command == "detectors":
