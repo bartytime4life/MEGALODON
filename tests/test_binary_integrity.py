@@ -207,3 +207,19 @@ def test_cli_exit_codes(system, tmp_path, monkeypatch, capsys):
     manifest = str(tmp_path / "binaries.json")
     assert code("binaries", "check", "--manifest", manifest) == 2
     assert code("binaries", "baseline", "--manifest", manifest) == 1, "baseline reports what is already wrong"
+
+
+def test_a_packaged_program_replaced_by_a_link_is_still_checked(system, tmp_path):
+    manifest = tmp_path / "binaries.json"
+    bi.baseline(manifest, **system.options())
+    payload = system.program("/tmp/.x/ls", b"\x7fELF replacement")
+    os.unlink(system.root / "usr/bin/ls")
+    os.symlink(payload, system.root / "usr/bin/ls")
+    for report in (bi.verify(**system.options()), bi.check(manifest, **system.options())):
+        found = [f for f in report["findings"] if f["path"] == "/usr/bin/ls"]
+        assert [(f["rule_id"], f["severity"]) for f in found] == [("PACKAGE_MISMATCH", "CRITICAL")]
+        assert found[0]["detail"]["replaced_by_link"] == str(payload)
+    # A relative link to another system program is a replacement too.
+    os.unlink(system.root / "usr/bin/ls")
+    os.symlink("cat", system.root / "usr/bin/ls")
+    assert ("PACKAGE_MISMATCH", "/usr/bin/ls", "CRITICAL") in rules(bi.verify(**system.options()))
