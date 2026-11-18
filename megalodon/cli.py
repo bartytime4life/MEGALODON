@@ -202,6 +202,21 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--config", type=Path,
                              help="settings file (default ~/.config/megalodon/settings.toml)")
 
+    ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
+    ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
+    ransom_watch = ransom_sub.add_parser(
+        "watch", help="watch folders until stopped; print each finding as JSON and send it to configured alerts")
+    ransom_watch.add_argument("--dir", type=Path, action="append", required=True,
+                              help="folder to watch, recursively (repeat for more)")
+    ransom_watch.add_argument("--min-files", type=_bounded_cli_integer("min-files", 2, 10000), default=10,
+                              help="encrypted files within the window that raise the alarm (default 10)")
+    ransom_watch.add_argument("--window", type=_bounded_cli_integer("window", 5, 3600), default=60,
+                              help="seconds (default 60)")
+    ransom_watch.add_argument("--config", type=Path,
+                              help="settings file whose [alerts] receive findings "
+                                   "(default ~/.config/megalodon/settings.toml when present)")
+    ransom_sub.add_parser("selftest", help="encrypt throwaway files in a temporary folder and confirm the alarm")
+
     alerts = sub.add_parser("alerts", help="off-machine alerts: webhooks (JSON, Slack, Discord, ntfy) and syslog")
     alerts_sub = alerts.add_subparsers(dest="alerts_command", required=True)
     alerts_test = alerts_sub.add_parser(
@@ -1039,6 +1054,62 @@ def _feeds(args: argparse.Namespace) -> int:
     return 1 if any(item["status"] == "failed" for item in result["sources"].values()) else 0
 
 
+def _ransomware(args: argparse.Namespace) -> int:
+    from threading import Event
+    import tempfile
+
+    from . import ransomware_watch as watch
+    from .alerts import HostNotice, dispatcher_for
+    from .validation import ValidationError
+
+    if args.ransomware_command == "selftest":
+        with tempfile.TemporaryDirectory(prefix="megalodon-ransomware-selftest-") as base:
+            try:
+                found = watch.selftest(os.path.join(base, "files"))
+            except watch.WatchError as exc:
+                print(f"megalodon: {exc}", file=sys.stderr)
+                return 2
+        rules = sorted({item.rule_id for item in found})
+        ok = {"RANSOMWARE_ENCRYPTION", "RANSOM_NOTE"} <= set(rules)
+        print(json.dumps(dict(schema="megalodon-ransomware-selftest-v1", detected=rules, ok=ok), indent=2))
+        return 0 if ok else 1
+    path = args.config or Path.home() / ".config/megalodon/settings.toml"
+    dispatcher = None
+    try:
+        if args.config or path.exists():
+            dispatcher = dispatcher_for(load_settings(path).alerts)
+        detector = watch.RansomwareDetector(min_files=args.min_files, window_seconds=args.window)
+        roots = [str(item) for item in args.dir]
+        seeded = 0
+        for root in roots:
+            seeded += detector.seed([root])
+        watcher = watch.Watcher(roots, detector, lambda finding: None)
+    except (ValidationError, watch.WatchError, OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+
+    def emit(finding):
+        print(json.dumps(finding.to_dict(), sort_keys=True), flush=True)
+        if dispatcher is not None:
+            dispatcher.submit([HostNotice(finding.rule_id, finding.severity, finding.detected_at,
+                                          finding.message, watch.ATTACK,
+                                          "Files are being rewritten as encrypted data, as ransomware does.")])
+    watcher.emit = emit
+    print(f"megalodon: watching {watcher.watched} folders ({seeded} files recorded)"
+          + ("; folder limit reached, some subfolders are not watched" if watcher.truncated else "")
+          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else "; no alerts configured"),
+          file=sys.stderr, flush=True)
+    stop = Event()
+    try:
+        watcher.run(stop)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        watcher.close()
+    return 0
+
+
 def _alerts(args: argparse.Namespace) -> int:
     from .alerts import test_destinations
     from .validation import ValidationError
@@ -1680,6 +1751,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _yara(args)
     elif args.command == "alerts":
         code = _alerts(args)
+    elif args.command == "ransomware":
+        code = _ransomware(args)
     elif args.command == "feeds":
         code = _feeds(args)
     elif args.command == "detectors":
