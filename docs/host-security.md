@@ -490,6 +490,20 @@ review, each with a fixed ATT&CK technique:
 | `EXECUTABLE_DELETED` | T1070.004 | The program file was deleted or replaced after it started; updates also do this |
 | `EXECUTABLE_IN_MEMORY` | T1620 | The program runs from an anonymous `memfd:` file with no path on disk |
 | `EXECUTABLE_IN_TEMPORARY` | T1105 | The program runs from `/tmp`, `/var/tmp` or `/dev/shm`; installers and developer tools also do |
+| `STDIO_SHELL_ON_NETWORK` | T1059 | **Possible reverse shell:** a shell or script interpreter's stdin, stdout or stderr *is* a remote connection, as in `bash -i >& /dev/tcp/…`, `nc -e /bin/sh` or a Python `dup2` + `pty.spawn`; socket-activated services can look alike |
+| `PIPED_TO_SHELL` | T1059.004 | A program holding a remote connection shares a pipe with a shell's input or output, as in a `mkfifo` relay (`cat f \| sh -i \| nc host port > f`) or `curl … \| sh`; installers piped into a shell also do this |
+| `SHELL_HOLDS_SOCKET` | T1059.004 | A Unix shell itself holds a remote connection on another descriptor (`exec 3<>/dev/tcp/…`) |
+| `STDIO_ON_NETWORK` | T1071 | Any other program whose standard input or output is a remote connection rather than a terminal, file or pipe |
+
+The reverse-shell flags read only which descriptors (0, 1 and 2, and pipes)
+point at which sockets and pipes. Shells and interpreters are recognized by the
+executable's file name, or the process name when the file is unavailable, from
+a fixed list (`sh`, `bash`, `dash`, `zsh`, `ksh`, `fish`, `busybox`, …;
+`python`, `perl`, `ruby`, `php`, `node`, …). The command line is never read.
+Loopback connections stay out of scope, as for every row. Relays through
+`socketpair` (for example `socat EXEC:`) or a pseudo-terminal can hide the
+link between the shell and the connection, and other accounts' and root's
+processes are invisible without privilege.
 
 At most 16 programs are listed, flagged ones first; `programs_total` and
 `flagged_total` count all. Each socket table is read without following a final

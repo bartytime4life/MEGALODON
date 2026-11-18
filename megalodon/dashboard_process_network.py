@@ -58,7 +58,7 @@ function renderProcessNetwork(panel, payload) {
   if(!validProcessNetwork(payload)){
     panel.replaceChildren(node('p','Programs on the network could not be read on this PC.'));return;
   }
-  const rules=__RULES__,labels={EXECUTABLE_DELETED:'Program file deleted',EXECUTABLE_IN_MEMORY:'Program runs from memory',EXECUTABLE_IN_TEMPORARY:'Program in a temporary folder'};
+  const rules=__RULES__,labels={EXECUTABLE_DELETED:'Program file deleted',EXECUTABLE_IN_MEMORY:'Program runs from memory',EXECUTABLE_IN_TEMPORARY:'Program in a temporary folder',STDIO_SHELL_ON_NETWORK:'Possible reverse shell: shell input/output on the network',PIPED_TO_SHELL:'Network connection piped into a shell',SHELL_HOLDS_SOCKET:'Shell holds a network connection',STDIO_ON_NETWORK:'Program input/output on the network'};
   const children=[node('p',`${payload.programs_total} programs hold network sockets · ${payload.flagged_total} need review · ${payload.processes_reviewed} of this account's processes reviewed · checked ${time(payload.reviewed_at)}`)];
   if(!payload.programs.length)children.push(node('p','No program of this account holds a non-loopback network socket.'));
   for(const r of payload.programs){
