@@ -36,7 +36,7 @@ function validProcessNetwork(p) {
     &&count(r.established)&&count(r.listening)&&count(r.other)&&r.established+r.listening+r.other>0
     &&Array.isArray(r.remotes)&&r.remotes.length<=__REMOTES__&&r.remotes.every(endpoint)&&new Set(r.remotes).size===r.remotes.length
     &&count(r.remotes_total)&&r.remotes_total>=r.remotes.length
-    &&Array.isArray(r.flags)&&r.flags.length<=2&&r.flags.every(f=>Object.hasOwn(rules,f))&&new Set(r.flags).size===r.flags.length;
+    &&Array.isArray(r.flags)&&r.flags.length<=Object.keys(rules).length&&r.flags.every(f=>Object.hasOwn(rules,f))&&new Set(r.flags).size===r.flags.length;
   return keys(p,['schema','reviewed_at','programs','programs_total','flagged_total','processes_reviewed','tables_complete','scan_complete','gaps','action_status','action_authority'])
     &&p.schema===__SCHEMA__&&p.action_authority==='none'&&p.action_status==='not_attempted'&&stamp(p.reviewed_at)
     &&Array.isArray(p.programs)&&p.programs.length<=__PROGRAMS__&&p.programs.every(program)
@@ -58,7 +58,7 @@ function renderProcessNetwork(panel, payload) {
   if(!validProcessNetwork(payload)){
     panel.replaceChildren(node('p','Programs on the network could not be read on this PC.'));return;
   }
-  const rules=__RULES__,labels={EXECUTABLE_DELETED:'Program file deleted',EXECUTABLE_IN_MEMORY:'Program runs from memory',EXECUTABLE_IN_TEMPORARY:'Program in a temporary folder'};
+  const rules=__RULES__,labels={EXECUTABLE_DELETED:'Program file deleted',EXECUTABLE_IN_MEMORY:'Program runs from memory',EXECUTABLE_IN_TEMPORARY:'Program in a temporary folder',STDIO_SHELL_ON_NETWORK:'Possible reverse shell: shell input/output on the network',PIPED_TO_SHELL:'Network connection piped into a shell',SHELL_HOLDS_SOCKET:'Shell holds a network connection',STDIO_ON_NETWORK:'Program input/output on the network'};
   const children=[node('p',`${payload.programs_total} programs hold network sockets · ${payload.flagged_total} need review · ${payload.processes_reviewed} of this account's processes reviewed · checked ${time(payload.reviewed_at)}`)];
   if(!payload.programs.length)children.push(node('p','No program of this account holds a non-loopback network socket.'));
   for(const r of payload.programs){

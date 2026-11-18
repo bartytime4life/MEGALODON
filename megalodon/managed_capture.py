@@ -45,8 +45,16 @@ def now():
     return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
+# The metadata-only default keeps 256 bytes of each packet. Opt-in name and
+# fingerprint fields need the whole packet: a ClientHello is usually 500+ bytes
+# and a long DNS query can exceed 256, and a cut packet yields no field at all.
+# Bytes go only through the pipe to TShark; they are never written to disk.
+SNAPLEN, ENRICHED_SNAPLEN = 256, 65535
+
+
 def capture_commands(interface, dns_names=False, tls=()):
-    capture = ['/usr/bin/dumpcap', '-i', interface, '-p', '-s', '256', '-q',
+    snaplen = ENRICHED_SNAPLEN if dns_names or tls else SNAPLEN
+    capture = ['/usr/bin/dumpcap', '-i', interface, '-p', '-s', str(snaplen), '-q',
                '-a', f'duration:{MAX_SECONDS}', '-c', str(MAX_PACKETS), '-P', '-w', '-']
     decode = ['/usr/bin/tshark', '-n', '-l', '-r', '-', '-T', 'fields',
               '-E', 'header=n', '-E', 'separator=/t', '-E', 'quote=n',

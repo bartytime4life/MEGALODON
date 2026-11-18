@@ -60,7 +60,33 @@ RULES = {
     'EXECUTABLE_IN_MEMORY': ('T1620', 'The program runs from an anonymous in-memory file with no path on disk.'),
     'EXECUTABLE_IN_TEMPORARY': ('T1105', 'The program runs from a temporary directory, where downloaded tools are often '
                                          'placed. Installers and developer tools also run there.'),
+    # Reverse-shell shapes, read from which descriptors hold which sockets and pipes.
+    'STDIO_SHELL_ON_NETWORK': ('T1059', 'A shell or script interpreter reads its input from, or writes its output to, a '
+                                        'remote network connection. This is how reverse shells such as bash -i >& '
+                                        '/dev/tcp/..., nc -e /bin/sh and Python pty spawns work. Socket-activated '
+                                        'services can also look like this.'),
+    'PIPED_TO_SHELL': ('T1059.004', 'A program holding a remote network connection shares a pipe with a shell\'s input or '
+                                    'output, as in mkfifo relays (cat f | sh -i | nc host port > f) or running a '
+                                    'downloaded script (curl ... | sh). Installers piped into a shell also do this.'),
+    'SHELL_HOLDS_SOCKET': ('T1059.004', 'A Unix shell itself holds a remote network connection, for example through '
+                                        'bash\'s /dev/tcp redirection. Interactive shells rarely do this.'),
+    'STDIO_ON_NETWORK': ('T1071', 'The program\'s standard input or output is a remote network connection rather than a '
+                                  'terminal, file or pipe. Socket-activated services and some relays work this way.'),
 }
+# Identified by executable path (or process name when the path is unavailable), never by command line.
+SHELLS = frozenset({'sh', 'bash', 'rbash', 'dash', 'zsh', 'ksh', 'mksh', 'pdksh', 'fish', 'ash', 'busybox',
+                    'tcsh', 'csh', 'yash'})
+_INTERPRETER = re.compile(r'(?:python|perl|ruby|php|lua|tclsh|pwsh)[0-9.]*|node|nodejs|deno|bun|powershell')
+
+
+def _program_kind(path, comm):
+    """'shell', 'interpreter' or None, from the executable's file name or the process name."""
+    for name in (path.rsplit('/', 1)[-1], comm):
+        if name in SHELLS:
+            return 'shell'
+        if _INTERPRETER.fullmatch(name):
+            return 'interpreter'
+    return None
 # /proc/net prints each network-order address word as a host-order number.
 _HEX = re.compile(r'[0-9A-Fa-f]+')
 _BYTE_ORDER = sys.byteorder
@@ -318,6 +344,8 @@ def review(root='/', *, uid=None, now=_now):
         stopped = True
     # First pass: each process's socket inodes, loading each namespace's tables once.
     candidates = []
+    # Processes whose standard input or output is a pipe, to find shells fed by networked programs.
+    stdio_owners = []
     for pid in pids:
         if seen >= MAX_PROCESSES or links >= MAX_FD_LINKS:
             stopped = True
@@ -337,7 +365,7 @@ def review(root='/', *, uid=None, now=_now):
                 unread_namespaces.add(namespace)
             else:
                 tables[namespace] = sockets(root, f'proc/{pid}/net')
-        inodes = []
+        inodes, stdio_sockets, stdio_pipes, pipes = [], set(), set(), set()
         with fds:
             # Iterate rather than list, so a process with very many descriptors stays within the bound.
             for fd in fds:
@@ -349,16 +377,41 @@ def review(root='/', *, uid=None, now=_now):
                     target = os.readlink(fd.path)
                 except OSError:
                     continue
-                if target.startswith('socket:[') and target.endswith(']') and target[8:-1].isdigit():
-                    inodes.append(int(target[8:-1]))
+                stdio = fd.name in ('0', '1', '2')
+                for prefix, found in (('socket:[', inodes), ('pipe:[', None)):
+                    if target.startswith(prefix) and target.endswith(']') and target[len(prefix):-1].isdigit():
+                        number = int(target[len(prefix):-1])
+                        if found is not None:
+                            found.append(number)
+                            if stdio:
+                                stdio_sockets.add(number)
+                        else:
+                            pipes.add(number)
+                            if stdio:
+                                stdio_pipes.add(number)
+        if stdio_pipes:
+            stdio_owners.append((proc, stdio_pipes))
         if inodes:
-            candidates.append((proc, inodes))
+            candidates.append((proc, inodes, stdio_sockets, pipes))
     # Socket inodes are unique across namespaces, and a process can hold a socket from a namespace
     # it is not a member of (socket activation into PrivateNetwork=), so match against every table.
     known = {}
     for table, _ in tables.values():
         known.update(table)
-    for proc, inodes in candidates:
+    # Pipes on a shell's standard input or output, keyed by pipe inode.
+    shell_pipes = {}
+    networked_pipes = set().union(*(pipes for _, _, _, pipes in candidates)) if candidates else set()
+    for proc, stdio_pipes in stdio_owners:
+        if not stdio_pipes & networked_pipes:
+            continue
+        try:
+            path = os.readlink(proc/'exe').removesuffix(' (deleted)')
+        except OSError:
+            path = ''
+        if _program_kind(path, _comm(proc/'comm')) == 'shell':
+            for pipe in stdio_pipes:
+                shell_pipes.setdefault(pipe, set()).add(proc.name)
+    for proc, inodes, stdio_sockets, pipes in candidates:
         held = [(inode, known[inode]) for inode in inodes if inode in known]
         if not held:
             continue
@@ -400,6 +453,20 @@ def review(root='/', *, uid=None, now=_now):
                                         parent=_comm(base/str(parent)/'comm') if parent else '?',
                                         processes=0, established=0, listening=0, other=0, remotes=[], remotes_total=0,
                                         flags=flags, _remotes=set(), _inodes=set(), _procs=[], _identity=identity)
+        # Per-process reverse-shell shapes; a row carries a flag when any of its processes shows it.
+        remote = {inode for inode, item in held if item['kind'] == 'established' and item['remote']}
+        stdio_remote = remote & stdio_sockets
+        kind = _program_kind(path, _comm(proc/'comm'))
+        found = []
+        if stdio_remote:
+            found.append('STDIO_SHELL_ON_NETWORK' if kind else 'STDIO_ON_NETWORK')
+        elif kind == 'shell' and remote:
+            found.append('SHELL_HOLDS_SOCKET')
+        if remote and any(shell_pipes.get(pipe, set()) - {proc.name} for pipe in pipes):
+            found.append('PIPED_TO_SHELL')
+        for flag in found:
+            if flag not in row['flags']:
+                row['flags'].append(flag)
         row['processes'] += 1
         if len(row['_procs']) < MAX_HASH_SOURCES:
             row['_procs'].append(proc)

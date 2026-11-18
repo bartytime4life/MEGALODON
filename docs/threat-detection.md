@@ -97,6 +97,10 @@ When enabled:
   name. Only *queries* count: responses echo the client's question, and rows
   with several questions are ambiguous, so neither yields a name. JSONL input
   may carry a `dns_query_name` field.
+* **Whole packets.** With names on, the HUD capture keeps whole packets
+  (snapshot length 65535 instead of the metadata-only 256 bytes), so a long
+  query name is not cut off. Packets still go only through a pipe to TShark
+  and are never written to disk.
 * **What is kept.** Names stay in memory for detection. The events table
   never stores them. A domain is retained only when it triggers a finding,
   inside that finding's evidence. A test checks the raw database bytes for
@@ -142,7 +146,10 @@ When enabled:
 
 * **Capture.** The HUD's TShark capture reads `tls.handshake.type`,
   `tls.handshake.ja3`, `tls.handshake.ja4` and
-  `tls.handshake.extensions_server_name`, from single ClientHellos only.
+  `tls.handshake.extensions_server_name`, from single ClientHellos only. It
+  keeps whole packets (snapshot length 65535 instead of 256 bytes): a
+  ClientHello is usually over 500 bytes, and when one is cut TShark computes no
+  fingerprint at all. Packets go only through a pipe to TShark, never to disk.
 * **Field probing.** TShark refuses to start on an unknown field, and JA4
   needs Wireshark 4.2 or later. Each capture therefore first probes which of
   these fields the installed TShark accepts, using a header-only pcap on stdin,
