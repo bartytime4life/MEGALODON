@@ -45,6 +45,8 @@ RANK = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2, 'CRITICAL': 3}
 MAX_POLICY_BYTES = 256 * 1024
 MAX_PLAYBOOKS = 64
 MAX_LEDGER_BYTES = 16 * 1024 * 1024
+# The state's own bounds (seen keys, incidents, recent actions) keep it far below this.
+MAX_STATE_BYTES = 64 * 1024 * 1024
 MAX_SEEN = 20_000
 MAX_INCIDENTS = 2_000
 MAX_DB_ROWS = 5_000
@@ -251,7 +253,7 @@ def _playbook(raw, index):
                     frozenset(sources), frozenset(_strings(raw.get('categories', []), f'playbook {name} categories')))
 
 
-def _private_file(path, what):
+def _private_file(path, what, limit=MAX_POLICY_BYTES):
     """Bytes of a regular file owned by this account and writable by no one else."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
@@ -263,10 +265,17 @@ def _private_file(path, what):
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
             raise ResponseError(f'{what} {path} must be a regular file owned by you and writable only by you')
-        data = os.read(fd, MAX_POLICY_BYTES + 1)
+        chunks, size = [], 0
+        while size <= limit:
+            chunk = os.read(fd, min(1 << 20, limit + 1 - size))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+        data = b''.join(chunks)
     finally:
         os.close(fd)
-    if len(data) > MAX_POLICY_BYTES:
+    if len(data) > limit:
         raise ResponseError(f'{what} {path} is too large')
     return data
 
@@ -520,7 +529,9 @@ def collect(policy, state, now, *, root='/'):
     if sources.get('process_review', True):
         try:
             from . import process_network
-            signals += process_signals(process_network.review(root))
+            review = process_network.review(root)
+            signals += process_signals(review)
+            gaps += [f'process_review: {gap}' for gap in review.get('gaps', [])]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             gaps.append(f'process_review: {exc}')
     checks = (('listeners_manifest', 'listener_watch', 'ListenerError', listener_signals),
@@ -536,7 +547,10 @@ def collect(policy, state, now, *, root='/'):
             continue
         module = importlib.import_module(f'.{module_name}', __package__)
         try:
-            signals += convert(module.check(Path(manifest).expanduser()))
+            report = module.check(Path(manifest).expanduser())
+            signals += convert(report)
+            # A check that ran but could not see everything says so; keep that in the run's gaps.
+            gaps += [f'{setting.removesuffix("_manifest")}: {gap}' for gap in report.get('gaps', [])]
         except (getattr(module, error_name), OSError) as exc:
             gaps.append(f'{setting.removesuffix("_manifest")}: {exc}')
     if sources.get('canary_manifest'):
@@ -671,9 +685,12 @@ def correlate(state, signals, now, window_minutes):
             for other in matches[1:]:  # One signal links two incidents: merge them.
                 incident['entities'] = sorted(set(incident['entities']) | set(other['entities']))
                 incident['sources'] = sorted(set(incident['sources']) | set(other['sources']))
-                incident['signals'] += other['signals']
+                incident['signals'] = list(dict.fromkeys(incident['signals'] + other['signals']))[-64:]
                 open_.remove(other)
                 incidents.remove(other)
+                for key, previous in assigned.items():
+                    if previous is other:
+                        assigned[key] = incident
         else:
             incident = dict(id=hashlib.sha256(f'{signal.key}{_iso(now)}'.encode()).hexdigest()[:12],
                             opened_at=_iso(now), entities=[], sources=[], signals=[])
@@ -681,7 +698,7 @@ def correlate(state, signals, now, window_minutes):
             open_.append(incident)
         incident['entities'] = sorted(set(incident['entities']) | keys)[:256]
         incident['sources'] = sorted(set(incident['sources']) | {signal.source})
-        incident['signals'] = (incident['signals'] + [signal.key])[-64:]
+        incident['signals'] = list(dict.fromkeys(incident['signals'] + [signal.key]))[-64:]
         incident['last_seen'] = _iso(now)
         assigned[signal.key] = incident
     del incidents[:-MAX_INCIDENTS]
@@ -702,8 +719,10 @@ def decide(policy, state, signals, now, *, guards=None):
     cutoff = now - timedelta(hours=SEEN_HOURS)
     for key in [k for k, at in seen.items() if datetime.fromisoformat(at.replace('Z', '+00:00')) < cutoff]:
         del seen[key]
-    fresh = list({s.key: s for s in signals if s.key not in seen}.values())
-    assigned = correlate(state, fresh, now, policy.correlation_minutes)
+    current = list({s.key: s for s in signals}.values())
+    # Every current observation keeps its incident alive; only new ones are decided.
+    assigned = correlate(state, current, now, policy.correlation_minutes)
+    fresh = [s for s in current if s.key not in seen]
     decisions = []
     for signal in fresh:
         seen[signal.key] = _iso(now)
@@ -755,7 +774,7 @@ def _read_state(path):
     if not path.exists():
         return {}
     try:
-        value = json.loads(_private_file(path, 'response state'))
+        value = json.loads(_private_file(path, 'response state', MAX_STATE_BYTES))
     except ValueError:
         raise ResponseError(f'response state {path} is not valid JSON') from None
     return value if isinstance(value, dict) else {}
