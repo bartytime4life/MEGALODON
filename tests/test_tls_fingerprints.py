@@ -94,6 +94,16 @@ def test_capture_commands_include_tls_fields_only_when_given():
     assert decode[-8:] == [x for f in tshark.TLS_FIELDS for x in ("-e", f)]
 
 
+def test_opt_in_fields_capture_whole_packets_and_the_default_stays_short():
+    def snaplen(command):
+        return int(command[command.index("-s") + 1])
+    assert snaplen(capture_commands("eth0")[0]) == 256
+    # A ClientHello (here from Python's own TLS stack) does not fit the default.
+    assert len(_client_hello("api.example-sni.test")) > 256 - 54
+    for options in (dict(tls=tshark.TLS_FIELDS), dict(dns_names=True), dict(dns_names=True, tls=("tls.handshake.type",))):
+        assert snaplen(capture_commands("eth0", **options)[0]) == 65535
+
+
 class _FakeProcess:
     def __init__(self, ok):
         self.returncode = 0 if ok else 1
@@ -132,7 +142,7 @@ def _client_hello(server_name):
     return outgoing.read()
 
 
-def _pcap(payloads):
+def _pcap(payloads, snaplen=None):
     def checksum(data):
         if len(data) % 2:
             data += b"\0"
@@ -148,25 +158,42 @@ def _pcap(payloads):
                          bytes([192, 168, 1, 10]), bytes([8, 8, 4, 4]))
         ip = ip[:10] + struct.pack("!H", checksum(ip)) + ip[12:]
         frame = b"\x00" * 12 + b"\x08\x00" + ip + tcp
-        frames.append(struct.pack("<IIII", 1788710400 + index, 0, len(frame), len(frame)) + frame)
+        kept = frame if snaplen is None else frame[:snaplen]
+        frames.append(struct.pack("<IIII", 1788710400 + index, 0, len(kept), len(frame)) + kept)
     return tshark.EMPTY_PCAP + b"".join(frames)
 
 
-@pytest.mark.skipif(not Path("/usr/bin/tshark").exists(), reason="TShark not installed")
-def test_real_tshark_fingerprints_a_genuine_client_hello(tmp_path):
+def _decode(tmp_path, pcap):
     env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "LANG": "C", "LC_ALL": "C"}
     tls = tshark.probe_fields(tshark.TLS_FIELDS, subprocess.Popen, env)
     assert {"tls.handshake.type", "tls.handshake.ja3"} <= set(tls)
     capture = tmp_path / "hello.pcap"
-    capture.write_bytes(_pcap([_client_hello("api.example-sni.test"), _client_hello(None)]))
+    capture.write_bytes(pcap)
     argv = ["/usr/bin/tshark", "-n", "-r", str(capture), "-T", "fields", "-E", "header=n",
             "-E", "separator=/t", "-E", "quote=n", "-E", "occurrence=a", "-E", "aggregator=,",
             "-o", "tls.desegment_ssl_records:TRUE", "-d", "tcp.port==443,tls"]
     for field in tshark.fields(False, tls):
         argv += ["-e", field]
     rows = subprocess.run(argv, capture_output=True, text=True, env=env, timeout=30).stdout.splitlines()
-    events = [tshark.parse_fields(row, tls=tls) for row in rows]
-    hellos = [e for e in events if e is not None and e.is_client_hello]
+    return tls, [e for e in (tshark.parse_fields(row, tls=tls) for row in rows)
+                 if e is not None and (e.tls_ja3 or e.tls_ja4 or e.tls_sni)]
+
+
+@pytest.mark.skipif(not Path("/usr/bin/tshark").exists(), reason="TShark not installed")
+def test_real_tshark_needs_the_whole_client_hello(tmp_path):
+    # The managed capture's default 256-byte snapshot cuts a ClientHello: TShark
+    # may still read the early server name but computes no JA3 or JA4 at all.
+    hellos = [_client_hello("api.example-sni.test"), _client_hello(None)]
+    cut = _decode(tmp_path, _pcap(hellos, snaplen=256))[1]
+    assert not any(e.is_client_hello for e in cut)
+    command = capture_commands("eth0", tls=tshark.TLS_FIELDS)[0]
+    whole = _decode(tmp_path, _pcap(hellos, snaplen=int(command[command.index("-s") + 1])))[1]
+    assert [e.is_client_hello for e in whole] == [True, True] and all(len(e.tls_ja3) == 32 for e in whole)
+
+
+@pytest.mark.skipif(not Path("/usr/bin/tshark").exists(), reason="TShark not installed")
+def test_real_tshark_fingerprints_a_genuine_client_hello(tmp_path):
+    tls, hellos = _decode(tmp_path, _pcap([_client_hello("api.example-sni.test"), _client_hello(None)]))
     assert [e.tls_sni for e in hellos] == ["api.example-sni.test", None]
     assert all(e.tls_ja3 and len(e.tls_ja3) == 32 for e in hellos)
     if "tls.handshake.ja4" in tls:
