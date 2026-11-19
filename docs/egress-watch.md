@@ -83,10 +83,12 @@ also reads, passively, the two places the machine says which name it means:
   resolver's on loopback). Each address is mapped to the name that was looked
   up, for as long as the answer's time to live: at least a minute, at most a
   day.
-* **The server name in each TLS ClientHello** a program sends. This maps the
-  address and port to the service the program asked for, and it is kept for an
-  hour. It is shown first, because it is what that program asked that address
-  for.
+* **The server name in each TLS ClientHello** a program sends. This is kept
+  for that one connection (the address, the port and this machine's port) for
+  an hour, and shown first. Another program reaching the same address and port
+  may have asked for a different service, and does not get this name.
+
+A packet that cannot be read is skipped; it never stops the listener.
 
 A classic BPF filter in the kernel passes only those packets, so other
 traffic never reaches MEGALODON. Nothing is sent, blocked or changed, and
