@@ -338,6 +338,10 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--port", help="also allow this port, written tcp/443 or udp/53")
         if name == "watch":
             command.add_argument("--interval", type=float, default=1.0, help="seconds between scans (default 1)")
+            command.add_argument("--no-names", action="store_true",
+                                 help="do not read DNS answers and TLS server names to name destinations")
+            command.add_argument("--watchlist", type=Path,
+                                 help="domain watchlist (default [threat_detection] watchlist_path in the settings)")
         if name in ("check", "watch"):
             command.add_argument("--alert", action="store_true",
                                  help="also send findings to the [alerts] destinations in the settings file")
@@ -1754,7 +1758,29 @@ def _egress(args: argparse.Namespace) -> int:
             def emit(found):
                 print(json.dumps(found, sort_keys=True), flush=True)
                 notify(found)
-            watcher = egress.Watcher(manifest, emit, interval=args.interval)
+            names = watchlist = None
+            if not args.no_names:
+                from . import connection_names
+                names, _, error = connection_names.start()
+                if error:
+                    print(f"megalodon: {error}; destinations are shown by address only", file=sys.stderr)
+                    names = None
+            listed = args.watchlist
+            if listed is None:
+                try:
+                    configured = load_settings(args.config or Path.home() / ".config/megalodon/settings.toml")
+                    listed = Path(configured.threat.watchlist_path).expanduser() \
+                        if configured.threat.watchlist_path else None
+                except (ValidationError, OSError):
+                    listed = None
+            if listed is not None:
+                from .watchlist import load_watchlist
+                try:
+                    watchlist = load_watchlist(listed)
+                except (ValueError, OSError) as exc:
+                    print(f"megalodon: watchlist unavailable: {exc}", file=sys.stderr)
+                    return 2
+            watcher = egress.Watcher(manifest, emit, interval=args.interval, names=names, watchlist=watchlist)
             stop = Event()
             try:
                 watcher.run(stop)
