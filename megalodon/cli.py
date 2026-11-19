@@ -1688,6 +1688,32 @@ def _tamper_alert(args, findings, summary):
     return True
 
 
+def _sanitize_tamper_output(value: object) -> object:
+    sensitive_keys = {
+        "configs",
+        "secrets",
+        "secret",
+        "password",
+        "token",
+        "api_key",
+        "key",
+    }
+    if isinstance(value, dict):
+        sanitized = {}
+        for key, item in value.items():
+            lowered = str(key).casefold()
+            if lowered in sensitive_keys or any(marker in lowered for marker in ("secret", "password", "token", "key")):
+                sanitized[key] = "[REDACTED]"
+            elif lowered == "detail" and isinstance(item, str):
+                sanitized[key] = "[REDACTED]"
+            else:
+                sanitized[key] = _sanitize_tamper_output(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_tamper_output(item) for item in value]
+    return value
+
+
 def _tamper(args: argparse.Namespace) -> int:
     from . import tamper
 
@@ -1702,7 +1728,7 @@ def _tamper(args: argparse.Namespace) -> int:
     except (tamper.TamperError, OSError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(result, indent=2, sort_keys=True))
+    print(json.dumps(_sanitize_tamper_output(result), indent=2, sort_keys=True))
     findings = result.get("findings", [])
     if args.tamper_command == "check" and args.alert and findings:
         if not _tamper_alert(args, findings, "MEGALODON's own code, schedule or configuration changed."):
