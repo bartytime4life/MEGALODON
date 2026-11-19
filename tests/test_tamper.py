@@ -193,3 +193,52 @@ def test_cli(world, tmp_path, capsys, receiver):
     assert code("heartbeat", "monitor", "--input", str(received), "--key-file", str(key_file),
                 "--max-gap", "0") == 1
     assert [f["rule_id"] for f in json.loads(capsys.readouterr().out)["findings"]] == ["HEARTBEAT_SILENT"]
+
+
+def test_a_changed_alert_destination_file_is_reported_without_its_contents(world, tmp_path):
+    config = Path(world["config_dir"])
+    (config / "alerts").mkdir()
+    hook = config / "alerts/ntfy.url"
+    hook.write_text("https://ntfy.example/alerts-7f2c\n")
+    (config / "settings.toml").write_text('[alerts]\nenabled = true\n[[alerts.destination]]\nname = "phone"\n'
+                                          f'kind = "webhook"\nurl_file = "{hook}"\n')
+    manifest = tmp_path / "tamper.json"
+    tp.baseline(manifest, **world)
+    assert tp.check(manifest, runner=fake_systemctl({}), uptime=100.0, **world)["findings"] == []
+    hook.write_text("https://attacker.example/sink\n")            # alerts redirected; settings.toml untouched
+    report = tp.check(manifest, runner=fake_systemctl({}), uptime=100.0, **world)
+    assert rules(report) == [("ALERTS_CONFIG_CHANGED", f"config:secret:{hook}")]
+    assert "attacker" not in json.dumps(report) and "7f2c" not in manifest.read_text(), "hashes only"
+    hook.unlink()
+    assert "removed" in tp.check(manifest, runner=fake_systemctl({}), uptime=100.0, **world)["findings"][0]["detail"]
+
+
+def test_removing_the_tamper_baseline_is_reported_on_and_off_the_machine(world, tmp_path, receiver):
+    config, sequence = tmp_path / "heartbeat.json", tmp_path / "state/sequence.json"
+    key = tp.init_heartbeat(receiver, config)["key"]
+    manifest = tmp_path / "tamper.json"
+    tp.baseline(manifest, **world)
+
+    def beat(minute):
+        settings, body = tp.heartbeat(config, manifest=manifest, sequence_path=sequence,
+                                      now=NOW + timedelta(minutes=minute), runner=fake_systemctl({}),
+                                      uptime=100.0, **world)
+        tp.send(settings, body)
+        return body
+    assert beat(0)["tamper_baseline"] is True and Receiver.bodies
+    manifest.unlink()
+    body = beat(5)
+    assert body["tamper_baseline"] is False
+    assert [(f["rule_id"], f["subject"]) for f in body["findings"]] == [("CONFIG_REMOVED", "config:tamper.json")]
+    report = tp.monitor(Receiver.bodies, key, now=NOW + timedelta(minutes=6))
+    assert {"TAMPER_BASELINE_LOST", "HEARTBEAT_REPORTS_TAMPER"} <= {f["rule_id"] for f in report["findings"]}
+    # Wiping the sender's own record as well still shows from outside.
+    sequence.unlink()
+    Receiver.bodies.clear()
+    tp.baseline(manifest, **world)
+    beat(10)
+    manifest.unlink()
+    sequence.unlink()
+    beat(15)
+    lost = tp.monitor(Receiver.bodies, key, now=NOW + timedelta(minutes=16))
+    assert "TAMPER_BASELINE_LOST" in {f["rule_id"] for f in lost["findings"]}

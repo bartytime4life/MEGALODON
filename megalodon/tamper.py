@@ -30,6 +30,7 @@ import socket
 import stat
 import subprocess
 import tempfile
+import tomllib
 import urllib.request
 
 SCHEMA = 'megalodon-tamper-v1'
@@ -80,6 +81,8 @@ RULES = {
                                      'MEGALODON stopped.'),
     'HEARTBEAT_FORGED': ('CRITICAL', 'A heartbeat\'s signature does not match the key.'),
     'HEARTBEAT_REPLAYED': ('HIGH', 'A heartbeat repeated or went back in sequence: a replay, or a reset sender.'),
+    'TAMPER_BASELINE_LOST': ('HIGH', 'The machine stopped reporting a tamper baseline after earlier heartbeats '
+                                     'had one: the local check was switched off.'),
     'HEARTBEAT_REPORTS_TAMPER': ('HIGH', 'The machine\'s own tamper check reported findings.'),
     'SENSOR_STATE_CHANGED': ('MEDIUM', 'The state digest in the heartbeats changed.'),
     'HEARTBEAT_GAP': ('MEDIUM', 'Heartbeats are missing from the sequence: lost deliveries, or a sender that was '
@@ -132,8 +135,27 @@ def _code(package):
     return files
 
 
+def _alert_secrets(folder):
+    """The URL and token files the alert settings point to: where alerts really go. Hashes only."""
+    try:
+        data = tomllib.loads(Path(folder, 'settings.toml').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    destinations = data.get('alerts', {}).get('destination', []) if isinstance(data.get('alerts'), dict) else []
+    found = {}
+    for destination in destinations if isinstance(destinations, list) else []:
+        if not isinstance(destination, dict):
+            continue
+        for key in ('url_file', 'token_file'):
+            value = destination.get(key)
+            if isinstance(value, str) and value:
+                path = os.path.expanduser(value)
+                found[f'secret:{value}'] = _sha256(path) if os.path.lexists(path) else None
+    return found
+
+
 def _configs(folder):
-    files = {}
+    files = _alert_secrets(folder)
     for name in WATCHED:
         path = os.path.join(folder, name)
         if os.path.lexists(path):
@@ -289,7 +311,12 @@ def compare(old, new, states=None):
         before, after = old['configs'].get(name), new['configs'].get(name)
         if before == after:
             continue
-        if name not in new['configs']:
+        if name.startswith('secret:'):
+            # Only its digest is recorded; the report never shows what the file holds.
+            what = 'removed' if name not in new['configs'] or after is None else 'changed'
+            findings.append(_finding('ALERTS_CONFIG_CHANGED', f'config:{name}',
+                                     f'the alert destination file {name[7:]} {what}'))
+        elif name not in new['configs']:
             findings.append(_finding('CONFIG_REMOVED', f'config:{name}', f'{name} was removed'))
         elif name not in old['configs']:
             findings.append(_finding('CONFIG_ADDED', f'config:{name}', f'{name} is new'))
@@ -370,32 +397,39 @@ def _sign(key, body):
     return hmac.new(bytes.fromhex(key), canonical, hashlib.sha256).hexdigest()
 
 
-def _next_sequence(path):
+def _sender_state(path):
     path = Path(path).expanduser()
     try:
-        current = _read(path, HEARTBEAT_SCHEMA + '-sequence', 'heartbeat sequence')['sequence']
+        return _read(path, HEARTBEAT_SCHEMA + '-sequence', 'heartbeat sequence')
     except TamperError:
         if path.exists():
             raise
-        current = 0
-    _write(path, dict(schema=HEARTBEAT_SCHEMA + '-sequence', sequence=current + 1))
-    return current + 1
+        return dict(schema=HEARTBEAT_SCHEMA + '-sequence', sequence=0)
 
 
 def heartbeat(config=DEFAULT_HEARTBEAT, *, manifest=DEFAULT_MANIFEST, sequence_path=DEFAULT_SEQUENCE, now=None,
               runner=None, uptime=None, **options):
     """One signed heartbeat: sequence, time, state digest and the tamper check's findings."""
     settings = _read(config, HEARTBEAT_SCHEMA + '-config', 'heartbeat configuration')
+    sender = _sender_state(sequence_path)
     report = None
     if Path(manifest).expanduser().exists():
+        sender['baseline_seen'] = True
         try:
             report = check(manifest, runner=runner, uptime=uptime, **options)
         except TamperError as exc:
             report = dict(findings=[_finding('CONFIG_REMOVED', 'config:tamper.json', str(exc))], state_digest=None)
-    body = dict(schema=HEARTBEAT_SCHEMA, sensor=settings.get('sensor', ''), sequence=_next_sequence(sequence_path),
+    elif sender.get('baseline_seen'):
+        # A baseline that existed and is gone switches every baseline check off: that is a finding, not silence.
+        report = dict(findings=[_finding('CONFIG_REMOVED', 'config:tamper.json',
+                                         f'the tamper baseline {Path(manifest).expanduser()} was removed')],
+                      state_digest=None)
+    sender['sequence'] += 1
+    _write(sequence_path, sender)
+    body = dict(schema=HEARTBEAT_SCHEMA, sensor=settings.get('sensor', ''), sequence=sender['sequence'],
                 sent_at=_iso(now or _now()),
-                state_digest=report['state_digest'] if report else state_digest(snapshot(**options)),
-                tamper_baseline=bool(report),
+                state_digest=(report or {}).get('state_digest') or state_digest(snapshot(**options)),
+                tamper_baseline=Path(manifest).expanduser().exists(),
                 findings=[dict(rule_id=f['rule_id'], severity=f['severity'], subject=f['subject'])
                           for f in (report or {}).get('findings', [])][:20])
     body['mac'] = _sign(settings['key'], body)
@@ -430,6 +464,7 @@ def monitor(lines, key, *, max_gap=900, now=None, sensor=None):
     """Findings over received heartbeats (JSON lines, oldest first) from one sensor."""
     now = now or _now()
     findings, last, last_time, digest, refused, reported = [], None, None, None, 0, frozenset()
+    had_baseline = False
     for line in lines:
         if len(line) > MAX_LINE_BYTES:
             refused += 1
@@ -454,6 +489,15 @@ def monitor(lines, key, *, max_gap=900, now=None, sensor=None):
             findings.append(_finding('HEARTBEAT_FORGED', f'heartbeat:{sequence}',
                                      f'heartbeat {sequence} from {body.get("sensor")!r} has a bad signature'))
             continue
+        # Checked for every signed heartbeat, replayed or not: wiping the sender's sequence record as well as
+        # its baseline makes every later heartbeat look replayed.
+        if body.get('tamper_baseline') is True:
+            had_baseline = True
+        elif had_baseline:
+            # Seen from outside, so it holds even if the sender's own record was wiped too.
+            findings.append(_finding('TAMPER_BASELINE_LOST', f'heartbeat:{sequence}',
+                                     f'heartbeat {sequence} has no tamper baseline; earlier ones did'))
+            had_baseline = False
         if last is not None and sequence <= last:
             findings.append(_finding('HEARTBEAT_REPLAYED', f'heartbeat:{sequence}',
                                      f'heartbeat {sequence} arrived after {last}'))
