@@ -331,14 +331,32 @@ def apt_options(text):
 
 
 def _apt_conf_files(root, gaps):
-    files = ['/etc/apt/apt.conf']
+    files = []
     for path in _listing(root, 'etc/apt/apt.conf.d', gaps):
         name = path.rsplit('/', 1)[1]
         # apt reads names of letters, digits, '_', '-' and '.', and skips package manager leftovers.
         if re.fullmatch(r'[A-Za-z0-9_.-]+', name) and not re.search(
                 r'\.(?:disabled|bak|dpkg-[a-z]+|ucf-[a-z]+|save|orig)$', name):
             files.append(path)
-    return files
+    # apt reads apt.conf.d in name order, then apt.conf: a later file overrides an earlier one.
+    return files + ['/etc/apt/apt.conf']
+
+
+# Where apt looks, as apt resolves it: Dir::Etc under Dir, the rest under Dir::Etc unless absolute.
+APT_DEFAULTS = {'dir::etc::sourcelist': 'sources.list', 'dir::etc::sourceparts': 'sources.list.d',
+                'dir::etc::trusted': 'trusted.gpg', 'dir::etc::trustedparts': 'trusted.gpg.d'}
+
+
+def apt_locations(settings):
+    """{setting: absolute path} for the sources and keys apt reads, given the effective settings."""
+    base = settings.get('dir', '/') or '/'
+    etc = settings.get('dir::etc', 'etc/apt/') or 'etc/apt/'
+    etc = os.path.normpath(etc if etc.startswith('/') else os.path.join(base, etc))
+    out = {}
+    for name, default in APT_DEFAULTS.items():
+        value = settings.get(name, default) or default
+        out[name] = os.path.normpath(value if value.startswith('/') else os.path.join(etc, value))
+    return out
 
 
 def _true(value):
@@ -389,8 +407,8 @@ def _deb822_sources(text, path):
     return sources
 
 
-def apt_sources(root, gaps):
-    files = ['/etc/apt/sources.list'] + _listing(root, 'etc/apt/sources.list.d', gaps, ('.list', '.sources'))
+def apt_sources(root, gaps, source_list='/etc/apt/sources.list', source_parts='/etc/apt/sources.list.d'):
+    files = [source_list] + _listing(root, source_parts.lstrip('/'), gaps, ('.list', '.sources'))
     found = []
     for path in files:
         raw = _read(root, path, gaps)
@@ -501,7 +519,18 @@ def _guarded_writable(root, extra):
         except OSError:
             continue
         paths.update(f'/{folder}/{name}' for name in names)
-    paths.update(p for p in extra if p.startswith('/'))
+    real = os.path.realpath(root)
+    for path in (p for p in extra if p.startswith('/')):
+        # The file, where a symlink leads inside the root, and every folder above each: whoever can rename a
+        # folder on the way can put their own keyring or source list in place.
+        from .hardening_drift import _resolve
+        # Absolute link targets are followed inside the root, as the machine scanned sees them.
+        targets = [t for t in dict.fromkeys((path, _resolve(real, path))) if t]
+        for target in targets:
+            current = os.path.normpath(target)
+            while current != '/':
+                paths.add(current)
+                current = os.path.dirname(current)
     paths.update(('/etc/apt/sources.list', '/etc/apt/apt.conf', '/etc/apt/trusted.gpg', '/etc/dnf/dnf.conf',
                   '/etc/yum.conf'))
     for path in sorted(paths):
@@ -526,8 +555,8 @@ def snapshot(*, root='/', runner=None):
     gaps, weakenings, hooks, keys, sources = [], {}, {}, {}, {}
     runner = runner or _run
 
-    def weaken(rule, subject, detail, path, severity=None):
-        weakenings[f'{rule}|{subject}'] = dict(rule=rule, subject=subject, detail=detail, path=path,
+    def weaken(rule, subject, detail, path, severity=None, value=None):
+        weakenings[f'{rule}|{subject}' + (f'|{value}' if value is not None else '')] = dict(rule=rule, subject=subject, detail=detail, path=path,
                                                severity=severity or RULES[rule][0])
 
     def add_key(key, path, scope):
@@ -553,36 +582,45 @@ def snapshot(*, root='/', runner=None):
 
     # apt: the settings and hooks.
     has_apt = os.path.isdir(_under(root, 'etc/apt'))
+    # A setting assigned more than once takes its last value, in apt's reading order: what apt uses is judged.
+    settings = {}
     for path in _apt_conf_files(root, gaps) if has_apt else []:
         raw = _read(root, path, gaps)
         if raw is None:
             continue
         for name, value in apt_options(raw.decode('utf-8', 'replace')):
             name = name.rstrip(':')
-            # A setting for one host, such as Acquire::https::example.com::Verify-Peer, weakens that host.
-            host = re.fullmatch(r'acquire::https::(.+)::(verify-peer|verify-host)', name)
-            if host:
-                name = f'acquire::https::{host.group(2)}'
-            if name in APT_WEAKENING:
-                rule, effect = APT_WEAKENING[name]
-                if (_false(value) if name in APT_WEAK_WHEN_FALSE else _true(value)):
-                    scope = f'for {host.group(1)}' if host else 'for every source'
-                    weaken(rule, f'apt:{name}' + (f':{host.group(1)}' if host else ''),
-                           f'{path} sets {name} "{value}": apt {effect} {scope}', path)
-            elif name in APT_LOCATIONS:
-                weaken('PACKAGE_CONFIG_REDIRECTED', f'apt:{name}', f'{path} sets {name} "{value}"', path)
-            elif (name in APT_HOOKS or any(name.startswith(h + '::') for h in APT_HOOKS)) and value.strip():
-                # An empty value only clears or opens a list; it runs nothing.
-                hooks[_hook_id(path, name, value)] = dict(file=path, option=name, command=value[:4096])
+            if (name in APT_HOOKS or any(name.startswith(h + '::') for h in APT_HOOKS)):
+                # Hooks are lists: every item runs. An empty value only clears or opens a list; it runs nothing.
+                if value.strip():
+                    hooks[_hook_id(path, name, value)] = dict(file=path, option=name, command=value[:4096])
+            else:
+                settings[name] = (value, path)
+    for name, (value, path) in sorted(settings.items()):
+        # A setting for one host, such as Acquire::https::example.com::Verify-Peer, weakens that host.
+        host = re.fullmatch(r'acquire::https::(.+)::(verify-peer|verify-host)', name)
+        general = f'acquire::https::{host.group(2)}' if host else name
+        if general in APT_WEAKENING:
+            rule, effect = APT_WEAKENING[general]
+            if (_false(value) if general in APT_WEAK_WHEN_FALSE else _true(value)):
+                scope = f'for {host.group(1)}' if host else 'for every source'
+                weaken(rule, f'apt:{general}' + (f':{host.group(1)}' if host else ''),
+                       f'{path} sets {general} "{value}": apt {effect} {scope}', path)
+        elif name in APT_LOCATIONS:
+            # Recorded with its value: pointing it somewhere else is a new redirection.
+            weaken('PACKAGE_CONFIG_REDIRECTED', f'apt:{name}', f'{path} sets {name} "{value}"', path, value=value)
+    where = apt_locations({name: value for name, (value, _path) in settings.items()})
 
-    # apt: sources and the keys they trust.
-    for path in [*APT_GLOBAL_KEYRINGS, *(p.lstrip('/') for f in APT_GLOBAL_KEY_FOLDERS
-                                         for p in _listing(root, f, gaps, ('.gpg', '.asc')))] if has_apt else []:
+    # apt: sources and the keys they trust, wherever apt is told to read them.
+    for path in [where['dir::etc::trusted'].lstrip('/'),
+                 *(p.lstrip('/') for p in _listing(root, where['dir::etc::trustedparts'].lstrip('/'), gaps,
+                                                   ('.gpg', '.asc')))] if has_apt else []:
         keyring('/' + path, 'all')
     for folder in APT_NAMED_KEY_FOLDERS if has_apt else ():
         for path in _listing(root, folder, gaps, ('.gpg', '.asc', '.pgp')):
             keyring(path, 'named')
-    for source in apt_sources(root, gaps) if has_apt else []:
+    for source in apt_sources(root, gaps, where['dir::etc::sourcelist'], where['dir::etc::sourceparts']) \
+            if has_apt else []:
         options = source['options']
         signed_by = (options.get('signed-by') or '').strip()
         trusts = []
@@ -672,7 +710,7 @@ def snapshot(*, root='/', runner=None):
                     hooks[_hook_id(path, 'action', line)] = dict(file=path, option='action', command=line[:4096])
 
     signed_files = [p for s in sources.values() for p in re.split(r'[\s,]+', s['signed_by']) if p.startswith('/')]
-    writable = _guarded_writable(root, signed_files)
+    writable = _guarded_writable(root, signed_files + (sorted(where.values()) if has_apt else []))
     for entry in keys.values():
         entry['files'].sort()
         entry['used_by'].sort()

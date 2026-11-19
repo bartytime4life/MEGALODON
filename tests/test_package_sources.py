@@ -190,13 +190,11 @@ def test_keys_sources_and_hooks_added_or_redirected(root, tmp_path):
     (root / "etc/apt/apt.conf.d/80hooks").write_text(
         'APT::Update::Pre-Invoke { "/usr/local/bin/refresh-placeholder"; };\n'
         'DPkg::Post-Invoke:: "/var/tmp/placeholder";\n'
-        'Dir::Etc::TrustedParts "/opt/placeholder/keys";\n'
         'Acquire::https::mirror.example::Verify-Peer "false";\n')
     report = ps.check(manifest)
     hooks = {h["command"]: f"hook:{k}" for k, h in ps.snapshot(root=str(root))["hooks"].items()}
     assert rules(report) == sorted([
         ("CRITICAL", "PACKAGE_MANAGER_HOOK_ADDED", hooks["/var/tmp/placeholder"]),
-        ("HIGH", "PACKAGE_CONFIG_REDIRECTED", "apt:dir::etc::trustedparts"),
         ("HIGH", "PACKAGE_MANAGER_HOOK_ADDED", hooks["/usr/local/bin/refresh-placeholder"]),
         ("HIGH", "PACKAGE_SOURCE_CHANGED", "source:apt deb https://packages.vendor.example/debian stable"),
         ("HIGH", "PACKAGE_SOURCE_REDIRECTED", "source:apt deb http://other-mirror.example/debian stable"),
@@ -279,3 +277,54 @@ def test_findings_become_shadow_decisions_and_the_cli(root, tmp_path, capsys):
     assert exit_.value.code == 1
     assert {f["rule_id"] for f in json.loads(capsys.readouterr().out)["findings"]} == {
         "SIGNING_KEY_ADDED", "PACKAGE_SOURCE_ADDED"}
+
+
+def test_the_last_assignment_is_the_one_apt_uses(root, tmp_path):
+    # apt reads apt.conf.d in name order, then apt.conf: the later value wins.
+    (root / "etc/apt/apt.conf.d/10weak").write_text('Acquire::AllowInsecureRepositories "true";\n')
+    (root / "etc/apt/apt.conf.d/90restore").write_text('Acquire::AllowInsecureRepositories "false";\n')
+    manifest = tmp_path / "packages.json"
+    assert ps.baseline(manifest, root=str(root))["findings"] == [], "the effective value is false"
+    (root / "etc/apt/apt.conf").write_text('Acquire::AllowInsecureRepositories "true";\n')
+    assert rules(ps.check(manifest)) == [
+        ("HIGH", "PACKAGE_SIGNATURE_CHECK_WEAKENED", "apt:acquire::allowinsecurerepositories")]
+
+
+def test_a_relocation_is_followed_and_its_value_compared(root, tmp_path):
+    vendor = root / "opt/vendor/sources"
+    vendor.mkdir(parents=True)
+    (vendor / "vendor.list").write_text("deb https://vendor.example/debian stable main\n")
+    (root / "etc/apt/apt.conf.d/50parts").write_text('Dir::Etc::SourceParts "/opt/vendor/sources";\n')
+    manifest = tmp_path / "packages.json"
+    first = ps.baseline(manifest, root=str(root))
+    assert rules(first) == [("HIGH", "PACKAGE_CONFIG_REDIRECTED", "apt:dir::etc::sourceparts")]
+    assert "apt deb https://vendor.example/debian stable" in ps.snapshot(root=str(root))["sources"], \
+        "apt reads sources from where it is told to"
+    elsewhere = root / "opt/elsewhere/sources"
+    elsewhere.mkdir(parents=True)
+    (elsewhere / "other.list").write_text("deb https://other.example/debian stable main\n")
+    (root / "etc/apt/apt.conf.d/50parts").write_text('Dir::Etc::SourceParts "/opt/elsewhere/sources";\n')
+    assert rules(ps.check(manifest)) == [
+        ("HIGH", "PACKAGE_CONFIG_REDIRECTED", "apt:dir::etc::sourceparts"),
+        ("MEDIUM", "PACKAGE_SOURCE_ADDED", "source:apt deb https://other.example/debian stable")]
+
+
+def test_folders_above_a_named_keyring_are_checked(root, tmp_path):
+    keys, _ = keyring(("vendor-key", "Vendor Key", 4096))
+    (root / "opt/vendor").mkdir(parents=True)
+    (root / "opt/vendor/key.gpg").write_bytes(keys)
+    (root / "srv/keys").mkdir(parents=True)
+    (root / "srv/keys/real.gpg").write_bytes(keys)
+    os.symlink("/srv/keys/real.gpg", root / "etc/apt/keyrings/linked.gpg")
+    for folder in ("opt", "opt/vendor", "srv", "srv/keys"):
+        os.chmod(root / folder, 0o755)
+    (root / "etc/apt/sources.list.d/vendor.list").write_text(
+        "deb [signed-by=/opt/vendor/key.gpg] https://vendor.example/debian stable main\n"
+        "deb [signed-by=/etc/apt/keyrings/linked.gpg] https://linked.example/debian stable main\n")
+    manifest = tmp_path / "packages.json"
+    assert ps.baseline(manifest, root=str(root))["findings"] == []
+    os.chmod(root / "opt/vendor", 0o777)       # anyone can swap the keyring without touching the file
+    os.chmod(root / "srv/keys", 0o777)         # nor the file a symlinked keyring leads to
+    assert rules(ps.check(manifest)) == [
+        ("CRITICAL", "PACKAGE_CONFIG_WRITABLE", "file:/opt/vendor"),
+        ("CRITICAL", "PACKAGE_CONFIG_WRITABLE", "file:/srv/keys")]

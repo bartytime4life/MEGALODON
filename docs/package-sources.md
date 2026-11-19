@@ -69,18 +69,22 @@ reads.
   sources that name them. Each key is recorded by fingerprint, with its
   algorithm, size and first user ID. Armored and binary keyrings are both
   read. A GnuPG keybox, which apt cannot use, is listed as a gap.
-* **apt settings.** `/etc/apt/apt.conf` and `apt.conf.d` are read with apt's
-  own rules: nested blocks, lists, comments, and the files apt skips. These
-  settings are reported:
+* **apt settings.** `apt.conf.d` (in name order) and then `/etc/apt/apt.conf`
+  are read with apt's own rules: nested blocks, lists, comments, and the files
+  apt skips. A setting assigned more than once is judged by its last value, the
+  one apt uses. Hook lists keep every item. These settings are reported:
   - **Signature checks off:** `APT::Get::AllowUnauthenticated`.
   - **Signature checks weakened:** `Acquire::AllowInsecureRepositories`,
     `Acquire::AllowDowngradeToInsecureRepositories`,
     `Acquire::AllowWeakRepositories`, and `Acquire::Check-Valid-Until "false"`.
   - **Connections not verified:** `Acquire::https::Verify-Peer` or
     `Verify-Host` set to false, for every host or for one.
-  - **apt moved elsewhere:** `Dir::Etc::Trusted`, `TrustedParts`, `SourceList`
-    or `SourceParts` set, which makes apt read its keys or sources from
-    another folder.
+  - **apt moved elsewhere:** `Dir`, `Dir::Etc`, `Dir::Etc::Trusted`,
+    `TrustedParts`, `SourceList` or `SourceParts` set, which makes apt read its
+    keys or sources from another folder. The check reads them from there too,
+    so sources and keys at the new place are recorded and reported like any
+    others. A relocation is recorded with its value, so pointing it somewhere
+    else again is reported.
 * **apt hooks.** These are commands run as root:
   - `DPkg::Pre-Invoke`, `Post-Invoke` and `Pre-Install-Pkgs`;
   - `APT::Update::Pre-Invoke` and `Post-Invoke`;
@@ -96,9 +100,11 @@ reads.
 
   The keys are those in `/etc/pki/rpm-gpg` and those imported into rpm.
   Hooks are the commands in dnf's post-transaction actions.
-* **Who can change it.** These folders, every folder above them, the files in
-  them, and every keyring a source names are checked for whether an account
-  other than root can change them:
+* **Who can change it.** These folders, every folder above them and the files
+  in them are checked for whether an account other than root can change them.
+  So is every keyring a source names, together with the folders above it and,
+  for a symlinked keyring, the file it leads to and the folders above that.
+  The folders checked are:
   - `/etc/apt` and its folders;
   - `/usr/share/keyrings`;
   - `/etc/yum.repos.d`, `/etc/dnf`;
