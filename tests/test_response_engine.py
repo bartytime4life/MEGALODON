@@ -31,9 +31,10 @@ def edit_policy(paths, old, new):
     path.write_text(text.replace(old, new), encoding="utf-8")
 
 
-def process_signal(flag="STDIO_SHELL_ON_NETWORK", exe="/tmp/.cache/agent", remotes=(f"{ATTACKER}:4444",)):
+def process_signal(flag="STDIO_SHELL_ON_NETWORK", exe="/tmp/.cache/agent", remotes=(f"{ATTACKER}:4444",), pids=()):
     review = {"reviewed_at": "2026-11-18T22:00:00Z", "programs": [
-        {"program": "agent", "executable": exe, "flags": [flag], "remotes": list(remotes)}]}
+        {"program": "agent", "executable": exe, "flags": [flag], "remotes": list(remotes),
+         "flag_processes": {flag: list(pids)} if pids else {}}]}
     return re_.process_signals(review)
 
 
@@ -54,7 +55,7 @@ def actions(decision):
 
 def test_default_policy_is_private_and_only_shadow_mode_exists(paths):
     policy = re_.load_policy(paths["policy_path"])
-    assert len(policy.playbooks) == 8 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
+    assert len(policy.playbooks) == 12 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
     with pytest.raises(re_.ResponseError, match="exists"):
         re_.write_default_policy(paths["policy_path"])
     for old, new, message in [
@@ -102,7 +103,14 @@ def test_guards_refuse_what_would_cut_off_or_break_the_machine(paths):
     assert "gateway, DNS server or own address" in refused[("block_address", "8.8.8.8")]
     assert "not a public address" in refused[("block_address", "192.168.1.30")]
     assert "never_touch_addresses" in refused[("block_address", "203.0.115.8")]
-    assert ("suspend_process", "/bin/bash") not in refused
+    # A shell is shared by every login: pausing "/bin/bash" would pause them all, so a finding that names no
+    # specific process is refused, and one that does is planned against that process only.
+    assert "shared program" in refused[("suspend_process", "/bin/bash")]
+    re_.run(signals=process_signal(flag="SHELL_HOLDS_SOCKET", exe="/bin/bash", remotes=["203.0.113.9:4444"],
+                                   pids=["4242@987654"]), now=NOW + timedelta(minutes=1), **paths)
+    last = ledger(paths)[-1]
+    assert ("suspend_process", "4242@987654:/bin/bash", "would_apply") in actions(last)
+    assert not any(a["action"] == "suspend_process" and a["target"] == "/bin/bash" for a in last["actions"])
 
 
 def test_corroboration_turns_a_network_signal_into_an_action(paths):
@@ -171,7 +179,9 @@ def test_network_detections_are_read_once_from_the_audit_store(paths, tmp_path):
             service.process(event)
     edit_policy(paths, 'audit_db = "data/megalodon.db"', f'audit_db = "{settings.db_path}"')
     edit_policy(paths, "process_review = true", "process_review = false")
-    for name in ("listeners", "persistence", "binaries", "logwatch"):
+    edit_policy(paths, 'ancestry_allow_file = "~/.config/megalodon/ancestry-allow.json"', 'ancestry_allow_file = ""')
+    edit_policy(paths, "rootkit_check = true", "rootkit_check = false")
+    for name in ("listeners", "persistence", "binaries", "logwatch", "devices", "webroot"):
         edit_policy(paths, f'{name}_manifest = "~/', f'{name}_manifest = "" # ~/')
     first = re_.run(now=NOW, **paths)
     assert first["signals"] > 0 and first["gaps"] == []
@@ -273,10 +283,11 @@ def test_gaps_reported_by_the_source_checks_are_kept(paths, monkeypatch):
     from megalodon import listener_watch, process_network
     monkeypatch.setattr(listener_watch, "check", lambda manifest: {
         "findings": [], "gaps": ["no visible program owns tcp:2024"], "checked_at": ""})
-    monkeypatch.setattr(process_network, "review", lambda root="/": {
+    monkeypatch.setattr(process_network, "review", lambda root="/", with_pids=False: {
         "programs": [], "gaps": ["A socket table was not fully read"]})
     policy = re_.load_policy(paths["policy_path"])
     policy = re_.Policy(**{**policy.__dict__, "sources": {"audit_db": "", "process_review": True,
+                                                         "ancestry_allow_file": "", "rootkit_check": False,
                                                          "listeners_manifest": "/x/listeners.json"}})
     signals, gaps = re_.collect(policy, {}, NOW)
     assert gaps == ["process_review: A socket table was not fully read",

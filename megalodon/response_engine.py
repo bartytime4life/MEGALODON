@@ -30,6 +30,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import stat
@@ -61,8 +62,10 @@ ACTIONS = {
     'notify': dict(entity=None, effect='Send a summary to the off-machine alert destinations', reversible=True),
     'block_address': dict(entity='address', effect='Drop traffic to and from this address for a limited time',
                           reversible=True),
-    'suspend_process': dict(entity='process', effect='Pause (SIGSTOP) the processes running this program, '
-                                                     'keeping them for investigation', reversible=True),
+    # Targets are processes ('pid@start:program'), so a shared program such as a shell is never paused
+    # everywhere. A program-wide target is planned only for an unshared program outside system folders.
+    'suspend_process': dict(entity='process', effect='Pause (SIGSTOP) this process, or the processes running this '
+                                                     'program, keeping them for investigation', reversible=True),
     'quarantine_file': dict(entity='file', effect='Move the file aside with no permissions, recording its hash',
                             reversible=True),
     'disable_persistence': dict(entity='persistence', effect='Disable this service, job or startup entry without '
@@ -70,15 +73,18 @@ ACTIONS = {
     'lock_account': dict(entity='account', effect='Lock this account\'s password and logins', reversible=True),
 }
 # 'peer' links incidents but is never an action target (a finding's other addresses).
-ENTITY_KINDS = ('address', 'peer', 'process', 'file', 'port', 'persistence', 'account')
-SOURCES = ('network', 'process_review', 'listeners', 'persistence', 'binaries', 'logwatch', 'canary', 'ingest')
+# 'process_id' is 'pid@start:program': the PID with its start time names one process, not a reused PID.
+ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
+PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
+SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
+           'devices', 'webroot', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
                              '/usr/sbin/sshd', '/usr/sbin/dbus-daemon', '/usr/bin/dbus-daemon'})
 SYSTEM_FOLDERS = ('/usr/', '/bin/', '/sbin/', '/lib/', '/lib64/', '/etc/', '/boot/', '/var/log/', '/var/lib/', '/proc/',
                   '/sys/', '/dev/')
-DEFAULT_QUARANTINE_ROOTS = ('/tmp/', '/var/tmp/', '/dev/shm/', '/home/', '/root/', '/srv/', '/opt/')
+DEFAULT_QUARANTINE_ROOTS = ('/tmp/', '/var/tmp/', '/dev/shm/', '/home/', '/root/', '/srv/', '/opt/', '/var/www/')
 PROCESS_SEVERITY = {'STDIO_SHELL_ON_NETWORK': 'HIGH', 'SHELL_HOLDS_SOCKET': 'HIGH', 'PIPED_TO_SHELL': 'HIGH',
                     'EXECUTABLE_IN_MEMORY': 'HIGH', 'STDIO_ON_NETWORK': 'MEDIUM', 'EXECUTABLE_DELETED': 'MEDIUM',
                     'EXECUTABLE_IN_TEMPORARY': 'MEDIUM'}
@@ -97,16 +103,24 @@ never_touch_addresses = []
 never_touch_programs = []
 never_touch_accounts = []
 # Files outside these folders are never quarantined.
-quarantine_roots = ["/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/", "/srv/", "/opt/"]
+quarantine_roots = ["/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/", "/srv/", "/opt/", "/var/www/"]
 
 [response.sources]
 # The network audit store; use an absolute path when running from a timer. "" turns a source off.
 audit_db = "data/megalodon.db"
 process_review = true
+# Services starting shells or attack tools; the allow file is from `megalodon ancestry allow`.
+ancestry_allow_file = "~/.config/megalodon/ancestry-allow.json"
+# Rootkit cross-checks (processes, modules, folders, preloaded libraries). The port check briefly binds every
+# free port, so it is off here; turn it on with rootkit_ports = true or run `megalodon rootkit check`.
+rootkit_check = true
+rootkit_ports = false
 listeners_manifest = "~/.config/megalodon/listeners.json"
 persistence_manifest = "~/.config/megalodon/persistence.json"
 binaries_manifest = "~/.config/megalodon/binaries.json"
 logwatch_manifest = "~/.config/megalodon/log-integrity.json"
+devices_manifest = "~/.config/megalodon/devices.json"
+webroot_manifest = "~/.config/megalodon/webroot.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -127,6 +141,32 @@ name = "bind-shell-or-dropped-listener"
 rules = ["NEW_LISTENER", "LISTENER_PROGRAM_CHANGED"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "suspend_process", "notify"]
+
+[[response.playbook]]
+name = "web-shell-or-exploited-service"
+rules = ["SERVICE_SPAWNED_SHELL", "SERVICE_SPAWNED_TOOL"]
+min_severity = "HIGH"
+actions = ["collect_evidence", "suspend_process", "notify"]
+
+[[response.playbook]]
+name = "rootkit"
+rules = ["HIDDEN_PROCESS", "HIDDEN_MODULE", "HIDDEN_PORT", "HIDDEN_DIRECTORY", "HIDDEN_FILE", "PRELOAD_LIBRARY"]
+min_severity = "HIGH"
+# A machine that hides things from itself cannot be trusted to clean itself: preserve and escalate.
+actions = ["collect_evidence", "notify"]
+
+[[response.playbook]]
+name = "web-shell-file"
+rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
+min_severity = "HIGH"
+actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "new-hardware"
+rules = ["NEW_USB_KEYBOARD", "NEW_NETWORK_ADAPTER", "NEW_THUNDERBOLT_DEVICE", "DEVICE_GAINED_FUNCTIONS"]
+min_severity = "HIGH"
+# Only you know whether you plugged it in.
+actions = ["notify"]
 
 [[response.playbook]]
 name = "program-from-memory"
@@ -315,14 +355,16 @@ def load_policy(path=DEFAULT_POLICY):
     if any(not r.startswith('/') for r in roots):
         raise ResponseError('quarantine_roots must be absolute folders')
     sources = table.get('sources', {})
-    allowed = {'audit_db', 'process_review', 'listeners_manifest', 'persistence_manifest', 'binaries_manifest',
-               'logwatch_manifest', 'canary_manifest'}
+    allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
+               'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
+               'devices_manifest', 'webroot_manifest', 'canary_manifest'}
+    switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
     for name, value in sources.items():
-        if name == 'process_review' and not isinstance(value, bool):
-            raise ResponseError('response.sources.process_review must be true or false')
-        if name != 'process_review' and (not isinstance(value, str) or len(value) > 1024):
+        if name in switches and not isinstance(value, bool):
+            raise ResponseError(f'response.sources.{name} must be true or false')
+        if name not in switches and (not isinstance(value, str) or len(value) > 1024):
             raise ResponseError(f'response.sources.{name} must be a path')
     return Policy(
         digest=hashlib.sha256(data).hexdigest(), playbooks=parsed,
@@ -444,11 +486,38 @@ def process_signals(review):
                 continue
             remotes = [_host(r) for r in row.get('remotes', [])]
             exe = row.get('executable', '')
+            ids = [f'{i}:{exe}' for i in row.get('flag_processes', {}).get(flag, [])] if exe.startswith('/') else []
             signals.append(Signal(
                 f'process:{flag}:{exe}:{",".join(sorted(r for r in remotes if r))}', 'process_review', flag,
                 PROCESS_SEVERITY[flag], review.get('reviewed_at', ''),
                 f"{row.get('program', '?')} ({exe}) {flag.lower().replace('_', ' ')}",
-                _entities(process=[exe], address=remotes)))
+                _entities(process=[exe], process_id=ids, address=remotes)))
+    return signals
+
+
+def ancestry_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        evidence = f.get('evidence', {})
+        program, service = evidence.get('program', ''), evidence.get('service', {}).get('program', '')
+        ids = [f"{evidence['pid']}@{evidence['start']}:{program}"] if (
+            isinstance(evidence.get('pid'), int) and isinstance(evidence.get('start'), int)
+            and program.startswith('/')) else []
+        signals.append(Signal(f"ancestry:{f['rule_id']}:{service}:{ids[0] if ids else program}", 'ancestry',
+                              f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
+                              f.get('message', ''), _entities(process=[program], process_id=ids)))
+    return signals
+
+
+def rootkit_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        program = f.get('program') or ''
+        signals.append(Signal(f"rootkit:{f['rule_id']}:{f.get('subject', '')}", 'rootkit', f['rule_id'],
+                              _severity(f.get('severity')), report.get('checked_at', ''), f.get('detail', ''),
+                              _entities(process=[program] if program.startswith('/') else [],
+                                        port=[f['subject']] if f['rule_id'] == 'HIDDEN_PORT' else [],
+                                        file=[f['subject']] if f['rule_id'] == 'HIDDEN_FILE' else [])))
     return signals
 
 
@@ -505,12 +574,17 @@ def ingest_signals(lines, now):
             continue
         evidence = item.get('evidence') if isinstance(item.get('evidence'), dict) else {}
         processes = [p.get('program') for p in evidence.get('processes', []) if isinstance(p, dict)]
+        # A process named with its start time (as the ancestry watch writes it) is a suspension target.
+        ids = [f"{p['pid']}@{p['start']}:{p['program']}" for p in evidence.get('processes', [])
+               if isinstance(p, dict) and type(p.get('pid')) is int and type(p.get('start')) is int
+               and isinstance(p.get('program'), str) and p['program'].startswith('/')]
         folder = evidence.get('folder')
         detected = item.get('detected_at') if isinstance(item.get('detected_at'), str) else _iso(now)
         digest = hashlib.sha256(line.encode()).hexdigest()[:16]
         signals.append(Signal(f"ingest:{item['rule_id']}:{digest}", 'ingest', item['rule_id'][:64],
                               _severity(item.get('severity')), detected, str(item.get('message', ''))[:300],
-                              _entities(process=processes, file=[folder] if isinstance(folder, str) else [],
+                              _entities(process=processes, process_id=ids,
+                                        file=[folder] if isinstance(folder, str) else [],
                                         address=[item.get('src_ip'), item.get('dst_ip')])))
     return signals, refused
 
@@ -529,17 +603,37 @@ def collect(policy, state, now, *, root='/'):
     if sources.get('process_review', True):
         try:
             from . import process_network
-            review = process_network.review(root)
+            review = process_network.review(root, with_pids=True)
             signals += process_signals(review)
             gaps += [f'process_review: {gap}' for gap in review.get('gaps', [])]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             gaps.append(f'process_review: {exc}')
+    if sources.get('ancestry_allow_file', '~/.config/megalodon/ancestry-allow.json'):
+        from . import process_ancestry
+        try:
+            report = process_ancestry.check(
+                root, allow_path=Path(sources.get('ancestry_allow_file',
+                                                  '~/.config/megalodon/ancestry-allow.json')).expanduser())
+            signals += ancestry_signals(report)
+            gaps += [f'ancestry: {gap}' for gap in report.get('gaps', [])]
+        except (process_ancestry.AncestryError, OSError) as exc:
+            gaps.append(f'ancestry: {exc}')
+    if sources.get('rootkit_check', True):
+        from . import rootkit_check
+        try:
+            report = rootkit_check.check(root, ports=sources.get('rootkit_ports', False))
+            signals += rootkit_signals(report)
+            gaps += [f'rootkit: {gap}' for gap in report.get('gaps', [])]
+        except (rootkit_check.RootkitError, OSError) as exc:
+            gaps.append(f'rootkit: {exc}')
     checks = (('listeners_manifest', 'listener_watch', 'ListenerError', listener_signals),
               ('persistence_manifest', 'persistence_watch', 'PersistenceError', persistence_signals),
               ('binaries_manifest', 'binary_integrity', 'BinaryIntegrityError',
                lambda r: path_signals(r, 'binaries', 'path')),
               ('logwatch_manifest', 'log_integrity', 'LogIntegrityError',
-               lambda r: path_signals(r, 'logwatch', 'log')))
+               lambda r: path_signals(r, 'logwatch', 'log')),
+              ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')),
+              ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')
@@ -623,10 +717,19 @@ class Guards:
             if any(address in network for network in self.networks):
                 return 'listed in never_touch_addresses'
         elif action == 'suspend_process':
-            if target in SYSTEM_PROGRAMS or target in policy.never_touch_programs:
+            match = PROCESS_ID.fullmatch(target)
+            program = match.group(3) if match else target
+            if program in SYSTEM_PROGRAMS or program in policy.never_touch_programs:
                 return 'a system program or listed in never_touch_programs'
-            if not target.startswith('/'):
+            if match and int(match.group(1)) <= 1:
+                return 'the init process'
+            if not program.startswith('/'):
                 return 'program path unknown'
+            if not match:
+                from .process_network import _program_kind
+                if _program_kind(program, '') or program.startswith(SYSTEM_FOLDERS):
+                    return ('a shared program: pausing it would pause every process running it, and the finding '
+                            'names no specific process')
         elif action == 'quarantine_file':
             if target.startswith(SYSTEM_FOLDERS):
                 return 'a system file: reinstall the package or restore it instead'
@@ -709,6 +812,9 @@ def _targets(action, signal, incident):
     entity = ACTIONS[action]['entity']
     if entity is None:
         return [None]
+    if action == 'suspend_process' and signal.entities.get('process_id'):
+        # The processes behind the finding, rather than every process running the same program.
+        return sorted(signal.entities['process_id'])[:8]
     return sorted(signal.entities.get(entity, ()))[:8]
 
 

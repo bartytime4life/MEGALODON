@@ -258,6 +258,102 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    ancestry = sub.add_parser(
+        "ancestry", help="catch web servers, databases and mail servers starting shells or attack tools (Linux)")
+    ancestry_sub = ancestry.add_subparsers(dest="ancestry_command", required=True)
+    for name, text in (("check", "review the processes running now (exit 1 on findings)"),
+                       ("watch", "report each program a service starts, as it starts, as JSON lines"),
+                       ("allow", "after review, allow one service program to start one program")):
+        command = ancestry_sub.add_parser(name, help=text)
+        command.add_argument("--allow-file", type=Path,
+                             help="allowed pairs (default ~/.config/megalodon/ancestry-allow.json)")
+        if name == "allow":
+            command.add_argument("service", help="the service's executable path, e.g. /usr/lib/postgresql/16/bin/postgres")
+            command.add_argument("program", help="the program it may start, e.g. /usr/bin/dash")
+            continue
+        if name == "watch":
+            command.add_argument("--interval", type=float, default=0.25,
+                                 help="seconds between /proc scans when not root (default 0.25)")
+        command.add_argument("--alert", action="store_true",
+                             help="also send findings to the [alerts] destinations in the settings file")
+        command.add_argument("--config", type=Path,
+                             help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
+    devices = sub.add_parser(
+        "devices", help="baseline and check USB devices, keyboards, network adapters and removable disks (Linux)")
+    devices_sub = devices.add_subparsers(dest="devices_command", required=True)
+    for name, text in (("baseline", "record the devices attached now"),
+                       ("check", "report new keyboards, network adapters, storage and Thunderbolt devices "
+                                 "(exit 1 on findings)"),
+                       ("watch", "check every few seconds and print each new device once, as JSON lines"),
+                       ("accept", "after review, record the current devices as the new baseline")):
+        command = devices_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/devices.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "watch":
+            command.add_argument("--interval", type=float, default=2.0, help="seconds between checks (default 2)")
+        if name in ("check", "watch"):
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
+    webroot = sub.add_parser(
+        "webroot", help="baseline and check web roots for dropped scripts, hidden code and web shells")
+    webroot_sub = webroot.add_subparsers(dest="webroot_command", required=True)
+    for name, text in (("baseline", "record the server-side scripts under the web roots, reporting any web shell "
+                                    "already there"),
+                       ("check", "report new and changed scripts, hidden code and web-shell shapes (exit 1 on "
+                                 "findings)"),
+                       ("accept", "after review, record the current scripts as the new baseline")):
+        command = webroot_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/webroot.json)")
+        command.add_argument("--root", action="append", dest="roots",
+                             help="a web document root (repeatable; default /var/www, /srv/www, /srv/http, ... "
+                                  "or the baseline's roots)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send a summary to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
+    schedule = sub.add_parser(
+        "schedule", help="run every host watch on a schedule with alerts (systemd timers; plan first)")
+    schedule_sub = schedule.add_subparsers(dest="schedule_command", required=True)
+    for name, text in (("plan", "show the timers and services that install would add, and missing baselines"),
+                       ("install", "write and enable the timers and services (needs --yes)"),
+                       ("remove", "disable and delete MEGALODON's timers and services (needs --yes)")):
+        command = schedule_sub.add_parser(name, help=text)
+        scope = command.add_mutually_exclusive_group()
+        scope.add_argument("--system", action="store_true", default=None,
+                           help="system units in /etc/systemd/system (the default as root)")
+        scope.add_argument("--user", action="store_false", dest="system",
+                           help="user units in ~/.config/systemd/user (the default otherwise)")
+        command.add_argument("--unit-dir", type=Path, help="unit folder to use instead of the systemd default")
+        if name != "remove":
+            command.add_argument("--only", action="append", help="limit to these jobs (repeatable)")
+        if name in ("install", "remove"):
+            command.add_argument("--yes", action="store_true", help="confirm the change")
+        if name == "install":
+            command.add_argument("--take-baselines", action="store_true",
+                                 help="take missing baselines first; do this only on a system you trust")
+
+    rootkit = sub.add_parser(
+        "rootkit", help="cross-check processes, kernel modules, ports and folders for hidden ones (Linux)")
+    rootkit_sub = rootkit.add_subparsers(dest="rootkit_command", required=True)
+    command = rootkit_sub.add_parser("check", help="report what one view of the system hides from another "
+                                                   "(exit 1 on findings)")
+    command.add_argument("--skip-ports", action="store_true",
+                         help="do not test ports (the port test briefly binds every free port)")
+    command.add_argument("--max-pid", type=int, help="highest process ID to probe (default: the kernel's pid_max)")
+    command.add_argument("--alert", action="store_true",
+                         help="also send findings to the [alerts] destinations in the settings file")
+    command.add_argument("--config", type=Path,
+                         help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     binaries = sub.add_parser(
         "binaries", help="detect trojaned system programs and libraries (exit 1 on findings)")
     binaries_sub = binaries.add_subparsers(dest="binaries_command", required=True)
@@ -1314,6 +1410,208 @@ def _listeners(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _ancestry(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from . import process_ancestry as ancestry
+    from .alerts import HostNotice, dispatcher_for
+    from .validation import ValidationError
+
+    allow_file = args.allow_file or Path.home() / ".config/megalodon/ancestry-allow.json"
+    if args.ancestry_command == "allow":
+        try:
+            count = ancestry.allow(allow_file, args.service, args.program)
+        except (ancestry.AncestryError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(dict(allow_file=str(allow_file), allowed=count), indent=2))
+        return 0
+    dispatcher = None
+    if args.alert:
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def notify(found):
+        if dispatcher is not None:
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["message"], tuple(found["attack"]), found["summary"])])
+    if args.ancestry_command == "check":
+        try:
+            report = ancestry.check(allow_path=allow_file)
+        except (ancestry.AncestryError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(report, indent=2, sort_keys=True))
+        for found in report["findings"][:10]:
+            notify(found)
+        return 1 if report["findings"] else 0
+
+    def emit(found):
+        print(json.dumps(found, sort_keys=True), flush=True)
+        notify(found)
+    try:
+        watcher = ancestry.Watcher(emit, allow_path=allow_file, interval=args.interval)
+    except (ancestry.AncestryError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(f"megalodon: watching programs that services start ({watcher.mode})"
+          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else ""), file=sys.stderr, flush=True)
+    stop = Event()
+    try:
+        watcher.run(stop)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        watcher.close()
+        print(f"megalodon: {json.dumps(watcher.stats, sort_keys=True)}", file=sys.stderr)
+    return 0
+
+
+def _devices(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import device_watch as watch
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    dispatcher = None
+    if getattr(args, "alert", False):
+        from .alerts import dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def notify(found):
+        if dispatcher is not None:
+            from .alerts import HostNotice
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["detail"], tuple(found["techniques"]), found["summary"])])
+    try:
+        if args.devices_command == "baseline":
+            result = watch.baseline(manifest, replace=args.replace)
+        elif args.devices_command == "accept":
+            result = watch.accept(manifest)
+        elif args.devices_command == "watch":
+            def emit(found):
+                print(json.dumps(found, sort_keys=True), flush=True)
+                notify(found)
+            try:
+                watch.watch(manifest, emit, interval=args.interval)
+            except KeyboardInterrupt:
+                pass
+            return 0
+        else:
+            result = watch.check(manifest)
+    except (watch.DeviceError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    for found in findings[:10]:
+        notify(found)
+    return 1 if findings else 0
+
+
+def _webroot(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import webroot_watch as watch
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.webroot_command == "baseline":
+            result = watch.baseline(manifest, replace=args.replace, web_roots=args.roots)
+        elif args.webroot_command == "accept":
+            result = watch.accept(manifest, web_roots=args.roots)
+        else:
+            result = watch.check(manifest, web_roots=args.roots)
+    except (watch.WebrootError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.webroot_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} web-root findings: {listed}", ("T1505.003",),
+                                          "A server-side script was added, changed or hidden under a web root.")])
+    # A baseline that finds a web shell already in place still records it, and says so with exit 1.
+    return 1 if findings else 0
+
+
+def _schedule(args: argparse.Namespace) -> int:
+    import subprocess
+
+    from . import schedule
+
+    try:
+        if args.schedule_command == "plan":
+            result = schedule.plan(system=args.system, only=args.only, directory=args.unit_dir)
+        elif not args.yes:
+            print("megalodon: this changes the machine's services; review `megalodon schedule plan`, then add --yes",
+                  file=sys.stderr)
+            return 2
+        elif args.schedule_command == "install":
+            result = schedule.install(system=args.system, only=args.only, directory=args.unit_dir,
+                                      take_baselines=args.take_baselines)
+        else:
+            result = schedule.remove(system=args.system, directory=args.unit_dir)
+    except (schedule.ScheduleError, OSError, subprocess.SubprocessError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("ok", True) else 1
+
+
+def _rootkit(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import rootkit_check
+    from .validation import ValidationError
+
+    try:
+        report = rootkit_check.check(ports=not args.skip_ports, max_pid=args.max_pid)
+    except (rootkit_check.RootkitError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report, indent=2, sort_keys=True))
+    findings = report["findings"]
+    if args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(
+                findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                f"{len(findings)} rootkit cross-check findings: {listed}",
+                tuple(sorted({t for f in findings for t in f["techniques"]})),
+                "One view of the system hides something another view still sees, as rootkits do.")])
+    return 1 if findings else 0
+
+
 def _binaries(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2144,6 +2442,16 @@ def main(argv: list[str] | None = None) -> None:
         code = _evidence(args)
     elif args.command == "binaries":
         code = _binaries(args)
+    elif args.command == "ancestry":
+        code = _ancestry(args)
+    elif args.command == "rootkit":
+        code = _rootkit(args)
+    elif args.command == "devices":
+        code = _devices(args)
+    elif args.command == "webroot":
+        code = _webroot(args)
+    elif args.command == "schedule":
+        code = _schedule(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":

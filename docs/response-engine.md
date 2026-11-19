@@ -44,9 +44,14 @@ megalodon respond report
      before;
    * the process-and-network review: reverse-shell shapes, and programs
      running from memory, from a deleted file or from a temporary folder;
+   * the [process ancestry](process-ancestry.md) check: services running
+     shells or attack tools. Its live `watch` can be piped into `ingest`;
+   * the [rootkit cross-checks](rootkit-check.md), without the port test
+     unless `rootkit_ports = true`;
    * the [listener](listener-watch.md), [persistence](persistence-watch.md),
-     [program integrity](binary-integrity.md) and [log](log-integrity.md)
-     checks, and canaries.
+     [program integrity](binary-integrity.md), [log](log-integrity.md),
+     [device](device-watch.md) and [web-root](webroot-watch.md) checks, and
+     canaries.
 
    Each check needs its baseline. A source that can't be read is listed
    under `gaps`.
@@ -73,7 +78,7 @@ The same finding is decided at most once a day.
 | `collect_evidence` | — | Save a hashed, read-only snapshot of the programs, sockets and files involved, before anything else: what [`megalodon evidence collect`](evidence-collection.md) does |
 | `notify` | — | Send a summary to the [off-machine alerts](off-machine-alerts.md) |
 | `block_address` | address | Drop traffic to and from the address for `block_minutes` |
-| `suspend_process` | program | Pause (SIGSTOP) its processes, keeping them for investigation |
+| `suspend_process` | process, or program | Pause (SIGSTOP) the process, keeping it for investigation |
 | `quarantine_file` | file | Move the file aside with no permissions, recording its hash |
 | `disable_persistence` | persistence entry | Disable a service, job or startup entry without deleting it |
 | `lock_account` | account | Lock the account's password and logins |
@@ -88,7 +93,12 @@ Guards apply whatever the playbooks say:
   network need switch-level controls. This machine's gateways, DNS servers
   and own addresses, and anything in `never_touch_addresses`, are refused.
 * **Programs.** init, systemd, sshd and dbus, and anything in
-  `never_touch_programs`, are never suspended.
+  `never_touch_programs`, are never suspended. A plan names the processes
+  behind the finding (`pid@start:program`; the start time keeps a reused
+  process ID from matching). Without one, a whole program is planned only
+  when nothing else shares it: a shell, an interpreter or anything in a
+  system folder is refused, because pausing `/usr/bin/bash` would pause
+  every login.
 * **Files.** Files in system folders (`/usr`, `/etc`, `/var/lib`,
   `/var/log`...) are never quarantined; reinstall the package instead.
   Only files under `quarantine_roots` are.
@@ -106,6 +116,10 @@ Guards apply whatever the playbooks say:
 | reverse-shell | `STDIO_SHELL_ON_NETWORK`, `SHELL_HOLDS_SOCKET`, `PIPED_TO_SHELL` | Collect evidence, suspend the program, block the remote address for 15 minutes, notify |
 | ransomware | `RANSOMWARE_ENCRYPTION`, `RANSOMWARE_MASS_WRITE` | Collect evidence, suspend the suspect programs, notify |
 | bind-shell-or-dropped-listener | HIGH `NEW_LISTENER`, `LISTENER_PROGRAM_CHANGED` | Collect evidence, suspend the program, notify |
+| web-shell-or-exploited-service | HIGH `SERVICE_SPAWNED_SHELL`, `SERVICE_SPAWNED_TOOL` | Collect evidence, suspend the started process, notify |
+| rootkit | `HIDDEN_PROCESS`, `HIDDEN_MODULE`, `HIDDEN_PORT`, `HIDDEN_DIRECTORY`, `HIDDEN_FILE`, `PRELOAD_LIBRARY` | Collect evidence, notify: a machine that hides things from itself cannot be trusted to clean itself |
+| web-shell-file | HIGH `SCRIPT_IN_UPLOAD_FOLDER`, `CODE_IN_NON_SCRIPT_FILE`, `WEB_SHELL_PATTERN` | Collect evidence, quarantine the file, notify |
+| new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Notify: only you know whether you plugged it in |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
 | attacker-at-the-door | HIGH `BRUTE_FORCE`, `HOST_SWEEP`, `DECOY_TOUCH`, `SYN_FLOOD`, `PORT_SCAN` | Block the source for 30 minutes, notify |
 | command-and-control-or-exfiltration | HIGH `BEACONING`, `DATA_EXFILTRATION`, `IOC_MATCH`, DNS rules | Only when corroborated: collect evidence, block for 60 minutes, notify |
@@ -128,9 +142,10 @@ decision or escalate it to you, never start an action.
   nothing more.
 * **Correlation is by shared values.** Two findings about the same attack
   with nothing in common stay separate incidents.
-* **Process targets are programs, not process IDs.** A shadow plan names the
-  program path. Enforcement would have to resolve which processes run it at
-  that moment.
+* **Process targets name processes where the source knows them.** The
+  process review and the process ancestry watch name the processes; the
+  listener watch names only programs, so its plans are limited by the
+  shared-program guard.
 * **The policy file is protected by its permissions only.** It must be owned
   by you and writable only by you, and every decision records its SHA-256.
   Cryptographic signing comes with enforcement.
