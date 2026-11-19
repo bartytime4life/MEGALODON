@@ -56,10 +56,15 @@ With `--alert`, findings also go to the
 
 A program is its executable. For a script interpreter or shell, it is the
 executable and the script it runs, so `python3 /opt/app/backup.py` and
-`python3 /tmp/stage2.py` are different programs.
+`python3 /tmp/stage2.py` are different programs. A script given by a relative
+name (`python3 backup.py`) is placed in the process's working folder, and
+`python3 -m module` counts the module. A script in a temporary folder makes
+the connection `OUTBOUND_FROM_TEMPORARY` even when the interpreter is
+installed normally.
 
 Outgoing means a TCP connection that is established or being opened, or a
-UDP socket connected to a remote address. Connections to loopback,
+UDP socket connected to a remote address. A connection that arrived on a port
+this machine listens on is incoming and is left out. Connections to loopback,
 link-local and multicast addresses are left out. Private (LAN) destinations
 are left out unless `learn --include-private` was used.
 

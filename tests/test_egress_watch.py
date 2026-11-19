@@ -89,7 +89,8 @@ def test_a_script_is_its_own_program_and_temporary_programs_are_never_learned(ho
     assert rules(ew.check(manifest, root=str(host))) == [
         ("NEW_OUTBOUND_PROGRAM", "/dev/shm/x", 443),
         ("NEW_OUTBOUND_PROGRAM", "/usr/bin/python3.12 /tmp/stage2.py", 443),
-        ("OUTBOUND_FROM_TEMPORARY", "/dev/shm/x", 443)]
+        ("OUTBOUND_FROM_TEMPORARY", "/dev/shm/x", 443),
+        ("OUTBOUND_FROM_TEMPORARY", "/usr/bin/python3.12 /tmp/stage2.py", 443)]
 
 
 def test_allow_and_a_watch_that_reloads_the_baseline(host, tmp_path):
@@ -146,7 +147,11 @@ def test_a_real_connection_is_matched_to_its_program(tmp_path, monkeypatch):
             child.wait()
         accepted.close()
     mine = [f for f in report["findings"] if f["evidence"]["processes"][0]["pid"] == child.pid]
-    assert [(f["rule_id"], f["port"]) for f in mine] == [("NEW_OUTBOUND_PROGRAM", port)]
+    # The script sits in a temporary folder, so it is also a dropped tool.
+    assert sorted((f["rule_id"], f["port"]) for f in mine) == [("NEW_OUTBOUND_PROGRAM", port),
+                                                               ("OUTBOUND_FROM_TEMPORARY", port)]
+    assert not [f for f in report["findings"] if f["port"] != port and f["address"] == "127.0.0.1"
+                and f["evidence"]["processes"][0]["pid"] == os.getpid()], "the accepted side is not outgoing"
     assert mine[0]["program"] == f"{os.path.realpath(sys.executable)} {script}" or \
         mine[0]["program"].endswith(str(script))
 
@@ -186,3 +191,37 @@ def test_cli(host, tmp_path, capsys, monkeypatch):
     assert code("egress", "allow", "--manifest", str(manifest), "/opt/new") == 0
     assert code("egress", "check", "--manifest", str(manifest)) == 0
     assert code("egress", "check", "--manifest", str(tmp_path / "none.json")) == 2
+
+
+def test_review_gaps_scripts_by_working_folder_inbound_and_the_ingest_pipe(host, tmp_path):
+    manifest = tmp_path / "egress.json"
+    # A script started by a relative name is identified by its working folder.
+    add_connection(host, 901, ("93.184.216.7", 443), 300, "/usr/bin/python3.12", b"python3\0backup.py\0")
+    os.symlink("/opt/app", host / "proc/300/cwd")
+    ew.learn(manifest, root=str(host))
+    assert "/usr/bin/python3.12 /opt/app/backup.py" in ew.read(manifest)["programs"]
+    add_connection(host, 902, ("93.184.216.7", 443), 301, "/usr/bin/python3.12", b"python3\0sync.py\0")
+    os.symlink("/home/u/.cache", host / "proc/301/cwd")
+    add_connection(host, 903, ("93.184.216.7", 443), 302, "/usr/bin/python3.12", b"python3\0-m\0http.client\0")
+    found = rules(ew.check(manifest, root=str(host)))
+    assert ("NEW_OUTBOUND_PROGRAM", "/usr/bin/python3.12 /home/u/.cache/sync.py", 443) in found
+    assert ("NEW_OUTBOUND_PROGRAM", "/usr/bin/python3.12 -m http.client", 443) in found
+    # A connection a local server accepted is inbound, even though it is established.
+    with open(host / "proc/net/tcp", "a") as table:
+        table.write(row(("0.0.0.0", 8443), ("0.0.0.0", 0), "0A", 904))
+        table.write(row(("192.168.1.5", 8443), ("93.184.216.99", 55123), "01", 905))
+    proc(host, 303, "/usr/sbin/nginx", [904, 905], cmdline=b"nginx\0")
+    stat_line(host, 303, 9100)
+    assert not [f for f in ew.check(manifest, root=str(host))["findings"] if f["program"] == "/usr/sbin/nginx"]
+    # Through the documented pipe, the destination survives and the address block is planned.
+    add_connection(host, 906, ("93.184.216.51", 4444), 304, "/tmp/.x/kworker", b"kworker\0", start=77)
+    line = json.dumps(next(f for f in ew.check(manifest, root=str(host))["findings"]
+                           if f["rule_id"] == "OUTBOUND_FROM_TEMPORARY" and f["port"] == 4444))
+    signals, refused = re_.ingest_signals([line], re_._now())
+    policy = tmp_path / "policy.toml"
+    re_.write_default_policy(policy)
+    re_.run(policy_path=policy, ledger=tmp_path / "ledger.jsonl", state_path=tmp_path / "state.json",
+            signals=signals, protected=set())
+    decision = json.loads((tmp_path / "ledger.jsonl").read_text().splitlines()[0])
+    assert refused == 0 and ("block_address", "93.184.216.51") in {(a["action"], a["target"])
+                                                                   for a in decision["actions"]}

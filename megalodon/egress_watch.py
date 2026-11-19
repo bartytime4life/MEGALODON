@@ -75,7 +75,7 @@ def _network(address):
 
 def connections(root='/', *, include_private=False):
     """Outgoing connections in this network namespace: {inode: (protocol, remote address, remote port)}."""
-    found, gaps = {}, []
+    found, gaps, tables = {}, [], []
     for protocol, _family, name, length in TABLES:
         try:
             lines, complete = _read_table(Path(root, 'proc/net', name))
@@ -86,12 +86,27 @@ def connections(root='/', *, include_private=False):
             continue
         if not complete:
             gaps.append(f'/proc/net/{name} was too large to read whole')
+        tables.append((protocol, length, lines))
+    # A connection a server accepted is established too, on the port it listens on: that one came in.
+    listening = set()
+    for protocol, length, lines in tables:
+        for line in lines:
+            fields = line.split()
+            if protocol == 'tcp' and len(fields) > 3 and fields[3] == '0A':
+                local = _endpoint(fields[1], length)
+                if local is not None:
+                    listening.add(local[1])
+    for protocol, length, lines in tables:
         for line in lines:
             fields = line.split()
             if len(fields) < 10 or not fields[9].isdigit() or fields[9] == '0':
                 continue
             if protocol == 'tcp' and fields[3] not in OUTGOING:
                 continue
+            if protocol == 'tcp':
+                local = _endpoint(fields[1], length)
+                if local is not None and local[1] in listening:
+                    continue
             remote = _endpoint(fields[2], length)
             if remote is None or remote[1] == 0:
                 continue                        # an unconnected UDP socket, or a listener
@@ -119,17 +134,34 @@ def _proc_info(proc):
         start = int(text[text.rindex(')') + 2:].split()[19])
     except (OSError, ValueError, IndexError):
         start = None
-    return dict(path=path, deleted=deleted, argv=argv, start=start)
+    try:
+        cwd = os.readlink(proc / 'cwd')
+    except OSError:
+        cwd = None
+    return dict(path=path, deleted=deleted, argv=argv, start=start, cwd=cwd)
+
+
+def script(info):
+    """The script an interpreter or shell runs: an absolute path, `-m module`, or None."""
+    if _program_kind(info['path'], '') not in ('interpreter', 'shell'):
+        return None
+    argv = info['argv'][1:]
+    if '-m' in argv and argv.index('-m') + 1 < len(argv):
+        return f"-m {argv[argv.index('-m') + 1]}"
+    operands = [a for a in argv if not a.startswith('-')]
+    if not operands or '\n' in operands[0]:
+        return None
+    operand = operands[0]
+    if not operand.startswith('/'):
+        # `python3 backup.py` names a file in the working directory; without it, keep the name as given.
+        operand = os.path.normpath(os.path.join(info['cwd'], operand)) if info.get('cwd') else f'./{operand}'
+    return operand
 
 
 def identity(info):
     """A program is its executable; for a script interpreter, the executable and the script it runs."""
-    path = info['path']
-    if _program_kind(path, '') in ('interpreter', 'shell'):
-        operands = [a for a in info['argv'][1:] if not a.startswith('-')]
-        if operands and operands[0].startswith('/') and ' ' not in operands[0]:
-            return f'{path} {operands[0]}'
-    return path
+    found = script(info)
+    return f"{info['path']} {found}" if found else info['path']
 
 
 def owners(root, inodes):
@@ -189,7 +221,7 @@ def observe(root='/', *, include_private=False, known=None):
             continue
         pid, info = owner
         seen.append(dict(inode=inode, protocol=protocol, address=str(address), port=port, scope=scope, pid=pid,
-                         start=info['start'], program=identity(info), executable=info['path'],
+                         start=info['start'], program=identity(info), executable=info['path'], script=script(info),
                          deleted=info['deleted'], argv=info['argv'][:8]))
     if unattributed:
         gaps.append(f'{unattributed} outgoing connections could not be matched to a program'
@@ -265,8 +297,9 @@ def record(baseline, connection):
 
 
 def _temporary(connection):
-    path = connection['executable']
-    return connection['deleted'] or path.startswith(TEMPORARY) or path.startswith('/memfd:')
+    path, run = connection['executable'], connection.get('script') or ''
+    return (connection['deleted'] or path.startswith(TEMPORARY) or path.startswith('/memfd:')
+            or run.startswith(TEMPORARY))      # `python3 /tmp/stage2.py`: the interpreter is installed, the script is not
 
 
 def judge(baseline, connection):
@@ -294,6 +327,8 @@ def _finding(rule, connection, detail):
         severity = 'MEDIUM'
     return dict(rule_id=rule, severity=severity, techniques=techniques, program=connection['program'],
                 detail=detail, summary=summary, address=connection['address'], port=connection['port'],
+                # `egress watch | respond ingest` reads the destination from dst_ip, as for network findings.
+                dst_ip=connection['address'],
                 protocol=connection['protocol'], detected_at=_now(),
                 evidence=dict(processes=[dict(program=connection['executable'], pid=connection['pid'],
                                               start=connection['start'])],
