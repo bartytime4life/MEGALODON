@@ -192,3 +192,24 @@ def test_cli_allow_and_check(tmp_path, capsys):
     with pytest.raises(SystemExit) as exit_:
         main(["ancestry", "allow", "--allow-file", str(allow), "nginx", "/usr/bin/dash"])
     assert exit_.value.code == 2
+
+
+def test_code_passed_as_a_string_never_counts_as_a_cgi_script(root):
+    # The CGI exemption is for an interpreter given a script file, not `-c`/`-e` code that starts with a path.
+    proc(root, 800, 30, "/usr/bin/dash", ["sh", "-c", "/usr/lib/cgi-bin/status; echo x > /var/www/html/b.php"])
+    proc(root, 801, 30, "/usr/bin/perl", ["/usr/bin/perl", "-e", "/usr/lib/cgi-bin/x.pl"])
+    proc(root, 802, 30, "/usr/bin/perl", ["/usr/bin/perl", "/usr/lib/cgi-bin/x.pl; id"])
+    proc(root, 803, 30, "/usr/bin/perl", ["/usr/bin/perl", "-T", "/usr/lib/cgi-bin/status.pl"])   # real CGI
+    assert set(rules(anc.check(root, now=NOW))) == {800, 801, 802}
+
+
+def test_without_fork_events_a_reused_service_pid_is_not_blamed(root):
+    # Polling mode: PHP-FPM was seen at PID 20, then sshd took the PID. A login shell under sshd is not PHP-FPM's.
+    found = []
+    watcher = anc.Watcher(found.append, root=root, source=Events([]))
+    watcher.handle("exec", 20, 0)
+    shutil.rmtree(root / "proc/20")
+    proc(root, 20, 1, "/usr/sbin/sshd", start=99999)
+    proc(root, 21, 20, "/usr/bin/bash", ["-bash"], start=100000)
+    watcher.handle("exec", 21, 0)
+    assert found == []

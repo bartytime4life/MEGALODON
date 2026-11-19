@@ -120,3 +120,23 @@ def test_cli(site, tmp_path, capsys):
     assert code("webroot", "check", "--manifest", str(manifest)) == 1
     assert {f["rule_id"] for f in json.loads(capsys.readouterr().out)["findings"]} == {
         "WEB_SCRIPT_ADDED", "WEB_SHELL_PATTERN"}
+
+
+def test_a_script_replaced_by_a_link_and_new_links_are_reported(site, tmp_path):
+    manifest = tmp_path / "webroot.json"
+    ww.baseline(manifest, web_roots=[str(site)])
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "kit").mkdir(parents=True)
+    (elsewhere / "shell.php").write_text(SHELL_CALL)
+    html = site / "html"
+    (html / "index.php").unlink()
+    os.symlink(elsewhere / "shell.php", html / "index.php")          # the served page now runs the dropped file
+    os.symlink(elsewhere / "kit", html / "kit")                      # a linked folder: recorded, not followed
+    report = ww.check(manifest)
+    assert rules(report) == [("WEB_LINK_ADDED", "kit"), ("WEB_SCRIPT_REPLACED_BY_LINK", "index.php"),
+                             ("WEB_SHELL_PATTERN", "index.php")]
+    assert report["removed"] == [] and "not followed" in report["gaps"][0]
+    ww.accept(manifest)
+    assert ww.check(manifest)["findings"] == []
+    (elsewhere / "shell.php").write_text(OBFUSCATED)                 # the link's target changes
+    assert rules(ww.check(manifest)) == [("WEB_LINK_CHANGED", "index.php"), ("WEB_SHELL_PATTERN", "index.php")]

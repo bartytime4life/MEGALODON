@@ -150,9 +150,16 @@ def _allowed_helper(argv):
     return bool(words) and words[0].rsplit('/', 1)[-1] in HELPERS
 
 
+_CODE_OPTION = re.compile(r'-[A-Za-z]*[ceEr]')     # sh -c, perl/ruby -e/-E, php -r: code given as text
+_PLAIN_PATH = re.compile(r'/[\w.@+-]+(?:/[\w.@+-]+)*')
+
+
 def _cgi_script(argv):
+    """`perl -T /usr/lib/cgi-bin/x.pl`: an interpreter given a script file, never code as a string."""
+    if any(_CODE_OPTION.match(a) for a in argv[1:] if a.startswith('-') and not a.startswith('--')):
+        return False
     operands = [a for a in argv[1:] if not a.startswith('-')]
-    return bool(operands) and operands[0].startswith(CGI_ROOTS)
+    return bool(operands) and operands[0].startswith(CGI_ROOTS) and bool(_PLAIN_PATH.fullmatch(operands[0]))
 
 
 def _load_allow(path):
@@ -232,22 +239,26 @@ class Judge:
                 processes=[dict(program=proc.path, pid=proc.pid, start=proc.start)]))
 
 
-def _ancestors(base, proc, cache, parent_of):
+def _ancestors(base, proc, cache, parent_of, forked=lambda pid: False):
     """Parents up to init. A parent that already exited comes from the cache, so `sh -c 'id &'` run by a
-    service still leads back to it after the shell is gone and `id` was reparented."""
-    chain, seen, ppid = [], {proc.pid}, parent_of(proc)
+    service still leads back to it after the shell is gone and `id` was reparented.
+
+    A cached parent is trusted over the live process at that PID only when a fork event tied this child to
+    it (`forked`). Otherwise the PID may simply have been reused, and the live process is the parent."""
+    chain, seen, child, ppid = [], {proc.pid}, proc, parent_of(proc)
     while ppid and ppid not in seen and len(chain) < MAX_DEPTH:
         seen.add(ppid)
         item = read_proc(base, ppid)
         cached = cache.get(ppid)
-        if item is None or (cached is not None and cached.start is not None and item.start != cached.start):
-            # Gone, or the PID now belongs to another process: the one we saw start is the ancestor.
-            item = cached
+        if item is None:
+            item = cached if forked(child.pid) else None
+        elif cached is not None and cached.start is not None and item.start != cached.start and forked(child.pid):
+            item = cached            # the PID now belongs to another process; the one that forked us is gone
         if item is None:
             break
         cache[ppid] = item
         chain.append(item)
-        ppid = parent_of(item)
+        child, ppid = item, parent_of(item)
     return chain
 
 
@@ -428,7 +439,8 @@ class Watcher:
             self.stats['vanished'] += 1
             return None
         self._remember(self.cache, pid, proc)
-        chain = _ancestors(self.base, proc, _BoundedCache(self.cache, self._remember), self._parent_of)
+        chain = _ancestors(self.base, proc, _BoundedCache(self.cache, self._remember), self._parent_of,
+                           forked=lambda child: child in self.parents)
         found = self.judge.judge(proc, chain, _now())
         if not found:
             return None

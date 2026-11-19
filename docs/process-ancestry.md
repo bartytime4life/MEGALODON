@@ -67,7 +67,9 @@ line (up to 512 bytes), the service and the chain of parents.
   (`rotatelogs`, `cronolog`). Any `;`, `|`, `$(...)` or other shell syntax
   makes it a finding.
 * **CGI scripts:** an interpreter that the web server starts directly on a
-  script under `/usr/lib/cgi-bin/` or another `cgi-bin` folder.
+  script file under `/usr/lib/cgi-bin/` or another `cgi-bin` folder. Code
+  given as text (`sh -c`, `perl -e`, `php -r`) never counts, even if it
+  starts with a CGI path.
 * **Pairs in the allow list.**
 * **Your own shells.** A shell under `sshd` or a terminal is not under a
   service.
@@ -76,6 +78,8 @@ line (up to 512 bytes), the service and the chain of parents.
 
 * **Root sees everything.** Without root, the programs of other accounts'
   processes cannot be read, and the `/proc` scan misses short-lived commands.
+  It also cannot follow a parent that already exited, because only the
+  kernel's fork events prove which process a child came from.
 * **Code that never starts a program is invisible.** A PHP web shell that
   reads files or opens sockets from inside PHP, without running a command,
   is not seen here. The [web-root watch](webroot-watch.md) looks at the

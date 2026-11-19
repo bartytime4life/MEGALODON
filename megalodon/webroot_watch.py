@@ -71,6 +71,11 @@ RULES = {
     'SCRIPT_IN_UPLOAD_FOLDER': ('CRITICAL', 'A new server-side script in a folder meant for uploads or static files, '
                                             'where web shells are dropped.'),
     'WEB_SHELL_PATTERN': ('HIGH', 'The file contains a known web-shell shape.'),
+    'WEB_SCRIPT_REPLACED_BY_LINK': ('HIGH', 'A recorded script is now a link to another file, which the web '
+                                            'server serves in its place.'),
+    'WEB_LINK_ADDED': ('MEDIUM', 'A new link under a web root. Deployments use links; so does an intruder pointing '
+                                 'a page at a dropped script.'),
+    'WEB_LINK_CHANGED': ('MEDIUM', 'A link under a web root now leads elsewhere, or its target changed.'),
     'WEB_SCRIPT_ADDED': ('HIGH', 'A new server-side script under a web root. Deployments add these; so do intruders.'),
     'WEB_SCRIPT_CHANGED': ('MEDIUM', 'A server-side script changed. Updates do this; so does an injected backdoor.'),
 }
@@ -127,6 +132,35 @@ def _hash_and_match(fd, size):
     return (digest.hexdigest() if read >= size else None), sorted(matches)
 
 
+def _link(path):
+    try:
+        target = os.readlink(path)
+    except OSError:
+        target = None
+    entry = dict(kind='link', target=target, target_kind='missing', sha256=None, size=None, mtime_ns=None,
+                 indicators=[])
+    try:
+        info = os.stat(path)
+    except OSError:
+        return entry
+    if stat.S_ISDIR(info.st_mode):
+        entry['target_kind'] = 'folder'      # not followed: it may lead out of the web root or loop
+        return entry
+    if not stat.S_ISREG(info.st_mode):
+        entry['target_kind'] = 'other'
+        return entry
+    entry.update(target_kind='file', size=info.st_size, mtime_ns=info.st_mtime_ns)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return entry
+    try:
+        entry['sha256'], entry['indicators'] = _hash_and_match(fd, info.st_size)
+    finally:
+        os.close(fd)
+    return entry
+
+
 def snapshot(web_roots=None):
     files, gaps, walked = {}, [], 0
     chosen = roots(web_roots)
@@ -154,6 +188,11 @@ def snapshot(web_roots=None):
                         if entry.name not in SKIP_FOLDERS and depth < MAX_DEPTH:
                             stack.append((entry.path, depth + 1))
                         continue
+                    if stat.S_ISLNK(info.st_mode):
+                        # A web server that follows links serves whatever the link points to: record the target,
+                        # and the contents when it is a file, instead of skipping it.
+                        files[entry.path] = _link(entry.path)
+                        continue
                     if not stat.S_ISREG(info.st_mode):
                         continue
                     try:
@@ -178,6 +217,9 @@ def snapshot(web_roots=None):
             if walked > MAX_WALK or len(files) >= MAX_FILES:
                 gaps.append('the scan reached its limit; later files were not recorded')
                 break
+    folders = sum(1 for f in files.values() if f.get('target_kind') == 'folder')
+    if folders:
+        gaps.append(f'{folders} links to folders were recorded but not followed; their contents are not checked')
     unreadable = sum(1 for f in files.values() if f.get('unreadable'))
     if unreadable:
         gaps.append(f'{unreadable} scripts could not be read; run as root or as the web server\'s owner')
@@ -244,6 +286,10 @@ def _indicator_findings(path, entry):
 
 
 def _same(before, entry):
+    if (before.get('kind') == 'link') != (entry.get('kind') == 'link'):
+        return False
+    if entry.get('kind') == 'link' and before.get('target') != entry.get('target'):
+        return False
     if before.get('sha256') and entry.get('sha256'):
         return before['sha256'] == entry['sha256']
     # Too large to hash or unreadable: fall back to size and modification time.
@@ -256,6 +302,18 @@ def compare(old, new, root_list):
     for path in sorted(new):
         entry, before = new[path], old.get(path)
         if before is not None and _same(before, entry):
+            continue
+        if entry['kind'] == 'link':
+            shown = f"{path} -> {entry.get('target')}"
+            if before is not None and before.get('kind') != 'link':
+                findings.append(_finding('WEB_SCRIPT_REPLACED_BY_LINK', path, entry,
+                                         f'script {path} was replaced by a link: {shown}'))
+            elif before is None:
+                findings.append(_finding('WEB_LINK_ADDED', path, entry, f'new link {shown}'))
+            else:
+                findings.append(_finding('WEB_LINK_CHANGED', path, entry, f'link {shown} now leads elsewhere or '
+                                                                         'to changed contents'))
+            findings += _indicator_findings(path, entry)
             continue
         if entry['kind'] == 'hidden':
             findings.append(_finding('CODE_IN_NON_SCRIPT_FILE', path, entry,

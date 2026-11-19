@@ -46,8 +46,16 @@ read. With `--alert`, a summary also goes to the
 | `CODE_IN_NON_SCRIPT_FILE` | CRITICAL | A file that should only be served (an image, text, CSS, font, archive) contains server-side code (`<?php`, `<%`, `<script runat="server">`) |
 | `SCRIPT_IN_UPLOAD_FOLDER` | CRITICAL | A new script in a folder meant for uploads or static files: `uploads`, `images`, `media`, `files`, `cache`, `tmp`, `static`, `assets` and similar |
 | `WEB_SHELL_PATTERN` | HIGH | The file contains a known web-shell shape (see below) |
+| `WEB_SCRIPT_REPLACED_BY_LINK` | HIGH | A recorded script is now a symbolic link, so the web server serves another file in its place |
 | `WEB_SCRIPT_ADDED` | HIGH | A new script elsewhere under a web root |
 | `WEB_SCRIPT_CHANGED` | MEDIUM | A script's contents changed |
+| `WEB_LINK_ADDED` | MEDIUM | A new symbolic link under a web root |
+| `WEB_LINK_CHANGED` | MEDIUM | A link now leads elsewhere, or the file it leads to changed |
+
+Symbolic links are recorded with their targets. A link to a file has that
+file's contents hashed and checked for web-shell shapes, wherever it is. A
+link to a folder is recorded but not followed, since it may lead out of the
+web root or loop, and the report lists it under `gaps`.
 
 A script is a file with a server-side extension (`.php` and its variants,
 `.phtml`, `.phar`, `.jsp`, `.asp`, `.aspx`, `.ashx`, `.cfm`, `.cgi`, `.pl`,
