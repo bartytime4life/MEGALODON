@@ -19,8 +19,9 @@ action is ever allowed to run:
    policy's SHA-256, as ``would_apply`` or ``refused`` with the guard's reason.
 
 Shadow mode is the only mode. This module cannot act: it starts no process,
-sends no signal, changes no firewall, file or account. ``mode = "enforce"`` is
-refused until enforcement exists as separate, reviewed code.
+sends no signal, changes no firewall, file or account. Carrying decisions out
+is the separate ``megalodon enforce`` step (:mod:`megalodon.enforcement`),
+which acts only on the actions and playbooks its own policy allows.
 """
 from __future__ import annotations
 
@@ -467,8 +468,8 @@ def load_policy(path=DEFAULT_POLICY):
         raise ResponseError('response has unsupported settings: ' + ', '.join(sorted(set(table) - known)))
     mode = table.get('mode', 'shadow')
     if mode != 'shadow':
-        raise ResponseError(f'response mode "{mode}" is not available: only shadow mode exists, which records '
-                            'decisions and carries none of them out')
+        raise ResponseError(f'response mode "{mode}" is not available: the response engine only records decisions; '
+                            '`megalodon enforce` carries out the ones its own policy allows')
     playbooks = table.get('playbook', [])
     if not isinstance(playbooks, list) or len(playbooks) > MAX_PLAYBOOKS:
         raise ResponseError(f'up to {MAX_PLAYBOOKS} [[response.playbook]] entries are allowed')

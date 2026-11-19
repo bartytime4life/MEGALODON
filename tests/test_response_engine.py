@@ -59,7 +59,7 @@ def test_default_policy_is_private_and_only_shadow_mode_exists(paths):
     with pytest.raises(re_.ResponseError, match="exists"):
         re_.write_default_policy(paths["policy_path"])
     for old, new, message in [
-            ('mode = "shadow"', 'mode = "enforce"', "only shadow mode exists"),
+            ('mode = "shadow"', 'mode = "enforce"', "only records decisions"),
             ('"collect_evidence", "suspend_process", "block_address", "notify"]', '"run_command"]', "actions must"),
             ('min_severity = "MEDIUM"', 'min_severity = "URGENT"', "min_severity"),
             ("correlation_minutes = 30", "correlation_minutes = 30\nauto_apply = true", "unsupported settings"),
