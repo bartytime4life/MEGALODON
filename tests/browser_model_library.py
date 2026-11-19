@@ -99,12 +99,22 @@ async def exercise_model_library(browser, port, password, passed):
     page.on("pageerror", lambda _: errors.append("uncaught page error"))
     artifacts = Path("artifacts/model-library-ux")
     artifacts.mkdir(parents=True, exist_ok=True)
+
+    async def open_file_tools():
+        await expect(page.locator("#support-model-refresh")).to_be_visible()
+        assert await page.locator("#model-library-options").get_attribute("open") is None
+        await expect(page.locator("#model-library-reuse")).not_to_be_visible()
+        await page.locator("#model-library-options > summary").focus()
+        await page.keyboard.press("Enter")
+        await expect(page.locator("#model-library-reuse")).to_be_visible()
+
     try:
         await page.goto(origin + "/")
         await page.locator("#password").fill(password)
         await page.locator("#submit").click()
         await expect(page.locator("#workspace-tab-setup")).to_be_visible()
         await page.goto(origin + "/#support-model-title")
+        await open_file_tools()
         reuse = page.locator("#model-library-reuse")
         await expect(reuse).to_be_enabled()
         assert actions == []
@@ -136,6 +146,7 @@ async def exercise_model_library(browser, port, password, passed):
             assert await page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             await page.screenshot(path=str(artifacts / f"existing-files-{width}.png"))
         await page.reload()
+        await open_file_tools()
         await expect(reuse).to_be_enabled()
         await expect(page.locator("#model-library-local")).to_contain_text("Files verified at last check")
         assert actions == [check_request], "reload must not repeat a check"
@@ -149,6 +160,7 @@ async def exercise_model_library(browser, port, password, passed):
 
         value["model_library"]["local_models"] = [observation("interrupted", "INTERRUPTED")]
         await page.reload()
+        await open_file_tools()
         await expect(page.locator("#model-library-local")).to_contain_text("Interrupted")
         await page.wait_for_timeout(10500)  # Cover the normal 10-second status poll.
         assert actions == [check_request, check_request], "restart/polling must not resume work"

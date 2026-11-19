@@ -225,6 +225,12 @@ renderHostTripwires = stableReview(renderHostTripwires);
   const workspaceVisible=()=>liveVisible()||setupVisible();
   const viewVisible=()=>workspaceVisible()&&(setupVisible()||typeof IntersectionObserver==='undefined'||state.globeVisible||(state.open&&state.configVisible));
   function feedback(message,kind='ready'){if(state.liveAction && el('live-action-status'))el('live-action-status').textContent=message;el('support-config-status').textContent=message;el('support-config').dataset.state=kind;}
+  function modelTestStatus(){
+    if(!state.valid)return;
+    const test=state.payload?.model?.response_test;
+    const draft=['model','compute_mode','timeout_seconds'].some(key=>state.dirty.has(key));
+    el('support-model-test-status').textContent=draft?'Unsaved changes · save, then test this choice. Previous results apply to saved settings.':test?(test.state==='running'?'Testing '+test.model+' · limit '+test.timeout_seconds+' s.':(test.model?test.model+' · ':'')+test.message+(test.finished_at?' · '+time(test.finished_at):'')):'Model testing is unavailable in this service version.';
+  }
   // Read only the already validated snapshot and current draft. Never probe or act here.
   function modelGuidance(){
     const model=state.payload?.model,test=model?.response_test;
@@ -270,7 +276,7 @@ renderHostTripwires = stableReview(renderHostTripwires);
         || (action==='tool_directory_set'&&state.payload?.tool_directories_status!=='ready') || (action==='model_select'&&!state.payload?.model?.options.some(row=>row.name===el('support-model-select').value)) || (action==='model_cancel'&&!state.payload?.model?.running)
         || (modelRunActions.has(action)&&aiBlocked) || (modelActions.has(action)&&!modelRunActions.has(action)&&choiceBlocked) || (action==='geography_disable'&&!state.payload?.geography_enabled) || (action==='persistence_baseline'&&!persistenceAllowsBaseline(state.payload?.persistence));
     }
-    el('support-model-adopt').disabled=aiBlocked||!!working();
+    el('support-model-adopt').disabled=choiceBlocked||!!working();
     el('support-model-load').disabled=aiBlocked||!!working()||!state.payload?.model?.model||state.payload?.model?.keep_ready!==true||['checking','loading'].includes(state.payload?.model?.lifecycle?.state);
     el('support-model-ready').disabled=choiceBlocked||!!working();
     el('support-model-test').disabled=blocked||!!working()||state.payload?.model?.response_test?.selection_saved!==true||['model','compute_mode','timeout_seconds'].some(key=>state.dirty.has(key));
@@ -284,6 +290,7 @@ renderHostTripwires = stableReview(renderHostTripwires);
     el('support-config').setAttribute('aria-busy',changing?'true':'false');
     const draft=['model','compute_mode','timeout_seconds'].some(key=>state.dirty.has(key));
     if(el('support-model-draft'))el('support-model-draft').textContent=draft?'Unsaved changes · save to use these settings after restart.':'Your saved choice stays selected across restarts. Refresh only to choose a different installed model.';
+    modelTestStatus();
     modelGuidance();
     startupControls(blocked);
     libraryControls(blocked);
@@ -323,8 +330,6 @@ renderHostTripwires = stableReview(renderHostTripwires);
       el('support-model-saved').textContent=(remembered?'Saved preference · ':'')+(remembered?model.model:model.selection_state==='invalid'?'Saved profile needs attention':'No model saved');
       if(el('support-model-persistence'))el('support-model-persistence').textContent=model.selection_state==='restored'?'Restored from this computer · model, version, compute and response limit.':model.selection_state==='invalid'?'The private saved profile could not be read safely. Select and save a model again.':remembered?'Saved on this computer · restored at the next HUD start.':'Choose an installed model and save it once.';
       el('support-ollama-connection').textContent={reachable:'Ollama connected · installed models were read successfully.',unavailable:'Ollama unavailable at 127.0.0.1:11434. Check its service, then refresh.',error:'The Ollama connection check failed. Refresh to retry.',unchecked:'Ollama connection has not been checked in this session.'}[model.connection_state]||'Refresh installed models to check the Ollama connection.';
-      const test=model.response_test;
-      el('support-model-test-status').textContent=test?(test.state==='running'?'Testing '+test.model+' · limit '+test.timeout_seconds+' s.':test.message+(test.finished_at?' · '+time(test.finished_at):'')):'Model testing is unavailable in this service version.';
       el('support-model-authorization').hidden=!unbound;
       const options=model.options.map(row=>{const option=document.createElement('option');option.value=row.name;option.textContent=row.name+' · '+(row.size_bytes/1024**3).toFixed(1)+' GiB';return option;});
       const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=options.length?'Choose a model':unbound&&!model.updated_at?'Click Refresh installed models':model.running?'Model busy · refresh when finished':['checking','model_loading'].includes(model.model_state)?'Waiting for Ollama…':'No installed models returned';
