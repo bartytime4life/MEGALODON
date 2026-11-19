@@ -78,6 +78,21 @@ def _iso(moment):
     return moment.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
+def _cursor_text(moment):
+    """The cursor keeps microseconds: a whole-second cursor would leave a later fraction looking new forever."""
+    return moment.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+
+def _cursor_time(text):
+    """Read a cursor, with or without fractional seconds (older cursors have none)."""
+    for layout in ('%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%SZ'):
+        try:
+            return datetime.strptime(text, layout).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    raise LoginError(f'login cursor has an unreadable time: {text!r}')
+
+
 def _network(address):
     parsed = ipaddress.ip_address(address)
     return str(ipaddress.ip_network(f'{parsed}/{24 if parsed.version == 4 else 48}', strict=False))
@@ -94,7 +109,9 @@ def _scope(address):
 
 def events_from_lines(lines, *, reference=None):
     """Successful logins, sudo and su from syslog or journal text."""
-    clock = _Clock((reference or _now()).astimezone(), None)
+    # Classic syslog stamps carry no zone: they are local time, as in the auth reviewer.
+    reference = (reference or _now()).astimezone()
+    clock = _Clock(reference, reference.tzinfo)
     out = []
     for raw in lines:
         text = raw.decode('utf-8', 'replace').rstrip('\r\n') if isinstance(raw, bytes) else raw.rstrip('\r\n')
@@ -254,7 +271,7 @@ def learn(manifest=DEFAULT_MANIFEST, *, logs=None, cursor=DEFAULT_CURSOR):
     baseline['recorded_at'] = _iso(_now())
     _write(path, baseline)
     if events and cursor:
-        _write(cursor, dict(schema=SCHEMA + '-cursor', last=_iso(events[-1]['when'])))
+        _write(cursor, dict(schema=SCHEMA + '-cursor', last=_cursor_text(events[-1]['when'])))
     return dict(schema=REPORT_SCHEMA, action='learn', manifest=str(path), events=len(events),
                 accounts=len(baseline['users']), sudo_users=len(baseline['sudo']))
 
@@ -344,8 +361,7 @@ def check(manifest=DEFAULT_MANIFEST, *, logs=None, cursor=DEFAULT_CURSOR, every=
     events = read_events(logs)
     since = None
     if cursor and not every and Path(cursor).expanduser().exists():
-        since = datetime.strptime(_read(cursor, SCHEMA + '-cursor', 'login cursor')['last'],
-                                  '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+        since = _cursor_time(_read(cursor, SCHEMA + '-cursor', 'login cursor')['last'])
     fresh = [e for e in events if since is None or e['when'] > since]
     findings = []
     for event in fresh:
@@ -353,7 +369,7 @@ def check(manifest=DEFAULT_MANIFEST, *, logs=None, cursor=DEFAULT_CURSOR, every=
         # Judged once: a second login from the same new network in this run is not reported again.
         record(baseline, event)
     if events and cursor:
-        _write(cursor, dict(schema=SCHEMA + '-cursor', last=_iso(events[-1]['when'])))
+        _write(cursor, dict(schema=SCHEMA + '-cursor', last=_cursor_text(events[-1]['when'])))
     findings.sort(key=lambda f: (RANK.index(f['severity']), f['when']))
     return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()), checked_at=_iso(_now()),
                 events=len(fresh), findings=findings,

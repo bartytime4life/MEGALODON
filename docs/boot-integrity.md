@@ -34,7 +34,9 @@ sudo megalodon boot accept
   at once.
 * **`check`** reports what changed, most severe first. It exits 1 on
   findings and 2 on an error. Changes that package updates explain are
-  listed under `explained` and are not findings.
+  listed under `explained` and are not findings. A protection the baseline
+  could read but this check cannot, for example after securityfs is
+  unmounted, is listed under `gaps` rather than skipped.
 * **`accept`** records the current state after a kernel or bootloader update
   you reviewed.
 
@@ -64,7 +66,7 @@ to match an update, but not its change time.
 | `SECURE_BOOT_DISABLED` | HIGH | Secure Boot was on and is now off |
 | `LOCKDOWN_WEAKENED` | HIGH | Kernel lockdown is weaker than before (confidentiality → integrity → none) |
 | `MODULE_SIGNATURES_OFF` | HIGH | The kernel enforced module signatures and no longer does |
-| `CMDLINE_WEAKENED` | HIGH | The running kernel, or a GRUB or loader entry, gained a parameter that switches a protection off or replaces the first program: `init=`, `rd.break`, `single`, `module.sig_enforce=0`, `lockdown=none`, `apparmor=0`, `selinux=0`, `enforcing=0`, `security=none`, `audit=0`, `ima_appraise=off`, `nokaslr`, `mitigations=off`, `lsm=` |
+| `CMDLINE_WEAKENED` | HIGH | The running kernel, a GRUB or loader entry, or a quoted `GRUB_CMDLINE_LINUX` value in `/etc/default/grub` gained a parameter that switches a protection off or replaces the first program: `init=`, `rd.break`, `single`, `module.sig_enforce=0`, `lockdown=none`, `apparmor=0`, `selinux=0`, `enforcing=0`, `security=none`, `audit=0`, `ima_appraise=off`, `nokaslr`, `mitigations=off`, `lsm=`. Reported even when an update explains the file change |
 | `BOOT_FILE_CHANGED`, `BOOT_FILE_ADDED` | HIGH | A kernel, initramfs or bootloader file changed or appeared with no package update near that time |
 | `BOOT_CONFIG_CHANGED` | MEDIUM | Bootloader or initramfs configuration changed with no package update near that time |
 | `CMDLINE_CHANGED` | MEDIUM | The running kernel's command line changed in another way |

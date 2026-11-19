@@ -137,3 +137,34 @@ def test_cli_and_baseline_permissions(paths, tmp_path, capsys, monkeypatch):
     assert json.loads(capsys.readouterr().out)["findings"][0]["rule_id"] == "LOGIN_NEW_ACCOUNT"
     os.chmod(manifest, 0o644)
     assert code("logins", "check", "--manifest", str(manifest), "--log", other) == 2
+
+
+def test_classic_syslog_lines_are_read_in_local_time(paths, tmp_path):
+    # Classic lines carry no year or zone. They used to crash on a naive-versus-aware comparison.
+    classic = write(tmp_path / "classic.log",
+                    f"Nov 19 09:15:00 host sshd[40]: Accepted publickey for alice from 93.184.216.10 port 50001 "
+                    f"ssh2: ED25519 {KEY}\n"
+                    "Nov 19 09:20:00 host sudo:    alice : TTY=pts/0 ; PWD=/home/alice ; USER=root ; "
+                    "COMMAND=/usr/bin/apt update\n")
+    reference = datetime(2026, 11, 19, 12, 0, tzinfo=timezone.utc)
+    events = lw.events_from_lines(Path(classic).read_text().splitlines(), reference=reference)
+    assert [e["kind"] for e in events] == ["login", "sudo"]
+    assert all(e["when"].tzinfo is not None and e["when"].year == 2026 for e in events)
+    assert events[0]["when"].astimezone().replace(tzinfo=None) == datetime(2026, 11, 19, 9, 15)
+    lw.learn(paths["manifest"], logs=[paths["history"]], cursor=None)
+    assert lw.check(paths["manifest"], logs=[classic], cursor=paths["cursor"])["events"] == 2
+
+
+def test_the_cursor_keeps_fractional_seconds(paths, tmp_path):
+    lw.learn(paths["manifest"], logs=[paths["history"]], cursor=None)
+    precise = write(tmp_path / "precise.log", "2026-11-28T10:00:00.123456+00:00 host sshd[50]: Accepted publickey "
+                                              "for bob from 93.184.216.11 port 40002 ssh2\n")
+    first = lw.check(paths["manifest"], logs=[precise], cursor=paths["cursor"])
+    assert [f["rule_id"] for f in first["findings"]] == ["LOGIN_NEW_ACCOUNT"]
+    for _ in range(2):          # the same unchanged log is not judged again
+        again = lw.check(paths["manifest"], logs=[precise], cursor=paths["cursor"])
+        assert again["events"] == 0 and again["findings"] == []
+    # A cursor written before fractions were kept is still read.
+    paths["cursor"].write_text(json.dumps(dict(schema=lw.SCHEMA + "-cursor", last="2026-11-28T09:59:59Z")))
+    os.chmod(paths["cursor"], 0o600)
+    assert lw.check(paths["manifest"], logs=[precise], cursor=paths["cursor"])["events"] == 1
