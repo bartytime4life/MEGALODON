@@ -40,7 +40,10 @@ megalodon credentials check
   [tamper check](tamper-detection.md) watches it.
 
 As root, every user's home is watched (UID 0 and 1000 and up). Otherwise,
-only your own is. With `--alert`, findings also go to the
+only your own is. A credential that is a symbolic link, such as a key linked
+from a secrets folder, is reported under its own name. Credential folders and
+files created after the watch started, such as a first `aws configure` or a
+new browser profile, are picked up within 30 seconds. With `--alert`, findings also go to the
 [off-machine alerts](off-machine-alerts.md). The contents of the files are
 never read.
 

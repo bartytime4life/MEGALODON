@@ -39,6 +39,7 @@ DEFAULT_ALLOW = '~/.config/megalodon/credential-allow.json'
 MAX_TRACKED = 65536
 COOLDOWN_SECONDS = 3600
 SWEEP_WINDOW = 120
+REFRESH_SECONDS = 30
 SYSTEM_PREFIXES = ('/usr/', '/bin/', '/sbin/', '/lib/', '/lib64/', '/opt/', '/snap/')
 
 _BROWSERS = ('google-chrome', 'google-chrome-beta', 'chromium', 'BraveSoftware/Brave-Browser', 'microsoft-edge',
@@ -141,6 +142,30 @@ def classify(path, watched):
         if fnmatch.fnmatchcase(path, pattern):
             return category
     return None
+
+
+def aliases(watched):
+    """{resolved path: (credential path, category)} for credentials that are symbolic links. The kernel names the
+    file a descriptor really opened, so a linked key is reported under its target unless it is mapped back."""
+    found = {}
+    for category, pattern in watched:
+        for match in glob.glob(pattern):
+            if match.endswith(_SUFFIX_SKIP):
+                continue
+            real = os.path.realpath(match)
+            if real != match and os.path.isfile(real):
+                found[real] = (match, category)
+    return found
+
+
+def resolve(path, watched, linked):
+    """(category, credential path) for an opened path, through the symlink map; (None, path) otherwise."""
+    category = classify(path, watched)
+    if category:
+        return category, path
+    if path in linked:
+        return linked[path][1], linked[path][0]
+    return None, path
 
 
 def targets(watched):
@@ -267,6 +292,7 @@ class Judge:
 
 def check(*, root='/', home_dirs=None, allow_path=DEFAULT_ALLOW):
     watched = patterns(home_dirs if home_dirs is not None else homes(root), root)
+    linked = aliases(watched)
     judge = Judge(_load_allow(allow_path))
     findings, gaps, unreadable = [], [], 0
     base = Path(root, 'proc')
@@ -284,9 +310,9 @@ def check(*, root='/', home_dirs=None, allow_path=DEFAULT_ALLOW):
                     target = os.readlink(fd.path)
                 except OSError:
                     continue
-                category = classify(target, watched) if target.startswith('/') else None
+                category, shown = resolve(target, watched, linked) if target.startswith('/') else (None, target)
                 if category:
-                    findings += judge.judge(int(entry.name), _proc_info(base / entry.name), target, category,
+                    findings += judge.judge(int(entry.name), _proc_info(base / entry.name), shown, category,
                                             time.monotonic())
     if unreadable and os.geteuid():
         gaps.append(f'{unreadable} processes of other accounts could not be read; run as root to see every process')
@@ -315,9 +341,16 @@ class Fanotify:
         self.fd = self.libc.fanotify_init(FAN_CLOEXEC | FAN_NONBLOCK | FAN_CLASS_NOTIF, os.O_RDONLY | O_LARGEFILE)
         if self.fd < 0:
             raise OSError(ctypes.get_errno(), 'fanotify is not available')
-        self.marked = 0
+        self.marked, self.paths = 0, set()
+        self.add(files, folders)
+
+    def add(self, files, folders):
+        """Mark more files and folders; marks follow symbolic links to the file itself."""
         for path, mask in [(f, FAN_OPEN) for f in files] + [(d, FAN_OPEN | FAN_EVENT_ON_CHILD) for d in folders]:
+            if path in self.paths:
+                continue
             if self.libc.fanotify_mark(self.fd, FAN_MARK_ADD, mask, -100, path.encode()) == 0:
+                self.paths.add(path)
                 self.marked += 1
 
     def fileno(self):
@@ -361,7 +394,13 @@ class Inotify:
             raise OSError(ctypes.get_errno(), 'inotify is not available')
         self.watches, self.marked = {}, 0
         self.libc.inotify_add_watch.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+        self.add(files, folders)
+
+    def add(self, files, folders):
+        known = set(self.watches.values())
         for path in list(folders) + list(files):
+            if path in known:
+                continue
             wd = self.libc.inotify_add_watch(self.fd, path.encode(), IN_OPEN)
             if wd >= 0:
                 self.watches[wd] = path
@@ -393,14 +432,16 @@ class Inotify:
 
 
 def _holders(path):
-    """Processes that hold `path` open now (for the inotify fallback)."""
+    """Processes that hold `path` open now (for the inotify fallback). Descriptors name the resolved file, so a
+    credential that is a symbolic link is matched by its target too."""
+    wanted = {path, os.path.realpath(path)}
     found = []
     for entry in os.scandir('/proc'):
         if not entry.name.isdigit():
             continue
         try:
             with os.scandir(f'/proc/{entry.name}/fd') as fds:
-                if any(_link(fd.path) == path for fd in fds):
+                if any(_link(fd.path) in wanted for fd in fds):
                     found.append(int(entry.name))
         except OSError:
             continue
@@ -417,8 +458,10 @@ def _link(path):
 class Watcher:
     def __init__(self, emit, *, home_dirs=None, allow_path=DEFAULT_ALLOW, source=None, processes=None,
                  clock=time.monotonic):
+        self.home_dirs = home_dirs
         self.watched = patterns(home_dirs if home_dirs is not None else homes())
         self.files, self.folders = targets(self.watched)
+        self.linked = aliases(self.watched)
         self.judge = Judge(_load_allow(allow_path))
         self.emit, self.clock = emit, clock
         self.cache: OrderedDict = OrderedDict()
@@ -438,6 +481,18 @@ class Watcher:
                 processes = None
         self.processes = processes
         self.mode = source.mode
+        self.refreshed = clock()
+
+    def refresh(self):
+        """Pick up credential folders and files created since the watch started (a first `aws configure`, a
+        new browser profile, a new user's home)."""
+        self.watched = patterns(self.home_dirs if self.home_dirs is not None else homes())
+        files, folders = targets(self.watched)
+        self.linked = aliases(self.watched)
+        if hasattr(self.source, 'add'):
+            self.source.add(files, folders)
+        self.files, self.folders = files, folders
+        self.refreshed = self.clock()
 
     def _remember(self, pid):
         info = _proc_info(Path('/proc', str(pid)))
@@ -451,7 +506,7 @@ class Watcher:
         if pid == 'lost':
             self.stats['lost'] += 1
             return []
-        category = classify(path, self.watched)
+        category, shown = resolve(path, self.watched, self.linked)
         if category is None:
             return []
         self.stats['opens'] += 1
@@ -466,7 +521,7 @@ class Watcher:
             if info is None:
                 self.stats['unattributed'] += 1
                 continue
-            for found in self.judge.judge(one, info, path, category, self.clock()):
+            for found in self.judge.judge(one, info, shown, category, self.clock()):
                 self.stats['findings'] += 1
                 out.append(found)
                 self.emit(found)
@@ -474,6 +529,8 @@ class Watcher:
 
     def run(self, stop, timeout=0.5):
         while not stop.is_set():
+            if self.clock() - self.refreshed >= REFRESH_SECONDS:
+                self.refresh()
             ready, _, _ = select.select([self.source.fileno()] + ([self.processes.sock] if self.processes else []),
                                         [], [], timeout)
             if self.processes is not None:

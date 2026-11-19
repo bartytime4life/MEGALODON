@@ -166,3 +166,59 @@ def test_without_fanotify_a_reader_still_holding_the_file_is_named(home, tmp_pat
         watcher.close()
     assert any(f["rule_id"] == "CREDENTIAL_READ_BY_DROPPED_TOOL" and f["category"] == "wallet" for f in found), \
         watcher.stats
+
+
+def run_reader(watcher, argv, settle=0.5):
+    stop = threading.Event()
+    worker = threading.Thread(target=watcher.run, args=(stop,), kwargs=dict(timeout=0.05), daemon=True)
+    worker.start()
+    try:
+        time.sleep(0.3)
+        subprocess.run(argv, check=True)
+        time.sleep(settle)
+    finally:
+        stop.set()
+        worker.join(5)
+        watcher.close()
+
+
+@linux
+@pytest.mark.parametrize("mode", ["fanotify", "inotify"])
+def test_a_credential_that_is_a_symbolic_link_is_still_watched(home, tmp_path, monkeypatch, mode):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "deploy_key").write_text("placeholder key\n")
+    link = home / ".ssh/id_deploy"
+    os.symlink(vault / "deploy_key", link)
+    holder = tmp_path / "hold.py"
+    holder.write_text("import sys, time\nheld = open(sys.argv[1])\ntime.sleep(1.0)\n")
+    # Held open: the descriptor names the vault file, and check maps it back to the key.
+    child = subprocess.Popen([sys.executable, str(holder), str(link)])
+    try:
+        time.sleep(0.4)
+        report = cw.check(home_dirs=[str(home)], allow_path=None)
+    finally:
+        child.wait()
+    assert [f["path"] for f in report["findings"] if f["evidence"]["processes"][0]["pid"] == child.pid] == [str(link)]
+    if mode == "inotify":
+        monkeypatch.setattr(cw, "Fanotify", lambda *a, **k: (_ for _ in ()).throw(OSError(1, "no fanotify")))
+    found = []
+    watcher = cw.Watcher(found.append, home_dirs=[str(home)], allow_path=None)
+    run_reader(watcher, [sys.executable, str(holder), str(link)])
+    assert any(f["path"] == str(link) and f["category"] == "ssh" for f in found), (watcher.mode, watcher.stats)
+
+
+@linux
+def test_credentials_created_after_the_watch_started_are_picked_up(home, tmp_path):
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    found = []
+    watcher = cw.Watcher(found.append, home_dirs=[str(fresh)], allow_path=None)
+    assert not any(".aws" in f for f in watcher.files + watcher.folders)
+    (fresh / ".aws").mkdir()
+    (fresh / ".aws/credentials").write_text("[default]\n")       # a first `aws configure`
+    watcher.refresh()
+    holder = tmp_path / "hold.py"
+    holder.write_text("import sys, time\nheld = open(sys.argv[1])\ntime.sleep(1.0)\n")
+    run_reader(watcher, [sys.executable, str(holder), str(fresh / ".aws/credentials")])
+    assert any(f["category"] == "cloud" for f in found), (watcher.mode, watcher.stats)
