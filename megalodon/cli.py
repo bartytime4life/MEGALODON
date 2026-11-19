@@ -364,6 +364,22 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    memory = sub.add_parser(
+        "memory", help="find code that lives only in process memory, and save it before the process is gone (root)")
+    memory_sub = memory.add_subparsers(dest="memory_command", required=True)
+    inspect_cmd = memory_sub.add_parser("inspect", help="list a process's executable memory and flag what is suspicious")
+    inspect_cmd.add_argument("pid", type=int)
+    memory_sub.add_parser("sweep", help="inspect every process (exit 1 on findings)")
+    capture_cmd = memory_sub.add_parser("capture", help="save a process's suspicious memory into a sealed bundle")
+    capture_cmd.add_argument("pid", type=int)
+    capture_cmd.add_argument("--start", type=int,
+                             help="the process's start time as reported; refuses if the PID now names another process")
+    capture_cmd.add_argument("--output", type=Path, help="bundle folder (default under ~/.local/share/megalodon/evidence)")
+    capture_cmd.add_argument("--all", action="store_true", help="save every readable region, not only suspicious ones")
+    capture_cmd.add_argument("--limit-mb", type=int, default=256, help="stop saving after this much (default 256)")
+    capture_cmd.add_argument("--with-command-line", action="store_true",
+                             help="also save the command line, which can hold passwords and tokens")
+
     hardening = sub.add_parser(
         "hardening", help="baseline and check protections that get weaker, file capabilities and root's search path")
     hardening_sub = hardening.add_subparsers(dest="hardening_command", required=True)
@@ -1835,6 +1851,24 @@ def _ebpf(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _memory(args: argparse.Namespace) -> int:
+    from . import memory_capture as mc
+
+    try:
+        if args.memory_command == "inspect":
+            result = mc.inspect(args.pid)
+        elif args.memory_command == "sweep":
+            result = mc.sweep()
+        else:
+            result = mc.capture(args.pid, start=args.start, output=args.output, everything=args.all,
+                                command_line=args.with_command_line, limit=max(1, args.limit_mb) * 1024 * 1024)
+    except (mc.MemoryCaptureError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 1 if result.get("findings") else 0
+
+
 def _hardening(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -3054,6 +3088,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _containers(args)
     elif args.command == "hardening":
         code = _hardening(args)
+    elif args.command == "memory":
+        code = _memory(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":
