@@ -475,6 +475,8 @@ def build_parser() -> argparse.ArgumentParser:
                               "command line, where it would be recorded")
     command.add_argument("--expect-sequence", type=int,
                          help="the last line the heartbeat carried off the machine; a log ending earlier was cut")
+    command.add_argument("--from-sequence", type=int, default=1,
+                         help="start here: rotated files before this line were moved off the machine on purpose")
     command = commands_sub.add_parser("show", help="list recorded programs (does not verify: use verify)")
     command.add_argument("--since", help="only from this time on, such as 2026-11-19T12:00")
     command.add_argument("--uid", type=int, help="only this account, as it ran or as it logged in")
@@ -2181,7 +2183,8 @@ def _commands(args: argparse.Namespace) -> int:
             print(json.dumps(dict(recorded=count), sort_keys=True))
             return 0
         if args.commands_command == "verify":
-            result = cl.verify(read_secret(str(args.key_file)), log=paths["log"], expect_sequence=args.expect_sequence)
+            result = cl.verify(read_secret(str(args.key_file)), log=paths["log"], expect_sequence=args.expect_sequence,
+                               from_sequence=args.from_sequence)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 1 if result["findings"] else 0
         if args.commands_command == "status":

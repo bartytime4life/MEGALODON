@@ -59,8 +59,18 @@ is replaced by its length. `--keep-secrets` turns this off. Do so only if the
 log is kept as carefully as the secrets themselves.
 
 The log is `~/.local/state/megalodon/commands.jsonl` (mode 600; for the
-root service, root's home). Past 64 MiB it moves to `commands.jsonl.1`, and
-`verify` reads both.
+root service, root's home). Past 64 MiB it moves aside under a name of its own,
+`commands.jsonl.000000048211` after its first line. No rotated file is ever
+written over, and `verify` reads them all in order.
+
+To keep less on the machine, move the oldest rotated files off it, for
+example next to the key. Then verify the rest with `--from-sequence`, the first
+line of the oldest file you kept. That boundary comes from you, off the
+machine. It is not written in the log, where an intruder holding the current
+key could write one too.
+
+Only one recorder runs at a time. A second `commands record` for the same log
+is refused, because two would sign different lines with the same key.
 
 ## Why it cannot be quietly rewritten
 
@@ -91,7 +101,7 @@ root service, root's home). Past 64 MiB it moves to `commands.jsonl.1`, and
 
 | Rule | Severity | When |
 | --- | --- | --- |
-| `COMMAND_LOG_FORGED` | CRITICAL | A line does not match its signature, or does not follow the line before it: it was changed, inserted, reordered or spliced |
+| `COMMAND_LOG_FORGED` | CRITICAL | A line does not match its signature, does not follow the line before it, or is not a signed record at all: it was changed, inserted, reordered, spliced or overwritten |
 | `COMMAND_LOG_GAP` | HIGH | Lines are missing from the middle: they were removed |
 | `COMMAND_LOG_TRUNCATED` | HIGH | The log ends before `--expect-sequence`: its end was cut off |
 | `COMMAND_LOG_STOPPED_UNCLEANLY` | MEDIUM | The recorder started again without having stopped: it crashed or was killed, and programs in between are not recorded |

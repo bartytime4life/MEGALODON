@@ -18,6 +18,7 @@ must not become a store of secrets.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import fcntl
 import hashlib
 import hmac
 import json
@@ -181,11 +182,38 @@ class Recorder:
     def __init__(self, *, state=DEFAULT_STATE, log=DEFAULT_LOG, clock=None):
         self.state_path, self.log_path = Path(state).expanduser(), Path(log).expanduser()
         self.clock = clock or (lambda: datetime.now(timezone.utc))
-        state = read_state(self.state_path)
+        # One recorder at a time, from before the key is read until it stops: two would sign different lines
+        # with the same key and number.
+        self.state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.lock = os.open(self.state_path.with_name(self.state_path.name + '.lock'),
+                            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        try:
+            fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(self.lock)
+            raise CommandLogError('another command recorder is running for this log') from None
+        try:
+            state = read_state(self.state_path)
+        except BaseException:
+            self.close()
+            raise
         self.key_id = state['key_id']
         self.next, self.key, self.last_mac = state['next'], bytes.fromhex(state['key']), state['last_mac']
         self.pending, self.flushed_at = [], time.monotonic()
         self._catch_up()
+
+    def close(self):
+        """Release the recorder lock; the state on disk is whatever was last flushed."""
+        if self.lock is not None:
+            os.close(self.lock)
+            self.lock = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.flush()
+        self.close()
 
     def _catch_up(self):
         """Lines written after the state was last saved (a crash between the two) move the key forward."""
@@ -214,7 +242,9 @@ class Recorder:
             return
         self.log_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         if self.log_path.exists() and self.log_path.stat().st_size > ROTATE_BYTES:
-            os.replace(self.log_path, self.log_path.with_name(self.log_path.name + '.1'))
+            # Each rotated file keeps its own name, after the first line it holds: none is ever written over.
+            first = _first_sequence(self.log_path)
+            os.replace(self.log_path, self.log_path.with_name(f'{self.log_path.name}.{first:012d}'))
         fd = os.open(self.log_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
         try:
             info = os.fstat(fd)
@@ -228,6 +258,14 @@ class Recorder:
         self.pending = []
         _write_state(self.state_path, dict(read_state(self.state_path), next=self.next, key=self.key.hex(),
                                            last_mac=self.last_mac))
+
+
+def _first_sequence(path):
+    try:
+        with open(path, 'rb') as stream:
+            return int(json.loads(stream.readline()).get('seq', 0))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return int(time.time())          # an unreadable first line still gets a name of its own
 
 
 def _tail(path, from_sequence):
@@ -349,29 +387,39 @@ def record(stop, *, state=DEFAULT_STATE, log=DEFAULT_LOG, root='/', source=None,
             if recorder.pending and time.monotonic() - recorder.flushed_at >= FLUSH_SECONDS:
                 recorder.flush()
     finally:
-        recorder.add('stop', recorded=count)
-        recorder.flush()
-        source.close()
+        try:
+            recorder.add('stop', recorded=count)
+            recorder.flush()
+        finally:
+            recorder.close()
+            source.close()
     return count
 
 
 # ------------------------------------------------------------------ reading and verifying
 
-def entries(log=DEFAULT_LOG):
-    """Every entry of the log and its rotated copy, in sequence order."""
+def log_files(log=DEFAULT_LOG):
+    """The rotated files, oldest first, then the current one."""
     path = Path(log).expanduser()
+    rotated = sorted(p for p in path.parent.glob(path.name + '.*')
+                     if p.name[len(path.name) + 1:].isdigit())
+    return [*rotated, path] if path.exists() else rotated
+
+
+def entries(log=DEFAULT_LOG):
+    """Every entry of the log and its rotated files, in file order. A line that is not a record is kept as one
+    marked unreadable, with where it was, so that verify can report it."""
     out = []
-    for candidate in (path.with_name(path.name + '.1'), path):
-        if not candidate.exists():
-            continue
-        for line in _private_read(candidate, 'command log').splitlines():
+    for candidate in log_files(log):
+        for number, line in enumerate(_private_read(candidate, 'command log').splitlines(), 1):
             try:
                 entry = json.loads(line)
             except ValueError:
-                out.append(dict(seq=None, unreadable=True))
+                entry = None
+            if not isinstance(entry, dict) or type(entry.get('seq')) is not int:
+                out.append(dict(seq=None, unreadable=True, file=candidate.name, line_number=number))
                 continue
-            if isinstance(entry, dict):
-                out.append(entry)
+            out.append(entry)
     return out
 
 
@@ -381,7 +429,7 @@ def _finding(rule, subject, detail, **extra):
                 techniques=['T1070.003', 'T1070'], **extra)
 
 
-def verify(key_hex, *, log=DEFAULT_LOG, expect_sequence=None):
+def verify(key_hex, *, log=DEFAULT_LOG, expect_sequence=None, from_sequence=1):
     """Check every line against the key from init: signatures, order, gaps, restarts and the expected end."""
     try:
         seed = bytes.fromhex(key_hex.strip())
@@ -389,12 +437,20 @@ def verify(key_hex, *, log=DEFAULT_LOG, expect_sequence=None):
         raise CommandLogError('the key must be the 64 hexadecimal digits that `commands init` printed') from None
     if len(seed) != 32:
         raise CommandLogError('the key must be the 64 hexadecimal digits that `commands init` printed')
-    lines = [e for e in entries(log) if isinstance(e.get('seq'), int)]
-    unreadable = sum(1 for e in entries(log) if e.get('unreadable'))
-    findings = []
+    every = entries(log)
+    lines = [e for e in every if isinstance(e.get('seq'), int) and e['seq'] >= from_sequence]
+    broken = [e for e in every if e.get('unreadable')]
+    # A line that is not a signed record is not something to skip: a log rewritten as anything else must fail.
+    findings = [_finding('COMMAND_LOG_FORGED', f"file:{e['file']}:{e['line_number']}",
+                         f"line {e['line_number']} of {e['file']} is not a signed record") for e in broken[:100]]
+    unreadable = len(broken)
     if lines and lines[0].get('key_id') not in (None, _key_id(seed)):
         raise CommandLogError('this key is not the one this log was started with')
-    key, position, previous, expected, running = seed, 1, '0' * 64, 1, False
+    # Lines before from_sequence were let go on purpose; that boundary comes from whoever verifies, off the
+    # machine, never from the log itself, where an intruder could write one.
+    key, position, previous, expected, running = seed, 1, '0' * 64, max(1, from_sequence), False
+    if from_sequence > 1 and lines and lines[0]['seq'] == from_sequence:
+        previous = lines[0].get('prev')
     verified = 0
     for entry in lines:
         sequence = entry['seq']

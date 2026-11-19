@@ -33,6 +33,7 @@ def log(tmp_path):
         recorder.add("exec", pid=1000 + number, uid=1000, program="/usr/bin/true", argv=["true", str(number)])
     recorder.add("stop", recorded=5)
     recorder.flush()
+    recorder.close()
     return dict(paths, key=key, path=tmp_path)
 
 
@@ -95,12 +96,14 @@ def test_a_crash_between_the_log_and_its_state(log):
     recorder.add("start", mode="given")
     recorder.add("exec", pid=2001, program="/usr/bin/id", argv=["id"])
     recorder.flush()
+    recorder.close()
     log["state"].write_text(saved)                  # the lines reached the disk, the state did not
     os.chmod(log["state"], 0o600)
     again = cl.Recorder(clock=Clock(), state=log["state"], log=log["log"])
     assert again.next == 10, "the key moved past the lines already written"
     again.add("exec", pid=2002, program="/usr/bin/id", argv=["id"])
     again.flush()
+    again.close()
     report = cl.verify(log["key"], log=log["log"])
     assert report["verified"] == report["lines"] == 10
     assert rules(report) == [("COMMAND_LOG_STOPPED_UNCLEANLY", "line:8")] or rules(report) == [], \
@@ -123,6 +126,7 @@ def test_restarts_lost_events_and_recording(log):
     crashed = cl.Recorder(clock=Clock(), state=log["state"], log=log["log"])
     crashed.add("start", mode="given")
     crashed.flush()                                  # no stop line: it was killed
+    crashed.close()                                  # as its process ending would
     stop = threading.Event()
     assert cl.record(stop, state=log["state"], log=log["log"], source=Source(stop, os.getpid()), clock=Clock()) == 1
     report = cl.verify(log["key"], log=log["log"])
@@ -205,3 +209,39 @@ def test_the_cli(log, tmp_path, capsys):
               "--key-file", str(second)])
     assert exit_.value.code == 0 and oct(second.stat().st_mode & 0o777) == "0o600"
     assert len(second.read_text().strip()) == 64 and second.read_text().strip() not in capsys.readouterr().out
+
+
+def test_one_recorder_at_a_time(log):
+    first = cl.Recorder(state=log["state"], log=log["log"])
+    with pytest.raises(cl.CommandLogError, match="another command recorder is running"):
+        cl.Recorder(state=log["state"], log=log["log"])
+    first.close()
+    with cl.Recorder(state=log["state"], log=log["log"]) as second:
+        second.add("exec", pid=1, program="/bin/true", argv=["true"])
+    assert cl.verify(log["key"], log=log["log"])["findings"] == []
+
+
+def test_lines_that_are_not_records_fail_verification(log):
+    log["log"].write_text("not json\n")
+    report = cl.verify(log["key"], log=log["log"])
+    assert rules(report) == [("COMMAND_LOG_FORGED", "file:commands.jsonl:1")] and report["unreadable"] == 1
+    log["log"].write_text(json.dumps(dict(kind="exec", argv=["ls"])) + "\n")     # a record with no number
+    assert rules(cl.verify(log["key"], log=log["log"])) == [("COMMAND_LOG_FORGED", "file:commands.jsonl:1")]
+
+
+def test_rotation_keeps_every_file_and_a_chosen_start(log, monkeypatch):
+    monkeypatch.setattr(cl, "ROTATE_BYTES", 1)                  # every flush starts a new file
+    with cl.Recorder(clock=Clock(), state=log["state"], log=log["log"]) as recorder:
+        for batch in range(3):
+            recorder.add("exec", pid=3000 + batch, program="/bin/true", argv=["true", str(batch)])
+            recorder.flush()
+    files = cl.log_files(log["log"])
+    assert len(files) == 4 and files[-1] == log["log"], "three rotated files, none written over"
+    assert cl.verify(log["key"], log=log["log"])["findings"] == []
+    assert cl.verify(log["key"], log=log["log"], from_sequence=8)["findings"] == [], "earlier lines are skipped"
+    # The oldest file moved off the machine on purpose: the verifier says where its own copy ends.
+    oldest = files[0]
+    oldest.unlink()
+    assert rules(cl.verify(log["key"], log=log["log"])) == [("COMMAND_LOG_GAP", "lines:1-7")]
+    report = cl.verify(log["key"], log=log["log"], from_sequence=8)
+    assert report["findings"] == [] and report["first"] == 8
