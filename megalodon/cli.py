@@ -1421,12 +1421,18 @@ def _evidence(args: argparse.Namespace) -> int:
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
             return 1
-        if dispatcher is not None:
-            # An off-machine copy of the digest is what lets a later verify prove the bundle unchanged.
-            dispatcher.submit([HostNotice(
-                "EVIDENCE_COLLECTED", "LOW", datetime.now(timezone.utc),
-                f"Evidence bundle {result['bundle']} collected; manifest SHA-256 {result['manifest_sha256']}",
-                (), "A read-only evidence snapshot was taken. Keep this digest to verify the bundle later.")])
+        if dispatcher is None:
+            print("megalodon: alerts are off in the settings; the digest was not sent", file=sys.stderr)
+            return 1
+        # An off-machine copy of the digest is what lets a later verify prove the bundle unchanged. It was
+        # asked for by name, so it goes out whatever the alert minimum severity is.
+        dispatcher.submit([HostNotice(
+            "EVIDENCE_COLLECTED", "LOW", datetime.now(timezone.utc),
+            f"Evidence bundle {result['bundle']} collected; manifest SHA-256 {result['manifest_sha256']}",
+            # Alerts at the standard detail carry the summary but not the message, so the digest goes in both.
+            (), f"A read-only evidence snapshot was taken; manifest SHA-256 {result['manifest_sha256']}. "
+                "Keep this digest to verify the bundle later.")],
+            any_severity=True)
     return 0
 
 

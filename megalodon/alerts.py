@@ -416,10 +416,11 @@ class AlertDispatcher:
             for channel in self.channels:
                 channel.start()
 
-    def submit(self, detections):
-        """Queue committed findings at or above the minimum severity; never blocks or raises."""
+    def submit(self, detections, *, any_severity=False):
+        """Queue committed findings at or above the minimum severity; never blocks or raises.
+        any_severity is for a notice the operator asked for by name, such as an evidence digest."""
         for detection in detections:
-            if SEVERITIES.index(detection.severity) < self.minimum:
+            if not any_severity and SEVERITIES.index(detection.severity) < self.minimum:
                 continue
             for channel in self.channels:
                 channel.offer(detection)

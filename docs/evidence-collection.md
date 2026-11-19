@@ -17,8 +17,9 @@ megalodon evidence verify ~/.local/share/megalodon/evidence/20261118T232901Z --e
   `~/.local/share/megalodon/evidence/` (or `--output`). It prints the bundle
   path and its `manifest_sha256`. **Keep that digest somewhere off the
   machine**, or pass `--alert` to send it to your
-  [off-machine alerts](off-machine-alerts.md). Run it as root to see every
-  process.
+  [off-machine alerts](off-machine-alerts.md). The digest is sent whatever
+  the alert minimum severity and detail level are; if alerts are off, `collect` says so and
+  exits 1. Run it as root to see every process.
 * **`verify`** re-checks every file against the manifest and, with
   `--expected`, the manifest against the digest you kept. It exits 1 if
   anything was changed, added or removed.
@@ -54,6 +55,11 @@ overwrites an existing bundle.
   not in it, except in its traces (recent files, logs, persistence).
 * **Root sees everything; others see their own processes.** The manifest
   lists what could not be read.
+* **Bounded.** Program hashing stops at 4 GiB in all, recent-file hashing at
+  512 MiB, program copies at 512 MiB, and the recent-file scan at 5,000 files
+  or 500,000 entries, even inside a single folder. A file that
+  grows while it is read is skipped with a reason, not read to its end.
+  Reaching a limit is listed in the bundle's gaps.
 * **No memory images.** Process memory and kernel state are not captured.
   Use a dedicated memory-forensics tool if you need them.
 * **A root attacker can lie to the collector.** A kernel rootkit can hide
