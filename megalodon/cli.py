@@ -360,6 +360,23 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    containers = sub.add_parser(
+        "containers", help="baseline and check containers for escapes and for ways out to the host (root)")
+    containers_sub = containers.add_subparsers(dest="containers_command", required=True)
+    for name, text in (("baseline", "record the running containers, the escape hooks and the container exposures"),
+                       ("check", "report escapes and containers that became riskier (exit 1 on findings)"),
+                       ("accept", "after review, record the current containers")):
+        command = containers_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path,
+                             help="baseline file (default ~/.config/megalodon/containers.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     boot = sub.add_parser(
         "boot", help="baseline and check the kernel, initramfs, bootloader and boot-time protections")
     boot_sub = boot.add_subparsers(dest="boot_command", required=True)
@@ -1775,6 +1792,42 @@ def _ebpf(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _containers(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import container_watch as cw
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(cw.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.containers_command == "baseline":
+            result = cw.baseline(manifest, replace=args.replace)
+        elif args.containers_command == "accept":
+            result = cw.accept(manifest)
+        else:
+            result = cw.check(manifest)
+    except (cw.ContainerError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.containers_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} container findings: {listed}",
+                                          tuple(sorted({t for f in findings for t in f["techniques"]})),
+                                          "A container escaped or gained a way out to the host.")])
+    return 1 if findings else 0
+
+
 def _boot(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2918,6 +2971,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _boot(args)
     elif args.command == "ebpf":
         code = _ebpf(args)
+    elif args.command == "containers":
+        code = _containers(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":

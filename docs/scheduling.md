@@ -48,6 +48,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | logwatch | every 15 minutes | `logwatch check --alert` |
 | webroot | every 15 minutes | `webroot check --alert` |
 | ebpf | every 15 minutes (root) | `ebpf check --alert` ([eBPF watch](ebpf-watch.md)) |
+| containers | every 15 minutes (root) | `containers check --alert` ([container watch](container-watch.md)) |
 | boot | hourly | `boot check --alert` ([boot integrity](boot-integrity.md)) |
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
 | binaries | daily at 03:17 | `binaries check --alert` |

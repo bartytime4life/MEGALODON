@@ -189,6 +189,7 @@ or source basis.
 | [Web-root watch: dropped scripts and web shells](webroot-watch.md) | `docs/webroot-watch.md` |
 | [Egress watch: programs connecting out](egress-watch.md) | `docs/egress-watch.md` |
 | [eBPF watch: kernel programs modern rootkits use](ebpf-watch.md) | `docs/ebpf-watch.md` |
+| [Container watch: escapes and ways out to the host](container-watch.md) | `docs/container-watch.md` |
 | [Boot integrity: kernels, initramfs, bootloader and boot-time protections](boot-integrity.md) | `docs/boot-integrity.md` |
 | [Login watch: successful logins that do not fit](login-watch.md) | `docs/login-watch.md` |
 | [Credential access watch: who reads keys, passwords and tokens](credential-watch.md) | `docs/credential-watch.md` |

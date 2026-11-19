@@ -53,7 +53,7 @@ megalodon respond report
      [device](device-watch.md), [web-root](webroot-watch.md),
      [tamper](tamper-detection.md), [egress](egress-watch.md),
      [credential](credential-watch.md), [login](login-watch.md),
-     [boot](boot-integrity.md) and [eBPF](ebpf-watch.md) checks, and
+     [boot](boot-integrity.md), [eBPF](ebpf-watch.md) and [container](container-watch.md) checks, and
      canaries.
 
    Each check needs its baseline. A source that can't be read is listed
@@ -124,6 +124,8 @@ Guards apply whatever the playbooks say:
 | web-shell-file | HIGH `SCRIPT_IN_UPLOAD_FOLDER`, `CODE_IN_NON_SCRIPT_FILE`, `WEB_SHELL_PATTERN` | Collect evidence, quarantine the file, notify |
 | ebpf-rootkit | `EBPF_HIDDEN_PROGRAM`, `EBPF_LOADED_BY_DROPPED_TOOL` | Collect evidence, suspend the holding process, notify |
 | ebpf-change | HIGH `EBPF_NEW_PROGRAM`, `EBPF_PROGRAM_CHANGED`, `EBPF_UNPRIVILEGED_ENABLED` | Collect evidence, notify |
+| container-escape | `CONTAINER_ESCAPE`, `ESCAPE_HOOK_SET`, `RUNTIME_API_EXPOSED`, `RUNTIME_SOCKET_WORLD_WRITABLE` | Collect evidence, suspend the escaped process, notify |
+| container-exposure | HIGH `CONTAINER_PRIVILEGED`, `CONTAINER_RUNTIME_SOCKET`, `CONTAINER_HOST_PATH_MOUNTED`, `CONTAINER_DANGEROUS_CAPABILITY`, `CONTAINER_HOST_PID`, `ESCAPE_HOOK_CHANGED`, `RUNTIME_GROUP_MEMBER_ADDED` | Collect evidence, notify |
 | boot-tampering | HIGH and CRITICAL [boot integrity](boot-integrity.md) findings | Collect evidence, notify |
 | service-account-login | `LOGIN_SERVICE_ACCOUNT` | Collect evidence, lock the account, block the source for 60 minutes, notify |
 | unusual-login | HIGH `LOGIN_NEW_KEY`, `LOGIN_NEW_SOURCE`, `LOGIN_ROOT_REMOTE`, `LOGIN_NEW_ACCOUNT`, `SUDO_FIRST_USE` | Collect evidence, notify |
