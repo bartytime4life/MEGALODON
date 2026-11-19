@@ -122,6 +122,9 @@ Use either of these:
 | `TAMPER_BASELINE_LOST` | HIGH | Heartbeats that carried a tamper baseline stopped carrying one, even if the sender's own records were wiped too |
 | `SENSOR_STATE_CHANGED` | MEDIUM | The state digest changed between heartbeats |
 | `HEARTBEAT_GAP` | MEDIUM | Sequence numbers are missing: lost deliveries, or a restarted sender |
+| `COMMAND_LOG_ROLLED_BACK` | CRITICAL | The [command log](command-log.md)'s last line went back between heartbeats: its end was cut off, or it was replaced |
+| `COMMAND_LOG_LOST` | HIGH | Heartbeats that carried the command log's last line stopped carrying one |
+| `COMMAND_LOG_RESTARTED` | MEDIUM | The command log was started over with a new key |
 
 The [response engine](response-engine.md) reads the local check and plans to
 collect evidence and notify you of HIGH and CRITICAL findings.

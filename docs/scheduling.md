@@ -58,6 +58,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | vulns | daily at 06:41 | `vulns check --alert` ([known-vulnerable software](known-vulnerable-software.md)) |
 | binaries | daily at 03:17 | `binaries check --alert` |
 | ancestry | always running (root) | `ancestry watch --alert` |
+| commands | always running (root) | `commands record`, after `megalodon commands init --key-file ...` ([command log](command-log.md)) |
 | credentials | always running | `credentials watch --alert` ([credential access watch](credential-watch.md); as root it names every reader) |
 | egress | always running | `egress watch --alert`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md)) |
 

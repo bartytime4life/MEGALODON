@@ -457,6 +457,38 @@ def build_parser() -> argparse.ArgumentParser:
                                                          "log is read beside it)")
         command.add_argument("--journal", type=Path, help="the enforcement journal")
 
+    commands = sub.add_parser(
+        "commands", help="a signed log of every program started on this machine, that cannot be quietly rewritten")
+    commands_sub = commands.add_subparsers(dest="commands_command", required=True)
+    command = commands_sub.add_parser("init", help="start a log and print its first key once; keep the key off "
+                                                   "this machine")
+    command.add_argument("--key-file", type=Path, help="write the key to this file (mode 600) instead of printing "
+                                                       "it, to move it off this machine")
+    command.add_argument("--replace", action="store_true",
+                         help="start a new log with a new key; the old log is kept under another name")
+    command = commands_sub.add_parser("record", help="record every started program until stopped (root sees all)")
+    command.add_argument("--keep-secrets", action="store_true",
+                         help="do not blank passwords and tokens on command lines")
+    command = commands_sub.add_parser("verify", help="check every line against the first key (exit 1 on findings)")
+    command.add_argument("--key-file", type=Path, required=True,
+                         help="mode-600 file holding the key `commands init` printed; never pass the key on a "
+                              "command line, where it would be recorded")
+    command.add_argument("--expect-sequence", type=int,
+                         help="the last line the heartbeat carried off the machine; a log ending earlier was cut")
+    command.add_argument("--from-sequence", type=int, default=1,
+                         help="start here: rotated files before this line were moved off the machine on purpose")
+    command = commands_sub.add_parser("show", help="list recorded programs (does not verify: use verify)")
+    command.add_argument("--since", help="only from this time on, such as 2026-11-19T12:00")
+    command.add_argument("--uid", type=int, help="only this account, as it ran or as it logged in")
+    command.add_argument("--contains", help="only commands containing this text")
+    command.add_argument("--limit", type=int, default=500, help="the newest N (default 500)")
+    command.add_argument("--format", choices=("text", "json"), default="text")
+    commands_sub.add_parser("status", help="the last line written and the key's fingerprint")
+    for command in commands_sub.choices.values():
+        command.add_argument("--log", type=Path, help="the log (default ~/.local/state/megalodon/commands.jsonl)")
+        command.add_argument("--state", type=Path,
+                             help="the recorder's state (default ~/.local/state/megalodon/commands-state.json)")
+
     containers = sub.add_parser(
         "containers", help="baseline and check containers for escapes and for ways out to the host (root)")
     containers_sub = containers.add_subparsers(dest="containers_command", required=True)
@@ -2130,6 +2162,49 @@ def _timeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _commands(args: argparse.Namespace) -> int:
+    import threading
+
+    from . import command_log as cl
+    from .alerts import AlertConfigError, read_secret
+
+    paths = dict(log=args.log or cl.DEFAULT_LOG, state=args.state or cl.DEFAULT_STATE)
+    try:
+        if args.commands_command == "init":
+            result = cl.init(state=paths["state"], log=paths["log"], replace=args.replace, key_file=args.key_file)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0
+        if args.commands_command == "record":
+            import signal as signals
+            stop = threading.Event()
+            for number in (signals.SIGTERM, signals.SIGINT):
+                signals.signal(number, lambda *_: stop.set())
+            count = cl.record(stop, state=paths["state"], log=paths["log"], redact=not args.keep_secrets)
+            print(json.dumps(dict(recorded=count), sort_keys=True))
+            return 0
+        if args.commands_command == "verify":
+            result = cl.verify(read_secret(str(args.key_file)), log=paths["log"], expect_sequence=args.expect_sequence,
+                               from_sequence=args.from_sequence)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 1 if result["findings"] else 0
+        if args.commands_command == "status":
+            print(json.dumps(cl.head(paths["state"]) or dict(error="no command log is set up here"), indent=2,
+                             sort_keys=True))
+            return 0
+        rows = cl.show(log=paths["log"], since=args.since, uid=args.uid, contains=args.contains, limit=args.limit)
+    except (cl.CommandLogError, AlertConfigError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    if args.format == "json":
+        print(json.dumps(rows, indent=2, sort_keys=True))
+    else:
+        for row in rows:
+            who = f"uid {row['uid']}" + (f" (login {row['login_uid']})" if row["login_uid"] not in (None, row["uid"])
+                                          else "")
+            print(f"{row['at']}  #{row['seq']}  {who}  {row['cwd'] or '?'}$ {row['command']}")
+    return 0
+
+
 def _containers(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -3421,6 +3496,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _secrets(args)
     elif args.command == "timeline":
         code = _timeline(args)
+    elif args.command == "commands":
+        code = _commands(args)
     elif args.command == "memory":
         code = _memory(args)
     elif args.command == "fleet":

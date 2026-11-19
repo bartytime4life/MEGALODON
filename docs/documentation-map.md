@@ -194,6 +194,7 @@ or source basis.
 | [Package sources and signing keys: who may sign what gets installed](package-sources.md) | `docs/package-sources.md` |
 | [Exposed secrets: keys, tokens and passwords others can read](exposed-secrets.md) | `docs/exposed-secrets.md` |
 | [Incident timeline: each incident's findings, decisions and actions in order](incident-timeline.md) | `docs/incident-timeline.md` |
+| [Command log: every started program, in a log that cannot be quietly rewritten](command-log.md) | `docs/command-log.md` |
 | [Process memory: fileless code, found and saved](memory-capture.md) | `docs/memory-capture.md` |
 | [Fleet view: every machine's heartbeats and alerts in one place](fleet.md) | `docs/fleet.md` |
 | [Enforcement: carrying out allowed decisions, with undo](enforcement.md) | `docs/enforcement.md` |
