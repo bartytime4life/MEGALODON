@@ -1,6 +1,7 @@
 """Download/staging controls composed into the protected Setup workflow."""
 
 MODEL_LIBRARY_HTML = r'''
+      <details id="model-library-options" class="settings-disclosure"><summary>Advanced: model files and downloads <small id="model-library-summary">Optional tools for existing files or staged downloads.</small></summary>
       <div class="model-library" aria-labelledby="model-library-title">
         <h5 id="model-library-title">Model library</h5>
         <p class="support-config-note">Use existing Ollama files first. File availability, byte verification and runtime acceptance are separate.</p>
@@ -25,9 +26,12 @@ MODEL_LIBRARY_HTML = r'''
         <ul id="model-library-history" aria-label="Recent staging jobs"></ul>
         <p class="support-config-note">One transfer at a time. No automatic downloads, resume, or activation. Cancellation removes partial staging bytes after the current bounded read returns. The first catalog entry is a small Qwen model; adding other downloads requires reviewed source and file pins.</p>
       </div>
+      </details>
 '''
 
 MODEL_LIBRARY_CSS = r'''
+#model-library-options .model-library { margin-top:12px; padding-top:0; border-top:0; }
+#model-library-options summary small { display:block; color:#a9c6cf; font-size:.8rem; font-weight:normal; margin-top:4px; }
 .model-library { margin-top:28px; padding-top:24px; border-top:1px solid #355464; }
 .model-library .model-library-consent { display:flex; align-items:center; gap:10px; }
 .model-library input[type="checkbox"] { width:20px; max-width:20px; min-height:20px; flex:none; }
@@ -66,6 +70,10 @@ MODEL_LIBRARY_JS = r'''
     el('model-library-space').textContent=v?.free_bytes===null||v?.free_bytes===undefined?'Available space has not been checked; it is checked before any transfer.':(v.free_bytes/1024**3).toFixed(1)+' GiB available at last check · '+(v.reserve_bytes/1024**2).toFixed(0)+' MiB reserve required.';
   }
   function libraryRender(v){
+    const busy=['downloading','verifying'].includes(v?.active?.state)||(v?.local_models||[]).some(x=>x.state==='verifying');
+    el('model-library-summary').textContent=busy?'File work in progress · open for status and cancellation.':v?.state==='failed'?'Last file action needs attention · open for details.':v?'Optional · not needed to test an installed Ollama model.':'File tools unavailable · retry Setup status.';
+    if(busy)el('model-library-options').open=true;
+
     const select=el('model-library-select'),catalog=v?.catalog||[],key=JSON.stringify(catalog);
     if(select.dataset.catalog!==key){const chosen=select.value;select.replaceChildren(...catalog.map(x=>{const option=document.createElement('option');option.value=x.id;option.textContent=x.title;return option;}));if(catalog.some(x=>x.id===chosen))select.value=chosen;select.dataset.catalog=key;el('model-library-online').checked=false;}
     libraryDetails();
