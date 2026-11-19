@@ -279,6 +279,26 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--config", type=Path,
                              help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    devices = sub.add_parser(
+        "devices", help="baseline and check USB devices, keyboards, network adapters and removable disks (Linux)")
+    devices_sub = devices.add_subparsers(dest="devices_command", required=True)
+    for name, text in (("baseline", "record the devices attached now"),
+                       ("check", "report new keyboards, network adapters, storage and Thunderbolt devices "
+                                 "(exit 1 on findings)"),
+                       ("watch", "check every few seconds and print each new device once, as JSON lines"),
+                       ("accept", "after review, record the current devices as the new baseline")):
+        command = devices_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/devices.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "watch":
+            command.add_argument("--interval", type=float, default=2.0, help="seconds between checks (default 2)")
+        if name in ("check", "watch"):
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     rootkit = sub.add_parser(
         "rootkit", help="cross-check processes, kernel modules, ports and folders for hidden ones (Linux)")
     rootkit_sub = rootkit.add_subparsers(dest="rootkit_command", required=True)
@@ -1411,6 +1431,54 @@ def _ancestry(args: argparse.Namespace) -> int:
     return 0
 
 
+def _devices(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import device_watch as watch
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    dispatcher = None
+    if getattr(args, "alert", False):
+        from .alerts import dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def notify(found):
+        if dispatcher is not None:
+            from .alerts import HostNotice
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["detail"], tuple(found["techniques"]), found["summary"])])
+    try:
+        if args.devices_command == "baseline":
+            result = watch.baseline(manifest, replace=args.replace)
+        elif args.devices_command == "accept":
+            result = watch.accept(manifest)
+        elif args.devices_command == "watch":
+            def emit(found):
+                print(json.dumps(found, sort_keys=True), flush=True)
+                notify(found)
+            try:
+                watch.watch(manifest, emit, interval=args.interval)
+            except KeyboardInterrupt:
+                pass
+            return 0
+        else:
+            result = watch.check(manifest)
+    except (watch.DeviceError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    for found in findings[:10]:
+        notify(found)
+    return 1 if findings else 0
+
+
 def _rootkit(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2276,6 +2344,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _ancestry(args)
     elif args.command == "rootkit":
         code = _rootkit(args)
+    elif args.command == "devices":
+        code = _devices(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":

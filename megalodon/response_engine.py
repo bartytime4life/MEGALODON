@@ -77,7 +77,7 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'canary', 'ingest')
+           'devices', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -119,6 +119,7 @@ listeners_manifest = "~/.config/megalodon/listeners.json"
 persistence_manifest = "~/.config/megalodon/persistence.json"
 binaries_manifest = "~/.config/megalodon/binaries.json"
 logwatch_manifest = "~/.config/megalodon/log-integrity.json"
+devices_manifest = "~/.config/megalodon/devices.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -152,6 +153,13 @@ rules = ["HIDDEN_PROCESS", "HIDDEN_MODULE", "HIDDEN_PORT", "HIDDEN_DIRECTORY", "
 min_severity = "HIGH"
 # A machine that hides things from itself cannot be trusted to clean itself: preserve and escalate.
 actions = ["collect_evidence", "notify"]
+
+[[response.playbook]]
+name = "new-hardware"
+rules = ["NEW_USB_KEYBOARD", "NEW_NETWORK_ADAPTER", "NEW_THUNDERBOLT_DEVICE", "DEVICE_GAINED_FUNCTIONS"]
+min_severity = "HIGH"
+# Only you know whether you plugged it in.
+actions = ["notify"]
 
 [[response.playbook]]
 name = "program-from-memory"
@@ -342,7 +350,7 @@ def load_policy(path=DEFAULT_POLICY):
     sources = table.get('sources', {})
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
-               'canary_manifest'}
+               'devices_manifest', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -616,7 +624,8 @@ def collect(policy, state, now, *, root='/'):
               ('binaries_manifest', 'binary_integrity', 'BinaryIntegrityError',
                lambda r: path_signals(r, 'binaries', 'path')),
               ('logwatch_manifest', 'log_integrity', 'LogIntegrityError',
-               lambda r: path_signals(r, 'logwatch', 'log')))
+               lambda r: path_signals(r, 'logwatch', 'log')),
+              ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')
