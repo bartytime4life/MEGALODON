@@ -76,8 +76,8 @@ ACTIONS = {
 # 'process_id' is 'pid@start:program': the PID with its start time names one process, not a reused PID.
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
-SOURCES = ('network', 'process_review', 'ancestry', 'listeners', 'persistence', 'binaries', 'logwatch', 'canary',
-           'ingest')
+SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
+           'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -111,6 +111,10 @@ audit_db = "data/megalodon.db"
 process_review = true
 # Services starting shells or attack tools; the allow file is from `megalodon ancestry allow`.
 ancestry_allow_file = "~/.config/megalodon/ancestry-allow.json"
+# Rootkit cross-checks (processes, modules, folders, preloaded libraries). The port check briefly binds every
+# free port, so it is off here; turn it on with rootkit_ports = true or run `megalodon rootkit check`.
+rootkit_check = true
+rootkit_ports = false
 listeners_manifest = "~/.config/megalodon/listeners.json"
 persistence_manifest = "~/.config/megalodon/persistence.json"
 binaries_manifest = "~/.config/megalodon/binaries.json"
@@ -141,6 +145,13 @@ name = "web-shell-or-exploited-service"
 rules = ["SERVICE_SPAWNED_SHELL", "SERVICE_SPAWNED_TOOL"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "suspend_process", "notify"]
+
+[[response.playbook]]
+name = "rootkit"
+rules = ["HIDDEN_PROCESS", "HIDDEN_MODULE", "HIDDEN_PORT", "HIDDEN_DIRECTORY", "HIDDEN_FILE", "PRELOAD_LIBRARY"]
+min_severity = "HIGH"
+# A machine that hides things from itself cannot be trusted to clean itself: preserve and escalate.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "program-from-memory"
@@ -329,14 +340,16 @@ def load_policy(path=DEFAULT_POLICY):
     if any(not r.startswith('/') for r in roots):
         raise ResponseError('quarantine_roots must be absolute folders')
     sources = table.get('sources', {})
-    allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'listeners_manifest', 'persistence_manifest',
-               'binaries_manifest', 'logwatch_manifest', 'canary_manifest'}
+    allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
+               'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
+               'canary_manifest'}
+    switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
     for name, value in sources.items():
-        if name == 'process_review' and not isinstance(value, bool):
-            raise ResponseError('response.sources.process_review must be true or false')
-        if name != 'process_review' and (not isinstance(value, str) or len(value) > 1024):
+        if name in switches and not isinstance(value, bool):
+            raise ResponseError(f'response.sources.{name} must be true or false')
+        if name not in switches and (not isinstance(value, str) or len(value) > 1024):
             raise ResponseError(f'response.sources.{name} must be a path')
     return Policy(
         digest=hashlib.sha256(data).hexdigest(), playbooks=parsed,
@@ -481,6 +494,18 @@ def ancestry_signals(report):
     return signals
 
 
+def rootkit_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        program = f.get('program') or ''
+        signals.append(Signal(f"rootkit:{f['rule_id']}:{f.get('subject', '')}", 'rootkit', f['rule_id'],
+                              _severity(f.get('severity')), report.get('checked_at', ''), f.get('detail', ''),
+                              _entities(process=[program] if program.startswith('/') else [],
+                                        port=[f['subject']] if f['rule_id'] == 'HIDDEN_PORT' else [],
+                                        file=[f['subject']] if f['rule_id'] == 'HIDDEN_FILE' else [])))
+    return signals
+
+
 def listener_signals(report):
     signals = []
     for f in report.get('findings', []):
@@ -578,6 +603,14 @@ def collect(policy, state, now, *, root='/'):
             gaps += [f'ancestry: {gap}' for gap in report.get('gaps', [])]
         except (process_ancestry.AncestryError, OSError) as exc:
             gaps.append(f'ancestry: {exc}')
+    if sources.get('rootkit_check', True):
+        from . import rootkit_check
+        try:
+            report = rootkit_check.check(root, ports=sources.get('rootkit_ports', False))
+            signals += rootkit_signals(report)
+            gaps += [f'rootkit: {gap}' for gap in report.get('gaps', [])]
+        except (rootkit_check.RootkitError, OSError) as exc:
+            gaps.append(f'rootkit: {exc}')
     checks = (('listeners_manifest', 'listener_watch', 'ListenerError', listener_signals),
               ('persistence_manifest', 'persistence_watch', 'PersistenceError', persistence_signals),
               ('binaries_manifest', 'binary_integrity', 'BinaryIntegrityError',

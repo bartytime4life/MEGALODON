@@ -46,6 +46,8 @@ megalodon respond report
      running from memory, from a deleted file or from a temporary folder;
    * the [process ancestry](process-ancestry.md) check: services running
      shells or attack tools. Its live `watch` can be piped into `ingest`;
+   * the [rootkit cross-checks](rootkit-check.md), without the port test
+     unless `rootkit_ports = true`;
    * the [listener](listener-watch.md), [persistence](persistence-watch.md),
      [program integrity](binary-integrity.md) and [log](log-integrity.md)
      checks, and canaries.
@@ -114,6 +116,7 @@ Guards apply whatever the playbooks say:
 | ransomware | `RANSOMWARE_ENCRYPTION`, `RANSOMWARE_MASS_WRITE` | Collect evidence, suspend the suspect programs, notify |
 | bind-shell-or-dropped-listener | HIGH `NEW_LISTENER`, `LISTENER_PROGRAM_CHANGED` | Collect evidence, suspend the program, notify |
 | web-shell-or-exploited-service | HIGH `SERVICE_SPAWNED_SHELL`, `SERVICE_SPAWNED_TOOL` | Collect evidence, suspend the started process, notify |
+| rootkit | `HIDDEN_PROCESS`, `HIDDEN_MODULE`, `HIDDEN_PORT`, `HIDDEN_DIRECTORY`, `HIDDEN_FILE`, `PRELOAD_LIBRARY` | Collect evidence, notify: a machine that hides things from itself cannot be trusted to clean itself |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
 | attacker-at-the-door | HIGH `BRUTE_FORCE`, `HOST_SWEEP`, `DECOY_TOUCH`, `SYN_FLOOD`, `PORT_SCAN` | Block the source for 30 minutes, notify |
 | command-and-control-or-exfiltration | HIGH `BEACONING`, `DATA_EXFILTRATION`, `IOC_MATCH`, DNS rules | Only when corroborated: collect evidence, block for 60 minutes, notify |

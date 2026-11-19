@@ -279,6 +279,19 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--config", type=Path,
                              help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    rootkit = sub.add_parser(
+        "rootkit", help="cross-check processes, kernel modules, ports and folders for hidden ones (Linux)")
+    rootkit_sub = rootkit.add_subparsers(dest="rootkit_command", required=True)
+    command = rootkit_sub.add_parser("check", help="report what one view of the system hides from another "
+                                                   "(exit 1 on findings)")
+    command.add_argument("--skip-ports", action="store_true",
+                         help="do not test ports (the port test briefly binds every free port)")
+    command.add_argument("--max-pid", type=int, help="highest process ID to probe (default: the kernel's pid_max)")
+    command.add_argument("--alert", action="store_true",
+                         help="also send findings to the [alerts] destinations in the settings file")
+    command.add_argument("--config", type=Path,
+                         help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     binaries = sub.add_parser(
         "binaries", help="detect trojaned system programs and libraries (exit 1 on findings)")
     binaries_sub = binaries.add_subparsers(dest="binaries_command", required=True)
@@ -1398,6 +1411,37 @@ def _ancestry(args: argparse.Namespace) -> int:
     return 0
 
 
+def _rootkit(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import rootkit_check
+    from .validation import ValidationError
+
+    try:
+        report = rootkit_check.check(ports=not args.skip_ports, max_pid=args.max_pid)
+    except (rootkit_check.RootkitError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report, indent=2, sort_keys=True))
+    findings = report["findings"]
+    if args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(
+                findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                f"{len(findings)} rootkit cross-check findings: {listed}",
+                tuple(sorted({t for f in findings for t in f["techniques"]})),
+                "One view of the system hides something another view still sees, as rootkits do.")])
+    return 1 if findings else 0
+
+
 def _binaries(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2230,6 +2274,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _binaries(args)
     elif args.command == "ancestry":
         code = _ancestry(args)
+    elif args.command == "rootkit":
+        code = _rootkit(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":
