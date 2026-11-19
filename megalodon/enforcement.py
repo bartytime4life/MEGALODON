@@ -439,23 +439,30 @@ class _Lock:
 def run(*, policy_path=DEFAULT_POLICY, response_policy=engine.DEFAULT_POLICY, ledger=engine.DEFAULT_LEDGER,
         journal=DEFAULT_JOURNAL, state_path=DEFAULT_STATE, now=None, executor=None, dry_run=False, protected=None):
     """Carry out the allowed decisions recorded since the last run."""
-    with _Lock(journal):
-        return _run(policy_path=policy_path, response_policy=response_policy, ledger=ledger, journal=journal,
-                    state_path=state_path, now=now, executor=executor, dry_run=dry_run, protected=protected)
-
-
-def _run(*, policy_path, response_policy, ledger, journal, state_path, now, executor, dry_run, protected):
     policy = load_policy(policy_path)
-    now = now or _now()
     if not policy['enabled'] and not dry_run:
         return dict(schema=SCHEMA, action='run', enabled=False, applied=[], refused=[],
                     note='Enforcement is off: set enabled = true in the enforcement policy to carry out decisions.')
-    if not dry_run:
-        from .execution_boundary import Stage0Denied, require_effects_allowed
-        try:
-            require_effects_allowed()
-        except Stage0Denied:
-            raise EnforcementError('this process is in Stage 0: no effects are allowed') from None
+    arguments = dict(policy=policy, response_policy=response_policy, ledger=ledger, journal=journal,
+                     state_path=state_path, now=now or _now(), executor=executor, dry_run=dry_run,
+                     protected=protected)
+    if dry_run:
+        return _run(**arguments)             # writes nothing, so it needs no lock
+    # Refused before anything is created or waited for: a run that is off or in Stage 0 leaves no trace.
+    _admit()
+    with _Lock(journal):
+        return _run(**arguments)
+
+
+def _admit():
+    from .execution_boundary import Stage0Denied, require_effects_allowed
+    try:
+        require_effects_allowed()
+    except Stage0Denied:
+        raise EnforcementError('this process is in Stage 0: no effects are allowed') from None
+
+
+def _run(*, policy, response_policy, ledger, journal, state_path, now, executor, dry_run, protected):
     rules = engine.load_policy(response_policy)
     state = _state(state_path)
     decisions = _decisions(ledger, state)
@@ -524,6 +531,7 @@ def active(journal=DEFAULT_JOURNAL):
 
 
 def undo(identifier, *, journal=DEFAULT_JOURNAL, executor=None, now=None):
+    _admit()
     with _Lock(journal):
         return _undo(identifier, journal=journal, executor=executor, now=now)
 
@@ -532,11 +540,6 @@ def _undo(identifier, *, journal, executor, now):
     record = next((r for r in active(journal) if r['id'] == identifier), None)
     if record is None:
         raise EnforcementError(f'no applied, not yet undone action has the ID {identifier}')
-    from .execution_boundary import Stage0Denied, require_effects_allowed
-    try:
-        require_effects_allowed()
-    except Stage0Denied:
-        raise EnforcementError('this process is in Stage 0: no effects are allowed') from None
     executor = executor or Executor()
     getattr(executor, 'undo_' + record['action'])(record)
     done = dict(schema=SCHEMA, id=secrets.token_hex(6), at=_iso(now or _now()), action=record['action'],

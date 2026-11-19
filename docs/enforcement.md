@@ -74,6 +74,8 @@ decision is reported with its reason. A failed one is recorded, and makes
 
 One run or undo happens at a time. A run started while another is going, by
 hand or by the scheduler, waits for it, so no decision is carried out twice.
+A run that is off, a `--dry-run`, and a run or undo refused in Stage 0 create
+no files and wait for nothing.
 The scheduled `megalodon-enforce` service keeps `ProtectSystem=full` but can
 write to `/etc`. `usermod` needs this to lock an account, because it writes
 lock and temporary files beside `/etc/shadow`.

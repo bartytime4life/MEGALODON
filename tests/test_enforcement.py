@@ -79,6 +79,7 @@ def memory_signal(process, start=None):
 def test_off_by_default_and_a_strict_policy(p):
     assert "enabled = false" in p["enforce"].read_text() and oct(p["enforce"].stat().st_mode & 0o777) == "0o600"
     assert enforce(p)["enabled"] is False
+    assert not p["journal"].with_name("enforced.jsonl.lock").exists(), "a run that is off creates nothing"
     os.chmod(p["enforce"], 0o666)                                   # anyone could turn enforcement on
     with pytest.raises(re_.ResponseError, match="writable only by you"):
         en.load_policy(p["enforce"])
@@ -223,8 +224,12 @@ def test_rate_limit_dry_run_and_stage0(p, monkeypatch):
     assert len(calls) == 1 and "rate limit" in result["refused"][0]["reason"]
     from megalodon import execution_boundary
     monkeypatch.setattr(execution_boundary, "_stage0_selected", True)
+    p["journal"].with_name("enforced.jsonl.lock").unlink()
     with pytest.raises(en.EnforcementError, match="Stage 0"):
         enforce(p, executor=Recording())
+    with pytest.raises(en.EnforcementError, match="Stage 0"):
+        en.undo("anything", journal=p["journal"])
+    assert not p["journal"].with_name("enforced.jsonl.lock").exists(), "refused before the lock file is created"
 
 
 def test_the_cli(p, capsys, monkeypatch):
