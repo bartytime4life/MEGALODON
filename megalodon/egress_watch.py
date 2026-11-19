@@ -47,6 +47,11 @@ RULES = {
                                                          'implant phoning home.'),
     'NEW_OUTBOUND_PORT': ('MEDIUM', ['T1571'], 'A program that connects out is using a port it has not used '
                                                'before.'),
+    # Named from DNS answers and TLS server names, read while `egress watch` runs.
+    'OUTBOUND_TO_WATCHLISTED_NAME': ('CRITICAL', ['T1071', 'T1568'], 'A program connects to a name on your watchlist.'),
+    'OUTBOUND_TO_GENERATED_NAME': ('MEDIUM', ['T1568.002'], 'A program connects to a name spelled the way generated '
+                                                            '(DGA) and encoded names are. Cloud and tracking names '
+                                                            'are sometimes spelled this way too.'),
 }
 
 
@@ -103,17 +108,16 @@ def connections(root='/', *, include_private=False):
                 continue
             if protocol == 'tcp' and fields[3] not in OUTGOING:
                 continue
-            if protocol == 'tcp':
-                local = _endpoint(fields[1], length)
-                if local is not None and local[1] in listening:
-                    continue
+            local = _endpoint(fields[1], length)
+            if protocol == 'tcp' and local is not None and local[1] in listening:
+                continue
             remote = _endpoint(fields[2], length)
             if remote is None or remote[1] == 0:
                 continue                        # an unconnected UDP socket, or a listener
             scope = _scope(remote[0])
             if scope is None or (scope == 'private' and not include_private):
                 continue
-            found[int(fields[9])] = (protocol, remote[0], remote[1], scope)
+            found[int(fields[9])] = (protocol, remote[0], remote[1], scope, local[1] if local else None)
     return found, gaps
 
 
@@ -214,13 +218,14 @@ def observe(root='/', *, include_private=False, known=None):
         if truncated:
             gaps.append('too many open files to map every connection to its program')
     seen, unattributed = [], 0
-    for inode, (protocol, address, port, scope) in table.items():
+    for inode, (protocol, address, port, scope, local_port) in table.items():
         owner = known.get(inode)
         if owner is None:
             unattributed += 1
             continue
         pid, info = owner
         seen.append(dict(inode=inode, protocol=protocol, address=str(address), port=port, scope=scope, pid=pid,
+                         local_port=local_port,
                          start=info['start'], program=identity(info), executable=info['path'], script=script(info),
                          deleted=info['deleted'], argv=info['argv'][:8]))
     if unattributed:
@@ -302,10 +307,29 @@ def _temporary(connection):
             or run.startswith(TEMPORARY))      # `python3 /tmp/stage2.py`: the interpreter is installed, the script is not
 
 
-def judge(baseline, connection):
+def judge(baseline, connection, watchlist=None):
     """Findings for one connection against the baseline (empty when it is known)."""
     found, entry = [], baseline['programs'].get(connection['program'])
-    where = f"{connection['address']}:{connection['port']}/{connection['protocol']}"
+    names = connection.get('names') or []
+    where = (f"{names[0]} ({connection['address']}):{connection['port']}/{connection['protocol']}" if names
+             else f"{connection['address']}:{connection['port']}/{connection['protocol']}")
+    for name in names:
+        hit = watchlist.match_domain(name) if watchlist is not None else None
+        if hit:
+            found.append(_finding('OUTBOUND_TO_WATCHLISTED_NAME', connection,
+                                  f"{connection['program']} (pid {connection['pid']}) connects to {name} "
+                                  f"({connection['address']}:{connection['port']}/{connection['protocol']}), "
+                                  f"on the watchlist as {hit[0]}{': ' + hit[1] if hit[1] else ''}", name=name))
+            break
+    for name in names:
+        from .domain_signals import assess
+        signals = assess(name)
+        if signals and signals['level'] == 'review':
+            found.append(_finding('OUTBOUND_TO_GENERATED_NAME', connection,
+                                  f"{connection['program']} (pid {connection['pid']}) connects to {name} "
+                                  f"({connection['address']}): " + ' '.join(s['detail'] for s in signals['signals'][:2]),
+                                  name=name))
+            break
     if _temporary(connection):
         found.append(_finding('OUTBOUND_FROM_TEMPORARY', connection,
                               f"{connection['program']} (pid {connection['pid']}), run from "
@@ -321,12 +345,14 @@ def judge(baseline, connection):
     return found
 
 
-def _finding(rule, connection, detail):
+def _finding(rule, connection, detail, name=None):
     severity, techniques, summary = RULES[rule]
     if rule == 'NEW_OUTBOUND_PROGRAM' and connection['scope'] == 'private':
         severity = 'MEDIUM'
+    extra = dict(name=name) if name else {}
     return dict(rule_id=rule, severity=severity, techniques=techniques, program=connection['program'],
                 detail=detail, summary=summary, address=connection['address'], port=connection['port'],
+                names=list(connection.get('names') or []), **extra,
                 # `egress watch | respond ingest` reads the destination from dst_ip, as for network findings.
                 dst_ip=connection['address'],
                 protocol=connection['protocol'], detected_at=_now(),
@@ -386,8 +412,10 @@ def check(manifest=DEFAULT_MANIFEST, *, root='/'):
 class Watcher:
     """Poll the socket tables and report each new finding once per hour."""
 
-    def __init__(self, manifest=DEFAULT_MANIFEST, emit=print, *, root='/', interval=1.0, clock=time.monotonic):
+    def __init__(self, manifest=DEFAULT_MANIFEST, emit=print, *, root='/', interval=1.0, clock=time.monotonic,
+                 names=None, watchlist=None):
         self.manifest, self.emit, self.root, self.interval, self.clock = manifest, emit, root, interval, clock
+        self.names, self.watchlist = names, watchlist
         self.baseline, self.loaded = read(manifest), self._stamp()
         self.known, self.last, self.stats = {}, {}, dict(polls=0, findings=0)
 
@@ -406,8 +434,11 @@ class Watcher:
         seen, _ = observe(self.root, include_private=self.baseline.get('include_private', False), known=self.known)
         now, out = self.clock(), []
         for connection in seen:
-            for found in judge(self.baseline, connection):
-                key = (found['rule_id'], found['program'], found['protocol'], found['port'])
+            if self.names is not None:
+                connection['names'] = self.names.lookup(connection['address'], connection['port'],
+                                                        connection.get('local_port'))
+            for found in judge(self.baseline, connection, self.watchlist):
+                key = (found['rule_id'], found['program'], found['protocol'], found['port'], found.get('name'))
                 if now - self.last.get(key, -1e18) < COOLDOWN_SECONDS:
                     continue
                 self.last[key] = now

@@ -253,6 +253,13 @@ actions = ["collect_evidence", "suspend_process", "block_address", "notify"]
 block_minutes = 60
 
 [[response.playbook]]
+name = "watchlisted-name"
+rules = ["OUTBOUND_TO_WATCHLISTED_NAME"]
+min_severity = "CRITICAL"
+actions = ["collect_evidence", "suspend_process", "block_address", "notify"]
+block_minutes = 60
+
+[[response.playbook]]
 name = "new-outbound-program"
 rules = ["NEW_OUTBOUND_PROGRAM"]
 min_severity = "HIGH"
