@@ -320,6 +320,30 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    egress = sub.add_parser(
+        "egress", help="learn which programs connect out, and report new ones and dropped tools phoning home")
+    egress_sub = egress.add_subparsers(dest="egress_command", required=True)
+    for name, text in (("learn", "record the programs connecting out now, and for --minutes more"),
+                       ("check", "report programs connecting out that are not in the baseline (exit 1 on findings)"),
+                       ("watch", "report each new outgoing program as it connects, as JSON lines"),
+                       ("allow", "after review, record a program (and optionally a port) as normal")):
+        command = egress_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/egress.json)")
+        if name == "learn":
+            command.add_argument("--minutes", type=float, default=0, help="keep learning this long (default 0)")
+            command.add_argument("--include-private", action="store_true",
+                                 help="also learn and watch connections to private (LAN) addresses")
+        if name == "allow":
+            command.add_argument("program", help="the program as reported, e.g. /opt/vendor/agent")
+            command.add_argument("--port", help="also allow this port, written tcp/443 or udp/53")
+        if name == "watch":
+            command.add_argument("--interval", type=float, default=1.0, help="seconds between scans (default 1)")
+        if name in ("check", "watch"):
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     tamper = sub.add_parser(
         "tamper", help="notice when MEGALODON's code, schedule or configuration is changed or switched off")
     tamper_sub = tamper.add_subparsers(dest="tamper_command", required=True)
@@ -1594,6 +1618,57 @@ def _webroot(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _egress(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from . import egress_watch as egress
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(egress.DEFAULT_MANIFEST).expanduser()
+    dispatcher = None
+    if getattr(args, "alert", False):
+        from .alerts import dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def notify(found):
+        if dispatcher is not None:
+            from .alerts import HostNotice
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["detail"], tuple(found["techniques"]), found["summary"])])
+    try:
+        if args.egress_command == "learn":
+            result = egress.learn(manifest, seconds=args.minutes * 60, include_private=args.include_private)
+        elif args.egress_command == "allow":
+            result = egress.allow(manifest, args.program, args.port)
+        elif args.egress_command == "watch":
+            def emit(found):
+                print(json.dumps(found, sort_keys=True), flush=True)
+                notify(found)
+            watcher = egress.Watcher(manifest, emit, interval=args.interval)
+            stop = Event()
+            try:
+                watcher.run(stop)
+            except KeyboardInterrupt:
+                pass
+            return 0
+        else:
+            result = egress.check(manifest)
+    except (egress.EgressError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    for found in findings[:10]:
+        notify(found)
+    return 1 if findings else 0
+
+
 def _tamper_alert(args, findings, summary):
     from datetime import datetime, timezone
 
@@ -2574,6 +2649,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _schedule(args)
     elif args.command == "tamper":
         code = _tamper(args)
+    elif args.command == "egress":
+        code = _egress(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":

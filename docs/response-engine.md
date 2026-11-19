@@ -50,8 +50,9 @@ megalodon respond report
      unless `rootkit_ports = true`;
    * the [listener](listener-watch.md), [persistence](persistence-watch.md),
      [program integrity](binary-integrity.md), [log](log-integrity.md),
-     [device](device-watch.md), [web-root](webroot-watch.md) and
-     [tamper](tamper-detection.md) checks, and canaries.
+     [device](device-watch.md), [web-root](webroot-watch.md),
+     [tamper](tamper-detection.md) and [egress](egress-watch.md) checks, and
+     canaries.
 
    Each check needs its baseline. A source that can't be read is listed
    under `gaps`.
@@ -119,6 +120,8 @@ Guards apply whatever the playbooks say:
 | web-shell-or-exploited-service | HIGH `SERVICE_SPAWNED_SHELL`, `SERVICE_SPAWNED_TOOL` | Collect evidence, suspend the started process, notify |
 | rootkit | `HIDDEN_PROCESS`, `HIDDEN_MODULE`, `HIDDEN_PORT`, `HIDDEN_DIRECTORY`, `HIDDEN_FILE`, `PRELOAD_LIBRARY` | Collect evidence, notify: a machine that hides things from itself cannot be trusted to clean itself |
 | web-shell-file | HIGH `SCRIPT_IN_UPLOAD_FOLDER`, `CODE_IN_NON_SCRIPT_FILE`, `WEB_SHELL_PATTERN` | Collect evidence, quarantine the file, notify |
+| dropped-tool-phoning-home | `OUTBOUND_FROM_TEMPORARY` | Collect evidence, suspend the process, block the address for 60 minutes, notify |
+| new-outbound-program | HIGH `NEW_OUTBOUND_PROGRAM` | Collect evidence, notify |
 | sensor-tampering | HIGH and CRITICAL [tamper](tamper-detection.md) findings | Collect evidence, notify |
 | new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Notify: only you know whether you plugged it in |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
