@@ -53,6 +53,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | containers | every 15 minutes (root) | `containers check --alert` ([container watch](container-watch.md)) |
 | boot | hourly | `boot check --alert` ([boot integrity](boot-integrity.md)) |
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
+| vulns | daily at 06:41 | `vulns check --alert` ([known-vulnerable software](known-vulnerable-software.md)) |
 | binaries | daily at 03:17 | `binaries check --alert` |
 | ancestry | always running (root) | `ancestry watch --alert` |
 | credentials | always running | `credentials watch --alert` ([credential access watch](credential-watch.md); as root it names every reader) |

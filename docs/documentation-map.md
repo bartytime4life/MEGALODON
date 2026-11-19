@@ -194,6 +194,7 @@ or source basis.
 | [Process memory: fileless code, found and saved](memory-capture.md) | `docs/memory-capture.md` |
 | [Fleet view: every machine's heartbeats and alerts in one place](fleet.md) | `docs/fleet.md` |
 | [Enforcement: carrying out allowed decisions, with undo](enforcement.md) | `docs/enforcement.md` |
+| [Known-vulnerable software: fixes waiting, exposed services first](known-vulnerable-software.md) | `docs/known-vulnerable-software.md` |
 | [Boot integrity: kernels, initramfs, bootloader and boot-time protections](boot-integrity.md) | `docs/boot-integrity.md` |
 | [Login watch: successful logins that do not fit](login-watch.md) | `docs/login-watch.md` |
 | [Credential access watch: who reads keys, passwords and tokens](credential-watch.md) | `docs/credential-watch.md` |

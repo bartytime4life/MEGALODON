@@ -505,6 +505,15 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--alert", action="store_true", help="also send findings to this machine's alerts")
     command.add_argument("--config", type=Path, help="settings file for --alert")
 
+    vulns = sub.add_parser(
+        "vulns", help="security fixes waiting, kernels not booted and old code still running, exposed services first")
+    vulns_sub = vulns.add_subparsers(dest="vulns_command", required=True)
+    command = vulns_sub.add_parser("check", help="read the package manager's local lists (exit 1 on findings)")
+    command.add_argument("--alert", action="store_true",
+                         help="also send findings to the [alerts] destinations in the settings file")
+    command.add_argument("--config", type=Path,
+                         help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     enforce = sub.add_parser(
         "enforce", help="carry out the response engine's decisions you allowed, with a way to undo each (off by "
                         "default)")
@@ -2224,6 +2233,36 @@ def _heartbeat(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _vulns(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import vuln_check
+    from .validation import ValidationError
+
+    try:
+        result = vuln_check.check()
+    except OSError as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result["findings"]
+    if args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} findings: {listed}",
+                                          tuple(sorted({t for f in findings for t in f["techniques"]})),
+                                          "Security fixes are waiting, or not in effect yet.")])
+    return 1 if findings else 0
+
+
 def _enforce(args: argparse.Namespace) -> int:
     from . import enforcement
     from . import response_engine
@@ -3213,6 +3252,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _fleet(args)
     elif args.command == "enforce":
         code = _enforce(args)
+    elif args.command == "vulns":
+        code = _vulns(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":
