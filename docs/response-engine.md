@@ -22,7 +22,10 @@ megalodon respond report
   `~/.config/megalodon/response-policy.toml` (mode 600). Read and edit it:
   it is the only thing that decides what the engine plans.
 * **`run`** collects findings once, decides, and appends the decisions to the
-  ledger, `~/.local/state/megalodon/response-shadow.jsonl` (mode 600).
+  ledger, `~/.local/state/megalodon/response-shadow.jsonl` (mode 600). Every
+  new finding, decided on or not, goes with its incident to
+  `observations.jsonl` beside it, and so does each merge of two incidents. The
+  [incident timeline](incident-timeline.md) reads both.
 * **`watch --interval 300`** repeats `run` until stopped.
 * **`ingest`** decides on findings read as JSON lines from standard input,
   for example from the ransomware watch:

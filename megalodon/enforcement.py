@@ -494,7 +494,8 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
                 reason = f'enforcement rate limit: {policy["max_per_hour"]} actions in the last hour'
             base = dict(schema=SCHEMA, id=key[:12], at=_iso(now), action=plan['action'], target=plan.get('target'),
                         playbook=decision.get('playbook'), rule_id=decision['signal']['rule_id'],
-                        decided_at=decision['decided_at'])
+                        decided_at=decision['decided_at'], signal_key=decision['signal'].get('key'),
+                        incident=(decision.get('incident') or {}).get('id'))
             if reason:
                 refused.append(dict(base, status='refused', reason=reason))
                 continue
@@ -543,6 +544,6 @@ def _undo(identifier, *, journal, executor, now):
     executor = executor or Executor()
     getattr(executor, 'undo_' + record['action'])(record)
     done = dict(schema=SCHEMA, id=secrets.token_hex(6), at=_iso(now or _now()), action=record['action'],
-                target=record['target'], status='undone', undo_of=identifier)
+                target=record['target'], status='undone', undo_of=identifier, incident=record.get('incident'))
     _journal(journal, [done])
     return done

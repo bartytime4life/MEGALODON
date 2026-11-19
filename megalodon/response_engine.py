@@ -42,6 +42,9 @@ SCHEMA = 'megalodon-response-decision-v1'
 REPORT_SCHEMA = 'megalodon-response-run-v1'
 DEFAULT_POLICY = '~/.config/megalodon/response-policy.toml'
 DEFAULT_LEDGER = '~/.local/state/megalodon/response-shadow.jsonl'
+# Beside the ledger: every new finding with its incident, and incident merges, for `megalodon timeline`.
+OBSERVATIONS_NAME = 'observations.jsonl'
+OBSERVATION_SCHEMA = 'megalodon-observation-v1'
 DEFAULT_STATE = '~/.local/state/megalodon/response-state.json'
 RANK = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2, 'CRITICAL': 3}
 MAX_POLICY_BYTES = 256 * 1024
@@ -1063,8 +1066,11 @@ def _account_name():
 
 # ------------------------------------------------------------------ correlation and decisions
 
-def correlate(state, signals, now, window_minutes):
-    """Attach each signal to an open incident sharing an entity, or open a new one. Returns {key: incident}."""
+def correlate(state, signals, now, window_minutes, merges=None):
+    """Attach each signal to an open incident sharing an entity, or open a new one. Returns {key: incident}.
+
+    When one signal links two incidents they are merged, and (kept ID, merged ID) is added to `merges`.
+    """
     incidents = state.setdefault('incidents', [])
     cutoff = now - timedelta(minutes=window_minutes)
     open_ = [i for i in incidents if datetime.fromisoformat(i['last_seen'].replace('Z', '+00:00')) >= cutoff]
@@ -1077,6 +1083,8 @@ def correlate(state, signals, now, window_minutes):
         if matches:
             incident = matches[0]
             for other in matches[1:]:  # One signal links two incidents: merge them.
+                if merges is not None:
+                    merges.append((incident['id'], other['id']))
                 incident['entities'] = sorted(set(incident['entities']) | set(other['entities']))
                 incident['sources'] = sorted(set(incident['sources']) | set(other['sources']))
                 incident['signals'] = list(dict.fromkeys(incident['signals'] + other['signals']))[-64:]
@@ -1109,8 +1117,12 @@ def _targets(action, signal, incident):
     return sorted(signal.entities.get(entity, ()))[:8]
 
 
-def decide(policy, state, signals, now, *, guards=None):
-    """Shadow decisions for the signals not decided in the last day."""
+def decide(policy, state, signals, now, *, guards=None, observations=None):
+    """Shadow decisions for the signals not decided in the last day.
+
+    With an `observations` list, every new signal is added to it with its incident, and so is every merge, so the
+    timeline can tell the whole story, not only the findings a playbook decided on.
+    """
     guards = guards or Guards(policy, state, now)
     seen = state.setdefault('seen', {})
     cutoff = now - timedelta(hours=SEEN_HOURS)
@@ -1118,8 +1130,14 @@ def decide(policy, state, signals, now, *, guards=None):
         del seen[key]
     current = list({s.key: s for s in signals}.values())
     # Every current observation keeps its incident alive; only new ones are decided.
-    assigned = correlate(state, current, now, policy.correlation_minutes)
+    merges = []
+    assigned = correlate(state, current, now, policy.correlation_minutes, merges)
     fresh = [s for s in current if s.key not in seen]
+    if observations is not None:
+        observations += [dict(schema=OBSERVATION_SCHEMA, kind='merge', at=_iso(now), incident=kept, merged=merged)
+                         for kept, merged in merges]
+        observations += [dict(schema=OBSERVATION_SCHEMA, kind='finding', at=_iso(now),
+                              incident=assigned[s.key]['id'], signal=s.to_dict()) for s in fresh]
     decisions = []
     for signal in fresh:
         seen[signal.key] = _iso(now)
@@ -1177,6 +1195,10 @@ def _read_state(path):
     return value if isinstance(value, dict) else {}
 
 
+def observations_path(ledger=DEFAULT_LEDGER):
+    return Path(ledger).expanduser().with_name(OBSERVATIONS_NAME)
+
+
 def _append_ledger(path, decisions):
     path = Path(path).expanduser()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -1214,8 +1236,11 @@ def run(*, policy_path=DEFAULT_POLICY, ledger=DEFAULT_LEDGER, state_path=DEFAULT
     gaps = []
     if signals is None:
         signals, gaps = collect(policy, state, now, root=root)
-    decisions = decide(policy, state, signals, now, guards=Guards(policy, state, now, root=root, protected=protected))
+    observed = []
+    decisions = decide(policy, state, signals, now, guards=Guards(policy, state, now, root=root, protected=protected),
+                       observations=observed)
     _append_ledger(ledger, decisions)
+    _append_ledger(observations_path(ledger), observed)
     _atomic_write(Path(state_path).expanduser(), json.dumps(state, sort_keys=True).encode())
     return _summary(decisions, signals, gaps, policy)
 
