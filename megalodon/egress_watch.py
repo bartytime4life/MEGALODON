@@ -108,17 +108,16 @@ def connections(root='/', *, include_private=False):
                 continue
             if protocol == 'tcp' and fields[3] not in OUTGOING:
                 continue
-            if protocol == 'tcp':
-                local = _endpoint(fields[1], length)
-                if local is not None and local[1] in listening:
-                    continue
+            local = _endpoint(fields[1], length)
+            if protocol == 'tcp' and local is not None and local[1] in listening:
+                continue
             remote = _endpoint(fields[2], length)
             if remote is None or remote[1] == 0:
                 continue                        # an unconnected UDP socket, or a listener
             scope = _scope(remote[0])
             if scope is None or (scope == 'private' and not include_private):
                 continue
-            found[int(fields[9])] = (protocol, remote[0], remote[1], scope)
+            found[int(fields[9])] = (protocol, remote[0], remote[1], scope, local[1] if local else None)
     return found, gaps
 
 
@@ -219,13 +218,14 @@ def observe(root='/', *, include_private=False, known=None):
         if truncated:
             gaps.append('too many open files to map every connection to its program')
     seen, unattributed = [], 0
-    for inode, (protocol, address, port, scope) in table.items():
+    for inode, (protocol, address, port, scope, local_port) in table.items():
         owner = known.get(inode)
         if owner is None:
             unattributed += 1
             continue
         pid, info = owner
         seen.append(dict(inode=inode, protocol=protocol, address=str(address), port=port, scope=scope, pid=pid,
+                         local_port=local_port,
                          start=info['start'], program=identity(info), executable=info['path'], script=script(info),
                          deleted=info['deleted'], argv=info['argv'][:8]))
     if unattributed:
@@ -435,7 +435,8 @@ class Watcher:
         now, out = self.clock(), []
         for connection in seen:
             if self.names is not None:
-                connection['names'] = self.names.lookup(connection['address'], connection['port'])
+                connection['names'] = self.names.lookup(connection['address'], connection['port'],
+                                                        connection.get('local_port'))
             for found in judge(self.baseline, connection, self.watchlist):
                 key = (found['rule_id'], found['program'], found['protocol'], found['port'], found.get('name'))
                 if now - self.last.get(key, -1e18) < COOLDOWN_SECONDS:

@@ -129,6 +129,8 @@ def parse_dns(data):
             break
         kind, _class, ttl, length = struct.unpack_from('!HHIH', data, offset)
         offset += 10
+        if offset + length > len(data):
+            break                                         # the record's data was cut short
         value = data[offset:offset + length]
         offset += length
         if kind == 1 and length == 4:
@@ -169,7 +171,8 @@ def parse_client_hello(data):
 
 
 def parse_packet(packet):
-    """('dns', [(address, name, ttl)]) or ('sni', address, port, name) from a network-layer packet, or None."""
+    """('dns', [(address, name, ttl)]) or ('sni', address, port, source port, name) from a network-layer packet,
+    or None."""
     if not packet:
         return None
     version = packet[0] >> 4
@@ -184,11 +187,11 @@ def parse_packet(packet):
         found = parse_dns(packet[header + 8:])
         return ('dns', found) if found else None
     if protocol == 6 and len(packet) >= header + 20:
-        port = struct.unpack_from('!H', packet, header + 2)[0]
+        source_port, port = struct.unpack_from('!HH', packet, header)
         offset = header + (packet[header + 12] >> 4) * 4
         name = parse_client_hello(packet[offset:])
         if name:
-            return 'sni', str(ipaddress.ip_address(bytes(destination))), port, name
+            return 'sni', str(ipaddress.ip_address(bytes(destination))), port, source_port, name
     return None
 
 
@@ -217,13 +220,15 @@ class Names:
                 for address, name, ttl in event[1]:
                     self._put(self.dns, address, name, now + ttl)
             elif event[0] == 'sni':
-                self._put(self.sni, (event[1], event[2]), event[3], now + SNI_SECONDS)
+                # One connection's server name, kept for that connection only: another program reaching the same
+                # address and port may have asked for a different service.
+                self._put(self.sni, (event[1], event[2], event[3]), event[4], now + SNI_SECONDS)
 
-    def lookup(self, address, port=None):
-        """Names for a destination: what the program asked that address for first, then what it was looked up as."""
+    def lookup(self, address, port=None, local_port=None):
+        """Names for a connection: the server name it asked for first, then what the address was looked up as."""
         now, out = self.clock(), []
         with self.lock:
-            for table, key in ((self.sni, (address, port)), (self.dns, address)):
+            for table, key in ((self.sni, (address, port, local_port)), (self.dns, address)):
                 for name, until in sorted(table.get(key, {}).items(), key=lambda item: -item[1]):
                     if until >= now and name not in out:
                         out.append(name)
@@ -235,7 +240,7 @@ class Listener:
 
     def __init__(self, names, *, open_socket=None):
         self.names, self.open_socket = names, open_socket or self._open
-        self.stats = dict(packets=0, dns=0, sni=0)
+        self.stats = dict(packets=0, dns=0, sni=0, malformed=0)
         self.error = None
 
     @staticmethod
@@ -261,7 +266,11 @@ class Listener:
 
     def handle(self, packet):
         self.stats['packets'] += 1
-        event = parse_packet(packet)
+        try:
+            event = parse_packet(packet)
+        except Exception:                                 # noqa: BLE001 - one odd packet must not stop the listener
+            self.stats['malformed'] += 1
+            return
         if event:
             self.stats[event[0]] += 1
             self.names.learn(event)

@@ -72,15 +72,15 @@ def test_client_hello_server_names():
         ("dns", [("93.184.216.34", "a.example", 120)])
     assert cn.parse_packet(ipv4_udp(5353, dns_answer("a.example", [(1, 120, b"\x5d\xb8\xd8\x22")]))) is None
     assert cn.parse_packet(ipv6_tcp("2001:db8::99", 443, client_hello("b.example"))) == \
-        ("sni", "2001:db8::99", 443, "b.example")
+        ("sni", "2001:db8::99", 443, 50000, "b.example")
 
 
 def test_the_cache_prefers_the_name_asked_for_and_forgets_on_time():
     now = [100.0]
     names = cn.Names(clock=lambda: now[0])
     names.learn(("dns", [("93.184.216.34", "updates.example.org", 60)]))
-    names.learn(("sni", "93.184.216.34", 443, "api.example.net"))
-    assert names.lookup("93.184.216.34", 443) == ["api.example.net", "updates.example.org"]
+    names.learn(("sni", "93.184.216.34", 443, 51000, "api.example.net"))
+    assert names.lookup("93.184.216.34", 443, 51000) == ["api.example.net", "updates.example.org"]
     assert names.lookup("93.184.216.34", 8443) == ["updates.example.org"]
     now[0] += 61
     assert names.lookup("93.184.216.34", 8443) == [], "the answer's lifetime is over"
@@ -89,13 +89,33 @@ def test_the_cache_prefers_the_name_asked_for_and_forgets_on_time():
     assert len(names.lookup("93.184.216.35")) == cn.MAX_NAMES
 
 
+def test_a_cut_short_record_is_ignored_and_never_stops_the_listener():
+    whole = dns_answer("a.example", [(1, 120, socket.inet_aton("93.184.216.34"))])
+    assert cn.parse_dns(whole[:-1]) == [], "the A record's last byte is missing"
+    names = cn.Names()
+    listener = cn.Listener(names)
+    listener.handle(ipv4_udp(53, whole[:-1]))
+    listener.handle(b"\x45" + b"\xff" * 30)                     # a header that claims more than it has
+    listener.handle(ipv4_udp(53, whole))
+    assert names.lookup("93.184.216.34") == ["a.example"], "it kept going after the bad packets"
+
+
+def test_a_server_name_belongs_to_one_connection():
+    names = cn.Names()
+    names.learn(("sni", "93.184.216.40", 443, 40001, "c2.bad-actor.example"))
+    names.learn(("sni", "93.184.216.40", 443, 40002, "good.example"))   # a second program, the same front end
+    assert names.lookup("93.184.216.40", 443, 40002) == ["good.example"]
+    assert names.lookup("93.184.216.40", 443, 40001) == ["c2.bad-actor.example"]
+    assert names.lookup("93.184.216.40", 443) == [], "without the connection, no server name is guessed"
+
+
 def test_the_egress_watch_names_destinations_and_reports_watchlisted_and_generated_names(host, tmp_path):
     manifest = tmp_path / "egress.json"
     ew.learn(manifest, root=str(host))
     names = cn.Names()
     names.learn(("dns", [("151.101.1.69", "deb.example.org", 300)]))                  # the known package manager
     add_connection(host, 822, ("93.184.215.71", 443), 221, "/usr/bin/python3", b"python3\0job.py\0")
-    names.learn(("sni", "93.184.215.71", 443, "c2.bad-actor.example"))
+    names.learn(("sni", "93.184.215.71", 443, 51822, "c2.bad-actor.example"))     # add_connection's local port
     add_connection(host, 823, ("93.184.215.72", 443), 222, "/usr/bin/curl", b"curl\0")
     names.learn(("dns", [("93.184.215.72", "q8x7k2v9n4m3b6z1w5p0.example", 300)]))
     watchlist = Watchlist(parse_lines(["bad-actor.example  # reported by the CERT"]))
@@ -160,11 +180,12 @@ def test_live_capture_reads_only_dns_answers_and_client_hellos():
         tls = socket.create_connection(listening.getsockname())
         tls.sendall(client_hello("api.example.net"))
         deadline = time.monotonic() + 3
-        while time.monotonic() < deadline and not (names.lookup("93.184.216.34")
-                                                   and names.lookup("127.0.0.1", listening.getsockname()[1])):
+        mine = ("127.0.0.1", listening.getsockname()[1], tls.getsockname()[1])
+        while time.monotonic() < deadline and not (names.lookup("93.184.216.34") and names.lookup(*mine)):
             time.sleep(0.05)
         assert names.lookup("93.184.216.34") == ["updates.example.org"]
-        assert names.lookup("127.0.0.1", listening.getsockname()[1]) == ["api.example.net"]
+        assert names.lookup(*mine) == ["api.example.net"]
+        assert names.lookup("127.0.0.1", listening.getsockname()[1], plain.getsockname()[1]) == [], "not its name"
         # The kernel filter passed only the answer and the handshake (each seen twice on loopback).
         assert listener.stats["packets"] == listener.stats["dns"] + listener.stats["sni"]
     finally:
