@@ -344,6 +344,24 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    logins = sub.add_parser(
+        "logins", help="learn who logs in from where, how and when, and report successful logins that do not fit")
+    logins_sub = logins.add_subparsers(dest="logins_command", required=True)
+    for name, text in (("learn", "build or extend the baseline from past logs (also how to accept reviewed logins)"),
+                       ("check", "report new logins, sudo and su that do not fit the baseline (exit 1 on findings)")):
+        command = logins_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/logins.json)")
+        command.add_argument("--log", action="append", dest="logs",
+                             help="auth log, wtmp file, or - for journal output on standard input (repeatable; "
+                                  "default /var/log/auth.log, /var/log/secure, then /var/log/wtmp)")
+        if name == "check":
+            command.add_argument("--all", action="store_true", help="judge every event, not only those since the "
+                                                                    "last check")
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     credentials = sub.add_parser(
         "credentials", help="report programs opening SSH keys, browser password stores, cloud tokens and wallets")
     credentials_sub = credentials.add_subparsers(dest="credentials_command", required=True)
@@ -1688,6 +1706,37 @@ def _egress(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _logins(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import login_watch as logins
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(logins.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.logins_command == "learn":
+            result = logins.learn(manifest, logs=args.logs)
+        else:
+            result = logins.check(manifest, logs=args.logs, every=args.all)
+    except (logins.LoginError, ValidationError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.logins_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            dispatcher.submit([HostNotice(f["rule_id"], f["severity"], datetime.now(timezone.utc), f["detail"],
+                                          tuple(f["techniques"]), f["summary"]) for f in findings[:10]])
+    return 1 if findings else 0
+
+
 def _credentials(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
     from threading import Event
@@ -2758,6 +2807,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _egress(args)
     elif args.command == "credentials":
         code = _credentials(args)
+    elif args.command == "logins":
+        code = _logins(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":

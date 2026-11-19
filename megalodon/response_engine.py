@@ -77,7 +77,7 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'devices', 'webroot', 'tamper', 'egress', 'credentials', 'canary', 'ingest')
+           'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -126,6 +126,9 @@ tamper_manifest = "~/.config/megalodon/tamper.json"
 egress_manifest = "~/.config/megalodon/egress.json"
 # Programs holding credential files open; the live `credentials watch` can be piped into ingest.
 credential_allow_file = "~/.config/megalodon/credential-allow.json"
+# Successful logins that do not fit; `megalodon logins learn` takes the baseline. The engine reads the auth log
+# with its own position, separate from `logins check`.
+logins_manifest = "~/.config/megalodon/logins.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -165,6 +168,20 @@ name = "web-shell-file"
 rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "service-account-login"
+rules = ["LOGIN_SERVICE_ACCOUNT"]
+min_severity = "CRITICAL"
+actions = ["collect_evidence", "lock_account", "block_address", "notify"]
+block_minutes = 60
+
+[[response.playbook]]
+name = "unusual-login"
+rules = ["LOGIN_NEW_KEY", "LOGIN_NEW_SOURCE", "LOGIN_ROOT_REMOTE", "LOGIN_NEW_ACCOUNT", "SUDO_FIRST_USE"]
+min_severity = "HIGH"
+# It may be you, travelling: preserve and ask.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "credential-theft"
@@ -399,7 +416,7 @@ def load_policy(path=DEFAULT_POLICY):
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
-               'credential_allow_file', 'canary_manifest'}
+               'credential_allow_file', 'logins_manifest', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -592,6 +609,15 @@ def credential_signals(report):
     return signals
 
 
+def login_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        signals.append(Signal(f"logins:{f['rule_id']}:{f.get('user')}:{f.get('src_ip')}:{f.get('when')}", 'logins',
+                              f['rule_id'], _severity(f.get('severity')), f.get('when', ''), f.get('detail', ''),
+                              _entities(account=[f.get('user')], address=[f.get('src_ip')])))
+    return signals
+
+
 def listener_signals(report):
     signals = []
     for f in report.get('findings', []):
@@ -698,6 +724,17 @@ def collect(policy, state, now, *, root='/'):
             gaps += [f'credentials: {gap}' for gap in report.get('gaps', [])]
         except (credential_watch.CredentialError, OSError) as exc:
             gaps.append(f'credentials: {exc}')
+    if sources.get('logins_manifest', '~/.config/megalodon/logins.json'):
+        from . import login_watch
+        manifest = Path(sources.get('logins_manifest', '~/.config/megalodon/logins.json')).expanduser()
+        if manifest.exists():
+            try:
+                report = login_watch.check(manifest, cursor=Path(DEFAULT_STATE).expanduser().parent / 'respond-logins-cursor.json')
+                signals += login_signals(report)
+            except (login_watch.LoginError, ValueError, OSError) as exc:
+                gaps.append(f'logins: {exc}')
+        else:
+            gaps.append(f'logins: no baseline at {manifest}; run megalodon logins learn')
     if sources.get('rootkit_check', True):
         from . import rootkit_check
         try:
