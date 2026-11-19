@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from megalodon import response_engine as re_
-from megalodon import secrets_scan as sc
+from megalodon import exposed_secrets as sc
 from test_process_network import proc  # noqa: F401
 
 GITHUB = "gh" + "p_" + "Zq7rT2" * 6
