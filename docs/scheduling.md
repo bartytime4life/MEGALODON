@@ -47,6 +47,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | tamper | every 15 minutes | `tamper check --alert`; its baseline is taken after the others and the units |
 | logwatch | every 15 minutes | `logwatch check --alert` |
 | webroot | every 15 minutes | `webroot check --alert` |
+| boot | hourly | `boot check --alert` ([boot integrity](boot-integrity.md)) |
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
 | binaries | daily at 03:17 | `binaries check --alert` |
 | ancestry | always running (root) | `ancestry watch --alert` |

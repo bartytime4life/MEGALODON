@@ -69,6 +69,8 @@ JOBS = (
     Job('binaries', 'MEGALODON program integrity check', ('binaries', 'check', '--alert'), '*-*-* 03:17:00',
         manifest='~/.config/megalodon/binaries.json', baseline=('binaries', 'baseline'), cron='17 3 * * *',
         interval=86400),
+    Job('boot', 'MEGALODON boot integrity check', ('boot', 'check', '--alert'), 'hourly',
+        manifest='~/.config/megalodon/boot.json', baseline=('boot', 'baseline'), cron='23 * * * *', interval=3600),
     # The port test briefly binds every free port; scheduled runs leave it out.
     Job('rootkit', 'MEGALODON rootkit cross-checks', ('rootkit', 'check', '--skip-ports', '--alert'), 'hourly',
         cron='41 * * * *', interval=3600),

@@ -344,6 +344,23 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    boot = sub.add_parser(
+        "boot", help="baseline and check the kernel, initramfs, bootloader and boot-time protections")
+    boot_sub = boot.add_subparsers(dest="boot_command", required=True)
+    for name, text in (("baseline", "record the boot files and the kernel's boot-time protections"),
+                       ("check", "report boot changes no package update explains, and weakened protections "
+                                 "(exit 1 on findings)"),
+                       ("accept", "after a reviewed kernel or bootloader update, record the current state")):
+        command = boot_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/boot.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     logins = sub.add_parser(
         "logins", help="learn who logs in from where, how and when, and report successful logins that do not fit")
     logins_sub = logins.add_subparsers(dest="logins_command", required=True)
@@ -1706,6 +1723,42 @@ def _egress(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _boot(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import boot_integrity as boot
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(boot.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.boot_command == "baseline":
+            result = boot.baseline(manifest, replace=args.replace)
+        elif args.boot_command == "accept":
+            result = boot.accept(manifest)
+        else:
+            result = boot.check(manifest)
+    except (boot.BootError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.boot_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} boot integrity findings: {listed}",
+                                          tuple(sorted({t for f in findings for t in f["techniques"]})),
+                                          "The kernel, initramfs, bootloader or a boot-time protection changed.")])
+    return 1 if findings else 0
+
+
 def _logins(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2809,6 +2862,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _credentials(args)
     elif args.command == "logins":
         code = _logins(args)
+    elif args.command == "boot":
+        code = _boot(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":
