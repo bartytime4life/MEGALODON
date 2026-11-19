@@ -29,10 +29,14 @@ fetched or installed:
   packages that asked.
 * **Code still running after an update.** Programs that still map a program
   or library from the system folders which an update has since replaced on
-  disk. The fix is installed but not in effect for them until they restart.
+  disk. The fix is installed but not in effect for them until they restart. Replaced data files,
+  such as the locale archive, are not counted.
 * **What is exposed.** Each process's program and libraries are matched to
   packages through dpkg's file lists, including on merged-`/usr` systems.
-  Its sockets show whether it listens beyond loopback.
+  On a machine with more than one architecture, a package is matched by its
+  architecture too: a fix waiting for `libssl3:i386` does not mark a service
+  that loads the amd64 library. Its sockets show whether it listens beyond
+  loopback.
 
 ## What is reported
 

@@ -34,8 +34,9 @@ def runner(text):
 
 def test_update_lists_are_read():
     found = vc.apt_updates(APT)
-    assert sorted(found) == ["docker-ce", "libgcc-s1", "libssl3"]
-    assert found["libssl3"]["security"] and found["libgcc-s1"]["security"] and not found["docker-ce"]["security"]
+    assert sorted(found) == ["docker-ce", "libgcc-s1:i386", "libssl3"]
+    assert found["libssl3"]["security"] and found["libgcc-s1:i386"]["security"] and not found["docker-ce"]["security"]
+    assert (found["libssl3"]["arch"], found["libgcc-s1:i386"]["arch"]) == ("amd64", "i386")
     assert found["libssl3"]["available"] == "3.0.2-0ubuntu1.12"
     found = vc.dnf_updates(DNF)
     assert sorted(found) == ["kernel", "openssl-libs"] and found["openssl-libs"]["severity"] == "Important"
@@ -124,3 +125,23 @@ def test_the_cli(host, capsys, monkeypatch):
         main(["vulns", "check"])
     assert exit_.value.code == 1
     assert json.loads(capsys.readouterr().out)["findings"][0]["rule_id"] == "VULNERABLE_EXPOSED_SERVICE"
+
+
+def test_another_architectures_fix_and_replaced_data_files_are_not_reported(host):
+    # Only the i386 copy of libssl3 has a fix waiting; nginx loads the amd64 one.
+    (host / "var/lib/dpkg/info/libssl3:i386.list").write_text("/lib/i386-linux-gnu/libssl.so.3\n")
+    foreign = ("Inst libssl3:i386 [3.0.2-0ubuntu1.10] (3.0.2-0ubuntu1.12 Ubuntu:22.04/jammy-security [i386])\n")
+    # A replaced locale archive is data, mapped read-only; it needs no restart.
+    (host / "proc/300/maps").write_text(
+        "7f0000000000-7f0000000fff r-xp 00000000 08:01 100 /usr/sbin/nginx\n"
+        "7f0000001000-7f0000001fff r-xp 00000000 08:01 101 /usr/lib/x86_64-linux-gnu/libssl.so.3\n"
+        "7f0000002000-7f0000002fff r--p 00000000 08:01 102 /usr/lib/locale/locale-archive (deleted)\n")
+    report = vc.check(str(host), run=runner(foreign), release="6.1.0-10-amd64")
+    assert rules(report) == [("HIGH", "SECURITY_UPDATES_PENDING", "packages:apt"),
+                             ("MEDIUM", "FIX_NOT_RUNNING", "process:302")]
+    assert report["findings"][0]["packages"] == ["libssl3:i386"]
+    # The same service loading the i386 library is reported.
+    (host / "proc/300/maps").write_text("7f0000000000-7f0000000fff r-xp 00000000 08:01 100 "
+                                        "/usr/lib/i386-linux-gnu/libssl.so.3\n")
+    exposed = vc.check(str(host), run=runner(foreign), release="6.1.0-10-amd64")["findings"][0]
+    assert (exposed["rule_id"], exposed["packages"]) == ("VULNERABLE_EXPOSED_SERVICE", ["libssl3:i386"])

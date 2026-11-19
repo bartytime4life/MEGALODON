@@ -35,7 +35,7 @@ STALE_DAYS = 7
 MAX_PROCESSES = 65536
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 SYSTEM_DIRS = ('/usr/', '/lib/', '/lib64/', '/lib32/', '/bin/', '/sbin/')
-_APT = re.compile(r'^Inst (\S+) (?:\[(\S+)\] )?\((\S+) (.+?)\)(?: \[[^\]]*\])?\s*$')
+_APT = re.compile(r'^Inst (\S+) (?:\[(\S+)\] )?\((\S+) (.+?)(?: \[([^\]]*)\])?\)(?: \[[^\]]*\])?\s*$')
 _DNF = re.compile(r'^(\S+)\s+(\S+)/Sec\.\s+(\S+)\s*$')
 
 RULES = {
@@ -70,7 +70,11 @@ def _run(argv):
 # ------------------------------------------------------------------ pending updates
 
 def apt_updates(text):
-    """{package: {installed, available, security, origins}} from `apt-get -s dist-upgrade` output."""
+    """{package: {name, arch, installed, available, security, origins}} from `apt-get -s dist-upgrade` output.
+
+    A package of a foreign architecture keeps its ':arch' in the key, as apt prints it: libssl3:i386 and libssl3 are
+    separate packages on a multiarch machine, and only the one with the fix waiting is vulnerable.
+    """
     found = {}
     for line in (text or '').splitlines():
         match = _APT.match(line)
@@ -78,8 +82,9 @@ def apt_updates(text):
             continue
         origins = [o.strip() for o in match.group(4).split(',')]
         security = any('-security' in o or 'Debian-Security' in o or '/security' in o for o in origins)
-        found[match.group(1).split(':')[0]] = dict(installed=match.group(2), available=match.group(3),
-                                                   security=security, origins=origins)
+        name, _, suffix = match.group(1).partition(':')
+        found[match.group(1)] = dict(name=name, arch=suffix or match.group(5), installed=match.group(2),
+                                     available=match.group(3), security=security, origins=origins)
     return found
 
 
@@ -124,7 +129,7 @@ def pending(root='/', run=_run):
 # ------------------------------------------------------------------ what runs and what listens
 
 def owners_dpkg(root='/'):
-    """{path: package} from dpkg's file lists."""
+    """{path: package} from dpkg's file lists; 'name:arch' for packages installed per architecture."""
     found = {}
     info = Path(root, 'var/lib/dpkg/info')
     try:
@@ -132,13 +137,20 @@ def owners_dpkg(root='/'):
     except OSError:
         return found
     for path in lists:
-        package = path.name[:-5].split(':')[0]
+        package = path.name[:-5]
         try:
             for line in path.read_text('utf-8', 'replace').splitlines():
                 found.setdefault(line, package)
         except OSError:
             continue
     return found
+
+
+def _fixes(package, security):
+    """The waiting security updates for an installed package, matched by name and architecture."""
+    name, _, arch = package.partition(':')
+    return [key for key, update in security.items() if update.get('name', key) == name
+            and (not arch or update.get('arch') in (None, arch, 'all'))]
 
 
 def _usr_merged(path):
@@ -173,12 +185,13 @@ def processes(root='/'):
             if len(parts) < 6 or not parts[5].startswith('/'):
                 continue
             path = parts[5]
-            if path.endswith(' (deleted)'):
-                path = path[:-10]
-                if path.startswith(SYSTEM_DIRS):
-                    stale.add(path)
+            deleted = path.endswith(' (deleted)')
+            path = path.removesuffix(' (deleted)')
+            # Code only: programs and libraries. A replaced data file, such as the locale archive, needs no restart.
             if path.startswith(SYSTEM_DIRS) and ('.so' in path or 'x' in parts[1]):
                 files.add(path)
+                if deleted:
+                    stale.add(path)
         out[pid] = dict(program=exe.removesuffix(' (deleted)'), files=files, stale=stale)
     return out, unreadable
 
@@ -267,7 +280,7 @@ def check(root='/', *, run=_run, release=None):
         gaps.append(f'{unreadable} processes could not be read; run as root to see every service')
     for pid, info in sorted(procs.items()):
         packages = {owner.get(p) or owner.get(_usr_merged(p)) for p in info['files'] | {info['program']}} - {None}
-        vulnerable = sorted(packages & set(security))
+        vulnerable = sorted({key for package in packages for key in _fixes(package, security)})
         where = exposed.get(pid)
         evidence = dict(processes=[dict(pid=pid, program=info['program'])])
         if where and vulnerable:
