@@ -25,6 +25,15 @@ def write(path, data):
     return str(path)
 
 
+def encrypted(size=8000):
+    """Random bytes the classifier sees as encrypted. About one random buffer in 13,000 starts with a format
+    signature such as MZ or BM and is then (rightly) a known format, which made tests that count files flaky."""
+    while True:
+        data = os.urandom(size)
+        if classify_bytes(data) == "encrypted":
+            return data
+
+
 # ------------------------------------------------------------- classification
 
 def test_formats_text_and_encrypted_bytes_are_told_apart():
@@ -79,13 +88,13 @@ def test_in_place_encryption_of_recognized_files_is_critical(tmp_path):
     d.seed([tmp_path])
     found = []
     for path in paths:
-        write(path, os.urandom(8000))
+        write(path, encrypted())
         found += d.written(path)
         clock.now += 1
     assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
     assert found[0].severity == "CRITICAL" and found[0].evidence["files"] == 5
     assert found[0].to_dict()["attack"] == ["T1486"]
-    write(paths[0], os.urandom(8000))
+    write(paths[0], encrypted())
     assert d.written(paths[0]) == [], "one finding per cooldown"
 
 
@@ -99,7 +108,7 @@ def test_encrypted_copy_next_to_a_deleted_original_counts(tmp_path):
         d.deleted(original)
         # Renamed extensions, swapped extensions and the same name all count as replacing the original.
         name = (f"photo{i}.jpg.id-1234", f"photo{i}.crypted", f"photo{i}.jpg")[i % 3]
-        found += d.written(write(tmp_path / name, os.urandom(8000)))
+        found += d.written(write(tmp_path / name, encrypted()))
     assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
 
 
@@ -119,7 +128,7 @@ def test_unrelated_encrypted_files_only_raise_the_milder_mass_write(tmp_path):
     d, clock = detector(min_files=3)
     found = []
     for i in range(9):
-        found += d.written(write(tmp_path / f"blob{i}.bin", os.urandom(8000)))
+        found += d.written(write(tmp_path / f"blob{i}.bin", encrypted()))
     assert [f.rule_id for f in found] == ["RANSOMWARE_MASS_WRITE"] and found[0].severity == "HIGH"
 
 
@@ -129,7 +138,7 @@ def test_the_window_forgets_old_rewrites(tmp_path):
     d.seed([tmp_path])
     found = []
     for path in paths:
-        write(path, os.urandom(8000))
+        write(path, encrypted())
         found += d.written(path)
         clock.now += 11
     assert found == []
@@ -171,13 +180,13 @@ def test_real_watch_catches_encryption_in_new_and_existing_folders(tmp_path):
         time.sleep(0.3)  # The watcher adds the new folder.
         for i in range(3):
             path = tmp_path / "old" / f"a{i}.txt"
-            write(str(path) + ".locked", os.urandom(8000))
+            write(str(path) + ".locked", encrypted())
             path.unlink()
         for i in range(3):
             original = write(tmp_path / "new" / f"b{i}.pdf", b"%PDF-1.7" + os.urandom(8000))
             time.sleep(0.05)
             os.rename(original, original + ".enc")
-            write(original + ".enc", os.urandom(8000))
+            write(original + ".enc", encrypted())
         deadline = time.monotonic() + 5
         while not found and time.monotonic() < deadline:
             time.sleep(0.05)
@@ -222,7 +231,7 @@ def test_a_rename_onto_an_existing_document_counts_its_history(tmp_path):
     d.seed([tmp_path])
     found = []
     for i, target in enumerate(targets):
-        temp = write(tmp_path / f".tmp{i}", os.urandom(8000))
+        temp = write(tmp_path / f".tmp{i}", encrypted())
         d.written(temp)
         os.replace(temp, target)
         found += d.written(target, previous_path=temp)
@@ -234,7 +243,7 @@ def test_staged_encrypted_files_renamed_to_new_enc_names_are_not_new_encryption(
     d.seed([tmp_path])
     found = []
     for i in range(6):
-        temp = write(tmp_path / f"part{i}.tmp", os.urandom(8000))
+        temp = write(tmp_path / f"part{i}.tmp", encrypted())
         found += d.written(temp)
         target = str(tmp_path / f"archive-{i}.enc")
         os.replace(temp, target)
@@ -252,7 +261,7 @@ def test_a_renamed_folder_keeps_its_files_history(tmp_path):
     d.rename_tree(str(tmp_path / "old"), str(tmp_path / "new"))
     found = []
     for i in range(2):
-        found += d.written(write(tmp_path / "new" / f"f{i}.pdf", os.urandom(8000)))
+        found += d.written(write(tmp_path / "new" / f"f{i}.pdf", encrypted()))
     assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
 
 
@@ -272,7 +281,7 @@ def test_real_watch_follows_a_folder_rename(tmp_path):
         os.rename(tmp_path / "old", tmp_path / "new")
         time.sleep(0.3)
         for i in range(2):
-            write(tmp_path / "new" / f"f{i}.pdf", os.urandom(8000))
+            write(tmp_path / "new" / f"f{i}.pdf", encrypted())
         deadline = time.monotonic() + 5
         while not found and time.monotonic() < deadline:
             time.sleep(0.05)
