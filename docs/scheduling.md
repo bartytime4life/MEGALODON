@@ -40,6 +40,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | --- | --- | --- |
 | respond | every 5 minutes | `respond run` (shadow mode; nothing is carried out) |
 | heartbeat | every 5 minutes | `heartbeat send`, after `megalodon heartbeat init --url ...` ([tamper detection](tamper-detection.md)) |
+| logins | every 5 minutes | `logins check --alert` ([login watch](login-watch.md)) |
 | devices | every 5 minutes | `devices check --alert` |
 | listeners | every 10 minutes | `listeners check --alert` |
 | persistence | every 15 minutes | `persistence check --alert` |
