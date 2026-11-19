@@ -210,7 +210,7 @@ def _in_use(protocol, family, port):
         if family == socket.AF_INET6:
             probe.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         try:
-            probe.bind(('::' if family == socket.AF_INET6 else '0.0.0.0', port))
+            probe.bind(('::1' if family == socket.AF_INET6 else '127.0.0.1', port))
         except OSError as exc:
             if exc.errno == errno.EADDRINUSE:
                 return True
