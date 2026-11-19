@@ -11,7 +11,7 @@ from megalodon.dashboard_support_config import SUPPORT_CONFIG_HTML, SUPPORT_CONF
 from megalodon.dashboard_settings import SETTINGS_JS
 
 
-@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs", "startup_preferences_browser.cjs", "support_status_browser.cjs", "network_defense_browser.cjs"])
+@pytest.mark.parametrize("script", ["support_config_browser.cjs", "support_config_visibility.cjs", "support_setup_visibility.cjs", "support_refresh_browser.cjs", "model_library_browser.cjs", "ollama_model_test_browser.cjs", "local_ai_usability_browser.cjs", "startup_preferences_browser.cjs", "support_status_browser.cjs", "network_defense_browser.cjs"])
 def test_support_config_behavior(script):
     node = shutil.which("node")
     if node is None:
@@ -117,3 +117,34 @@ def test_publisher_review_controls_expose_no_passive_navigation_target():
     for tag, attrs in parser.controls.values():
         assert tag == "button" and attrs["type"] == "button" and "disabled" in attrs
         assert not {"href", "src", "data-url"}.intersection(attrs)
+
+
+def test_existing_model_path_keeps_file_tools_available_but_secondary():
+    from html.parser import HTMLParser
+
+    class Disclosures(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack, self.parents, self.closed = [], {}, set()
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "details":
+                self.stack.append(attrs.get("id"))
+                if "open" not in attrs:
+                    self.closed.add(attrs.get("id"))
+            if attrs.get("id"):
+                self.parents[attrs["id"]] = tuple(self.stack)
+
+        def handle_endtag(self, tag):
+            if tag == "details":
+                self.stack.pop()
+
+    layout = Disclosures()
+    layout.feed(INDEX_HTML)
+    disclosure = "model-library-options"
+    assert disclosure in layout.closed
+    for control in ("model-library-reuse", "model-library-download", "model-library-check", "model-library-cancel"):
+        assert disclosure in layout.parents[control]
+    for control in ("support-model-refresh", "support-model-save", "support-model-test"):
+        assert disclosure not in layout.parents[control]

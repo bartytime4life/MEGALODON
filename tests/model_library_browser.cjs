@@ -39,6 +39,8 @@ process.stdin.on('end',async()=>{
  await poll(10000);assert.equal(posts().length,1,'polling never resumes or starts a transfer');
  assert.equal(get('model-library-download').disabled,true);assert.equal(get('model-library-cancel').disabled,false);
  assert.equal(get('model-library-progress').value,42);
+ assert.equal(get('model-library-options').open,true,'running file work keeps status and cancellation visible');
+ assert.match(get('model-library-summary').textContent,/in progress/);
  await click('model-library-cancel');assert.deepEqual(JSON.parse(posts().at(-1).opts.body),{action:'model_stage_cancel'});
  payload={...fixture,model:unbound_model,model_library:{...library,state:'checked',models:[{catalog_id:library.catalog[0].id,state:'staged_verified',checked_at:1}]}};
  await poll(2000);assert.match(get('model-library-models').children[0].textContent,/Verified at last check/);
