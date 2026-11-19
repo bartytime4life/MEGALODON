@@ -35,7 +35,7 @@ def test_the_plan_lists_jobs_missing_baselines_and_cron_lines(home, tmp_path):
     baselines(home, "persistence.json")
     result = sc.plan(system=False, directory=tmp_path / "units", launcher=["/usr/bin/megalodon"])
     jobs = {row["job"]: row for row in result["jobs"]}
-    assert "ancestry" not in jobs and {s["job"] for s in result["skipped"]} == {"ancestry", "ebpf", "containers", "enforce"}, \
+    assert "ancestry" not in jobs and {s["job"] for s in result["skipped"]} == {"ancestry", "ebpf", "containers", "enforce", "commands"}, \
         "the live ancestry watch, the eBPF and container checks and enforcement need root"
     assert jobs["persistence"]["baseline"] is None
     assert jobs["listeners"]["baseline"] == "/usr/bin/megalodon listeners baseline"

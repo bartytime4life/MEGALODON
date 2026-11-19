@@ -92,6 +92,11 @@ RULES = {
     'SENSOR_STATE_CHANGED': ('MEDIUM', 'The state digest in the heartbeats changed.'),
     'HEARTBEAT_GAP': ('MEDIUM', 'Heartbeats are missing from the sequence: lost deliveries, or a sender that was '
                                 'stopped and restarted.'),
+    'COMMAND_LOG_ROLLED_BACK': ('CRITICAL', 'The command log went back to an earlier line: its end was cut off, or '
+                                            'it was replaced.'),
+    'COMMAND_LOG_LOST': ('HIGH', 'The machine stopped reporting its command log after earlier heartbeats had one.'),
+    'COMMAND_LOG_RESTARTED': ('MEDIUM', 'The command log was started over with a new key. `commands init --replace` '
+                                        'does this; so does an intruder hiding what came before.'),
 }
 
 
@@ -412,8 +417,15 @@ def _sender_state(path):
         return dict(schema=HEARTBEAT_SCHEMA + '-sequence', sequence=0)
 
 
+def _command_log_head(path):
+    """The command log's last line, carried off the machine so a log cut short is seen from outside."""
+    from . import command_log
+    found = command_log.head(path or command_log.DEFAULT_STATE)
+    return dict(command_log=found) if found else {}
+
+
 def heartbeat(config=DEFAULT_HEARTBEAT, *, manifest=DEFAULT_MANIFEST, sequence_path=DEFAULT_SEQUENCE, now=None,
-              runner=None, uptime=None, **options):
+              runner=None, uptime=None, command_state=None, **options):
     """One signed heartbeat: sequence, time, state digest and the tamper check's findings."""
     settings = _read(config, HEARTBEAT_SCHEMA + '-config', 'heartbeat configuration')
     sender = _sender_state(sequence_path)
@@ -435,6 +447,7 @@ def heartbeat(config=DEFAULT_HEARTBEAT, *, manifest=DEFAULT_MANIFEST, sequence_p
                 sent_at=_iso(now or _now()),
                 state_digest=(report or {}).get('state_digest') or state_digest(snapshot(**options)),
                 tamper_baseline=Path(manifest).expanduser().exists(),
+                **_command_log_head(command_state),
                 findings=[dict(rule_id=f['rule_id'], severity=f['severity'], subject=f['subject'])
                           for f in (report or {}).get('findings', [])][:20])
     body['mac'] = _sign(settings['key'], body)
@@ -470,6 +483,7 @@ def monitor(lines, key, *, max_gap=900, now=None, sensor=None):
     now = now or _now()
     findings, last, last_time, digest, refused, reported = [], None, None, None, 0, frozenset()
     had_baseline = False
+    log_sequence, log_key = None, None
     for line in lines:
         if len(line) > MAX_LINE_BYTES:
             refused += 1
@@ -507,6 +521,22 @@ def monitor(lines, key, *, max_gap=900, now=None, sensor=None):
             findings.append(_finding('HEARTBEAT_REPLAYED', f'heartbeat:{sequence}',
                                      f'heartbeat {sequence} arrived after {last}'))
             continue
+        # After the replay check: a replayed old heartbeat carries an old line number too.
+        log = body.get('command_log')
+        if isinstance(log, dict) and type(log.get('sequence')) is int:
+            if log_key is not None and log.get('key_id') != log_key:
+                findings.append(_finding('COMMAND_LOG_RESTARTED', f'heartbeat:{sequence}',
+                                         f'heartbeat {sequence} reports a command log with a new key'))
+            elif log_sequence is not None and log['sequence'] < log_sequence:
+                findings.append(_finding('COMMAND_LOG_ROLLED_BACK', f'heartbeat:{sequence}',
+                                         f'heartbeat {sequence} reports command log line {log["sequence"]}; an '
+                                         f'earlier heartbeat reported line {log_sequence}'))
+            log_sequence, log_key = log['sequence'], log.get('key_id')
+        elif log_sequence is not None:
+            findings.append(_finding('COMMAND_LOG_LOST', f'heartbeat:{sequence}',
+                                     f'heartbeat {sequence} reports no command log; earlier ones did, up to line '
+                                     f'{log_sequence}'))
+            log_sequence, log_key = None, None
         if last is not None and sequence > last + 1:
             findings.append(_finding('HEARTBEAT_GAP', f'heartbeat:{last + 1}-{sequence - 1}',
                                      f'heartbeats {last + 1} to {sequence - 1} never arrived'))
@@ -529,4 +559,5 @@ def monitor(lines, key, *, max_gap=900, now=None, sensor=None):
                                  f'the last heartbeat ({last}) was {minutes} minutes ago'))
     findings.sort(key=lambda f: RANK.index(f['severity']))
     return dict(schema=REPORT_SCHEMA, action='monitor', checked_at=_iso(now), last_sequence=last,
+                command_log_sequence=log_sequence,
                 last_sent_at=_iso(last_time) if last_time else None, findings=findings, refused_lines=refused)

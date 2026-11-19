@@ -98,6 +98,10 @@ JOBS = (
     Job('rootkit', 'MEGALODON rootkit cross-checks', ('rootkit', 'check', '--skip-ports', '--alert'), 'hourly',
         cron='41 * * * *', interval=3600),
     Job('ancestry', 'MEGALODON process ancestry watch', ('ancestry', 'watch', '--alert'), root_only=True),
+    # Every started program, in a signed log; its first key is printed once by init and kept off the machine.
+    Job('commands', 'MEGALODON command log', ('commands', 'record'), root_only=True,
+        manifest='~/.local/state/megalodon/commands-state.json',
+        setup='megalodon commands init --key-file /path/to/move/off/this/machine'),
     Job('credentials', 'MEGALODON credential access watch', ('credentials', 'watch', '--alert')),
     Job('egress', 'MEGALODON outgoing-program watch', ('egress', 'watch', '--alert'),
         manifest='~/.config/megalodon/egress.json', setup='megalodon egress learn --minutes 60'),

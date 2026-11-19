@@ -69,6 +69,8 @@ Nothing is sent to the machines: the collector only listens.
   | `HEARTBEAT_REPORTS_TAMPER` | HIGH | The machine's own tamper check reported findings |
   | `TAMPER_BASELINE_LOST` | HIGH | Its tamper baseline disappeared |
   | `SENSOR_STATE_CHANGED`, `HEARTBEAT_GAP` | MEDIUM | Its state digest changed, or heartbeats went missing |
+  | `COMMAND_LOG_ROLLED_BACK` | CRITICAL | Its [command log](command-log.md) went back to an earlier line |
+  | `COMMAND_LOG_LOST`, `COMMAND_LOG_RESTARTED` | HIGH, MEDIUM | Its command log stopped being reported, or started over with a new key |
 
   The full rules are in [tamper detection](tamper-detection.md).
 * **Alerts** must carry an enrolled machine's token, or they are refused (401).
