@@ -35,6 +35,7 @@ class Job:
     cron: str | None = None
     interval: int | None = None           # seconds between runs, for the tamper check's overdue test
     setup: str | None = None              # what to run when there is no baseline command
+    writable: tuple = ()                  # folders the job changes, writable inside ProtectSystem=full
 
 
 JOBS = (
@@ -43,7 +44,8 @@ JOBS = (
         interval=300),
     # Carries out the decisions the enforcement policy allows; with no policy, or one that is off, it does nothing.
     Job('enforce', 'MEGALODON enforcement (off until its policy is enabled)', ('enforce', 'run'), '*:*:00',
-        cron='* * * * *', interval=60, root_only=True),
+        # usermod writes /etc/shadow through lock and temporary files beside it, so it needs /etc, not one file.
+        cron='* * * * *', interval=60, root_only=True, writable=('/etc',)),
     # A signed heartbeat off the machine: its silence is what an intruder who stops everything cannot hide.
     Job('heartbeat', 'MEGALODON heartbeat', ('heartbeat', 'send'), '*:0/5',
         manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,
@@ -124,6 +126,7 @@ def units(job, launcher, system):
                '[Service]', f'ExecStart={_exec(job, launcher)}',
                # Read-only checks: no new privileges, the system tree read-only, low priority.
                'NoNewPrivileges=yes', 'ProtectSystem=full', 'Nice=10']
+    service += [f'ReadWritePaths={folder}' for folder in job.writable]
     if job.calendar is None:
         service += ['Restart=on-failure', 'RestartSec=10', '', '[Install]',
                     f'WantedBy={"multi-user.target" if system else "default.target"}']

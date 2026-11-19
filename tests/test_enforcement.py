@@ -200,7 +200,8 @@ def test_accounts_are_locked_with_their_expiry_and_root_never(tmp_path):
     with pytest.raises(en.EnforcementError, match="UID 0"):
         executor.lock_account("root", {})
     undo = executor.lock_account("nobody", {})
-    assert commands.ran[-1] == ["usermod", "--lock", "--expiredate", "1", "nobody"] and undo == dict(previous_expiry="")
+    assert commands.ran[-1] == ["usermod", "--lock", "--expiredate", "1", "nobody"] \
+        and undo == dict(previous_expiry="", password_was_locked=False)
     executor.undo_lock_account(dict(target="nobody", undo=undo))
     assert commands.ran[-1] == ["usermod", "--unlock", "--expiredate", "", "nobody"]
 
@@ -232,3 +233,82 @@ def test_the_cli(p, capsys, monkeypatch):
     with pytest.raises(SystemExit) as exit_:
         main(["enforce", "list", "--policy", str(p["enforce"])])
     assert exit_.value.code == 0 and json.loads(capsys.readouterr().out) == dict(active=[])
+
+
+def test_a_folder_swapped_for_a_symlink_is_never_followed(p, tmp_path):
+    # A stand-in for a protected folder, reached through an upload subfolder replaced by a symlink.
+    protected = tmp_path / "protected"
+    protected.mkdir()
+    (protected / "accounts").write_text("placeholder\n")
+    (tmp_path / "uploads").mkdir()
+    os.symlink(protected, tmp_path / "uploads/sub")
+    enable(p, ["quarantine_file"], ["web-shell-file"])
+    report = dict(checked_at="2026-11-19T00:00:00Z", findings=[dict(rule_id="WEB_SHELL_PATTERN", severity="HIGH",
+                                                                    path=str(tmp_path / "uploads/sub/accounts"))])
+    decide(p, re_.path_signals(report, "webroot", "path"))
+    result = enforce(p)
+    assert result["applied"] == [] and "symlink" in result["refused"][0]["reason"]
+    assert (protected / "accounts").read_text() == "placeholder\n", "the file behind the symlink is untouched"
+    assert not p["quarantine"].exists() or not any(p["quarantine"].iterdir())
+
+
+def test_undo_never_restores_through_a_symlinked_folder(p, tmp_path):
+    shell = tmp_path / "uploads/shell.php"
+    shell.parent.mkdir()
+    shell.write_text("<?php echo 1; ?>")
+    enable(p, ["quarantine_file"], ["web-shell-file"])
+    report = dict(checked_at="2026-11-19T00:00:00Z", findings=[dict(rule_id="WEB_SHELL_PATTERN", severity="HIGH",
+                                                                    path=str(shell))])
+    decide(p, re_.path_signals(report, "webroot", "path"))
+    record = enforce(p)["applied"][0]
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (tmp_path / "uploads").rmdir()
+    os.symlink(elsewhere, tmp_path / "uploads")
+    with pytest.raises(en.EnforcementError, match="symlink"):
+        en.undo(record["id"], journal=p["journal"])
+    assert list(elsewhere.iterdir()) == [] and Path(record["undo"]["kept"]).exists()
+
+
+def test_a_password_locked_before_stays_locked_after_undo(tmp_path):
+    commands = Commands()
+    (tmp_path / "etc").mkdir()
+    (tmp_path / "etc/shadow").write_text("nobody:!placeholder:19000:0:99999:7::20000:\n")
+    executor = en.Executor(root=str(tmp_path), run=commands)
+    undo = executor.lock_account("nobody", {})
+    assert undo == dict(previous_expiry="20000", password_was_locked=True)
+    executor.undo_lock_account(dict(target="nobody", undo=undo))
+    assert commands.ran[-1] == ["usermod", "--expiredate", "20000", "nobody"], "the expiry comes back, the lock stays"
+
+
+def test_one_run_at_a_time(p):
+    import fcntl
+    held = []
+
+    class Probe(en.Executor):
+        def suspend_process(self, target, decision):
+            # A second run trying now would wait: the lock is held from reading the state to writing it.
+            fd = os.open(str(p["journal"]) + ".lock", os.O_RDWR)
+            try:
+                with pytest.raises(BlockingIOError):
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                held.append(True)
+            finally:
+                os.close(fd)
+            return {}
+    enable(p, ["suspend_process"], ["code-loaded-into-memory"])
+    decide(p, memory_signal(SimpleNamespace(pid=os.getpid())))
+    assert len(enforce(p, executor=Probe())["applied"]) == 1 and held == [True]
+    fd = os.open(str(p["journal"]) + ".lock", os.O_RDWR)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)       # released once the run is done
+    finally:
+        os.close(fd)
+
+
+def test_the_enforce_service_can_write_the_account_files():
+    from megalodon import schedule
+    jobs = {job.name: job for job in schedule.JOBS}
+    enforce_unit = schedule.units(jobs["enforce"], ["megalodon"], True)["megalodon-enforce.service"]
+    assert "ProtectSystem=full" in enforce_unit and "ReadWritePaths=/etc\n" in enforce_unit
+    assert "ReadWritePaths" not in schedule.units(jobs["hardening"], ["megalodon"], True)["megalodon-hardening.service"]

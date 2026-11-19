@@ -32,6 +32,8 @@ disable_persistence is not carried out by this version.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -213,65 +215,101 @@ class Executor:
                        '{', record['target'], '}'])
 
     # --- files
-    def quarantine_file(self, target, decision):
-        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    @staticmethod
+    def _folder(path):
+        """The folder holding `path`, opened one name at a time from / without following a symlink, and the name.
+
+        The guards check the path as written; a folder on the way swapped for a symlink (uploads/x -> /etc) would
+        otherwise lead somewhere they never checked. Everything after this works relative to the folder opened.
+        """
+        if not path.startswith('/') or path.startswith('//') or os.path.normpath(path) != path or path == '/':
+            raise EnforcementError(f'{path} is not a plain absolute path')
+        names = path.split('/')[1:]
+        fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         try:
-            info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_COPY:
-                raise EnforcementError('only a regular file up to 512 MiB is quarantined')
-            folder = self.quarantine / secrets.token_hex(8)
-            folder.mkdir(mode=0o700, parents=True)
-            kept = folder / 'file'
-            digest = hashlib.sha256()
-            out = os.open(kept, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
-            try:
-                for chunk in iter(lambda: os.read(fd, 1 << 20), b''):
-                    os.write(out, chunk)
-                    digest.update(chunk)
-                os.fsync(out)
-            finally:
-                os.close(out)
-        finally:
+            for name in names[:-1]:
+                inner = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+                os.close(fd)
+                fd = inner
+        except OSError as exc:
             os.close(fd)
-        now = os.stat(target, follow_symlinks=False)
-        if (now.st_dev, now.st_ino) != (info.st_dev, info.st_ino):
-            shutil.rmtree(folder)
-            raise EnforcementError(f'{target} was replaced while it was being quarantined')
-        os.unlink(target)
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise EnforcementError(f'a folder on the way to {path} is a symlink or not a folder') from None
+            raise
+        return fd, names[-1]
+
+    def quarantine_file(self, target, decision):
+        parent, name = self._folder(target)
+        try:
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent)
+            try:
+                info = os.fstat(fd)
+                if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_COPY:
+                    raise EnforcementError('only a regular file up to 512 MiB is quarantined')
+                folder = self.quarantine / secrets.token_hex(8)
+                folder.mkdir(mode=0o700, parents=True)
+                kept = folder / 'file'
+                digest = hashlib.sha256()
+                out = os.open(kept, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+                try:
+                    for chunk in iter(lambda: os.read(fd, 1 << 20), b''):
+                        os.write(out, chunk)
+                        digest.update(chunk)
+                    os.fsync(out)
+                finally:
+                    os.close(out)
+            finally:
+                os.close(fd)
+            now = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            if (now.st_dev, now.st_ino) != (info.st_dev, info.st_ino):
+                shutil.rmtree(folder)
+                raise EnforcementError(f'{target} was replaced while it was being quarantined')
+            os.unlink(name, dir_fd=parent)
+        finally:
+            os.close(parent)
         os.chmod(kept, 0)
         return dict(kept=str(kept), sha256=digest.hexdigest(), mode=stat.S_IMODE(info.st_mode), uid=info.st_uid,
                     gid=info.st_gid)
 
     def undo_quarantine_file(self, record):
         undo, target = record['undo'], record['target']
-        if os.path.lexists(target):
-            raise EnforcementError(f'{target} exists again; the quarantined copy is left at {undo["kept"]}')
-        os.chmod(undo['kept'], 0o600)
-        with open(undo['kept'], 'rb') as source:
-            data = source.read()
-        if hashlib.sha256(data).hexdigest() != undo['sha256']:
-            os.chmod(undo['kept'], 0)
-            raise EnforcementError('the quarantined copy no longer matches its recorded SHA-256')
-        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        parent, name = self._folder(target)
         try:
-            os.write(fd, data)
-            os.fchmod(fd, undo['mode'])
-            if os.geteuid() == 0:
-                os.fchown(fd, undo['uid'], undo['gid'])
+            try:
+                os.stat(name, dir_fd=parent, follow_symlinks=False)
+                raise EnforcementError(f'{target} exists again; the quarantined copy is left at {undo["kept"]}')
+            except FileNotFoundError:
+                pass
+            os.chmod(undo['kept'], 0o600)
+            with open(undo['kept'], 'rb') as source:
+                data = source.read()
+            if hashlib.sha256(data).hexdigest() != undo['sha256']:
+                os.chmod(undo['kept'], 0)
+                raise EnforcementError('the quarantined copy no longer matches its recorded SHA-256')
+            fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600,
+                         dir_fd=parent)
+            try:
+                os.write(fd, data)
+                os.fchmod(fd, undo['mode'])
+                if os.geteuid() == 0:
+                    os.fchown(fd, undo['uid'], undo['gid'])
+            finally:
+                os.close(fd)
         finally:
-            os.close(fd)
+            os.close(parent)
         shutil.rmtree(Path(undo['kept']).parent)
 
     # --- accounts
-    def _expiry(self, user):
+    def _shadow(self, user):
+        """(whether the password is already locked, the expiry day) from the shadow file."""
         try:
             for line in Path(self.root, 'etc/shadow').read_text().splitlines():
                 fields = line.split(':')
                 if fields[0] == user and len(fields) > 7:
-                    return fields[7]
+                    return fields[1].startswith('!'), fields[7]
         except OSError:
             pass
-        return ''
+        return False, ''
 
     def lock_account(self, target, decision):
         try:
@@ -279,14 +317,16 @@ class Executor:
                 raise EnforcementError('an account with UID 0 is never locked')
         except KeyError:
             raise EnforcementError(f'no account named {target}') from None
-        previous = self._expiry(target)
+        locked, previous = self._shadow(target)
         # A locked password alone still lets SSH keys in; an expired account does not.
         self._command(['usermod', '--lock', '--expiredate', '1', target])
-        return dict(previous_expiry=previous)
+        return dict(previous_expiry=previous, password_was_locked=locked)
 
     def undo_lock_account(self, record):
-        self._command(['usermod', '--unlock', '--expiredate', record['undo'].get('previous_expiry') or '',
-                       record['target']])
+        expiry = record['undo'].get('previous_expiry') or ''
+        # A password that was locked before stays locked: undo puts back what was there, nothing more.
+        unlock = [] if record['undo'].get('password_was_locked') else ['--unlock']
+        self._command(['usermod', *unlock, '--expiredate', expiry, record['target']])
 
     # --- evidence and notices
     def collect_evidence(self, target, decision):
@@ -380,9 +420,31 @@ def _decisions(ledger, state):
     return out
 
 
+class _Lock:
+    """One run or undo at a time: held from reading the state until the journal and state are written."""
+
+    def __init__(self, journal):
+        self.path = Path(journal).expanduser().with_name(Path(journal).name + '.lock')
+
+    def __enter__(self):
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        os.close(self.fd)        # closing releases the lock
+
+
 def run(*, policy_path=DEFAULT_POLICY, response_policy=engine.DEFAULT_POLICY, ledger=engine.DEFAULT_LEDGER,
         journal=DEFAULT_JOURNAL, state_path=DEFAULT_STATE, now=None, executor=None, dry_run=False, protected=None):
     """Carry out the allowed decisions recorded since the last run."""
+    with _Lock(journal):
+        return _run(policy_path=policy_path, response_policy=response_policy, ledger=ledger, journal=journal,
+                    state_path=state_path, now=now, executor=executor, dry_run=dry_run, protected=protected)
+
+
+def _run(*, policy_path, response_policy, ledger, journal, state_path, now, executor, dry_run, protected):
     policy = load_policy(policy_path)
     now = now or _now()
     if not policy['enabled'] and not dry_run:
@@ -462,6 +524,11 @@ def active(journal=DEFAULT_JOURNAL):
 
 
 def undo(identifier, *, journal=DEFAULT_JOURNAL, executor=None, now=None):
+    with _Lock(journal):
+        return _undo(identifier, journal=journal, executor=executor, now=now)
+
+
+def _undo(identifier, *, journal, executor, now):
     record = next((r for r in active(journal) if r['id'] == identifier), None)
     if record is None:
         raise EnforcementError(f'no applied, not yet undone action has the ID {identifier}')

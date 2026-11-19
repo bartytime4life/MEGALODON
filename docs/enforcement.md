@@ -70,7 +70,13 @@ Each action is carried out once, and recorded in
 `~/.local/state/megalodon/enforced.jsonl` (mode 600). The record holds what
 was done, to what, for which finding, and what undoing it takes. A refused
 decision is reported with its reason. A failed one is recorded, and makes
-`run` exit 1.
+`run` exit 1. It is not tried again.
+
+One run or undo happens at a time. A run started while another is going, by
+hand or by the scheduler, waits for it, so no decision is carried out twice.
+The scheduled `megalodon-enforce` service keeps `ProtectSystem=full` but can
+write to `/etc`. `usermod` needs this to lock an account, because it writes
+lock and temporary files beside `/etc/shadow`.
 
 ## What each action does
 
@@ -78,8 +84,8 @@ decision is reported with its reason. A failed one is recorded, and makes
 | --- | --- | --- |
 | `suspend_process` | SIGSTOP to the one process named by PID and start time. It is sent through a pidfd after checking that the start time and program still match, so a reused PID is never signalled. Program-wide targets are never signalled. The process is paused, not killed: its memory and files stay for [capture](memory-capture.md). | SIGCONT |
 | `block_address` | A time-limited element in MEGALODON's own nftables table (`inet megalodon`), dropping traffic to and from the address. It expires by itself after the playbook's `block_minutes`. | The element is deleted |
-| `quarantine_file` | The file is copied into the quarantine folder with no permissions, checked to be the same file, and removed. Its SHA-256, owner and mode are recorded. | Restored with its mode and owner, if the copy still matches its hash and nothing new is at that path |
-| `lock_account` | `usermod --lock --expiredate 1`. A locked password alone still lets SSH keys in; an expired account does not. Accounts with UID 0 are never locked. | Unlocked, with its previous expiry put back |
+| `quarantine_file` | The file is copied into the quarantine folder with no permissions, checked to be the same file, and removed. Its SHA-256, owner and mode are recorded. The path is opened one folder at a time without following symlinks, so a folder swapped for a symlink after the decision cannot lead outside the folders the guards checked. | Restored with its mode and owner, if the copy still matches its hash, nothing new is at that path, and no folder on the way is now a symlink |
+| `lock_account` | `usermod --lock --expiredate 1`. A locked password alone still lets SSH keys in; an expired account does not. Accounts with UID 0 are never locked. | Its previous expiry put back; the password is unlocked only if it was not already locked before |
 | `collect_evidence` | An [evidence bundle](evidence-collection.md), plus the [memory](memory-capture.md) of up to four processes the finding names | Nothing to undo |
 | `notify` | A summary of what was enforced, to the alert destinations | Nothing to undo |
 
