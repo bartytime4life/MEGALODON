@@ -505,6 +505,38 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--alert", action="store_true", help="also send findings to this machine's alerts")
     command.add_argument("--config", type=Path, help="settings file for --alert")
 
+    fleet = sub.add_parser(
+        "fleet", help="collect every machine's heartbeats and alerts in one place, and show them together")
+    fleet_sub = fleet.add_subparsers(dest="fleet_command", required=True)
+    command = fleet_sub.add_parser("enroll", help="record a machine and its heartbeat key; prints its alert token")
+    command.add_argument("machine", help="a name for the machine")
+    command.add_argument("--key-file", type=Path, required=True,
+                         help="mode-600 file holding the key that machine's `heartbeat init` printed")
+    command.add_argument("--sensor", help="the sensor name its heartbeats carry (default: the machine name)")
+    command.add_argument("--replace", action="store_true", help="give an enrolled machine a new key and token")
+    command = fleet_sub.add_parser("remove", help="stop accepting a machine (what it sent is kept)")
+    command.add_argument("machine")
+    command = fleet_sub.add_parser("serve", help="receive heartbeats at /heartbeat and alerts at /alert")
+    command.add_argument("--listen", default="127.0.0.1:8650", help="address:port (default 127.0.0.1:8650)")
+    command.add_argument("--certificate", type=Path, help="TLS certificate (needed off loopback)")
+    command.add_argument("--private-key", type=Path, help="TLS private key")
+    command.add_argument("--plain-http", action="store_true",
+                         help="listen off loopback without TLS (only behind a TLS proxy on the same network)")
+    command.add_argument("--max-gap", type=int, default=900, help="seconds without a heartbeat before a machine "
+                                                                  "is silent (default 900)")
+    command.add_argument("--view", default="127.0.0.1:8651",
+                         help="loopback address:port for the view, / and /status (default 127.0.0.1:8651; "
+                              "'off' for none)")
+    command = fleet_sub.add_parser("status", help="every machine's heartbeats and recent alerts (exit 1 if any "
+                                                  "needs attention)")
+    command.add_argument("--max-gap", type=int, default=900, help="seconds without a heartbeat before a machine "
+                                                                  "is silent (default 900)")
+    command.add_argument("--hours", type=int, default=24, help="alerts from this many hours (default 24)")
+    command.add_argument("--alert", action="store_true", help="also send heartbeat findings to this machine's alerts")
+    command.add_argument("--config", type=Path, help="settings file for --alert")
+    for command in fleet_sub.choices.values():
+        command.add_argument("--data", type=Path, help="collector folder (default ~/.local/share/megalodon/fleet)")
+
     schedule = sub.add_parser(
         "schedule", help="run every host watch on a schedule with alerts (systemd timers; plan first)")
     schedule_sub = schedule.add_subparsers(dest="schedule_command", required=True)
@@ -2177,6 +2209,51 @@ def _heartbeat(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _fleet(args: argparse.Namespace) -> int:
+    from . import fleet
+    from .alerts import AlertConfigError, read_secret
+
+    data = args.data or Path(fleet.DEFAULT_DATA).expanduser()
+    try:
+        if args.fleet_command == "enroll":
+            result = fleet.enroll(args.machine, read_secret(str(args.key_file)), sensor=args.sensor, data=data,
+                                  replace=args.replace)
+        elif args.fleet_command == "remove":
+            result = fleet.remove(args.machine, data=data)
+        elif args.fleet_command == "serve":
+            host, _, port = args.listen.rpartition(":")
+            if not host or not port.isdigit():
+                raise fleet.FleetError("--listen is address:port, such as 0.0.0.0:8650")
+            httpd = fleet.server(host.strip("[]"), int(port), data=data, certificate=args.certificate,
+                                 private_key=args.private_key, max_gap=args.max_gap, plain_http=args.plain_http)
+            view = None
+            if args.view != "off":
+                view_host, _, view_port = args.view.rpartition(":")
+                if not view_host or not view_port.isdigit():
+                    raise fleet.FleetError("--view is a loopback address:port, such as 127.0.0.1:8651, or off")
+                view = fleet.view_server(view_host.strip("[]"), int(view_port), data=data, max_gap=args.max_gap)
+                fleet.serve_in_background(view)
+            print(json.dumps(dict(listening=args.listen, tls=bool(args.certificate), view=args.view, data=str(data)),
+                             sort_keys=True), flush=True)
+            try:
+                httpd.serve_forever()
+            except KeyboardInterrupt:
+                pass
+            return 0
+        else:
+            result = fleet.status(data=data, max_gap=args.max_gap, hours=args.hours)
+    except (fleet.FleetError, AlertConfigError, OSError, ValueError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if args.fleet_command != "status":
+        return 0
+    if args.alert and result["findings"]:
+        _tamper_alert(args, result["findings"], "A machine in the fleet went silent, or its heartbeats were forged, "
+                                                "replayed or reported tampering.")
+    return 1 if any(row["state"] != "ok" for row in result["machines"]) else 0
+
+
 def _schedule(args: argparse.Namespace) -> int:
     import subprocess
 
@@ -3090,6 +3167,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _hardening(args)
     elif args.command == "memory":
         code = _memory(args)
+    elif args.command == "fleet":
+        code = _fleet(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":
