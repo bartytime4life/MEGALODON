@@ -39,9 +39,11 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | Job | Runs | Command |
 | --- | --- | --- |
 | respond | every 5 minutes | `respond run` (shadow mode; nothing is carried out) |
+| heartbeat | every 5 minutes | `heartbeat send`, after `megalodon heartbeat init --url ...` ([tamper detection](tamper-detection.md)) |
 | devices | every 5 minutes | `devices check --alert` |
 | listeners | every 10 minutes | `listeners check --alert` |
 | persistence | every 15 minutes | `persistence check --alert` |
+| tamper | every 15 minutes | `tamper check --alert`; its baseline is taken after the others and the units |
 | logwatch | every 15 minutes | `logwatch check --alert` |
 | webroot | every 15 minutes | `webroot check --alert` |
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
@@ -66,5 +68,7 @@ as a failure.
 * **The rootkit port test** briefly binds every free port, so scheduled runs
   leave it out. Run `megalodon rootkit check` yourself when nothing is
   starting.
+* **After installing more units,** run `megalodon tamper accept` so the tamper
+  check records them. `install` says so when it applies.
 * **Without systemd,** `install` refuses. Add the crontab lines that `plan`
   prints instead.

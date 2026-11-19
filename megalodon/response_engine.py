@@ -77,7 +77,7 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'devices', 'webroot', 'canary', 'ingest')
+           'devices', 'webroot', 'tamper', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -121,6 +121,7 @@ binaries_manifest = "~/.config/megalodon/binaries.json"
 logwatch_manifest = "~/.config/megalodon/log-integrity.json"
 devices_manifest = "~/.config/megalodon/devices.json"
 webroot_manifest = "~/.config/megalodon/webroot.json"
+tamper_manifest = "~/.config/megalodon/tamper.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -160,6 +161,15 @@ name = "web-shell-file"
 rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "sensor-tampering"
+rules = ["SENSOR_CODE_CHANGED", "SENSOR_CODE_REMOVED", "SCHEDULE_REMOVED", "SCHEDULE_CHANGED", "WATCH_DISABLED",
+         "WATCH_STOPPED", "ALERTS_CONFIG_CHANGED", "ALLOW_LIST_CHANGED", "HEARTBEAT_CONFIG_CHANGED",
+         "DETECTION_RULES_CHANGED", "CONFIG_REMOVED"]
+min_severity = "HIGH"
+# Whoever is blinding the sensor may also be reading its alerts: preserve, and tell you elsewhere.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "new-hardware"
@@ -357,7 +367,7 @@ def load_policy(path=DEFAULT_POLICY):
     sources = table.get('sources', {})
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
-               'devices_manifest', 'webroot_manifest', 'canary_manifest'}
+               'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -633,7 +643,8 @@ def collect(policy, state, now, *, root='/'):
               ('logwatch_manifest', 'log_integrity', 'LogIntegrityError',
                lambda r: path_signals(r, 'logwatch', 'log')),
               ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')),
-              ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')))
+              ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')),
+              ('tamper_manifest', 'tamper', 'TamperError', lambda r: path_signals(r, 'tamper', 'subject')))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')

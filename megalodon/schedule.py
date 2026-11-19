@@ -33,26 +33,42 @@ class Job:
     baseline: tuple | None = None         # how to take it
     root_only: bool = False
     cron: str | None = None
+    interval: int | None = None           # seconds between runs, for the tamper check's overdue test
+    setup: str | None = None              # what to run when there is no baseline command
 
 
 JOBS = (
     Job('respond', 'MEGALODON response engine, shadow pass', ('respond', 'run'), '*:0/5',
-        manifest='~/.config/megalodon/response-policy.toml', baseline=('respond', 'init'), cron='*/5 * * * *'),
+        manifest='~/.config/megalodon/response-policy.toml', baseline=('respond', 'init'), cron='*/5 * * * *',
+        interval=300),
+    # A signed heartbeat off the machine: its silence is what an intruder who stops everything cannot hide.
+    Job('heartbeat', 'MEGALODON heartbeat', ('heartbeat', 'send'), '*:0/5',
+        manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,
+        setup='megalodon heartbeat init --url https://your-monitor.example/ping'),
+    Job('tamper', 'MEGALODON tamper check', ('tamper', 'check', '--alert'), '*:0/15',
+        manifest='~/.config/megalodon/tamper.json', baseline=('tamper', 'baseline'), cron='*/15 * * * *',
+        interval=900),
     Job('persistence', 'MEGALODON persistence check', ('persistence', 'check', '--alert'), '*:0/15',
-        manifest='~/.config/megalodon/persistence.json', baseline=('persistence', 'baseline'), cron='*/15 * * * *'),
+        manifest='~/.config/megalodon/persistence.json', baseline=('persistence', 'baseline'), cron='*/15 * * * *',
+        interval=900),
     Job('listeners', 'MEGALODON listener check', ('listeners', 'check', '--alert'), '*:0/10',
-        manifest='~/.config/megalodon/listeners.json', baseline=('listeners', 'baseline'), cron='*/10 * * * *'),
+        manifest='~/.config/megalodon/listeners.json', baseline=('listeners', 'baseline'), cron='*/10 * * * *',
+        interval=600),
     Job('logwatch', 'MEGALODON log integrity check', ('logwatch', 'check', '--alert'), '*:0/15',
-        manifest='~/.config/megalodon/log-integrity.json', baseline=('logwatch', 'baseline'), cron='*/15 * * * *'),
+        manifest='~/.config/megalodon/log-integrity.json', baseline=('logwatch', 'baseline'), cron='*/15 * * * *',
+        interval=900),
     Job('devices', 'MEGALODON device check', ('devices', 'check', '--alert'), '*:0/5',
-        manifest='~/.config/megalodon/devices.json', baseline=('devices', 'baseline'), cron='*/5 * * * *'),
+        manifest='~/.config/megalodon/devices.json', baseline=('devices', 'baseline'), cron='*/5 * * * *',
+        interval=300),
     Job('webroot', 'MEGALODON web-root check', ('webroot', 'check', '--alert'), '*:0/15',
-        manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline'), cron='*/15 * * * *'),
+        manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline'), cron='*/15 * * * *',
+        interval=900),
     Job('binaries', 'MEGALODON program integrity check', ('binaries', 'check', '--alert'), '*-*-* 03:17:00',
-        manifest='~/.config/megalodon/binaries.json', baseline=('binaries', 'baseline'), cron='17 3 * * *'),
+        manifest='~/.config/megalodon/binaries.json', baseline=('binaries', 'baseline'), cron='17 3 * * *',
+        interval=86400),
     # The port test briefly binds every free port; scheduled runs leave it out.
     Job('rootkit', 'MEGALODON rootkit cross-checks', ('rootkit', 'check', '--skip-ports', '--alert'), 'hourly',
-        cron='41 * * * *'),
+        cron='41 * * * *', interval=3600),
     Job('ancestry', 'MEGALODON process ancestry watch', ('ancestry', 'watch', '--alert'), root_only=True),
 )
 
@@ -125,7 +141,8 @@ def plan(*, system=None, only=None, directory=None, launcher=None):
         ready = job.manifest is None or Path(job.manifest).expanduser().exists()
         rows.append(dict(job=job.name, description=job.description, command=_exec(job, launcher),
                          every=job.calendar or 'always running', units=sorted(units(job, launcher, system)),
-                         baseline=None if ready else ' '.join([*launcher, *job.baseline]),
+                         baseline=None if ready else (' '.join([*launcher, *job.baseline]) if job.baseline
+                                                      else job.setup),
                          cron=f'{job.cron} {_exec(job, launcher)}' if job.cron else None))
     return dict(schema='megalodon-schedule-plan-v1', scope='system' if system else 'user', unit_dir=str(folder),
                 systemd=has_systemd(), jobs=rows, skipped=skipped,
@@ -149,15 +166,23 @@ def install(*, system=None, only=None, directory=None, launcher=None, runner=Non
     jobs = _selected(only, system)
     missing = [j for j in jobs if j.manifest and not Path(j.manifest).expanduser().exists()]
     taken = []
+    manual = [j for j in missing if not j.baseline]
+    if manual:
+        raise ScheduleError('set up first: ' + '; '.join(f'{j.name}: {j.setup}' for j in manual) +
+                            ' (or leave them out with --only)')
     if missing and not take_baselines:
         raise ScheduleError('missing baselines for ' + ', '.join(j.name for j in missing) +
                             '; take them first (see `megalodon schedule plan`) or pass --take-baselines')
-    for job in missing:
+    def take(job):
         result = subprocess.run([*launcher, *job.baseline], check=False, capture_output=True, text=True,
                                 timeout=1800)
         if result.returncode not in (0, 1):     # 1: a baseline that already found something, which it reported
             raise ScheduleError(f'{job.name} baseline failed: {result.stderr.strip()[:300]}')
         taken.append(job.name)
+    # The tamper baseline records the other baselines and the units, so it is taken after both exist.
+    for job in missing:
+        if job.name != 'tamper':
+            take(job)
     folder.mkdir(parents=True, exist_ok=True, mode=0o755 if system else 0o700)
     written = []
     for job in jobs:
@@ -170,12 +195,18 @@ def install(*, system=None, only=None, directory=None, launcher=None, runner=Non
             os.chmod(temporary, 0o644)
             os.replace(temporary, path)
             written.append(str(path))
+    for job in missing:
+        if job.name == 'tamper':
+            take(job)
     enabled = [f'{PREFIX}{j.name}.{"timer" if j.calendar else "service"}' for j in jobs]
     results = [runner(system, 'daemon-reload')]
     results.append(runner(system, 'enable', '--now', *enabled))
     failed = [r for r in results if r.returncode != 0]
+    after = []
+    if any(j.name == 'tamper' for j in jobs) and 'tamper' not in taken:
+        after.append('run `megalodon tamper accept` so the tamper check records these units')
     return dict(schema='megalodon-schedule-v1', action='install', scope='system' if system else 'user',
-                baselines_taken=taken, written=written, enabled=enabled,
+                baselines_taken=taken, written=written, enabled=enabled, next=after,
                 ok=not failed, errors=[(r.stderr or '').strip()[:300] for r in failed])
 
 
