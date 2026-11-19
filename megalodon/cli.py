@@ -320,6 +320,27 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    schedule = sub.add_parser(
+        "schedule", help="run every host watch on a schedule with alerts (systemd timers; plan first)")
+    schedule_sub = schedule.add_subparsers(dest="schedule_command", required=True)
+    for name, text in (("plan", "show the timers and services that install would add, and missing baselines"),
+                       ("install", "write and enable the timers and services (needs --yes)"),
+                       ("remove", "disable and delete MEGALODON's timers and services (needs --yes)")):
+        command = schedule_sub.add_parser(name, help=text)
+        scope = command.add_mutually_exclusive_group()
+        scope.add_argument("--system", action="store_true", default=None,
+                           help="system units in /etc/systemd/system (the default as root)")
+        scope.add_argument("--user", action="store_false", dest="system",
+                           help="user units in ~/.config/systemd/user (the default otherwise)")
+        command.add_argument("--unit-dir", type=Path, help="unit folder to use instead of the systemd default")
+        if name != "remove":
+            command.add_argument("--only", action="append", help="limit to these jobs (repeatable)")
+        if name in ("install", "remove"):
+            command.add_argument("--yes", action="store_true", help="confirm the change")
+        if name == "install":
+            command.add_argument("--take-baselines", action="store_true",
+                                 help="take missing baselines first; do this only on a system you trust")
+
     rootkit = sub.add_parser(
         "rootkit", help="cross-check processes, kernel modules, ports and folders for hidden ones (Linux)")
     rootkit_sub = rootkit.add_subparsers(dest="rootkit_command", required=True)
@@ -1536,6 +1557,30 @@ def _webroot(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _schedule(args: argparse.Namespace) -> int:
+    import subprocess
+
+    from . import schedule
+
+    try:
+        if args.schedule_command == "plan":
+            result = schedule.plan(system=args.system, only=args.only, directory=args.unit_dir)
+        elif not args.yes:
+            print("megalodon: this changes the machine's services; review `megalodon schedule plan`, then add --yes",
+                  file=sys.stderr)
+            return 2
+        elif args.schedule_command == "install":
+            result = schedule.install(system=args.system, only=args.only, directory=args.unit_dir,
+                                      take_baselines=args.take_baselines)
+        else:
+            result = schedule.remove(system=args.system, directory=args.unit_dir)
+    except (schedule.ScheduleError, OSError, subprocess.SubprocessError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("ok", True) else 1
+
+
 def _rootkit(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2405,6 +2450,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _devices(args)
     elif args.command == "webroot":
         code = _webroot(args)
+    elif args.command == "schedule":
+        code = _schedule(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":

@@ -187,6 +187,7 @@ or source basis.
 | [Rootkit cross-checks: hidden processes, modules, ports and files](rootkit-check.md) | `docs/rootkit-check.md` |
 | [Device watch: new keyboards, network adapters and storage](device-watch.md) | `docs/device-watch.md` |
 | [Web-root watch: dropped scripts and web shells](webroot-watch.md) | `docs/webroot-watch.md` |
+| [Scheduling the host watches](scheduling.md) | `docs/scheduling.md` |
 | [Evidence collection: sealed, hashed snapshots](evidence-collection.md) | `docs/evidence-collection.md` |
 | [Response engine: shadow-mode automated response](response-engine.md) | `docs/response-engine.md` |
 | [Self-test drill: prove the detections fire](self-test-drill.md) | `docs/self-test-drill.md` |
