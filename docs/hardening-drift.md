@@ -55,14 +55,18 @@ on every pass.
   whoever runs it, and setuid searches do not see it.
 
   Every local file system is searched for files that carry the
-  `security.capability` attribute. The search skips kernel views, network and
-  FUSE mounts, and container image layers. It stops after two million files or
+  `security.capability` attribute. The root file system is always searched,
+  including an overlay root as in containers. The search skips kernel views,
+  container image layers, and network and FUSE mounts; skipped mounts are
+  listed as a gap. It stops after two million files or
   two minutes and reports a gap if it did.
 * **Root's command search path:**
   - **The search path.** It is read from the system default, `/etc/environment`,
     `ENV_SUPATH` in `/etc/login.defs`, and sudo's `secure_path`.
   - **Folders.** Each folder on the path, and every folder above it, is checked
-    for whether an account other than root can write to it. Whatever lands
+    for whether an account other than root can write to it. A folder that is a
+    symlink is checked both ways: up from its own path, and up from where it
+    leads. Whatever lands
     there, root runs.
   - **Programs.** So is each program in those folders.
   - **Relative entries.** An empty or relative entry (`.`) makes root run
@@ -78,7 +82,7 @@ on every pass.
 | `PATH_HAS_RELATIVE_ENTRY` | HIGH | Root's search path gained an empty or relative entry |
 | `FILE_CAPABILITY_ADDED` | HIGH | Another program gained a capability that leads to root |
 | `HARDENING_WEAKENED` | HIGH for kernel and SSH protections, MEDIUM for updates and network settings | A hardening review check got worse |
-| `FILE_CAPABILITY_CHANGED` | MEDIUM | A program gained another capability, such as `cap_net_raw` |
+| `FILE_CAPABILITY_CHANGED` | MEDIUM | A program gained another capability, such as `cap_net_raw`, or a permitted one was switched on (`+p` to `+ep`) |
 
 The **hardening-drift** response playbook covers the HIGH and CRITICAL rules.
 It collects evidence and notifies you. Settings and permissions are the

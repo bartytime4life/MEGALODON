@@ -138,3 +138,43 @@ def test_findings_become_shadow_decisions_and_the_cli(root, tmp_path, capsys, mo
     assert exit_.value.code == 1
     assert {f["rule_id"] for f in json.loads(capsys.readouterr().out)["findings"]} == {
         "PATH_FOLDER_WRITABLE", "HARDENING_WEAKENED"}
+
+
+def test_a_symlinked_search_path_folder_is_checked_where_it_leads(root, tmp_path):
+    (root / "opt/owner/bin").mkdir(parents=True)
+    os.symlink("/opt/owner/bin", root / "usr/local/tools")
+    (root / "etc/environment").write_text('PATH="/usr/local/tools:/usr/bin"\n')
+    manifest = tmp_path / "hardening.json"
+    hd.baseline(manifest, root=str(root), review=reviewer(GOOD), budget=30)
+    os.chmod(root / "opt/owner", 0o777)          # whoever can write here can rename bin and put their own in place
+    assert rules(hd.check(manifest, review=reviewer(GOOD), budget=30)) == [
+        ("CRITICAL", "PATH_FOLDER_WRITABLE", "file:/opt/owner")]
+
+
+def test_an_overlay_root_is_searched_and_network_mounts_are_a_gap(root, tmp_path):
+    probe = root / "usr/bin/tool"
+    if not _can_set_capabilities(probe):
+        pytest.skip("setting file capabilities needs root and a file system that keeps them")
+    (root / "proc/self").mkdir(parents=True)
+    (root / "proc/self/mountinfo").write_text(
+        "1 0 0:50 / / rw - overlay overlay rw,lowerdir=/a,upperdir=/b\n"
+        "2 1 0:51 / /mnt/share rw - nfs4 server:/export rw\n")
+    (root / "mnt/share").mkdir(parents=True)
+    (root / "mnt/share/far").write_text("")
+    os.setxattr(root / "mnt/share/far", "security.capability", cap_value(SETUID))
+    caps, gaps = hd.file_capabilities(str(root), budget=30)
+    assert sorted(caps) == ["/usr/bin/tool"], "the overlay root is searched, the network share is not"
+    assert gaps == ["1 network or FUSE mounts were not searched for file capabilities: /mnt/share"]
+
+
+def test_a_permitted_capability_switched_on_is_reported(root, tmp_path):
+    probe = root / "usr/bin/tool"
+    if not _can_set_capabilities(probe):
+        pytest.skip("setting file capabilities needs root and a file system that keeps them")
+    os.setxattr(probe, "security.capability", cap_value(NET_RAW, effective=False))
+    manifest = tmp_path / "hardening.json"
+    hd.baseline(manifest, root=str(root), review=reviewer(GOOD), budget=30)
+    os.setxattr(probe, "security.capability", cap_value(NET_RAW, effective=True))
+    report = hd.check(manifest, review=reviewer(GOOD), budget=30)
+    assert rules(report) == [("MEDIUM", "FILE_CAPABILITY_CHANGED", "file:/usr/bin/tool")]
+    assert report["findings"][0]["detail"] == "/usr/bin/tool holds cap_net_raw+ep"
