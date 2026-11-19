@@ -196,7 +196,7 @@ operator host remains an explicit operational acceptance check.
 ## Check an installed copy without starting it
 
 The normal installer `status` command describes release/artifact health. It does
-not establish that the model-library source matches a particular merged commit.
+not establish that the model-library source matches a particular source revision.
 From a reviewed checkout, run this separate read-only observation on the actual
 operator PC:
 
