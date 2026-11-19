@@ -50,6 +50,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | webroot | every 15 minutes | `webroot check --alert` |
 | ebpf | every 15 minutes (root) | `ebpf check --alert` ([eBPF watch](ebpf-watch.md)) |
 | hardening | hourly | `hardening check --alert` ([hardening drift](hardening-drift.md)) |
+| packages | hourly | `packages check --alert` ([package sources](package-sources.md)) |
 | containers | every 15 minutes (root) | `containers check --alert` ([container watch](container-watch.md)) |
 | boot | hourly | `boot check --alert` ([boot integrity](boot-integrity.md)) |
 | rootkit | hourly | `rootkit check --skip-ports --alert` |

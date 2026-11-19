@@ -55,8 +55,8 @@ policy allows, each with a way to undo it.
      [device](device-watch.md), [web-root](webroot-watch.md),
      [tamper](tamper-detection.md), [egress](egress-watch.md),
      [credential](credential-watch.md), [login](login-watch.md),
-     [boot](boot-integrity.md), [eBPF](ebpf-watch.md), [container](container-watch.md) and
-     [hardening drift](hardening-drift.md) checks, and
+     [boot](boot-integrity.md), [eBPF](ebpf-watch.md), [container](container-watch.md),
+     [hardening drift](hardening-drift.md) and [package sources](package-sources.md) checks, and
      canaries.
 
    Each check needs its baseline. A source that can't be read is listed
@@ -132,6 +132,7 @@ Guards apply whatever the playbooks say:
 | code-loaded-into-memory | `MEMORY_ELF_IN_ANONYMOUS` (with `memory_sweep = true`) | Collect evidence, suspend the process, notify |
 | code-run-from-memory | HIGH `MEMORY_EXECUTABLE_MEMFD`, `MEMORY_EXECUTABLE_TEMPORARY` | Collect evidence, notify |
 | hardening-drift | HIGH `FILE_CAPABILITY_BACKDOOR`, `FILE_CAPABILITY_ADDED`, `PROGRAM_WRITABLE`, `PATH_FOLDER_WRITABLE`, `PATH_HAS_RELATIVE_ENTRY`, `HARDENING_WEAKENED` | Collect evidence, notify |
+| package-trust-changed | HIGH `PACKAGE_SIGNATURES_OFF`, `PACKAGE_CONFIG_WRITABLE`, `SIGNING_KEY_ADDED`, `PACKAGE_SOURCE_REDIRECTED`, `PACKAGE_SOURCE_CHANGED`, `PACKAGE_CONFIG_REDIRECTED`, `PACKAGE_MANAGER_HOOK_ADDED`, `PACKAGE_MANAGER_HOOK_SUSPICIOUS`, `PACKAGE_SIGNATURE_CHECK_WEAKENED` | Collect evidence, notify |
 | container-exposure | HIGH `CONTAINER_PRIVILEGED`, `CONTAINER_RUNTIME_SOCKET`, `CONTAINER_HOST_PATH_MOUNTED`, `CONTAINER_DANGEROUS_CAPABILITY`, `CONTAINER_HOST_PID`, `ESCAPE_HOOK_CHANGED`, `RUNTIME_GROUP_MEMBER_ADDED` | Collect evidence, notify |
 | boot-tampering | HIGH and CRITICAL [boot integrity](boot-integrity.md) findings | Collect evidence, notify |
 | service-account-login | `LOGIN_SERVICE_ACCOUNT` | Collect evidence, lock the account, block the source for 60 minutes, notify |
