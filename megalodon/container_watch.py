@@ -116,6 +116,10 @@ def _now():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
+def _why():
+    return '; run as root' if os.geteuid() else '; this machine hides them, as some sandboxes do'
+
+
 def _text(path, limit=MAX_READ):
     try:
         with open(path, 'rb') as handle:
@@ -317,7 +321,7 @@ def snapshot(*, root='/', api=None):
     host_ns = {kind: _link(host / 'ns' / kind) for kind in ('mnt', 'pid', 'net', 'user')}
     gaps = []
     if host_ns['mnt'] is None:
-        gaps.append('the host\'s namespaces cannot be read; run as root')
+        gaps.append('the host\'s namespaces (those of process 1) cannot be read' + _why())
     last = _text(proc / 'sys/kernel/cap_last_cap', 64)
     last = int(last) if last and last.strip().isdigit() else 40
     everything = (1 << (last + 1)) - 1
@@ -376,7 +380,7 @@ def snapshot(*, root='/', api=None):
             elif outside and _risky_path(outside) and point != '/':
                 risks.add(f'mount:{outside}' + ('' if options.split(',')[0] == 'rw' else ' (read-only)'))
     if hidden:
-        gaps.append(f'{hidden} container processes could not be inspected; run as root')
+        gaps.append(f'{hidden} container processes could not be inspected' + _why())
     for entry in containers.values():
         if 'privileged' in entry['risks']:
             entry['risks'] = {r for r in entry['risks'] if not r.startswith('cap:') and r != 'seccomp_off'}
