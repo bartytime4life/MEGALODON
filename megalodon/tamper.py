@@ -49,6 +49,7 @@ CONFIG_KINDS = {
     'settings.toml': ('ALERTS_CONFIG_CHANGED', 'HIGH', 'the settings, including where alerts go'),
     'response-policy.toml': ('POLICY_CHANGED', 'MEDIUM', 'the response policy'),
     'ancestry-allow.json': ('ALLOW_LIST_CHANGED', 'HIGH', 'the process ancestry allow list'),
+    'credential-allow.json': ('ALLOW_LIST_CHANGED', 'HIGH', 'the credential reader allow list'),
     'heartbeat.json': ('HEARTBEAT_CONFIG_CHANGED', 'HIGH', 'the heartbeat destination and key'),
 }
 # The files that decide what MEGALODON reports. Other files there (the HUD's own settings) change in normal use.

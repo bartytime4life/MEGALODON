@@ -51,7 +51,7 @@ watch's baseline yourself.
 | `WATCH_DISABLED`, `WATCH_STOPPED` | HIGH | systemd reports a scheduled unit as not enabled or not running |
 | `WATCH_OVERDUE` | HIGH | A timer has not run for more than three of its intervals |
 | `ALERTS_CONFIG_CHANGED` | HIGH | The settings changed, or a URL or token file an alert destination points to changed or was removed |
-| `ALLOW_LIST_CHANGED` | HIGH | The process ancestry allow list changed |
+| `ALLOW_LIST_CHANGED` | HIGH | The process ancestry or credential reader allow list changed |
 | `DETECTION_RULES_CHANGED` | HIGH | A YARA rule file changed |
 | `HEARTBEAT_CONFIG_CHANGED` | HIGH | The heartbeat destination or key changed |
 | `CONFIG_REMOVED` | HIGH | A recorded baseline or configuration file was removed |
