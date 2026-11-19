@@ -124,6 +124,30 @@ def test_weakened_boot_time_protections(root, tmp_path):
     assert ("CMDLINE_CHANGED", "kernel:cmdline") in rules(bi.check(manifest))
 
 
+def test_a_quoted_grub_default_that_weakens_the_kernel_is_reported_during_an_update(root, tmp_path):
+    manifest = tmp_path / "boot.json"
+    bi.baseline(manifest, root=str(root))
+    package_activity_now(root)            # the edit hides inside an update window: the change itself is explained
+    (root / "etc/default/grub").write_text('GRUB_CMDLINE_LINUX_DEFAULT="quiet module.sig_enforce=0"\n'
+                                           'GRUB_CMDLINE_LINUX="audit=0"\n')
+    report = bi.check(manifest)
+    assert [e["subject"] for e in report["explained"]] == ["/etc/default/grub"]
+    assert rules(report) == [("CMDLINE_WEAKENED", "/etc/default/grub")]
+    assert report["findings"][0]["parameters"] == ["audit=0", "module.sig_enforce=0"]
+
+
+def test_a_protection_that_can_no_longer_be_read_is_a_gap(root, tmp_path):
+    manifest = tmp_path / "boot.json"
+    assert bi.baseline(manifest, root=str(root))["kernel"]["lockdown"] == "integrity"
+    (root / "sys/kernel/security/lockdown").unlink()               # securityfs unmounted
+    (root / bi.SECURE_BOOT_VAR).unlink()
+    report = bi.check(manifest)
+    assert report["findings"] == []
+    lost = [gap for gap in report["gaps"] if "can no longer be read" in gap]
+    assert len(lost) == 2 and any(gap.startswith("kernel lockdown was recorded as 'integrity'") for gap in lost) \
+        and any(gap.startswith("Secure Boot was recorded as True") for gap in lost)
+
+
 def test_a_mismatched_packaged_kernel_is_reported_at_baseline(root, tmp_path):
     (root / "boot/vmlinuz-6.1.0-9").write_bytes(b"already patched")
     result = bi.baseline(tmp_path / "boot.json", root=str(root))

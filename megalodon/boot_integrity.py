@@ -43,9 +43,14 @@ RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 SECURE_BOOT_VAR = 'sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c'
 LOCKDOWN_ORDER = ('none', 'integrity', 'confidentiality')
 # Kernel parameters that switch a protection off or hand the boot to something else.
-WEAKENING = re.compile(r'(?:^|\s)(init=\S+|rd\.break\S*|single|emergency|module\.sig_enforce=0|lockdown=none|'
-                       r'apparmor=0|selinux=0|enforcing=0|security=none|audit=0|ima_appraise=off|'
-                       r'efi=disable_early_pci_dma\S*|nokaslr|mitigations=off|lsm=\S*)(?=\s|$)')
+# A parameter stands alone, or at either end of a quoted value such as GRUB_CMDLINE_LINUX="audit=0".
+WEAKENING = re.compile(r'(?:^|[\s"\'])(init=[^\s"\']+|rd\.break[^\s"\']*|single|emergency|module\.sig_enforce=0|'
+                       r'lockdown=none|apparmor=0|selinux=0|enforcing=0|security=none|audit=0|ima_appraise=off|'
+                       r'efi=disable_early_pci_dma[^\s"\']*|nokaslr|mitigations=off|lsm=[^\s"\']*)(?=[\s"\']|$)')
+# Kernel protections that, once readable, should stay readable: losing sight of one is reported.
+OBSERVED = (('secure_boot', 'Secure Boot'), ('lockdown', 'kernel lockdown'),
+            ('sig_enforce', 'module-signature enforcement'), ('modules_disabled', 'the module-loading switch'),
+            ('cmdline', 'the kernel command line'))
 
 RULES = {
     'BOOT_PACKAGE_MISMATCH': ('CRITICAL', ['T1542'], 'A packaged boot file, such as a kernel, no longer matches '
@@ -341,6 +346,16 @@ def compare(old, new, *, activity=(), packaged=None):
     return findings, explained
 
 
+def lost_protections(was, now):
+    """Gaps for protections the baseline could read and this check cannot: they can no longer be compared."""
+    gaps = []
+    for key, name in OBSERVED:
+        if was.get(key) not in (None, '') and now.get(key) in (None, ''):
+            gaps.append(f'{name} was recorded as {was[key]!r} but can no longer be read, so it was not compared'
+                        + ('; run as root' if os.geteuid() else ''))
+    return gaps
+
+
 def _weakening_by_file(root, files):
     out = {}
     for path in files:
@@ -374,7 +389,7 @@ def check(manifest=DEFAULT_MANIFEST, *, root=None):
     return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
                 baseline_recorded_at=old.get('recorded_at'), checked_at=_iso(_now()), findings=findings,
                 explained=explained,
-                kernel=new['kernel'], gaps=new['gaps'],
+                kernel=new['kernel'], gaps=new['gaps'] + lost_protections(old.get('kernel', {}), new['kernel']),
                 note='After a reviewed kernel or bootloader update, `megalodon boot accept` records the new state.')
 
 
