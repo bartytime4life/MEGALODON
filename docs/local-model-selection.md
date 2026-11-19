@@ -28,6 +28,15 @@ status and unsaved selections: refresh, choose, save, or explicitly test.
 It highlights an available existing button without clicking it or contacting
 Ollama. Status-read failure clears the visible connection and response-test
 result; retry is required before treating a prior result as current.
+Unsaved model, compute or response-limit edits replace an earlier test result
+with a save-and-retest instruction, including during polling. Completed test
+results name the tested model. **Use installed version** remains available for
+an explicitly refreshed changed digest while UNBOUND; it performs the same
+protected save action, never loading or accepting the model.
+
+**Advanced: model files and downloads** keeps offline verification, publisher
+review, staging and cancellation available outside the ordinary selection/test
+path. Running file work opens that disclosure so its status stays visible.
 Automatic loading preferences remain under an advanced disclosure. Selection,
 fixed response testing, and live-analysis acceptance remain separate.
 
