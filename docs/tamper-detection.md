@@ -30,10 +30,10 @@ megalodon tamper accept
 (mode 600):
 - the SHA-256 of every MEGALODON program file;
 - the scheduled units from [`megalodon schedule`](scheduling.md);
-- the files that decide what MEGALODON reports: the settings (including the
-  alert destinations), the response policy, the process ancestry allow
-  list, the heartbeat configuration, every watch's baseline, and the YARA
-  rules.
+- the files that decide what MEGALODON reports: the settings, the URL and
+  token files its alert destinations point to (only their digests), the
+  response policy, the process ancestry allow list, the heartbeat
+  configuration, every watch's baseline, and the YARA rules.
 
 The dashboard's own settings files change in normal use and are not
 recorded.
@@ -50,7 +50,7 @@ watch's baseline yourself.
 | `SCHEDULE_REMOVED`, `SCHEDULE_CHANGED` | HIGH | A scheduled unit was removed or edited, for example its command |
 | `WATCH_DISABLED`, `WATCH_STOPPED` | HIGH | systemd reports a scheduled unit as not enabled or not running |
 | `WATCH_OVERDUE` | HIGH | A timer has not run for more than three of its intervals |
-| `ALERTS_CONFIG_CHANGED` | HIGH | The settings changed, including where alerts go |
+| `ALERTS_CONFIG_CHANGED` | HIGH | The settings changed, or a URL or token file an alert destination points to changed or was removed |
 | `ALLOW_LIST_CHANGED` | HIGH | The process ancestry allow list changed |
 | `DETECTION_RULES_CHANGED` | HIGH | A YARA rule file changed |
 | `HEARTBEAT_CONFIG_CHANGED` | HIGH | The heartbeat destination or key changed |
@@ -114,7 +114,8 @@ Use either of these:
 | `HEARTBEAT_SILENT` | CRITICAL | No valid heartbeat within `--max-gap` seconds (default 900) |
 | `HEARTBEAT_FORGED` | CRITICAL | A heartbeat's signature does not match the key: it was edited or made without it |
 | `HEARTBEAT_REPLAYED` | HIGH | A heartbeat repeated, or went back in the sequence |
-| `HEARTBEAT_REPORTS_TAMPER` | HIGH | The machine's own tamper check reported findings (once per new set) |
+| `HEARTBEAT_REPORTS_TAMPER` | HIGH | The machine's own tamper check reported findings (once per new set), including a removed tamper baseline |
+| `TAMPER_BASELINE_LOST` | HIGH | Heartbeats that carried a tamper baseline stopped carrying one, even if the sender's own records were wiped too |
 | `SENSOR_STATE_CHANGED` | MEDIUM | The state digest changed between heartbeats |
 | `HEARTBEAT_GAP` | MEDIUM | Sequence numbers are missing: lost deliveries, or a restarted sender |
 
