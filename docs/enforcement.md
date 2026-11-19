@@ -68,7 +68,8 @@ A decision is carried out only when every check passes:
 
 Each action is carried out once, and recorded in
 `~/.local/state/megalodon/enforced.jsonl` (mode 600). The record holds what
-was done, to what, for which finding, and what undoing it takes. A refused
+was done, to what, for which finding and incident, and what undoing it takes.
+The [incident timeline](incident-timeline.md) shows each one in its incident. A refused
 decision is reported with its reason. A failed one is recorded, and makes
 `run` exit 1. It is not tried again.
 

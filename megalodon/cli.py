@@ -438,6 +438,25 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    timeline = sub.add_parser(
+        "timeline", help="each incident's findings, decisions and actions in order, from every check")
+    timeline_sub = timeline.add_subparsers(dest="timeline_command", required=True)
+    for name, text in (("list", "incidents with activity in the last --hours, worst first"),
+                       ("show", "one incident in order, or every incident that involved --entity")):
+        command = timeline_sub.add_parser(name, help=text)
+        if name == "list":
+            command.add_argument("--hours", type=int, default=168, help="how far back (default 168)")
+        else:
+            command.add_argument("incident", nargs="?", help="incident ID, or the start of one")
+            command.add_argument("--entity", help="KIND:VALUE, such as address:203.0.113.7, file:/tmp/x, "
+                                                  "process:/usr/bin/curl or account:svc")
+            command.add_argument("--output", type=Path, help="write the result to this file (mode 600)")
+        command.add_argument("--format", choices=("json", "text") + (("html",) if name == "show" else ()),
+                             default="text", help="output format (default text)")
+        command.add_argument("--ledger", type=Path, help="the response engine's shadow ledger (the observation "
+                                                         "log is read beside it)")
+        command.add_argument("--journal", type=Path, help="the enforcement journal")
+
     containers = sub.add_parser(
         "containers", help="baseline and check containers for escapes and for ways out to the host (root)")
     containers_sub = containers.add_subparsers(dest="containers_command", required=True)
@@ -2081,6 +2100,36 @@ def _secrets(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _timeline(args: argparse.Namespace) -> int:
+    from . import response_engine as engine
+    from . import timeline as tl
+
+    paths = dict(ledger=args.ledger or engine.DEFAULT_LEDGER, journal=args.journal)
+    try:
+        if args.timeline_command == "list":
+            result = tl.incidents(hours=args.hours, **paths)
+        else:
+            result = tl.show(args.incident, entity=args.entity, **paths)
+    except (tl.TimelineError, engine.ResponseError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    if args.format == "json":
+        rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
+    elif args.format == "html":
+        rendered = tl.page(result)
+    else:
+        rendered = tl.text(result)
+    if getattr(args, "output", None):
+        try:
+            print(f"wrote {tl.write_private(args.output, rendered)}")
+        except (tl.TimelineError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+    else:
+        sys.stdout.write(rendered)
+    return 0
+
+
 def _containers(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -3370,6 +3419,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _packages(args)
     elif args.command == "secrets":
         code = _secrets(args)
+    elif args.command == "timeline":
+        code = _timeline(args)
     elif args.command == "memory":
         code = _memory(args)
     elif args.command == "fleet":
