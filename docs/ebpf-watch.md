@@ -66,6 +66,9 @@ process's open descriptors. With `--alert`, findings also go to the
 ## Limits
 
 * **Root is needed** to list programs. Without it, the check reports a gap.
+* **At most 8,192 programs are listed.** Past that, the check reports a gap
+  and does not look for hidden programs, because a list that was cut short
+  cannot show what is missing from it.
 * **A rootkit that hooks the kernel's own program list *and* the descriptor
   tables is not seen.** The hidden-program cross-check catches one that
   hooks only the list.

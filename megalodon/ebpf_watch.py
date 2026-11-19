@@ -139,7 +139,8 @@ def holders(root='/'):
                     target = os.readlink(fd.path)
                 except OSError:
                     continue
-                if target not in ('anon_inode:bpf-prog', 'anon_inode:bpf_link'):
+                # Links are bpf_link when created and bpf-link when reopened by ID.
+                if target not in ('anon_inode:bpf-prog', 'anon_inode:bpf_link', 'anon_inode:bpf-link'):
                     continue
                 try:
                     text = (base / entry.name / 'fdinfo' / fd.name).read_text('ascii', 'replace')
@@ -196,11 +197,18 @@ def snapshot(*, root='/', bpf=None):
             programs.setdefault(_key(program), []).append(program)
         # Held by a process, missing from the list: read the list again so a program loaded meanwhile is not taken
         # for a hidden one.
-        listed = set(ids) | set(bpf.ids())
+        again = bpf.ids()
+        listed = set(ids) | set(again)
+        if len(ids) >= MAX_PROGRAMS or len(again) >= MAX_PROGRAMS:
+            # A list cut short at the limit is not the kernel's whole list: nothing missing from it is hidden.
+            gaps.append(f'more than {MAX_PROGRAMS} eBPF programs are loaded: only the first {MAX_PROGRAMS} were '
+                        'checked, and hidden programs were not looked for')
+            held = {}
         for prog_id, pids in sorted(held.items()):
             if prog_id not in listed:
                 infos = [_proc_info(Path(root, 'proc', str(p))) for p in pids[:8]]
-                hidden.append(dict(id=prog_id, processes=[dict(pid=p, program=i['path'] if i else None)
+                hidden.append(dict(id=prog_id, processes=[dict(pid=p, program=i['path'] if i else None,
+                                                               start=i['start'] if i else None)
                                                           for p, i in zip(pids[:8], infos)]))
     try:
         unprivileged = Path(root, 'proc/sys/kernel/unprivileged_bpf_disabled').read_text().strip()
