@@ -397,6 +397,24 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    packages = sub.add_parser(
+        "packages", help="baseline and check package sources, signing keys and package manager hooks")
+    packages_sub = packages.add_subparsers(dest="packages_command", required=True)
+    for name, text in (("baseline", "record the package sources, signing keys and hooks; report checks already off"),
+                       ("check", "report keys, sources and hooks added and signature checks weakened (exit 1 on "
+                                 "findings)"),
+                       ("accept", "after review, record the current state")):
+        command = packages_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path,
+                             help="baseline file (default ~/.config/megalodon/packages.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     containers = sub.add_parser(
         "containers", help="baseline and check containers for escapes and for ways out to the host (root)")
     containers_sub = containers.add_subparsers(dest="containers_command", required=True)
@@ -1961,6 +1979,43 @@ def _hardening(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _packages(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import package_sources as ps
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(ps.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.packages_command == "baseline":
+            result = ps.baseline(manifest, replace=args.replace)
+        elif args.packages_command == "accept":
+            result = ps.accept(manifest)
+        else:
+            result = ps.check(manifest)
+    except (ps.PackageSourcesError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.packages_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} package source findings: {listed}",
+                                          tuple(sorted({t for f in findings for t in f["techniques"]})),
+                                          "A signing key, package source or package manager hook changed, or "
+                                          "signature checks were weakened.")])
+    return 1 if findings else 0
+
+
 def _containers(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -3246,6 +3301,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _containers(args)
     elif args.command == "hardening":
         code = _hardening(args)
+    elif args.command == "packages":
+        code = _packages(args)
     elif args.command == "memory":
         code = _memory(args)
     elif args.command == "fleet":

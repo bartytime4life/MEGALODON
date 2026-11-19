@@ -191,6 +191,7 @@ or source basis.
 | [eBPF watch: kernel programs modern rootkits use](ebpf-watch.md) | `docs/ebpf-watch.md` |
 | [Container watch: escapes and ways out to the host](container-watch.md) | `docs/container-watch.md` |
 | [Hardening drift: weaker protections and quiet ways to root](hardening-drift.md) | `docs/hardening-drift.md` |
+| [Package sources and signing keys: who may sign what gets installed](package-sources.md) | `docs/package-sources.md` |
 | [Process memory: fileless code, found and saved](memory-capture.md) | `docs/memory-capture.md` |
 | [Fleet view: every machine's heartbeats and alerts in one place](fleet.md) | `docs/fleet.md` |
 | [Enforcement: carrying out allowed decisions, with undo](enforcement.md) | `docs/enforcement.md` |

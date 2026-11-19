@@ -79,7 +79,7 @@ ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'per
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
-           'memory', 'canary', 'ingest')
+           'packages', 'memory', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -138,6 +138,8 @@ boot_manifest = "~/.config/megalodon/boot.json"
 ebpf_manifest = "~/.config/megalodon/ebpf.json"
 containers_manifest = "~/.config/megalodon/containers.json"
 hardening_manifest = "~/.config/megalodon/hardening.json"
+# Package sources, signing keys and package manager hooks (`megalodon packages baseline`).
+packages_manifest = "~/.config/megalodon/packages.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -189,6 +191,15 @@ name = "code-run-from-memory"
 rules = ["MEMORY_EXECUTABLE_MEMFD", "MEMORY_EXECUTABLE_TEMPORARY"]
 min_severity = "HIGH"
 # Some sandboxes and runtimes run from memory on purpose: preserve and ask.
+actions = ["collect_evidence", "notify"]
+
+[[response.playbook]]
+name = "package-trust-changed"
+rules = ["PACKAGE_SIGNATURES_OFF", "PACKAGE_CONFIG_WRITABLE", "SIGNING_KEY_ADDED", "PACKAGE_SOURCE_REDIRECTED",
+         "PACKAGE_SOURCE_CHANGED", "PACKAGE_CONFIG_REDIRECTED", "PACKAGE_MANAGER_HOOK_ADDED",
+         "PACKAGE_MANAGER_HOOK_SUSPICIOUS", "PACKAGE_SIGNATURE_CHECK_WEAKENED"]
+min_severity = "HIGH"
+# Keys, sources and hooks are the administrator's to put back: preserve and ask.
 actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
@@ -490,7 +501,7 @@ def load_policy(path=DEFAULT_POLICY):
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
                'credential_allow_file', 'logins_manifest', 'boot_manifest', 'ebpf_manifest', 'containers_manifest',
-               'hardening_manifest', 'memory_sweep', 'canary_manifest'}
+               'hardening_manifest', 'packages_manifest', 'memory_sweep', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports', 'memory_sweep')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -774,6 +785,13 @@ def hardening_signals(report):
             for f in report.get('findings', [])]
 
 
+def package_signals(report):
+    return [Signal(f"packages:{f['rule_id']}:{f.get('subject')}", 'packages', f['rule_id'],
+                   _severity(f.get('severity')), report.get('checked_at', ''), f.get('detail', ''),
+                   _entities(file=[f['path']] if str(f.get('path', '')).startswith('/') else ()))
+            for f in report.get('findings', [])]
+
+
 def ingest_signals(lines, now):
     """Findings piped in as JSON lines, such as `megalodon ransomware watch` output."""
     signals, refused = [], 0
@@ -886,7 +904,8 @@ def collect(policy, state, now, *, root='/'):
               ('boot_manifest', 'boot_integrity', 'BootError', lambda r: path_signals(r, 'boot', 'subject')),
               ('ebpf_manifest', 'ebpf_watch', 'EbpfError', lambda r: ebpf_signals(r)),
               ('containers_manifest', 'container_watch', 'ContainerError', lambda r: container_signals(r)),
-              ('hardening_manifest', 'hardening_drift', 'HardeningError', lambda r: hardening_signals(r)))
+              ('hardening_manifest', 'hardening_drift', 'HardeningError', lambda r: hardening_signals(r)),
+              ('packages_manifest', 'package_sources', 'PackageSourcesError', lambda r: package_signals(r)))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')
