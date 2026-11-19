@@ -76,7 +76,8 @@ ACTIONS = {
 # 'process_id' is 'pid@start:program': the PID with its start time names one process, not a reused PID.
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
-SOURCES = ('network', 'process_review', 'listeners', 'persistence', 'binaries', 'logwatch', 'canary', 'ingest')
+SOURCES = ('network', 'process_review', 'ancestry', 'listeners', 'persistence', 'binaries', 'logwatch', 'canary',
+           'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -108,6 +109,8 @@ quarantine_roots = ["/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/", "/srv
 # The network audit store; use an absolute path when running from a timer. "" turns a source off.
 audit_db = "data/megalodon.db"
 process_review = true
+# Services starting shells or attack tools; the allow file is from `megalodon ancestry allow`.
+ancestry_allow_file = "~/.config/megalodon/ancestry-allow.json"
 listeners_manifest = "~/.config/megalodon/listeners.json"
 persistence_manifest = "~/.config/megalodon/persistence.json"
 binaries_manifest = "~/.config/megalodon/binaries.json"
@@ -130,6 +133,12 @@ actions = ["collect_evidence", "suspend_process", "notify"]
 [[response.playbook]]
 name = "bind-shell-or-dropped-listener"
 rules = ["NEW_LISTENER", "LISTENER_PROGRAM_CHANGED"]
+min_severity = "HIGH"
+actions = ["collect_evidence", "suspend_process", "notify"]
+
+[[response.playbook]]
+name = "web-shell-or-exploited-service"
+rules = ["SERVICE_SPAWNED_SHELL", "SERVICE_SPAWNED_TOOL"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "suspend_process", "notify"]
 
@@ -320,8 +329,8 @@ def load_policy(path=DEFAULT_POLICY):
     if any(not r.startswith('/') for r in roots):
         raise ResponseError('quarantine_roots must be absolute folders')
     sources = table.get('sources', {})
-    allowed = {'audit_db', 'process_review', 'listeners_manifest', 'persistence_manifest', 'binaries_manifest',
-               'logwatch_manifest', 'canary_manifest'}
+    allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'listeners_manifest', 'persistence_manifest',
+               'binaries_manifest', 'logwatch_manifest', 'canary_manifest'}
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
     for name, value in sources.items():
@@ -458,6 +467,20 @@ def process_signals(review):
     return signals
 
 
+def ancestry_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        evidence = f.get('evidence', {})
+        program, service = evidence.get('program', ''), evidence.get('service', {}).get('program', '')
+        ids = [f"{evidence['pid']}@{evidence['start']}:{program}"] if (
+            isinstance(evidence.get('pid'), int) and isinstance(evidence.get('start'), int)
+            and program.startswith('/')) else []
+        signals.append(Signal(f"ancestry:{f['rule_id']}:{service}:{ids[0] if ids else program}", 'ancestry',
+                              f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
+                              f.get('message', ''), _entities(process=[program], process_id=ids)))
+    return signals
+
+
 def listener_signals(report):
     signals = []
     for f in report.get('findings', []):
@@ -511,12 +534,17 @@ def ingest_signals(lines, now):
             continue
         evidence = item.get('evidence') if isinstance(item.get('evidence'), dict) else {}
         processes = [p.get('program') for p in evidence.get('processes', []) if isinstance(p, dict)]
+        # A process named with its start time (as the ancestry watch writes it) is a suspension target.
+        ids = [f"{p['pid']}@{p['start']}:{p['program']}" for p in evidence.get('processes', [])
+               if isinstance(p, dict) and type(p.get('pid')) is int and type(p.get('start')) is int
+               and isinstance(p.get('program'), str) and p['program'].startswith('/')]
         folder = evidence.get('folder')
         detected = item.get('detected_at') if isinstance(item.get('detected_at'), str) else _iso(now)
         digest = hashlib.sha256(line.encode()).hexdigest()[:16]
         signals.append(Signal(f"ingest:{item['rule_id']}:{digest}", 'ingest', item['rule_id'][:64],
                               _severity(item.get('severity')), detected, str(item.get('message', ''))[:300],
-                              _entities(process=processes, file=[folder] if isinstance(folder, str) else [],
+                              _entities(process=processes, process_id=ids,
+                                        file=[folder] if isinstance(folder, str) else [],
                                         address=[item.get('src_ip'), item.get('dst_ip')])))
     return signals, refused
 
@@ -540,6 +568,16 @@ def collect(policy, state, now, *, root='/'):
             gaps += [f'process_review: {gap}' for gap in review.get('gaps', [])]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             gaps.append(f'process_review: {exc}')
+    if sources.get('ancestry_allow_file', '~/.config/megalodon/ancestry-allow.json'):
+        from . import process_ancestry
+        try:
+            report = process_ancestry.check(
+                root, allow_path=Path(sources.get('ancestry_allow_file',
+                                                  '~/.config/megalodon/ancestry-allow.json')).expanduser())
+            signals += ancestry_signals(report)
+            gaps += [f'ancestry: {gap}' for gap in report.get('gaps', [])]
+        except (process_ancestry.AncestryError, OSError) as exc:
+            gaps.append(f'ancestry: {exc}')
     checks = (('listeners_manifest', 'listener_watch', 'ListenerError', listener_signals),
               ('persistence_manifest', 'persistence_watch', 'PersistenceError', persistence_signals),
               ('binaries_manifest', 'binary_integrity', 'BinaryIntegrityError',

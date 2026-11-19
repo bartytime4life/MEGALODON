@@ -258,6 +258,27 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    ancestry = sub.add_parser(
+        "ancestry", help="catch web servers, databases and mail servers starting shells or attack tools (Linux)")
+    ancestry_sub = ancestry.add_subparsers(dest="ancestry_command", required=True)
+    for name, text in (("check", "review the processes running now (exit 1 on findings)"),
+                       ("watch", "report each program a service starts, as it starts, as JSON lines"),
+                       ("allow", "after review, allow one service program to start one program")):
+        command = ancestry_sub.add_parser(name, help=text)
+        command.add_argument("--allow-file", type=Path,
+                             help="allowed pairs (default ~/.config/megalodon/ancestry-allow.json)")
+        if name == "allow":
+            command.add_argument("service", help="the service's executable path, e.g. /usr/lib/postgresql/16/bin/postgres")
+            command.add_argument("program", help="the program it may start, e.g. /usr/bin/dash")
+            continue
+        if name == "watch":
+            command.add_argument("--interval", type=float, default=0.25,
+                                 help="seconds between /proc scans when not root (default 0.25)")
+        command.add_argument("--alert", action="store_true",
+                             help="also send findings to the [alerts] destinations in the settings file")
+        command.add_argument("--config", type=Path,
+                             help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     binaries = sub.add_parser(
         "binaries", help="detect trojaned system programs and libraries (exit 1 on findings)")
     binaries_sub = binaries.add_subparsers(dest="binaries_command", required=True)
@@ -1314,6 +1335,69 @@ def _listeners(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _ancestry(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from . import process_ancestry as ancestry
+    from .alerts import HostNotice, dispatcher_for
+    from .validation import ValidationError
+
+    allow_file = args.allow_file or Path.home() / ".config/megalodon/ancestry-allow.json"
+    if args.ancestry_command == "allow":
+        try:
+            count = ancestry.allow(allow_file, args.service, args.program)
+        except (ancestry.AncestryError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(dict(allow_file=str(allow_file), allowed=count), indent=2))
+        return 0
+    dispatcher = None
+    if args.alert:
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def notify(found):
+        if dispatcher is not None:
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["message"], tuple(found["attack"]), found["summary"])])
+    if args.ancestry_command == "check":
+        try:
+            report = ancestry.check(allow_path=allow_file)
+        except (ancestry.AncestryError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(report, indent=2, sort_keys=True))
+        for found in report["findings"][:10]:
+            notify(found)
+        return 1 if report["findings"] else 0
+
+    def emit(found):
+        print(json.dumps(found, sort_keys=True), flush=True)
+        notify(found)
+    try:
+        watcher = ancestry.Watcher(emit, allow_path=allow_file, interval=args.interval)
+    except (ancestry.AncestryError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(f"megalodon: watching programs that services start ({watcher.mode})"
+          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else ""), file=sys.stderr, flush=True)
+    stop = Event()
+    try:
+        watcher.run(stop)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        watcher.close()
+        print(f"megalodon: {json.dumps(watcher.stats, sort_keys=True)}", file=sys.stderr)
+    return 0
+
+
 def _binaries(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2144,6 +2228,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _evidence(args)
     elif args.command == "binaries":
         code = _binaries(args)
+    elif args.command == "ancestry":
+        code = _ancestry(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":

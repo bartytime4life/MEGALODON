@@ -27,6 +27,7 @@ timer.
 | persistence | Baselines a throwaway folder tree, then adds a comment-only cron file and a comment line in a profile | `cron`, `shell_startup` changes |
 | binaries | Baselines a throwaway tree with a one-package dpkg database, then changes its packaged program and adds an unpackaged one | `PACKAGE_MISMATCH`, `PROGRAM_ADDED` |
 | listeners | Baselines this machine's listeners into a temporary manifest, then listens on a loopback port of its own (Linux) | `NEW_LISTENER` for that port |
+| ancestry | A copy of the system shell named `nginx` starts a shell while the [process ancestry watch](process-ancestry.md) runs (Linux) | `SERVICE_SPAWNED_SHELL` for that copy |
 | alerts | With `--alerts`: the same labeled test notice as `megalodon alerts test`, sent to every configured destination | Every destination accepts it |
 
 ## What it never touches

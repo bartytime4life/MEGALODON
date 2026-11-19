@@ -16,6 +16,8 @@ MEGALODON's own built-in sample or self-test, and runs in a temporary folder:
   baselined, then its packaged program is changed and an unpackaged one added.
 * **listeners** (Linux): this machine's listeners are baselined into a
   temporary manifest, then the drill listens on a loopback port of its own.
+* **ancestry** (Linux): a copy of the system shell named ``nginx`` starts a
+  shell while the process ancestry watch runs.
 * **alerts** (with ``--alerts``): one labeled test notice goes to each
   configured destination.
 
@@ -150,6 +152,32 @@ def _listeners(work):
     return ours, f'a throwaway loopback listener on port {port}'
 
 
+def _ancestry(work):
+    import shutil
+    import subprocess
+    from threading import Event, Thread
+
+    from . import process_ancestry
+    service = work / 'nginx'
+    shutil.copy('/bin/sh', service)
+    found = []
+    watcher = process_ancestry.Watcher(found.append, interval=0.05)
+    stop = Event()
+    worker = Thread(target=watcher.run, args=(stop,), kwargs=dict(timeout=0.1), daemon=True)
+    worker.start()
+    try:
+        time.sleep(0.3)
+        # The trailing `true` keeps the shell from replacing itself with its last command.
+        subprocess.run([str(service), '-c', "/bin/sh -c 'sleep 0.5; true'; true"], check=True, timeout=30)
+        time.sleep(0.4)
+    finally:
+        stop.set()
+        worker.join(5)
+        watcher.close()
+    ours = sorted({f['rule_id'] for f in found if f['evidence']['service']['program'] == str(service)})
+    return ours, f'a copy of the shell named nginx started a shell ({watcher.mode})'
+
+
 def _alerts(settings):
     from .alerts import test_destinations
     results = test_destinations(settings)
@@ -167,13 +195,14 @@ def run(*, alert_settings=None):
         ('persistence', ['cron', 'shell_startup'], _persistence),
         ('binaries', ['PACKAGE_MISMATCH', 'PROGRAM_ADDED'], _binaries),
         ('listeners', ['NEW_LISTENER'], _listeners),
+        ('ancestry', ['SERVICE_SPAWNED_SHELL'], _ancestry),
     ]
     results = []
     with tempfile.TemporaryDirectory(prefix='megalodon-drill-') as base:
         for name, expected, function in checks:
             check = Check(name, expected)
             started = time.monotonic()
-            if name in ('ransomware', 'listeners') and not sys.platform.startswith('linux'):
+            if name in ('ransomware', 'listeners', 'ancestry') and not sys.platform.startswith('linux'):
                 check.status, check.detail = 'skipped', 'needs Linux'
             else:
                 work = Path(base) / name

@@ -44,6 +44,8 @@ megalodon respond report
      before;
    * the process-and-network review: reverse-shell shapes, and programs
      running from memory, from a deleted file or from a temporary folder;
+   * the [process ancestry](process-ancestry.md) check: services running
+     shells or attack tools. Its live `watch` can be piped into `ingest`;
    * the [listener](listener-watch.md), [persistence](persistence-watch.md),
      [program integrity](binary-integrity.md) and [log](log-integrity.md)
      checks, and canaries.
@@ -111,6 +113,7 @@ Guards apply whatever the playbooks say:
 | reverse-shell | `STDIO_SHELL_ON_NETWORK`, `SHELL_HOLDS_SOCKET`, `PIPED_TO_SHELL` | Collect evidence, suspend the program, block the remote address for 15 minutes, notify |
 | ransomware | `RANSOMWARE_ENCRYPTION`, `RANSOMWARE_MASS_WRITE` | Collect evidence, suspend the suspect programs, notify |
 | bind-shell-or-dropped-listener | HIGH `NEW_LISTENER`, `LISTENER_PROGRAM_CHANGED` | Collect evidence, suspend the program, notify |
+| web-shell-or-exploited-service | HIGH `SERVICE_SPAWNED_SHELL`, `SERVICE_SPAWNED_TOOL` | Collect evidence, suspend the started process, notify |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
 | attacker-at-the-door | HIGH `BRUTE_FORCE`, `HOST_SWEEP`, `DECOY_TOUCH`, `SYN_FLOOD`, `PORT_SCAN` | Block the source for 30 minutes, notify |
 | command-and-control-or-exfiltration | HIGH `BEACONING`, `DATA_EXFILTRATION`, `IOC_MATCH`, DNS rules | Only when corroborated: collect evidence, block for 60 minutes, notify |
