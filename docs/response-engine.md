@@ -52,8 +52,9 @@ megalodon respond report
      [program integrity](binary-integrity.md), [log](log-integrity.md),
      [device](device-watch.md), [web-root](webroot-watch.md),
      [tamper](tamper-detection.md), [egress](egress-watch.md),
-     [credential](credential-watch.md), [login](login-watch.md) and
-     [boot](boot-integrity.md) checks, and canaries.
+     [credential](credential-watch.md), [login](login-watch.md),
+     [boot](boot-integrity.md) and [eBPF](ebpf-watch.md) checks, and
+     canaries.
 
    Each check needs its baseline. A source that can't be read is listed
    under `gaps`.
@@ -121,6 +122,8 @@ Guards apply whatever the playbooks say:
 | web-shell-or-exploited-service | HIGH `SERVICE_SPAWNED_SHELL`, `SERVICE_SPAWNED_TOOL` | Collect evidence, suspend the started process, notify |
 | rootkit | `HIDDEN_PROCESS`, `HIDDEN_MODULE`, `HIDDEN_PORT`, `HIDDEN_DIRECTORY`, `HIDDEN_FILE`, `PRELOAD_LIBRARY` | Collect evidence, notify: a machine that hides things from itself cannot be trusted to clean itself |
 | web-shell-file | HIGH `SCRIPT_IN_UPLOAD_FOLDER`, `CODE_IN_NON_SCRIPT_FILE`, `WEB_SHELL_PATTERN` | Collect evidence, quarantine the file, notify |
+| ebpf-rootkit | `EBPF_HIDDEN_PROGRAM`, `EBPF_LOADED_BY_DROPPED_TOOL` | Collect evidence, suspend the holding process, notify |
+| ebpf-change | HIGH `EBPF_NEW_PROGRAM`, `EBPF_PROGRAM_CHANGED`, `EBPF_UNPRIVILEGED_ENABLED` | Collect evidence, notify |
 | boot-tampering | HIGH and CRITICAL [boot integrity](boot-integrity.md) findings | Collect evidence, notify |
 | service-account-login | `LOGIN_SERVICE_ACCOUNT` | Collect evidence, lock the account, block the source for 60 minutes, notify |
 | unusual-login | HIGH `LOGIN_NEW_KEY`, `LOGIN_NEW_SOURCE`, `LOGIN_ROOT_REMOTE`, `LOGIN_NEW_ACCOUNT`, `SUDO_FIRST_USE` | Collect evidence, notify |

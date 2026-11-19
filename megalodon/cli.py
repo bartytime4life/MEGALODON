@@ -344,6 +344,22 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    ebpf = sub.add_parser(
+        "ebpf", help="baseline and check loaded eBPF programs, the kernel code modern rootkits use (root)")
+    ebpf_sub = ebpf.add_subparsers(dest="ebpf_command", required=True)
+    for name, text in (("baseline", "record the loaded eBPF programs, pinned objects and the unprivileged setting"),
+                       ("check", "report new, changed and hidden programs (exit 1 on findings)"),
+                       ("accept", "after review, record the current programs")):
+        command = ebpf_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/ebpf.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     boot = sub.add_parser(
         "boot", help="baseline and check the kernel, initramfs, bootloader and boot-time protections")
     boot_sub = boot.add_subparsers(dest="boot_command", required=True)
@@ -1723,6 +1739,42 @@ def _egress(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _ebpf(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import ebpf_watch as ebpf
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(ebpf.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.ebpf_command == "baseline":
+            result = ebpf.baseline(manifest, replace=args.replace)
+        elif args.ebpf_command == "accept":
+            result = ebpf.accept(manifest)
+        else:
+            result = ebpf.check(manifest)
+    except (ebpf.EbpfError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.ebpf_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} eBPF findings: {listed}",
+                                          tuple(sorted({t for f in findings for t in f["techniques"]})),
+                                          "New, changed or hidden eBPF programs are loaded in the kernel.")])
+    return 1 if findings else 0
+
+
 def _boot(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2864,6 +2916,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _logins(args)
     elif args.command == "boot":
         code = _boot(args)
+    elif args.command == "ebpf":
+        code = _ebpf(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":

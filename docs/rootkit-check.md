@@ -50,6 +50,8 @@ when nothing is starting. Without root, ports below the unprivileged limit
 
 ## Limits
 
+* **eBPF programs** are not compared here; the [eBPF watch](ebpf-watch.md)
+  covers them.
 * **A rootkit that hooks every view is not seen.** For example, a kernel
   rootkit that hides a process from the `/proc` listing, from direct
   lookups and from signals alike. This check makes hiding harder, and it

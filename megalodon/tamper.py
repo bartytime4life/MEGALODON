@@ -54,7 +54,8 @@ CONFIG_KINDS = {
 }
 # The files that decide what MEGALODON reports. Other files there (the HUD's own settings) change in normal use.
 BASELINES = ('canary.json', 'listeners.json', 'persistence.json', 'binaries.json', 'log-integrity.json',
-             'devices.json', 'webroot.json', 'egress.json', 'logins.json', 'boot.json')
+             'devices.json', 'webroot.json', 'egress.json', 'logins.json', 'boot.json',
+             'ebpf.json')
 WATCHED = tuple(CONFIG_KINDS) + BASELINES
 RULE_FOLDER = 'yara-rules'
 
