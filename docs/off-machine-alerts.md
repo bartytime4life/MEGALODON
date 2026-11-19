@@ -80,7 +80,9 @@ finding: CRITICAL is `crit`, HIGH `err`, MEDIUM `warning` and LOW `notice`.
 
 Raw packets, payloads, stored evidence, file contents and the HUD's address
 book are never sent. An alert carries `suppressed_before` when earlier findings
-were held back by the rate limit, a full queue or a failed delivery.
+were held back by the rate limit, a full queue or a failed delivery. An
+[evidence collection](evidence-collection.md) notice carries `digest`, the
+bundle's manifest SHA-256, at every detail level and in every format.
 
 ## How delivery works
 
