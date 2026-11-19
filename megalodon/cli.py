@@ -360,6 +360,23 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    hardening = sub.add_parser(
+        "hardening", help="baseline and check protections that get weaker, file capabilities and root's search path")
+    hardening_sub = hardening.add_subparsers(dest="hardening_command", required=True)
+    for name, text in (("baseline", "record the hardening review, file capabilities and root's search path"),
+                       ("check", "report what got weaker or became a way to root (exit 1 on findings)"),
+                       ("accept", "after review, record the current state")):
+        command = hardening_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path,
+                             help="baseline file (default ~/.config/megalodon/hardening.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     containers = sub.add_parser(
         "containers", help="baseline and check containers for escapes and for ways out to the host (root)")
     containers_sub = containers.add_subparsers(dest="containers_command", required=True)
@@ -1792,6 +1809,42 @@ def _ebpf(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _hardening(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import hardening_drift as hd
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(hd.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.hardening_command == "baseline":
+            result = hd.baseline(manifest, replace=args.replace)
+        elif args.hardening_command == "accept":
+            result = hd.accept(manifest)
+        else:
+            result = hd.check(manifest)
+    except (hd.HardeningError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.hardening_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} hardening findings: {listed}",
+                                          tuple(sorted({t for f in findings for t in f["techniques"]})),
+                                          "A protection got weaker, or a new way to root appeared.")])
+    return 1 if findings else 0
+
+
 def _containers(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2973,6 +3026,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _ebpf(args)
     elif args.command == "containers":
         code = _containers(args)
+    elif args.command == "hardening":
+        code = _hardening(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":

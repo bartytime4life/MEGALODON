@@ -75,6 +75,9 @@ JOBS = (
     Job('containers', 'MEGALODON container check', ('containers', 'check', '--alert'), '*:0/15',
         manifest='~/.config/megalodon/containers.json', baseline=('containers', 'baseline'), cron='*/15 * * * *',
         interval=900, root_only=True),
+    Job('hardening', 'MEGALODON hardening drift check', ('hardening', 'check', '--alert'), 'hourly',
+        manifest='~/.config/megalodon/hardening.json', baseline=('hardening', 'baseline'), cron='47 * * * *',
+        interval=3600),
     Job('boot', 'MEGALODON boot integrity check', ('boot', 'check', '--alert'), 'hourly',
         manifest='~/.config/megalodon/boot.json', baseline=('boot', 'baseline'), cron='23 * * * *', interval=3600),
     # The port test briefly binds every free port; scheduled runs leave it out.
