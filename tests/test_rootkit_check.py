@@ -37,7 +37,7 @@ def test_a_process_hidden_from_the_proc_listing_is_found():
 @linux
 def test_a_port_missing_from_the_socket_tables_is_found():
     with socket.socket() as backdoor, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as quiet:
-        backdoor.bind(("0.0.0.0", 0))
+        backdoor.bind(("127.0.0.1", 0))   # conflicts with the probe's wildcard bind; never reachable
         backdoor.listen(1)
         port = backdoor.getsockname()[1]
         quiet.bind(("127.0.0.1", 0))
