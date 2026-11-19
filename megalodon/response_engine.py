@@ -924,7 +924,7 @@ def collect(policy, state, now, *, root='/'):
               ('containers_manifest', 'container_watch', 'ContainerError', lambda r: container_signals(r)),
               ('hardening_manifest', 'hardening_drift', 'HardeningError', lambda r: hardening_signals(r)),
               ('packages_manifest', 'package_sources', 'PackageSourcesError', lambda r: package_signals(r)),
-              ('secrets_manifest', 'secrets_scan', 'SecretsError', lambda r: secret_signals(r)))
+              ('secrets_manifest', 'exposed_secrets', 'SecretsError', lambda r: secret_signals(r)))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')

@@ -2042,7 +2042,7 @@ def _packages(args: argparse.Namespace) -> int:
 def _secrets(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
-    from . import secrets_scan as sc
+    from . import exposed_secrets as sc
     from .validation import ValidationError
 
     search = tuple(os.path.abspath(p) for p in args.path) if getattr(args, "path", None) else sc.SEARCH
