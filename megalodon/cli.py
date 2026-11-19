@@ -320,6 +320,43 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    tamper = sub.add_parser(
+        "tamper", help="notice when MEGALODON's code, schedule or configuration is changed or switched off")
+    tamper_sub = tamper.add_subparsers(dest="tamper_command", required=True)
+    for name, text in (("baseline", "record MEGALODON's code, scheduled units and configuration"),
+                       ("check", "report changed code, removed, stopped or overdue watches and changed "
+                                 "configuration (exit 1 on findings)"),
+                       ("accept", "after an upgrade or a reviewed change, record the current state")):
+        command = tamper_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/tamper.json)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
+    heartbeat = sub.add_parser(
+        "heartbeat", help="send a signed heartbeat off the machine, and check received ones for silence or forgery")
+    heartbeat_sub = heartbeat.add_subparsers(dest="heartbeat_command", required=True)
+    command = heartbeat_sub.add_parser("init", help="record the heartbeat destination and a new signing key")
+    command.add_argument("--url", required=True, help="where heartbeats are posted (https, or http to a private address)")
+    command.add_argument("--replace", action="store_true", help="set a new destination and key")
+    command = heartbeat_sub.add_parser("send", help="post one signed heartbeat (exit 1 if it could not be delivered)")
+    command.add_argument("--print", action="store_true", dest="print_only",
+                         help="print the heartbeat instead of posting it")
+    command = heartbeat_sub.add_parser("monitor", help="on another machine: report heartbeats that went silent, "
+                                                       "were replayed or forged, or changed state (exit 1 on findings)")
+    command.add_argument("--input", type=Path, help="received heartbeats as JSON lines (default: standard input)")
+    command.add_argument("--key-file", type=Path, required=True,
+                         help="mode-600 file holding the key that `heartbeat init` printed")
+    command.add_argument("--max-gap", type=int, default=900, help="seconds without a heartbeat before it is silent "
+                                                                  "(default 900)")
+    command.add_argument("--sensor", help="only heartbeats from this sensor name")
+    command.add_argument("--alert", action="store_true", help="also send findings to this machine's alerts")
+    command.add_argument("--config", type=Path, help="settings file for --alert")
+
     schedule = sub.add_parser(
         "schedule", help="run every host watch on a schedule with alerts (systemd timers; plan first)")
     schedule_sub = schedule.add_subparsers(dest="schedule_command", required=True)
@@ -1557,6 +1594,89 @@ def _webroot(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _tamper_alert(args, findings, summary):
+    from datetime import datetime, timezone
+
+    from .alerts import HostNotice, dispatcher_for
+    from .validation import ValidationError
+    try:
+        dispatcher = dispatcher_for(load_settings(
+            args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+    except (ValidationError, OSError) as exc:
+        print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+        return False
+    if dispatcher is not None:
+        listed = "; ".join(f["detail"] for f in findings[:5])
+        dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                      f"{len(findings)} findings: {listed}", ("T1562.001",), summary)],
+                          any_severity=True)
+    return True
+
+
+def _tamper(args: argparse.Namespace) -> int:
+    from . import tamper
+
+    manifest = args.manifest or Path(tamper.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.tamper_command == "baseline":
+            result = tamper.baseline(manifest, replace=args.replace)
+        elif args.tamper_command == "accept":
+            result = tamper.accept(manifest)
+        else:
+            result = tamper.check(manifest)
+    except (tamper.TamperError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.tamper_command == "check" and args.alert and findings:
+        if not _tamper_alert(args, findings, "MEGALODON's own code, schedule or configuration changed."):
+            return 1
+    return 1 if findings else 0
+
+
+def _heartbeat(args: argparse.Namespace) -> int:
+    import urllib.error
+
+    from . import tamper
+    from .alerts import AlertConfigError, read_secret
+
+    try:
+        if args.heartbeat_command == "init":
+            result = tamper.init_heartbeat(args.url, replace=args.replace)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0
+        if args.heartbeat_command == "send":
+            settings, body = tamper.heartbeat()
+            if args.print_only:
+                print(json.dumps(body, sort_keys=True))
+                return 0
+            try:
+                status = tamper.send(settings, body)
+            except (urllib.error.URLError, OSError) as exc:
+                print(f"megalodon: heartbeat {body['sequence']} was not delivered: {exc}", file=sys.stderr)
+                return 1
+            print(json.dumps(dict(sequence=body["sequence"], status=status, findings=len(body["findings"])),
+                             sort_keys=True))
+            return 0 if 200 <= status < 300 else 1
+        key = read_secret(str(args.key_file))
+        if args.input:
+            with open(args.input, encoding="utf-8", errors="replace") as stream:
+                lines = stream.read().splitlines()
+        else:
+            lines = sys.stdin.read().splitlines()
+        result = tamper.monitor(lines, key, max_gap=args.max_gap, sensor=args.sensor)
+    except (tamper.TamperError, AlertConfigError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result["findings"]
+    if args.alert and findings:
+        _tamper_alert(args, findings, "A monitored machine's heartbeat went silent, was forged or replayed, or "
+                                      "reported tampering.")
+    return 1 if findings else 0
+
+
 def _schedule(args: argparse.Namespace) -> int:
     import subprocess
 
@@ -2452,6 +2572,10 @@ def main(argv: list[str] | None = None) -> None:
         code = _webroot(args)
     elif args.command == "schedule":
         code = _schedule(args)
+    elif args.command == "tamper":
+        code = _tamper(args)
+    elif args.command == "heartbeat":
+        code = _heartbeat(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":
