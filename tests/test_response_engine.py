@@ -55,7 +55,7 @@ def actions(decision):
 
 def test_default_policy_is_private_and_only_shadow_mode_exists(paths):
     policy = re_.load_policy(paths["policy_path"])
-    assert len(policy.playbooks) == 17 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
+    assert len(policy.playbooks) == 19 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
     with pytest.raises(re_.ResponseError, match="exists"):
         re_.write_default_policy(paths["policy_path"])
     for old, new, message in [
@@ -183,7 +183,8 @@ def test_network_detections_are_read_once_from_the_audit_store(paths, tmp_path):
     edit_policy(paths, "rootkit_check = true", "rootkit_check = false")
     edit_policy(paths, 'credential_allow_file = "~/.config/megalodon/credential-allow.json"',
                 'credential_allow_file = ""')
-    for name in ("listeners", "persistence", "binaries", "logwatch", "devices", "webroot", "tamper", "egress"):
+    for name in ("listeners", "persistence", "binaries", "logwatch", "devices", "webroot", "tamper", "egress",
+                 "logins"):
         edit_policy(paths, f'{name}_manifest = "~/', f'{name}_manifest = "" # ~/')
     first = re_.run(now=NOW, **paths)
     assert first["signals"] > 0 and first["gaps"] == []
@@ -290,7 +291,7 @@ def test_gaps_reported_by_the_source_checks_are_kept(paths, monkeypatch):
     policy = re_.load_policy(paths["policy_path"])
     policy = re_.Policy(**{**policy.__dict__, "sources": {"audit_db": "", "process_review": True,
                                                          "ancestry_allow_file": "", "rootkit_check": False,
-                                                         "credential_allow_file": "",
+                                                         "credential_allow_file": "", "logins_manifest": "",
                                                          "listeners_manifest": "/x/listeners.json"}})
     signals, gaps = re_.collect(policy, {}, NOW)
     assert gaps == ["process_review: A socket table was not fully read",

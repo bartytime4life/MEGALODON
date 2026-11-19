@@ -51,8 +51,9 @@ megalodon respond report
    * the [listener](listener-watch.md), [persistence](persistence-watch.md),
      [program integrity](binary-integrity.md), [log](log-integrity.md),
      [device](device-watch.md), [web-root](webroot-watch.md),
-     [tamper](tamper-detection.md), [egress](egress-watch.md) and
-     [credential](credential-watch.md) checks, and canaries.
+     [tamper](tamper-detection.md), [egress](egress-watch.md),
+     [credential](credential-watch.md) and [login](login-watch.md) checks,
+     and canaries.
 
    Each check needs its baseline. A source that can't be read is listed
    under `gaps`.
@@ -120,6 +121,8 @@ Guards apply whatever the playbooks say:
 | web-shell-or-exploited-service | HIGH `SERVICE_SPAWNED_SHELL`, `SERVICE_SPAWNED_TOOL` | Collect evidence, suspend the started process, notify |
 | rootkit | `HIDDEN_PROCESS`, `HIDDEN_MODULE`, `HIDDEN_PORT`, `HIDDEN_DIRECTORY`, `HIDDEN_FILE`, `PRELOAD_LIBRARY` | Collect evidence, notify: a machine that hides things from itself cannot be trusted to clean itself |
 | web-shell-file | HIGH `SCRIPT_IN_UPLOAD_FOLDER`, `CODE_IN_NON_SCRIPT_FILE`, `WEB_SHELL_PATTERN` | Collect evidence, quarantine the file, notify |
+| service-account-login | `LOGIN_SERVICE_ACCOUNT` | Collect evidence, lock the account, block the source for 60 minutes, notify |
+| unusual-login | HIGH `LOGIN_NEW_KEY`, `LOGIN_NEW_SOURCE`, `LOGIN_ROOT_REMOTE`, `LOGIN_NEW_ACCOUNT`, `SUDO_FIRST_USE` | Collect evidence, notify |
 | credential-theft | `CREDENTIAL_SWEEP`, `CREDENTIAL_READ_BY_DROPPED_TOOL` | Collect evidence, suspend the process, notify |
 | credential-read | HIGH `CREDENTIAL_READ` | Collect evidence, notify |
 | dropped-tool-phoning-home | `OUTBOUND_FROM_TEMPORARY` | Collect evidence, suspend the process, block the address for 60 minutes, notify |
