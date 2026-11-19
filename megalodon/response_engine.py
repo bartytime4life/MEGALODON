@@ -77,7 +77,7 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'devices', 'webroot', 'tamper', 'egress', 'canary', 'ingest')
+           'devices', 'webroot', 'tamper', 'egress', 'credentials', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -124,6 +124,8 @@ webroot_manifest = "~/.config/megalodon/webroot.json"
 tamper_manifest = "~/.config/megalodon/tamper.json"
 # Programs connecting out for the first time; `megalodon egress learn` takes the baseline.
 egress_manifest = "~/.config/megalodon/egress.json"
+# Programs holding credential files open; the live `credentials watch` can be piped into ingest.
+credential_allow_file = "~/.config/megalodon/credential-allow.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -163,6 +165,19 @@ name = "web-shell-file"
 rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "credential-theft"
+rules = ["CREDENTIAL_SWEEP", "CREDENTIAL_READ_BY_DROPPED_TOOL"]
+min_severity = "HIGH"
+actions = ["collect_evidence", "suspend_process", "notify"]
+
+[[response.playbook]]
+name = "credential-read"
+rules = ["CREDENTIAL_READ"]
+min_severity = "HIGH"
+# Backups and migrations also read credentials: preserve and ask.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "dropped-tool-phoning-home"
@@ -383,7 +398,8 @@ def load_policy(path=DEFAULT_POLICY):
     sources = table.get('sources', {})
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
-               'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest', 'canary_manifest'}
+               'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
+               'credential_allow_file', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -562,6 +578,20 @@ def egress_signals(report):
     return signals
 
 
+def credential_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        process = (f.get('evidence', {}).get('processes') or [{}])[0]
+        program = process.get('program', '')
+        ids = [f"{process['pid']}@{process['start']}:{program}"] if (
+            type(process.get('pid')) is int and type(process.get('start')) is int and program.startswith('/')) else []
+        signals.append(Signal(f"credentials:{f['rule_id']}:{f.get('program')}:{f.get('path')}", 'credentials',
+                              f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
+                              f.get('detail', ''), _entities(process=[program], process_id=ids,
+                                                             file=f.get('files') or [f.get('path')])))
+    return signals
+
+
 def listener_signals(report):
     signals = []
     for f in report.get('findings', []):
@@ -659,6 +689,15 @@ def collect(policy, state, now, *, root='/'):
             gaps += [f'ancestry: {gap}' for gap in report.get('gaps', [])]
         except (process_ancestry.AncestryError, OSError) as exc:
             gaps.append(f'ancestry: {exc}')
+    if sources.get('credential_allow_file', '~/.config/megalodon/credential-allow.json'):
+        from . import credential_watch
+        try:
+            report = credential_watch.check(root=root, allow_path=Path(sources.get(
+                'credential_allow_file', '~/.config/megalodon/credential-allow.json')).expanduser())
+            signals += credential_signals(report)
+            gaps += [f'credentials: {gap}' for gap in report.get('gaps', [])]
+        except (credential_watch.CredentialError, OSError) as exc:
+            gaps.append(f'credentials: {exc}')
     if sources.get('rootkit_check', True):
         from . import rootkit_check
         try:

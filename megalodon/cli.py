@@ -344,6 +344,25 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    credentials = sub.add_parser(
+        "credentials", help="report programs opening SSH keys, browser password stores, cloud tokens and wallets")
+    credentials_sub = credentials.add_subparsers(dest="credentials_command", required=True)
+    for name, text in (("watch", "report each unexpected open of a credential file as it happens, as JSON lines"),
+                       ("check", "report unexpected programs holding credential files open now (exit 1 on findings)"),
+                       ("allow", "after review, allow one program to read one kind of credential")):
+        command = credentials_sub.add_parser(name, help=text)
+        command.add_argument("--allow-file", type=Path,
+                             help="reviewed readers (default ~/.config/megalodon/credential-allow.json)")
+        if name == "allow":
+            command.add_argument("program", help="the program as reported, e.g. /usr/bin/rsync")
+            command.add_argument("--category", default="any",
+                                 help="ssh, browser, cloud, keyring, wallet, system or any (default any)")
+            continue
+        command.add_argument("--alert", action="store_true",
+                             help="also send findings to the [alerts] destinations in the settings file")
+        command.add_argument("--config", type=Path,
+                             help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     tamper = sub.add_parser(
         "tamper", help="notice when MEGALODON's code, schedule or configuration is changed or switched off")
     tamper_sub = tamper.add_subparsers(dest="tamper_command", required=True)
@@ -1669,6 +1688,66 @@ def _egress(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _credentials(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from . import credential_watch as credentials
+    from .validation import ValidationError
+
+    allow_file = args.allow_file or Path(credentials.DEFAULT_ALLOW).expanduser()
+    if args.credentials_command == "allow":
+        try:
+            count = credentials.allow(allow_file, args.program, args.category)
+        except (credentials.CredentialError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(dict(allow_file=str(allow_file), allowed=count), indent=2))
+        return 0
+    dispatcher = None
+    if args.alert:
+        from .alerts import dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def notify(found):
+        if dispatcher is not None:
+            from .alerts import HostNotice
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["detail"], tuple(found["techniques"]), found["summary"])])
+    try:
+        if args.credentials_command == "check":
+            report = credentials.check(allow_path=allow_file)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            for found in report["findings"][:10]:
+                notify(found)
+            return 1 if report["findings"] else 0
+
+        def emit(found):
+            print(json.dumps(found, sort_keys=True), flush=True)
+            notify(found)
+        watcher = credentials.Watcher(emit, allow_path=allow_file)
+    except (credentials.CredentialError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(f"megalodon: watching {len(watcher.files)} credential files and {len(watcher.folders)} folders "
+          f"({watcher.mode})", file=sys.stderr, flush=True)
+    stop = Event()
+    try:
+        watcher.run(stop)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        watcher.close()
+        print(f"megalodon: {json.dumps(watcher.stats, sort_keys=True)}", file=sys.stderr)
+    return 0
+
+
 def _tamper_alert(args, findings, summary):
     from datetime import datetime, timezone
 
@@ -2677,6 +2756,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _tamper(args)
     elif args.command == "egress":
         code = _egress(args)
+    elif args.command == "credentials":
+        code = _credentials(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":

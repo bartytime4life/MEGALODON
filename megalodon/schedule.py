@@ -70,6 +70,7 @@ JOBS = (
     Job('rootkit', 'MEGALODON rootkit cross-checks', ('rootkit', 'check', '--skip-ports', '--alert'), 'hourly',
         cron='41 * * * *', interval=3600),
     Job('ancestry', 'MEGALODON process ancestry watch', ('ancestry', 'watch', '--alert'), root_only=True),
+    Job('credentials', 'MEGALODON credential access watch', ('credentials', 'watch', '--alert')),
     Job('egress', 'MEGALODON outgoing-program watch', ('egress', 'watch', '--alert'),
         manifest='~/.config/megalodon/egress.json', setup='megalodon egress learn --minutes 60'),
 )
