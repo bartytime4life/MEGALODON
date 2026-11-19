@@ -571,7 +571,8 @@ def snapshot(*, root='/', runner=None):
                            f'{path} sets {name} "{value}": apt {effect} {scope}', path)
             elif name in APT_LOCATIONS:
                 weaken('PACKAGE_CONFIG_REDIRECTED', f'apt:{name}', f'{path} sets {name} "{value}"', path)
-            elif name in APT_HOOKS or any(name.startswith(h + '::') for h in APT_HOOKS):
+            elif (name in APT_HOOKS or any(name.startswith(h + '::') for h in APT_HOOKS)) and value.strip():
+                # An empty value only clears or opens a list; it runs nothing.
                 hooks[_hook_id(path, name, value)] = dict(file=path, option=name, command=value[:4096])
 
     # apt: sources and the keys they trust.

@@ -85,7 +85,7 @@ def root(tmp_path, monkeypatch):
     (base / "etc/apt/apt.conf.d/70debconf").write_text(
         '// Pre-configure all packages\nDPkg::Pre-Install-Pkgs {"/usr/sbin/dpkg-preconfigure --apt || true";};\n')
     (base / "etc/apt/apt.conf.d/50vendor").write_text(
-        'Acquire::AllowInsecureRepositories "0";\nAcquire::Check-Valid-Until "true";\n')
+        'Acquire::AllowInsecureRepositories "0";\nAcquire::Check-Valid-Until "true";\nDPkg::Post-Invoke "";\n')
     for path in base.rglob("*"):
         if path.is_file():
             os.chmod(path, 0o644)
