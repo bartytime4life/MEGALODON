@@ -1429,10 +1429,9 @@ def _evidence(args: argparse.Namespace) -> int:
         dispatcher.submit([HostNotice(
             "EVIDENCE_COLLECTED", "LOW", datetime.now(timezone.utc),
             f"Evidence bundle {result['bundle']} collected; manifest SHA-256 {result['manifest_sha256']}",
-            # Alerts at the standard detail carry the summary but not the message, so the digest goes in both.
-            (), f"A read-only evidence snapshot was taken; manifest SHA-256 {result['manifest_sha256']}. "
-                "Keep this digest to verify the bundle later.")],
-            any_severity=True)
+            # The digest field is rendered by every transport at every detail level; the message is not.
+            (), "A read-only evidence snapshot was taken. Keep this digest to verify the bundle later.",
+            digest=result["manifest_sha256"])], any_severity=True)
     return 0
 
 

@@ -42,8 +42,14 @@ def sealed_input():
     return fd
 
 
+# Linux ABI values (F_LINUX_SPECIFIC_BASE + 9 and + 10). Some Python builds omit the
+# names; the kernel interface is fixed, so a missing name must not disable sealing.
+F_ADD_SEALS = getattr(fcntl, 'F_ADD_SEALS', 1033)
+F_GET_SEALS = getattr(fcntl, 'F_GET_SEALS', 1034)
+
+
 def seal(fd):
-    fcntl.fcntl(fd, fcntl.F_ADD_SEALS, 0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0020)
+    fcntl.fcntl(fd, F_ADD_SEALS, 0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0020)
     os.lseek(fd, 0, os.SEEK_SET)
 
 

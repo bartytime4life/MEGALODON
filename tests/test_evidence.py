@@ -236,10 +236,52 @@ def test_an_explicitly_requested_digest_is_sent_below_the_alert_minimum(tmp_path
     assert exit_.value.code == 0
     made[0].close(timeout=5)
     digest = json.loads(capsys.readouterr().out)["manifest_sha256"]
-    assert [item["rule_id"] for item in sent] == ["EVIDENCE_COLLECTED"] and digest in sent[0]["summary"]
+    assert [item["rule_id"] for item in sent] == ["EVIDENCE_COLLECTED"] and sent[0]["digest"] == digest
+    # What each transport actually sends at the default detail level carries the digest.
+    destination = made[0].settings.destinations[0]
+    assert digest in alerts.syslog_message(destination, sent[0]).decode()
+    for kind in alerts.FORMATS:
+        hook = alerts.AlertDestination(name="hook", kind="webhook", url_file="/unused", format=kind)
+        assert digest in alerts.webhook_request(hook, "https://example.invalid", "", sent[0])[0].decode()
     config.write_text("[alerts]\nenabled = false\n", encoding="utf-8")
     with pytest.raises(SystemExit) as exit_:
         main(["evidence", "collect", "--output", str(tmp_path / "second"), "--hours", "1",
               "--skip-program-verification", "--no-program-copies", "--alert", "--config", str(config)])
     assert exit_.value.code == 1 and "digest was not sent" in capsys.readouterr().err
     unseal(tmp_path / "second")
+
+
+def test_a_folder_failing_mid_listing_is_a_gap_not_a_failed_collection(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    (root / "tmp").mkdir(parents=True)
+    (root / "etc").mkdir()
+    (root / "etc/new.conf").write_text("new")
+    for number in range(3):
+        (root / f"tmp/drop-{number}").write_text("new")
+    real = os.scandir
+
+    class Failing:
+        def __init__(self, path):
+            self.inner = real(path)
+            self.given = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.inner.close()
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if self.given == 1:
+                raise OSError(5, "Input/output error")
+            self.given += 1
+            return next(self.inner)
+
+    monkeypatch.setattr(ev.os, "scandir", lambda path: Failing(path) if str(path).endswith("/tmp") else real(path))
+    found, gaps = ev.recent_files(str(root), hours=24)
+    paths = {f["path"] for f in found}
+    assert "/etc/new.conf" in paths and len(paths & {f"/tmp/drop-{n}" for n in range(3)}) == 1
+    assert gaps == ["/tmp could not be read whole"]

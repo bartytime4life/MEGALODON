@@ -328,6 +328,18 @@ def sessions(root='/'):
 
 # ------------------------------------------------------------------ recent files
 
+def _entries(iterator, failed):
+    """Lazily yield a folder's entries; a read error mid-listing ends that folder, not the collection."""
+    while True:
+        try:
+            yield next(iterator)
+        except StopIteration:
+            return
+        except OSError:
+            failed()
+            return
+
+
 def recent_files(root='/', *, hours=24, now=None, budget=None):
     now = now or _now()
     cutoff = (now - timedelta(hours=hours)).timestamp()
@@ -349,7 +361,7 @@ def recent_files(root='/', *, hours=24, now=None, budget=None):
             except OSError:
                 continue
             with entries:
-                for entry in entries:
+                for entry in _entries(entries, lambda: gaps.append(f'{shown(directory)} could not be read whole')):
                     # Both limits hold inside a single directory too: a flat /tmp can hold millions of entries.
                     if walked >= MAX_WALK_ENTRIES or len(found) >= MAX_RECENT_FILES:
                         break

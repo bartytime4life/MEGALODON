@@ -200,6 +200,8 @@ class HostNotice:
     message: str
     attack: tuple[str, ...] = ()
     summary: str = ''
+    # A SHA-256 the receiver must see whatever the detail level, e.g. an evidence manifest's.
+    digest: str = ''
     src_ip: None = None
     dst_ip: None = None
 
@@ -216,6 +218,9 @@ def record(detection, detail='standard', sensor='', suppressed=0):
         value.update(src_ip=detection.src_ip, dst_ip=detection.dst_ip)
     if detail == 'full':
         value['message'] = detection.message
+    digest = getattr(detection, 'digest', '')
+    if isinstance(digest, str) and re.fullmatch(r'[0-9a-f]{64}', digest):
+        value['digest'] = digest
     return value
 
 
@@ -225,6 +230,8 @@ def text(value):
         line += f": {value['src_ip']} -> {value['dst_ip']}"
     if 'message' in value:
         line += f". {value['message']}"
+    if 'digest' in value:
+        line += f". SHA-256 {value['digest']}"
     if value['suppressed_before']:
         line += f" (+{value['suppressed_before']} earlier findings not sent: rate limit or full queue)"
     return line + '. Review the evidence in the MEGALODON HUD.'
@@ -260,7 +267,7 @@ def syslog_message(destination, value, now=None):
     def param(v):
         return str(v).replace('\\', '\\\\').replace('"', '\\"').replace(']', '\\]')
     params = [('rule', value['rule_id']), ('severity', value['severity']), ('detected', value['detected_at'])]
-    params += [(k, value[k]) for k in ('src_ip', 'dst_ip') if k in value]
+    params += [(k, value[k]) for k in ('src_ip', 'dst_ip', 'digest') if k in value]
     if value['suppressed_before']:
         params.append(('suppressed', value['suppressed_before']))
     data = f'[{SD_ID} ' + ' '.join(f'{k}="{param(v)}"' for k, v in params) + ']'

@@ -103,3 +103,25 @@ def test_setup_failure_after_filter_closes_its_descriptor(monkeypatch, stage):
             os.close(descriptor)
         except OSError:
             pass
+
+
+@pytest.mark.skipif(not hasattr(os, 'memfd_create'), reason='needs Linux memfd')
+def test_sealing_does_not_depend_on_the_python_build_naming_the_seal_constants():
+    """Some Python builds omit fcntl.F_ADD_SEALS; the Linux values must still seal the sample."""
+    import fcntl
+    fd = os.memfd_create('synthetic-sealing', os.MFD_ALLOW_SEALING)
+    try:
+        os.write(fd, b'synthetic sample')
+        try:
+            sandbox.seal(fd)
+        except OSError as exc:  # F_SEAL_EXEC (0x20) needs Linux 6.3+
+            pytest.skip(f'kernel refused the seals: {exc}')
+        seals = fcntl.fcntl(fd, sandbox.F_GET_SEALS)
+        assert seals & 0x0f == 0x0f, 'sealed against further seals, shrinking, growing and writing'
+        with pytest.raises(OSError):
+            os.write(fd, b'more')
+        assert os.lseek(fd, 0, os.SEEK_CUR) == 0
+    finally:
+        os.close(fd)
+    assert (sandbox.F_ADD_SEALS, sandbox.F_GET_SEALS) == (getattr(fcntl, 'F_ADD_SEALS', 1033),
+                                                          getattr(fcntl, 'F_GET_SEALS', 1034)) == (1033, 1034)
