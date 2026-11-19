@@ -20,7 +20,7 @@ class FakeBpf:
         self.programs = {p["id"]: p for p in programs}
 
     def ids(self):
-        return sorted(self.programs)
+        return sorted(self.programs)[:ew.MAX_PROGRAMS]          # the real listing stops at the limit too
 
     def info(self, prog_id):
         return dict(self.programs[prog_id]) if prog_id in self.programs else None
@@ -30,12 +30,12 @@ def program(prog_id, kind, name, tag, uid=0):
     return dict(id=prog_id, type=kind, name=name, tag=tag, uid=uid, load_time_ns=1)
 
 
-def holder(root, pid, exe, prog_id, argv=None, start=5000):
+def holder(root, pid, exe, prog_id, argv=None, start=5000, kind="bpf-prog"):
     base = root / "proc" / str(pid)
     (base / "fd").mkdir(parents=True)
     (base / "fdinfo").mkdir()
     os.symlink(exe, base / "exe")
-    os.symlink("anon_inode:bpf-prog", base / "fd/7")
+    os.symlink(f"anon_inode:{kind}", base / "fd/7")
     (base / "fdinfo/7").write_text(f"pos:\t0\nprog_type:\t2\nprog_id:\t{prog_id}\n")
     (base / "cmdline").write_bytes(b"\0".join(a.encode() for a in (argv or [exe])) + b"\0")
     (base / "stat").write_text(f"{pid} (x) S 1 " + " ".join(["0"] * 17) + f" {start} 0 0\n")
@@ -88,6 +88,27 @@ def test_a_program_hidden_from_the_kernel_list_is_found(root, tmp_path):
     assert rules(report) == [("EBPF_HIDDEN_PROGRAM", "hidden")]
     assert report["findings"][0]["severity"] == "CRITICAL" and "/usr/sbin/cron (pid 400)" in \
         report["findings"][0]["detail"]
+    # The exact process, with its start time, so a response targets it and not every cron.
+    assert report["findings"][0]["processes"] == [dict(pid=400, program="/usr/sbin/cron", start=5000)]
+    assert re_.ebpf_signals(report)[0].entities["process_id"] == {"400@5000:/usr/sbin/cron"}
+
+
+def test_a_link_reopened_by_id_is_a_holder(root, tmp_path):
+    manifest = tmp_path / "ebpf.json"
+    ew.baseline(manifest, root=str(root), bpf=FakeBpf([SYSTEMD]))
+    holder(root, 410, "/tmp/.l", 98, kind="bpf-link")              # links reopened by ID are spelled bpf-link
+    assert rules(ew.check(manifest, root=str(root), bpf=FakeBpf([SYSTEMD]))) == [("EBPF_HIDDEN_PROGRAM", "hidden")]
+
+
+def test_a_list_cut_short_at_the_limit_is_a_gap_not_hidden_programs(root, tmp_path, monkeypatch):
+    manifest = tmp_path / "ebpf.json"
+    kernel = FakeBpf([SYSTEMD, program(11, "kprobe", "a", "bb" * 8), program(12, "kprobe", "b", "cc" * 8)])
+    ew.baseline(manifest, root=str(root), bpf=kernel)
+    monkeypatch.setattr(ew, "MAX_PROGRAMS", 2)
+    holder(root, 420, "/usr/sbin/agent", 12)                       # listed by the kernel, past the limit
+    report = ew.check(manifest, root=str(root), bpf=kernel)
+    assert [f["rule_id"] for f in report["findings"]] == []
+    assert any("more than 2 eBPF programs" in gap for gap in report["gaps"])
 
 
 def test_pins_and_the_unprivileged_setting(root, tmp_path):
