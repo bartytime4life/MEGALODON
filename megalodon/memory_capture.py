@@ -62,15 +62,54 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-def regions(pid, root='/'):
-    """[{start, end, perms, offset, inode, path}] from /proc/<pid>/maps."""
+def _open_process(pid, root):
+    """A handle on /proc/<pid> that stays bound to this one process: reads through it fail, rather than reach a new
+    process, once this one has exited and its PID is reused."""
     try:
-        with open(Path(root, 'proc', str(pid), 'maps'), 'r', encoding='utf-8', errors='replace') as handle:
-            lines = handle.read(64 * 1024 * 1024).splitlines()
+        return os.open(Path(root, 'proc', str(pid)), os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     except FileNotFoundError:
         raise MemoryCaptureError(f'process {pid} does not exist') from None
-    except PermissionError:
-        raise MemoryCaptureError(f'the memory map of process {pid} cannot be read; run as root') from None
+    except OSError as exc:
+        raise MemoryCaptureError(f'process {pid} cannot be opened: {exc.strerror}') from None
+
+
+def _read_at(handle, name, limit=65536):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_CLOEXEC, dir_fd=handle)
+    except OSError:
+        return None
+    try:
+        data, chunk = b'', b'x'
+        while chunk and len(data) < limit:
+            chunk = os.read(fd, min(1 << 20, limit - len(data)))
+            data += chunk
+        return data.decode('utf-8', 'replace')
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def _start_at(handle):
+    text = _read_at(handle, 'stat', 4096) or ''
+    try:
+        return int(text[text.rindex(')') + 2:].split()[19])
+    except (ValueError, IndexError):
+        return None
+
+
+def regions(pid, root='/', handle=None):
+    """[{start, end, perms, offset, inode, path}] from /proc/<pid>/maps."""
+    own = handle is None
+    handle = _open_process(pid, root) if own else handle
+    try:
+        text = _read_at(handle, 'maps', 64 * 1024 * 1024)
+    finally:
+        if own:
+            os.close(handle)
+    if text is None:
+        raise MemoryCaptureError(f'the memory map of process {pid} cannot be read; run as root')
+    lines = text.splitlines()
     out = []
     for line in lines[:MAX_REGIONS]:
         match = _MAP.match(line)
@@ -119,40 +158,42 @@ def flags(region, head=None):
     return out
 
 
-def _process(pid, root):
-    base = Path(root, 'proc', str(pid))
+def _process(pid, handle):
     try:
-        exe = os.readlink(base / 'exe')
+        exe = os.readlink('exe', dir_fd=handle)
     except OSError:
         exe = None
-    try:
-        text = (base / 'stat').read_text('utf-8', 'replace')
-        start = int(text[text.rindex(')') + 2:].split()[19])
-    except (OSError, ValueError, IndexError):
-        start = None
-    return dict(pid=pid, start=start, program=exe)
+    return dict(pid=pid, start=_start_at(handle), program=exe)
 
 
-def _open_memory(pid, root):
+def _open_memory(handle):
     try:
-        return os.open(Path(root, 'proc', str(pid), 'mem'), os.O_RDONLY | os.O_CLOEXEC)
+        return os.open('mem', os.O_RDONLY | os.O_CLOEXEC, dir_fd=handle)
     except OSError:
         return None
 
 
 def inspect(pid, root='/'):
     """Every executable region of a process, flagged, with findings for the suspicious ones."""
-    process = _process(pid, root)
-    found = regions(pid, root)
-    memory = _open_memory(pid, root)
+    handle = _open_process(pid, root)
+    try:
+        process = _process(pid, handle)
+        found = regions(pid, root, handle)
+        memory = _open_memory(handle)
+    finally:
+        os.close(handle)
     gaps = [] if memory is not None else [f'the memory of process {pid} cannot be read; ELF images were not looked for'
                                           + ('; run as root' if os.geteuid() else '')]
-    shown, findings, probes = [], [], 0
+    shown, findings, probes, unread, skipped = [], [], 0, 0, 0
     try:
         for region in found:
             head = None
-            if _anonymous(region) and 'x' in region['perms'] and probes < MAX_PROBES:
-                head, probes = _probe(memory, region), probes + 1
+            if _anonymous(region) and 'x' in region['perms'] and memory is not None:
+                if probes >= MAX_PROBES:
+                    skipped += 1
+                else:
+                    head, probes = _probe(memory, region), probes + 1
+                    unread += head is None or len(head) < 4
             why = flags(region, head)
             if not why:
                 continue
@@ -162,6 +203,12 @@ def inspect(pid, root='/'):
     finally:
         if memory is not None:
             os.close(memory)
+    if unread:
+        gaps.append(f'{unread} executable regions of process {pid} could not be read; they were not looked at for '
+                    'ELF images')
+    if skipped:
+        gaps.append(f'process {pid} has more than {MAX_PROBES} executable anonymous regions; {skipped} were not looked '
+                    'at for ELF images')
     findings.sort(key=lambda f: (RANK.index(f['severity']), f['subject']))
     return dict(schema=REPORT_SCHEMA, action='inspect', process=process, regions=shown, findings=findings, gaps=gaps)
 
@@ -219,15 +266,33 @@ def sweep(root='/'):
 def capture(pid, *, start=None, output=None, everything=False, command_line=False, root='/', limit=MAX_CAPTURE,
             now=None):
     """Save a process's suspicious (or, with everything, all readable) memory regions into a sealed bundle."""
-    process = _process(pid, root)
-    if process['start'] is None:
-        raise MemoryCaptureError(f'process {pid} does not exist')
-    if start is not None and process['start'] != start:
-        raise MemoryCaptureError(f'process {pid} started at {process["start"]}, not {start}: it is a different process')
-    found = regions(pid, root)
-    memory = _open_memory(pid, root)
-    if memory is None:
-        raise MemoryCaptureError(f'the memory of process {pid} cannot be read' + ('; run as root' if os.geteuid() else ''))
+    handle = _open_process(pid, root)
+    memory = None
+    try:
+        process = _process(pid, handle)
+        if process['start'] is None:
+            raise MemoryCaptureError(f'process {pid} does not exist')
+        if start is not None and process['start'] != start:
+            raise MemoryCaptureError(f'process {pid} started at {process["start"]}, not {start}: it is a different '
+                                     'process')
+        found = regions(pid, root, handle)
+        memory = _open_memory(handle)
+        if memory is None:
+            raise MemoryCaptureError(f'the memory of process {pid} cannot be read'
+                                     + ('; run as root' if os.geteuid() else ''))
+        # Checked again with the memory open: the handle cannot have moved to another process, but the process
+        # could have exited, and then nothing below would be its memory.
+        if _start_at(handle) != process['start']:
+            raise MemoryCaptureError(f'process {pid} exited while its memory was being opened')
+        status = _read_at(handle, 'status') or ''
+        maps = _read_at(handle, 'maps', 64 * 1024 * 1024) or ''
+        cmdline = _read_at(handle, 'cmdline', evidence.MAX_CMDLINE) or ''
+    except BaseException:
+        if memory is not None:
+            os.close(memory)
+        raise
+    finally:
+        os.close(handle)
     now = now or _now()
     base = (Path(output).expanduser() if output else
             Path(DEFAULT_ROOT).expanduser() / f"memory-{pid}-{now.strftime('%Y%m%dT%H%M%SZ')}")
@@ -242,8 +307,8 @@ def capture(pid, *, start=None, output=None, everything=False, command_line=Fals
         for region in found:
             head = _probe(memory, region) if _anonymous(region) and 'x' in region['perms'] else None
             why = flags(region, head)
-            readable = 'r' in region['perms'] and region['path'] not in KERNEL
-            if not readable or not (everything or why):
+            # Flagged regions are tried even without the read bit: /proc/<pid>/mem reads execute-only memory too.
+            if region['path'] in KERNEL or not (why or (everything and 'r' in region['perms'])):
                 continue
             size = region['end'] - region['start']
             if size > MAX_REGION or total + size > limit:
@@ -269,6 +334,10 @@ def capture(pid, *, start=None, output=None, everything=False, command_line=Fals
             finally:
                 os.close(fd)
             total += written
+            if not written:
+                os.unlink(base / name)
+                gaps.append(f"region {region['start']:x}-{region['end']:x} could not be read")
+                continue
             saved.append(dict(file=name, address=f"{region['start']:x}-{region['end']:x}", perms=region['perms'],
                               path=region['path'], flags=why, size=size, read=written, sha256=digest.hexdigest()))
             if written < size:
@@ -276,16 +345,13 @@ def capture(pid, *, start=None, output=None, everything=False, command_line=Fals
                             f"({written} of {size} bytes)")
     finally:
         os.close(memory)
-    proc = Path(root, 'proc', str(pid))
-    status = (evidence._text(proc / 'status') or '')
-    maps = (evidence._text(proc / 'maps', 64 * 1024 * 1024) or '')
     (base / 'maps.txt').write_text(maps)
     (base / 'status.txt').write_text(status)
     os.chmod(base / 'maps.txt', 0o600)
     os.chmod(base / 'status.txt', 0o600)
     info = dict(process, regions_saved=len(saved), bytes_saved=total)
     if command_line:
-        info['command_line'] = (evidence._text(proc / 'cmdline', evidence.MAX_CMDLINE) or '').replace('\0', ' ').strip()
+        info['command_line'] = cmdline.replace('\0', ' ').strip()
     evidence._write(base, 'process.json', info)
     evidence._write(base, 'regions.json', saved)
     listed = [dict(file=str(p.relative_to(base)), size=p.stat().st_size, sha256=evidence._file_digest(p))

@@ -31,6 +31,11 @@ sudo megalodon memory capture PID --start START
   suspicious regions; `--all` saves every readable region.
   - **`--start`** takes the start time from a finding. The capture refuses if
     that PID now names a different process.
+  - **One process only.** Every read goes through one handle on that
+    process. If its PID is reused partway through, the capture still reads the
+    original process. If the original exits, the capture stops rather than
+    save someone else's memory.
+  - **Execute-only regions,** as loaders often leave an image, are saved too.
   - **The size limit** is 256 MiB by default; set it with `--limit-mb`.
     Regions that do not fit are listed as gaps.
   - **Contents:** the bundle holds the saved regions, the memory map, the
@@ -81,6 +86,9 @@ machines.
 
 * **Root is needed** to read other accounts' processes. Some sandboxes hide
   other processes' memory even from root; the report counts them as gaps.
+* **Unchecked regions are listed as gaps.** That covers a region whose first
+  bytes cannot be read, and processes with more than 4096 executable anonymous
+  regions, beyond which the rest are not checked.
 * **Only the first bytes of each anonymous executable region are checked** for
   an ELF header. Code without a header, such as shellcode or a stripped image,
   is listed by `inspect` but not reported.
