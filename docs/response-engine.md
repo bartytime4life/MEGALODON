@@ -127,6 +127,8 @@ Guards apply whatever the playbooks say:
 | ebpf-change | HIGH `EBPF_NEW_PROGRAM`, `EBPF_PROGRAM_CHANGED`, `EBPF_UNPRIVILEGED_ENABLED` | Collect evidence, notify |
 | container-escape | `CONTAINER_ESCAPE`, `ESCAPE_HOOK_SET`, `RUNTIME_API_EXPOSED`, `RUNTIME_SOCKET_WORLD_WRITABLE` | Collect evidence, suspend the escaped process, notify |
 | watchlisted-name | `OUTBOUND_TO_WATCHLISTED_NAME` | Collect evidence, suspend the process, block the address 60 minutes, notify |
+| code-loaded-into-memory | `MEMORY_ELF_IN_ANONYMOUS` (with `memory_sweep = true`) | Collect evidence, suspend the process, notify |
+| code-run-from-memory | HIGH `MEMORY_EXECUTABLE_MEMFD`, `MEMORY_EXECUTABLE_TEMPORARY` | Collect evidence, notify |
 | hardening-drift | HIGH `FILE_CAPABILITY_BACKDOOR`, `FILE_CAPABILITY_ADDED`, `PROGRAM_WRITABLE`, `PATH_FOLDER_WRITABLE`, `PATH_HAS_RELATIVE_ENTRY`, `HARDENING_WEAKENED` | Collect evidence, notify |
 | container-exposure | HIGH `CONTAINER_PRIVILEGED`, `CONTAINER_RUNTIME_SOCKET`, `CONTAINER_HOST_PATH_MOUNTED`, `CONTAINER_DANGEROUS_CAPABILITY`, `CONTAINER_HOST_PID`, `ESCAPE_HOOK_CHANGED`, `RUNTIME_GROUP_MEMBER_ADDED` | Collect evidence, notify |
 | boot-tampering | HIGH and CRITICAL [boot integrity](boot-integrity.md) findings | Collect evidence, notify |

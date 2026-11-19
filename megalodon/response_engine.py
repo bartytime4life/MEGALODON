@@ -78,7 +78,7 @@ ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'per
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
-           'canary', 'ingest')
+           'memory', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -110,6 +110,9 @@ quarantine_roots = ["/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/", "/srv
 # The network audit store; use an absolute path when running from a timer. "" turns a source off.
 audit_db = "data/megalodon.db"
 process_review = true
+# Every process's memory for code that lives only there (`megalodon memory sweep`). Off here: programs that run from
+# memory on purpose would be reported on every pass. Turn it on with memory_sweep = true.
+memory_sweep = false
 # Services starting shells or attack tools; the allow file is from `megalodon ancestry allow`.
 ancestry_allow_file = "~/.config/megalodon/ancestry-allow.json"
 # Rootkit cross-checks (processes, modules, folders, preloaded libraries). The port check briefly binds every
@@ -173,6 +176,19 @@ name = "web-shell-file"
 rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "code-loaded-into-memory"
+rules = ["MEMORY_ELF_IN_ANONYMOUS"]
+min_severity = "CRITICAL"
+actions = ["collect_evidence", "suspend_process", "notify"]
+
+[[response.playbook]]
+name = "code-run-from-memory"
+rules = ["MEMORY_EXECUTABLE_MEMFD", "MEMORY_EXECUTABLE_TEMPORARY"]
+min_severity = "HIGH"
+# Some sandboxes and runtimes run from memory on purpose: preserve and ask.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "hardening-drift"
@@ -473,8 +489,8 @@ def load_policy(path=DEFAULT_POLICY):
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
                'credential_allow_file', 'logins_manifest', 'boot_manifest', 'ebpf_manifest', 'containers_manifest',
-               'hardening_manifest', 'canary_manifest'}
-    switches = ('process_review', 'rootkit_check', 'rootkit_ports')
+               'hardening_manifest', 'memory_sweep', 'canary_manifest'}
+    switches = ('process_review', 'rootkit_check', 'rootkit_ports', 'memory_sweep')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
     for name, value in sources.items():
@@ -737,6 +753,19 @@ def path_signals(report, source, key_field):
     return signals
 
 
+def memory_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        processes = f.get('evidence', {}).get('processes') or []
+        ids = [f"{p['pid']}@{p['start']}:{p['program']}" for p in processes
+               if type(p.get('pid')) is int and type(p.get('start')) is int and str(p.get('program')).startswith('/')]
+        signals.append(Signal(f"memory:{f['rule_id']}:{f.get('subject')}", 'memory', f['rule_id'],
+                              _severity(f.get('severity')), report.get('checked_at', ''), f.get('detail', ''),
+                              _entities(process=[p['program'] for p in processes
+                                                 if str(p.get('program', '')).startswith('/')], process_id=ids)))
+    return signals
+
+
 def hardening_signals(report):
     return [Signal(f"hardening:{f['rule_id']}:{f.get('subject')}", 'hardening', f['rule_id'],
                    _severity(f.get('severity')), report.get('checked_at', ''), f.get('detail', ''),
@@ -797,6 +826,14 @@ def collect(policy, state, now, *, root='/'):
             gaps += [f'process_review: {gap}' for gap in review.get('gaps', [])]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             gaps.append(f'process_review: {exc}')
+    if sources.get('memory_sweep', False):
+        from . import memory_capture
+        try:
+            report = memory_capture.sweep(root)
+            signals += memory_signals(report)
+            gaps += [f'memory: {gap}' for gap in report.get('gaps', [])]
+        except (memory_capture.MemoryCaptureError, OSError) as exc:
+            gaps.append(f'memory: {exc}')
     if sources.get('ancestry_allow_file', '~/.config/megalodon/ancestry-allow.json'):
         from . import process_ancestry
         try:
