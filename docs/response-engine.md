@@ -126,6 +126,7 @@ Guards apply whatever the playbooks say:
 | ebpf-rootkit | `EBPF_HIDDEN_PROGRAM`, `EBPF_LOADED_BY_DROPPED_TOOL` | Collect evidence, suspend the holding process, notify |
 | ebpf-change | HIGH `EBPF_NEW_PROGRAM`, `EBPF_PROGRAM_CHANGED`, `EBPF_UNPRIVILEGED_ENABLED` | Collect evidence, notify |
 | container-escape | `CONTAINER_ESCAPE`, `ESCAPE_HOOK_SET`, `RUNTIME_API_EXPOSED`, `RUNTIME_SOCKET_WORLD_WRITABLE` | Collect evidence, suspend the escaped process, notify |
+| watchlisted-name | `OUTBOUND_TO_WATCHLISTED_NAME` | Collect evidence, suspend the process, block the address 60 minutes, notify |
 | hardening-drift | HIGH `FILE_CAPABILITY_BACKDOOR`, `FILE_CAPABILITY_ADDED`, `PROGRAM_WRITABLE`, `PATH_FOLDER_WRITABLE`, `PATH_HAS_RELATIVE_ENTRY`, `HARDENING_WEAKENED` | Collect evidence, notify |
 | container-exposure | HIGH `CONTAINER_PRIVILEGED`, `CONTAINER_RUNTIME_SOCKET`, `CONTAINER_HOST_PATH_MOUNTED`, `CONTAINER_DANGEROUS_CAPABILITY`, `CONTAINER_HOST_PID`, `ESCAPE_HOOK_CHANGED`, `RUNTIME_GROUP_MEMBER_ADDED` | Collect evidence, notify |
 | boot-tampering | HIGH and CRITICAL [boot integrity](boot-integrity.md) findings | Collect evidence, notify |
