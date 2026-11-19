@@ -49,6 +49,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
 | binaries | daily at 03:17 | `binaries check --alert` |
 | ancestry | always running (root) | `ancestry watch --alert` |
+| egress | always running | `egress watch --alert`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md)) |
 
 Timers start up to a minute late at random, so that machines set up the same
 way do not all run at once, and they catch up after the machine was off.

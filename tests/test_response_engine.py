@@ -55,7 +55,7 @@ def actions(decision):
 
 def test_default_policy_is_private_and_only_shadow_mode_exists(paths):
     policy = re_.load_policy(paths["policy_path"])
-    assert len(policy.playbooks) == 13 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
+    assert len(policy.playbooks) == 15 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
     with pytest.raises(re_.ResponseError, match="exists"):
         re_.write_default_policy(paths["policy_path"])
     for old, new, message in [
@@ -181,7 +181,7 @@ def test_network_detections_are_read_once_from_the_audit_store(paths, tmp_path):
     edit_policy(paths, "process_review = true", "process_review = false")
     edit_policy(paths, 'ancestry_allow_file = "~/.config/megalodon/ancestry-allow.json"', 'ancestry_allow_file = ""')
     edit_policy(paths, "rootkit_check = true", "rootkit_check = false")
-    for name in ("listeners", "persistence", "binaries", "logwatch", "devices", "webroot", "tamper"):
+    for name in ("listeners", "persistence", "binaries", "logwatch", "devices", "webroot", "tamper", "egress"):
         edit_policy(paths, f'{name}_manifest = "~/', f'{name}_manifest = "" # ~/')
     first = re_.run(now=NOW, **paths)
     assert first["signals"] > 0 and first["gaps"] == []

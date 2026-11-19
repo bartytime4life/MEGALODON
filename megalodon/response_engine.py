@@ -77,7 +77,7 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'devices', 'webroot', 'tamper', 'canary', 'ingest')
+           'devices', 'webroot', 'tamper', 'egress', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -122,6 +122,8 @@ logwatch_manifest = "~/.config/megalodon/log-integrity.json"
 devices_manifest = "~/.config/megalodon/devices.json"
 webroot_manifest = "~/.config/megalodon/webroot.json"
 tamper_manifest = "~/.config/megalodon/tamper.json"
+# Programs connecting out for the first time; `megalodon egress learn` takes the baseline.
+egress_manifest = "~/.config/megalodon/egress.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -161,6 +163,20 @@ name = "web-shell-file"
 rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "dropped-tool-phoning-home"
+rules = ["OUTBOUND_FROM_TEMPORARY"]
+min_severity = "HIGH"
+actions = ["collect_evidence", "suspend_process", "block_address", "notify"]
+block_minutes = 60
+
+[[response.playbook]]
+name = "new-outbound-program"
+rules = ["NEW_OUTBOUND_PROGRAM"]
+min_severity = "HIGH"
+# New software also does this: preserve and ask.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "sensor-tampering"
@@ -367,7 +383,7 @@ def load_policy(path=DEFAULT_POLICY):
     sources = table.get('sources', {})
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
-               'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'canary_manifest'}
+               'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -531,6 +547,21 @@ def rootkit_signals(report):
     return signals
 
 
+def egress_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        process = (f.get('evidence', {}).get('processes') or [{}])[0]
+        program = process.get('program', '')
+        ids = [f"{process['pid']}@{process['start']}:{program}"] if (
+            type(process.get('pid')) is int and type(process.get('start')) is int and program.startswith('/')) else []
+        where = f"{f.get('protocol')}/{f.get('port')}"
+        signals.append(Signal(f"egress:{f['rule_id']}:{f.get('program')}:{where}:{f.get('address')}", 'egress',
+                              f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
+                              f.get('detail', ''), _entities(process=[program], process_id=ids,
+                                                             address=[f.get('address')], port=[where])))
+    return signals
+
+
 def listener_signals(report):
     signals = []
     for f in report.get('findings', []):
@@ -644,7 +675,8 @@ def collect(policy, state, now, *, root='/'):
                lambda r: path_signals(r, 'logwatch', 'log')),
               ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')),
               ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')),
-              ('tamper_manifest', 'tamper', 'TamperError', lambda r: path_signals(r, 'tamper', 'subject')))
+              ('tamper_manifest', 'tamper', 'TamperError', lambda r: path_signals(r, 'tamper', 'subject')),
+              ('egress_manifest', 'egress_watch', 'EgressError', lambda r: egress_signals(r)))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')
