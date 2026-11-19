@@ -79,7 +79,7 @@ ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'per
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
-           'packages', 'memory', 'canary', 'ingest')
+           'packages', 'secrets', 'memory', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -140,6 +140,8 @@ containers_manifest = "~/.config/megalodon/containers.json"
 hardening_manifest = "~/.config/megalodon/hardening.json"
 # Package sources, signing keys and package manager hooks (`megalodon packages baseline`).
 packages_manifest = "~/.config/megalodon/packages.json"
+# Keys, tokens and passwords others can read (`megalodon secrets baseline`).
+secrets_manifest = "~/.config/megalodon/secrets.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -192,6 +194,14 @@ rules = ["MEMORY_EXECUTABLE_MEMFD", "MEMORY_EXECUTABLE_TEMPORARY"]
 min_severity = "HIGH"
 # Some sandboxes and runtimes run from memory on purpose: preserve and ask.
 actions = ["collect_evidence", "notify"]
+
+[[response.playbook]]
+name = "secret-exposed"
+rules = ["SECRET_FILE_IN_WEB_ROOT", "VERSION_CONTROL_IN_WEB_ROOT", "SECRET_IN_WEB_ROOT", "PRIVATE_KEY_EXPOSED",
+         "CREDENTIAL_FILE_EXPOSED", "SECRET_IN_COMMAND_LINE", "SECRET_IN_EXPOSED_FILE"]
+min_severity = "HIGH"
+# The fix is to restrict or move the secret and replace it; nothing on the machine needs preserving.
+actions = ["notify"]
 
 [[response.playbook]]
 name = "package-trust-changed"
@@ -501,7 +511,8 @@ def load_policy(path=DEFAULT_POLICY):
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
                'credential_allow_file', 'logins_manifest', 'boot_manifest', 'ebpf_manifest', 'containers_manifest',
-               'hardening_manifest', 'packages_manifest', 'memory_sweep', 'canary_manifest'}
+               'hardening_manifest', 'packages_manifest', 'secrets_manifest', 'memory_sweep',
+               'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports', 'memory_sweep')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -792,6 +803,13 @@ def package_signals(report):
             for f in report.get('findings', [])]
 
 
+def secret_signals(report):
+    return [Signal(f"secrets:{f['rule_id']}:{f.get('subject')}", 'secrets', f['rule_id'],
+                   _severity(f.get('severity')), report.get('checked_at', ''), f.get('detail', ''),
+                   _entities(file=[f['path']] if str(f.get('path', '')).startswith('/') else ()))
+            for f in report.get('findings', [])]
+
+
 def ingest_signals(lines, now):
     """Findings piped in as JSON lines, such as `megalodon ransomware watch` output."""
     signals, refused = [], 0
@@ -905,7 +923,8 @@ def collect(policy, state, now, *, root='/'):
               ('ebpf_manifest', 'ebpf_watch', 'EbpfError', lambda r: ebpf_signals(r)),
               ('containers_manifest', 'container_watch', 'ContainerError', lambda r: container_signals(r)),
               ('hardening_manifest', 'hardening_drift', 'HardeningError', lambda r: hardening_signals(r)),
-              ('packages_manifest', 'package_sources', 'PackageSourcesError', lambda r: package_signals(r)))
+              ('packages_manifest', 'package_sources', 'PackageSourcesError', lambda r: package_signals(r)),
+              ('secrets_manifest', 'secrets_scan', 'SecretsError', lambda r: secret_signals(r)))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')

@@ -56,7 +56,8 @@ policy allows, each with a way to undo it.
      [tamper](tamper-detection.md), [egress](egress-watch.md),
      [credential](credential-watch.md), [login](login-watch.md),
      [boot](boot-integrity.md), [eBPF](ebpf-watch.md), [container](container-watch.md),
-     [hardening drift](hardening-drift.md) and [package sources](package-sources.md) checks, and
+     [hardening drift](hardening-drift.md), [package sources](package-sources.md) and
+     [exposed secrets](exposed-secrets.md) checks, and
      canaries.
 
    Each check needs its baseline. A source that can't be read is listed
@@ -132,6 +133,7 @@ Guards apply whatever the playbooks say:
 | code-loaded-into-memory | `MEMORY_ELF_IN_ANONYMOUS` (with `memory_sweep = true`) | Collect evidence, suspend the process, notify |
 | code-run-from-memory | HIGH `MEMORY_EXECUTABLE_MEMFD`, `MEMORY_EXECUTABLE_TEMPORARY` | Collect evidence, notify |
 | hardening-drift | HIGH `FILE_CAPABILITY_BACKDOOR`, `FILE_CAPABILITY_ADDED`, `PROGRAM_WRITABLE`, `PATH_FOLDER_WRITABLE`, `PATH_HAS_RELATIVE_ENTRY`, `HARDENING_WEAKENED` | Collect evidence, notify |
+| secret-exposed | HIGH `SECRET_FILE_IN_WEB_ROOT`, `VERSION_CONTROL_IN_WEB_ROOT`, `SECRET_IN_WEB_ROOT`, `PRIVATE_KEY_EXPOSED`, `CREDENTIAL_FILE_EXPOSED`, `SECRET_IN_COMMAND_LINE`, `SECRET_IN_EXPOSED_FILE` | Notify: restrict or move the secret, then replace it |
 | package-trust-changed | HIGH `PACKAGE_SIGNATURES_OFF`, `PACKAGE_CONFIG_WRITABLE`, `SIGNING_KEY_ADDED`, `PACKAGE_SOURCE_REDIRECTED`, `PACKAGE_SOURCE_CHANGED`, `PACKAGE_CONFIG_REDIRECTED`, `PACKAGE_MANAGER_HOOK_ADDED`, `PACKAGE_MANAGER_HOOK_SUSPICIOUS`, `PACKAGE_SIGNATURE_CHECK_WEAKENED` | Collect evidence, notify |
 | container-exposure | HIGH `CONTAINER_PRIVILEGED`, `CONTAINER_RUNTIME_SOCKET`, `CONTAINER_HOST_PATH_MOUNTED`, `CONTAINER_DANGEROUS_CAPABILITY`, `CONTAINER_HOST_PID`, `ESCAPE_HOOK_CHANGED`, `RUNTIME_GROUP_MEMBER_ADDED` | Collect evidence, notify |
 | boot-tampering | HIGH and CRITICAL [boot integrity](boot-integrity.md) findings | Collect evidence, notify |
