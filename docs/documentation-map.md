@@ -192,6 +192,7 @@ or source basis.
 | [Container watch: escapes and ways out to the host](container-watch.md) | `docs/container-watch.md` |
 | [Hardening drift: weaker protections and quiet ways to root](hardening-drift.md) | `docs/hardening-drift.md` |
 | [Process memory: fileless code, found and saved](memory-capture.md) | `docs/memory-capture.md` |
+| [Fleet view: every machine's heartbeats and alerts in one place](fleet.md) | `docs/fleet.md` |
 | [Boot integrity: kernels, initramfs, bootloader and boot-time protections](boot-integrity.md) | `docs/boot-integrity.md` |
 | [Login watch: successful logins that do not fit](login-watch.md) | `docs/login-watch.md` |
 | [Credential access watch: who reads keys, passwords and tokens](credential-watch.md) | `docs/credential-watch.md` |

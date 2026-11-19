@@ -108,6 +108,9 @@ Use either of these:
 
   It exits 1 on findings, and `--alert` sends them through that machine's
   own alerts. Run it from that machine's scheduler.
+* **`megalodon fleet serve` on a collector.** It receives heartbeats and
+  alerts from every enrolled machine and applies these rules to each. See the
+  [fleet view](fleet.md).
 
 | Rule | Severity | When |
 | --- | --- | --- |
