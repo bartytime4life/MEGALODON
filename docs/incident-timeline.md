@@ -54,9 +54,12 @@ and refused if it is readable by others.
 | `~/.local/state/megalodon/response-shadow.jsonl` | `megalodon respond run` | Each decision a playbook made, with its incident |
 | `~/.local/state/megalodon/enforced.jsonl` | `megalodon enforce` | Each action carried out, refused, failed or undone, with its incident |
 
-The rotated copies (`.1`) are read too. Older ledgers and journals, written
-before findings and actions carried their incident, are still read: their
-actions are matched to their decisions.
+The rotated copies (`.1`) are read too, and every file is read to its end,
+however large. Older ledgers and journals, written before findings and actions
+carried their incident, are still read. Their actions are matched to their
+decisions by time, rule, playbook, action and target. An action that matches
+decisions in two incidents is left unassigned rather than guessed; it still
+shows with `--entity`.
 
 ## Limits
 

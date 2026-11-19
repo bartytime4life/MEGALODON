@@ -46,6 +46,22 @@ def _parse(text):
         return None
 
 
+def _lines(path):
+    """Every line of an owner-only file, read as a stream: the enforcement journal is not rotated and grows."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise engine.ResponseError(f'{path} must be a mode-600 file owned by you')
+        stream = os.fdopen(fd, 'rb')
+    except BaseException:
+        os.close(fd)
+        raise
+    with stream:
+        for line in stream:
+            yield line
+
+
 def _records(path):
     """The JSON records of a private log and its rotated copy, oldest first; [] when neither exists."""
     path = Path(path).expanduser()
@@ -53,7 +69,7 @@ def _records(path):
     for candidate in (path.with_name(path.name + '.1'), path):
         if not candidate.exists():
             continue
-        for line in engine._private_file_lines(candidate):
+        for line in _lines(candidate):
             try:
                 record = json.loads(line)
             except ValueError:
@@ -116,7 +132,11 @@ def _load(*, ledger=engine.DEFAULT_LEDGER, observations=None, journal=None):
                             severity=_severity(signal.get('severity')), summary=signal.get('summary', ''),
                             observed_at=signal.get('observed_at'), entities=signal.get('entities') or {},
                             key=signal.get('key')))
-        decisions[(record.get('decided_at'), signal.get('rule_id'), record.get('playbook'))] = incident
+        # Older journals are matched to decisions by when, which rule and playbook, and which action on what.
+        for plan in record.get('actions', []):
+            key = (record.get('decided_at'), signal.get('rule_id'), record.get('playbook'), plan.get('action'),
+                   plan.get('target'))
+            decisions.setdefault(key, set()).add(incident)
         out.append(dict(at=record.get('decided_at'), kind='decision', incident=incident,
                         playbook=record.get('playbook'), rule_id=signal.get('rule_id'),
                         severity=_severity(signal.get('severity')), entities=signal.get('entities') or {},
@@ -131,8 +151,12 @@ def _load(*, ledger=engine.DEFAULT_LEDGER, observations=None, journal=None):
             out.append(dict(at=record.get('at'), kind='undo', incident=incident, action=record.get('action'),
                             target=record.get('target'), undo_of=record.get('undo_of')))
             continue
-        # A journal written before records carried their incident is matched to its decision.
-        incident = incident or decisions.get((record.get('decided_at'), record.get('rule_id'), record.get('playbook')))
+        # A journal written before records carried their incident is matched to its decision. A match that two
+        # incidents share is left unassigned rather than given to either: it still shows in --entity views.
+        if not incident:
+            matched = decisions.get((record.get('decided_at'), record.get('rule_id'), record.get('playbook'),
+                                     record.get('action'), record.get('target')), set())
+            incident = next(iter(matched)) if len(matched) == 1 else None
         applied[record.get('id')] = incident
         event = dict(at=record.get('at'), kind='action', incident=incident, action=record.get('action'),
                      target=record.get('target'), status=record.get('status'), reason=record.get('reason'),

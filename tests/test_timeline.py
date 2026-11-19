@@ -146,3 +146,45 @@ def test_an_entity_across_incidents_html_and_the_cli(p, tmp_path, capsys):
         main(["timeline", "list", "--format", "json", "--hours", "100000", "--ledger", str(p["ledger"]),
               "--journal", str(p["journal"])])
     assert len(json.loads(capsys.readouterr().out.split("wrote", 1)[-1].split("\n", 1)[-1])["incidents"]) == 2
+
+
+def legacy_decision(incident, target, at="2026-11-19T12:00:00Z"):
+    return dict(decided_at=at, playbook="reverse-shell", incident=dict(id=incident),
+                signal=dict(key=f"k-{incident}", source="process_review", rule_id="SHELL_HOLDS_SOCKET",
+                            severity="HIGH", summary="a shell holds a socket", entities=dict(process=[target])),
+                actions=[dict(action="suspend_process", target=target, status="would_apply")])
+
+
+def legacy_action(identifier, target, at="2026-11-19T12:01:00Z"):
+    return dict(id=identifier, at=at, action="suspend_process", target=target, status="applied",
+                playbook="reverse-shell", rule_id="SHELL_HOLDS_SOCKET", decided_at="2026-11-19T12:00:00Z")
+
+
+def write_log(path, records):
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+    os.chmod(path, 0o600)
+
+
+def test_older_actions_go_to_their_own_incident_or_to_none(tmp_path):
+    ledger, journal = tmp_path / "ledger.jsonl", tmp_path / "enforced.jsonl"
+    # One engine pass decided the same rule, under the same playbook, for two incidents.
+    write_log(ledger, [legacy_decision("aaaaaaaaaaaa", "10@1:/bin/sh"), legacy_decision("bbbbbbbbbbbb", "20@1:/bin/sh"),
+                       legacy_decision("cccccccccccc", "30@1:/bin/sh"), legacy_decision("dddddddddddd", "30@1:/bin/sh")])
+    write_log(journal, [legacy_action("e1", "10@1:/bin/sh"), legacy_action("e2", "20@1:/bin/sh"),
+                        legacy_action("e3", "30@1:/bin/sh")])
+    actions = {e["id"]: e["incident"] for e in tl.events(ledger=ledger, journal=journal) if e["kind"] == "action"}
+    assert actions == {"e1": "aaaaaaaaaaaa", "e2": "bbbbbbbbbbbb", "e3": None}, \
+        "each action goes with the decision on its target; one two incidents share goes with neither"
+
+
+def test_a_large_journal_is_read_to_its_end(tmp_path):
+    ledger, journal = tmp_path / "ledger.jsonl", tmp_path / "enforced.jsonl"
+    write_log(ledger, [legacy_decision("aaaaaaaaaaaa", "10@1:/bin/sh")])
+    filler = json.dumps(dict(id="x", at="2026-11-19T11:00:00Z", action="notify", status="refused",
+                             reason="r" * 400)) + "\n"
+    with open(journal, "w") as stream:
+        stream.write(filler * (20 * 1024 * 1024 // len(filler)))     # past the 17 MiB a single read took
+        stream.write(json.dumps(legacy_action("last", "10@1:/bin/sh")) + "\n")
+    os.chmod(journal, 0o600)
+    assert any(e.get("id") == "last" and e["incident"] == "aaaaaaaaaaaa"
+               for e in tl.events(ledger=ledger, journal=journal))
