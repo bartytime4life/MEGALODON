@@ -77,7 +77,7 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'canary', 'ingest')
+           'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -129,6 +129,7 @@ credential_allow_file = "~/.config/megalodon/credential-allow.json"
 # Successful logins that do not fit; `megalodon logins learn` takes the baseline. The engine reads the auth log
 # with its own position, separate from `logins check`.
 logins_manifest = "~/.config/megalodon/logins.json"
+boot_manifest = "~/.config/megalodon/boot.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -168,6 +169,14 @@ name = "web-shell-file"
 rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "boot-tampering"
+rules = ["BOOT_PACKAGE_MISMATCH", "SECURE_BOOT_DISABLED", "LOCKDOWN_WEAKENED", "MODULE_SIGNATURES_OFF",
+         "CMDLINE_WEAKENED", "BOOT_FILE_CHANGED", "BOOT_FILE_ADDED"]
+min_severity = "HIGH"
+# What runs before every defense cannot be fixed from inside: preserve and tell you.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "service-account-login"
@@ -416,7 +425,7 @@ def load_policy(path=DEFAULT_POLICY):
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
-               'credential_allow_file', 'logins_manifest', 'canary_manifest'}
+               'credential_allow_file', 'logins_manifest', 'boot_manifest', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -752,7 +761,8 @@ def collect(policy, state, now, *, root='/'):
               ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')),
               ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')),
               ('tamper_manifest', 'tamper', 'TamperError', lambda r: path_signals(r, 'tamper', 'subject')),
-              ('egress_manifest', 'egress_watch', 'EgressError', lambda r: egress_signals(r)))
+              ('egress_manifest', 'egress_watch', 'EgressError', lambda r: egress_signals(r)),
+              ('boot_manifest', 'boot_integrity', 'BootError', lambda r: path_signals(r, 'boot', 'subject')))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')
