@@ -50,6 +50,10 @@ JOBS = (
     Job('heartbeat', 'MEGALODON heartbeat', ('heartbeat', 'send'), '*:0/5',
         manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,
         setup='megalodon heartbeat init --url https://your-monitor.example/ping'),
+    # The incident timeline to the fleet collector, signed with the heartbeat key; a plain monitor answers 404.
+    Job('timeline-push', 'MEGALODON timeline push to the fleet collector', ('timeline', 'push'), '*:0/5',
+        manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,
+        setup='megalodon heartbeat init --url https://your-collector.example/heartbeat'),
     Job('tamper', 'MEGALODON tamper check', ('tamper', 'check', '--alert'), '*:0/15',
         manifest='~/.config/megalodon/tamper.json', baseline=('tamper', 'baseline'), cron='*/15 * * * *',
         interval=900),

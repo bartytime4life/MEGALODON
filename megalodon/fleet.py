@@ -9,7 +9,12 @@ send`) and alerts (webhook destinations). `megalodon fleet` is the other end:
   against the machine it claims to come from, and keeps them per machine;
 * `status` shows every machine: when it was last heard from, whether its
   heartbeats are signed, in sequence and on time, and its recent alerts. The
-  same view is served at /status (JSON) and / (a page), to this machine only.
+  same view is served at /status (JSON) and / (a page), to this machine only;
+* `serve` also receives each machine's incident timeline at /events, signed
+  with its heartbeat key (`megalodon timeline push`), and `timeline` tells
+  incidents across machines: one machine's incident is joined to another's
+  when both involve the same address within a day, as an attacker moving
+  between machines, or reaching several, does.
 
 Heartbeats are checked with the same rules as `megalodon heartbeat monitor`: a
 machine that goes silent, a forged or replayed heartbeat, or a machine whose
@@ -44,6 +49,11 @@ MAX_FILE = 8 * 1024 * 1024
 MAX_MACHINES = 4096
 WINDOW_HOURS = 24
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
+BATCH_SCHEMA = 'megalodon-timeline-batch-v1'
+EVENT_KINDS = frozenset({'finding', 'decision', 'action', 'undo'})
+MAX_BATCH_EVENTS = 2000
+LINK_HOURS = 24
+_RECEIVING = threading.Lock()
 _NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,252}')
 
 
@@ -212,6 +222,169 @@ def receive_alert(body, token, *, data=DEFAULT_DATA, now=None):
     return 200, 'ok'
 
 
+def _sequence_path(data, name):
+    return Path(data).expanduser() / 'machines' / name / 'events-sequence.json'
+
+
+def receive_events(body, *, data=DEFAULT_DATA, now=None):
+    """(status, message) for one posted timeline batch, signed with its machine's heartbeat key."""
+    if type(body) is not dict or body.get('schema') != BATCH_SCHEMA or type(body.get('events')) is not list \
+            or type(body.get('sequence')) is not int or len(body['events']) > MAX_BATCH_EVENTS:
+        return 400, 'not a MEGALODON timeline batch'
+    registry = machines(data)
+    name = next((n for n, m in registry.items() if m['sensor'] == body.get('sensor')), None)
+    if name is None:
+        return 403, 'this sensor is not enrolled'
+    unsigned = {k: v for k, v in body.items() if k != 'mac'}
+    try:
+        valid = hmac.compare_digest(str(body.get('mac', '')), tamper._sign(registry[name]['heartbeat_key'], unsigned))
+    except (ValueError, TypeError):
+        valid = False
+    if not valid:
+        return 401, 'the signature does not match this machine\'s key'
+    with _RECEIVING:
+        path = _sequence_path(data, name)
+        try:
+            last = json.loads(path.read_text()).get('sequence', 0)
+        except (OSError, ValueError):
+            last = 0
+        # A batch sent again, by a replay or a retry that already arrived, adds nothing.
+        if body['sequence'] <= last:
+            return 409, 'this batch, or a later one, was already received'
+        received = _iso(now or _now())
+        for event in body['events']:
+            if type(event) is dict and event.get('kind') in EVENT_KINDS and isinstance(event.get('event_id'), str):
+                _append(data, name, 'events', dict(event, machine=name, received_at=received))
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        handle, temporary = tempfile.mkstemp(prefix='.sequence-', dir=path.parent)
+        with os.fdopen(handle, 'w') as stream:
+            json.dump(dict(sequence=body['sequence'], at=received), stream)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    return 200, 'ok'
+
+
+# ------------------------------------------------------------------ the timeline across machines
+
+def fleet_events(*, data=DEFAULT_DATA):
+    """Every received timeline event, once each, oldest first, with the machine it came from."""
+    out, seen = [], set()
+    for name in sorted(machines(data)):
+        for line in _lines(data, name, 'events'):
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            key = (name, event.get('event_id'))
+            if type(event) is dict and key not in seen:
+                seen.add(key)
+                out.append(dict(event, machine=name))
+    out.sort(key=lambda e: str(e.get('at') or ''))
+    return out
+
+
+def _parse(text):
+    try:
+        return datetime.fromisoformat(str(text).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+
+
+def fleet_groups(*, data=DEFAULT_DATA):
+    """{fleet incident ID: events}: each machine's incidents, joined across machines by a shared address."""
+    from .timeline import _entity_keys
+    every = fleet_events(data=data)
+    parent = {}
+
+    def node(event):
+        return (event['machine'], event.get('incident') or f"event:{event.get('event_id')}")
+
+    def find(item):
+        parent.setdefault(item, item)
+        while parent[item] != item:
+            parent[item] = parent[parent[item]]
+            item = parent[item]
+        return item
+
+    def union(a, b):
+        parent[find(a)] = find(b)
+    by_address = {}
+    for event in every:
+        find(node(event))
+        for key in _entity_keys(event.get('entities')):
+            if key.startswith('address:'):
+                by_address.setdefault(key, []).append((_parse(event.get('at')), node(event)))
+    window = timedelta(hours=LINK_HOURS)
+    linked = {}
+    for key, sightings in by_address.items():
+        latest = {}                                    # machine -> (time, node) of its latest sighting
+        for moment, item in sorted((s for s in sightings if s[0]), key=lambda s: s[0]):
+            for machine, (seen_at, other) in latest.items():
+                if machine != item[0] and moment - seen_at <= window:
+                    union(item, other)
+                    linked.setdefault(frozenset((item, other)), set()).add(key.partition(':')[2])
+            latest[item[0]] = (moment, item)
+    groups = {}
+    for event in every:
+        groups.setdefault(find(node(event)), []).append(event)
+    named = {}
+    for root, items in groups.items():
+        first = min(items, key=lambda e: str(e.get('at') or ''))
+        identifier = hashlib.sha256(f"{node(first)[0]}/{node(first)[1]}".encode()).hexdigest()[:12]
+        nodes = {node(e) for e in items}
+        shared = sorted({a for pair, addresses in linked.items() if pair <= nodes for a in addresses})
+        named[identifier] = dict(events=items, linked_by=shared)
+    return named
+
+
+def fleet_timeline(*, data=DEFAULT_DATA, hours=168, now=None):
+    """Incidents across every machine with activity in the last `hours`, worst and most recent first."""
+    from .timeline import RANK as LEVELS, SCHEMA as TIMELINE_SCHEMA, summarize
+    now = now or _now()
+    cutoff = now - timedelta(hours=hours)
+    rows = []
+    for identifier, group in fleet_groups(data=data).items():
+        row = summarize(identifier, group['events'])
+        if not row['last'] or _parse(row['last']) < cutoff:
+            continue
+        row.update(machines=sorted({e['machine'] for e in group['events']}), linked_by=group['linked_by'],
+                   machine_incidents=sorted({f"{e['machine']}/{e['incident']}" for e in group['events']
+                                             if e.get('incident')}))
+        rows.append(row)
+    rows.sort(key=lambda r: r['last'], reverse=True)
+    rows.sort(key=lambda r: LEVELS.index(r['severity']))
+    return dict(schema=TIMELINE_SCHEMA, action='list', scope='fleet', hours=hours, incidents=rows)
+
+
+def fleet_show(incident=None, *, entity=None, data=DEFAULT_DATA):
+    """One fleet incident in order, or every event across machines that involved an entity."""
+    from .timeline import SCHEMA as TIMELINE_SCHEMA, TimelineError, _matches, summarize
+    if not incident and not entity:
+        raise TimelineError('give a fleet incident ID, or --entity KIND:VALUE such as address:203.0.113.7')
+    if entity and ':' not in entity:
+        raise TimelineError('an entity is KIND:VALUE, such as address:203.0.113.7 or file:/tmp/x')
+    groups = fleet_groups(data=data)
+    if incident:
+        chosen = [i for i in groups if i.startswith(incident)]
+        if len(chosen) != 1:
+            raise TimelineError(f'no fleet incident {incident} was received' if not chosen else
+                                f'{incident} is the start of {len(chosen)} incidents; give more of it')
+        identifiers = chosen
+    else:
+        identifiers = [i for i, g in groups.items() if any(_matches(e, entity) for e in g['events'])]
+        if not identifiers:
+            raise TimelineError(f'nothing received involves {entity}')
+    events = sorted((e for i in identifiers for e in groups[i]['events']), key=lambda e: str(e.get('at') or ''))
+    summaries = []
+    for identifier in identifiers:
+        row = summarize(identifier, groups[identifier]['events'])
+        row.update(machines=sorted({e['machine'] for e in groups[identifier]['events']}),
+                   linked_by=groups[identifier]['linked_by'])
+        summaries.append(row)
+    return dict(schema=TIMELINE_SCHEMA, action='show', scope='fleet', incident=identifiers[0] if incident else None,
+                entity=entity, incidents=summaries, events=events, truncated=False)
+
+
 # ------------------------------------------------------------------ the view
 
 def status(*, data=DEFAULT_DATA, max_gap=900, hours=WINDOW_HOURS, now=None):
@@ -316,6 +489,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._reply(500, dict(error=str(exc)))
         if self.path == '/status':
             return self._reply(200, report)
+        if self.path in ('/timeline', '/timeline.json') or re.fullmatch(r'/timeline/[0-9a-f]{4,12}', self.path):
+            from . import timeline
+            try:
+                if self.path.startswith('/timeline/'):
+                    result = fleet_show(self.path.rsplit('/', 1)[1], data=self.data)
+                    return self._reply(200, timeline.page(result), 'text/html')
+                result = fleet_timeline(data=self.data)
+            except (timeline.TimelineError, FleetError) as exc:
+                return self._reply(404, dict(error=str(exc)))
+            if self.path == '/timeline.json':
+                return self._reply(200, result)
+            return self._reply(200, timeline.list_page(result), 'text/html')
         if self.path in ('/', '/index.html'):
             return self._reply(200, page(report), 'text/html')
         return self._reply(404, dict(error='not found'))
@@ -336,6 +521,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if self.path == '/heartbeat':
                 code, message = receive_heartbeat(body, data=self.data)
+            elif self.path == '/events':
+                code, message = receive_events(body, data=self.data)
             elif self.path == '/alert':
                 auth = self.headers.get('Authorization', '')
                 code, message = receive_alert(body, auth[7:] if auth.startswith('Bearer ') else '', data=self.data)

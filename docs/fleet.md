@@ -117,6 +117,62 @@ ssh -L 8651:127.0.0.1:8651 collector
 `megalodon fleet remove NAME` stops accepting a machine. What it already sent
 is kept.
 
+## Incidents across machines
+
+Each machine's [incident timeline](incident-timeline.md) can be sent to the
+collector. The collector joins incidents on different machines when they share
+an address: the same outside address seen by two machines within a day, or one
+machine reaching another. An attacker moving between machines, or working
+through several, then shows up as one fleet incident.
+
+On each machine:
+
+```bash
+megalodon timeline push
+```
+
+On the collector:
+
+```bash
+megalodon fleet timeline
+```
+
+```bash
+megalodon fleet timeline 7d41c0
+```
+
+```bash
+megalodon fleet timeline --entity address:203.0.113.9
+```
+
+* **`timeline push`** sends the events this machine has not sent yet:
+  findings, decisions, actions and undos. It sends them in batches to
+  `/events` on the collector, at the heartbeat address with `/events` in place
+  of `/heartbeat` (or `--url`). Each batch is signed with the machine's
+  heartbeat key, so enrolling the machine is all it needs. The
+  [scheduler](scheduling.md) runs it every five minutes. A heartbeat monitor
+  that is not a fleet collector answers 404, and the push then sends nothing
+  and does not fail.
+* **The collector checks each batch.** It must be:
+  - from an enrolled machine (else 403);
+  - signed with that machine's key (else 401, and nothing is kept);
+  - newer than the last batch it accepted from it (a replay gets 409).
+
+  Each event is kept once, even if a machine that lost its record of what it
+  sent sends it again.
+* **`fleet timeline`** lists the fleet's incidents of the last `--hours` (168
+  by default), worst first. Each shows its machines and the addresses that
+  joined them. With an ID, or the start of one, it tells that incident, every
+  machine's events in one order. With `--entity`, it shows every incident that
+  involved that entity. `--format text|json|html` and `--output FILE` (mode
+  600) work as for `timeline show`.
+* **The view also shows it:**
+  - `/timeline` lists the incidents, as a page with no scripts;
+  - `/timeline/ID` tells one;
+  - `/timeline.json` gives the list as JSON.
+
+  Like the rest of the view, these are on the loopback listener only.
+
 ## Limits
 
 * **One collector.** It is not replicated; if it is down, heartbeats are
@@ -126,3 +182,9 @@ is kept.
   `detail` setting decides whether addresses and messages are included.
 * **No user accounts.** The view is shown to the collector machine itself and
   to nobody else. Anyone who can log in there can see it.
+* **Joined by address only.** Machines' incidents are joined by an address
+  they share within a day. The same file path or account name on two machines
+  is not taken to be the same thing.
+* **Timelines are only as recent as the last push.** With the scheduler, that
+  is at most five minutes old. The collector keeps about 16 MiB of events per
+  machine: the current file and the one before it.
