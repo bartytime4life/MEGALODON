@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import threading
 
@@ -106,14 +107,51 @@ def test_a_process_that_left_its_container_is_an_escape(root, tmp_path):
     cw.baseline(manifest, root=str(root), api=API)
     escaped = in_container(WEB, 10, mnt=HOST_NS["mnt"])
     process(root, 500, exe="/tmp/.x", start=777, **escaped)
-    process(root, 501, exe="/usr/bin/runc", comm="runc:[2:INIT]", **escaped)    # the runtime, mid-start
-    report = cw.check(manifest, api=API)
-    assert rules(report) == [("CONTAINER_ESCAPE", "process:500")]
+    # Calling itself runc does not make a payload the runtime: names are the process's own to set.
+    process(root, 502, exe="/tmp/runc", comm="runc", start=778, **escaped)
+    # runc's own init step, from its sealed in-memory copy, is gone a moment later.
+    process(root, 501, exe="/memfd:runc_cloned:/proc/self/exe (deleted)", comm="runc:[2:INIT]", **escaped)
+    # A long-lived helper that really is the installed runtime file stays exempt.
+    (root / "usr/bin").mkdir(parents=True)
+    (root / "usr/bin/conmon").write_text("")
+    process(root, 503, exe=str(root / "usr/bin/conmon"), comm="conmon", **escaped)
+    settled = []
+    report = cw.check(manifest, api=API, settle=lambda: (settled.append(1), shutil.rmtree(root / "proc/501")))
+    assert settled == [1]
+    assert rules(report) == [("CONTAINER_ESCAPE", "process:500"), ("CONTAINER_ESCAPE", "process:502")]
     finding = report["findings"][0]
     assert finding["severity"] == "CRITICAL" and f"docker:{WEB}" in finding["detail"]
     assert finding["evidence"]["processes"] == [dict(pid=500, start=777, program="/tmp/.x")]
-    cw.accept(manifest, api=API)
-    assert rules(cw.check(manifest, api=API)) == [("CONTAINER_ESCAPE", "process:500")], "never accepted"
+    cw.accept(manifest, api=API, settle=lambda: None)
+    assert [f["rule_id"] for f in cw.check(manifest, api=API, settle=lambda: None)["findings"]] == \
+        ["CONTAINER_ESCAPE"] * 2, "never accepted"
+
+
+def test_host_folders_on_a_btrfs_subvolume_are_recognized(root, tmp_path):
+    # A Btrfs root is mounted from the subvolume /@, not from /.
+    (root / "proc/1/mountinfo").write_text("22 1 0:31 /@ / rw,relatime shared:1 - btrfs /dev/sda2 rw,subvol=/@\n"
+                                           "23 22 0:31 /@home /home rw,relatime shared:2 - btrfs /dev/sda2 rw\n")
+    manifest = tmp_path / "containers.json"
+    cw.baseline(manifest, root=str(root), api=API)
+    process(root, 400, exe="/bin/sh", mountinfo=OWN_ROOT + "102 100 0:31 /@ /host rw - btrfs /dev/sda2 rw\n"
+                                                          "103 100 0:31 /@/etc /cfg ro - btrfs /dev/sda2 rw\n"
+                                                          "104 100 0:31 /@home /h rw - btrfs /dev/sda2 rw\n"
+                                                          "105 100 0:31 /@/srv/data /data rw - btrfs /dev/sda2 rw\n",
+            **in_container(TOOLS, 20))
+    assert rules(cw.check(manifest, api=API)) == [
+        ("CONTAINER_HOST_PATH_MOUNTED", "container:docker:tools:mount:/"),
+        ("CONTAINER_HOST_PATH_MOUNTED", "container:docker:tools:mount:/etc (read-only)"),
+        ("CONTAINER_HOST_PATH_MOUNTED", "container:docker:tools:mount:/home")]
+
+
+def test_a_hook_that_appears_after_the_baseline_is_judged(root, tmp_path):
+    manifest = tmp_path / "containers.json"
+    cw.baseline(manifest, root=str(root), api=API)
+    (root / "sys/fs/cgroup/rdma").mkdir()                          # a cgroup v1 hierarchy mounted later
+    (root / "sys/fs/cgroup/rdma/release_agent").write_text("/tmp/payload\n")
+    (root / "sys/fs/cgroup/pids").mkdir()
+    (root / "sys/fs/cgroup/pids/release_agent").write_text("\n")
+    assert rules(cw.check(manifest, api=API)) == [("ESCAPE_HOOK_SET", "hook:release_agent:rdma")]
 
 
 def test_rootless_containers_and_runtimes_without_names(root, tmp_path):
@@ -192,7 +230,7 @@ def test_findings_become_shadow_decisions_and_the_cli(root, tmp_path, capsys, mo
     cw.baseline(manifest, root=str(root), api=API)
     process(root, 500, exe="/tmp/.x", start=777, **in_container(WEB, 10, mnt=HOST_NS["mnt"]))
     process(root, 400, exe="/bin/sh", caps=EVERYTHING, **in_container(TOOLS, 20))
-    signals = re_.container_signals(cw.check(manifest, api=API))
+    signals = re_.container_signals(cw.check(manifest, api=API, settle=lambda: None))
     policy = tmp_path / "policy.toml"
     re_.write_default_policy(policy)
     re_.run(policy_path=policy, ledger=tmp_path / "ledger.jsonl", state_path=tmp_path / "state.json",

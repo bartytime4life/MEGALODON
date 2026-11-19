@@ -57,8 +57,20 @@ is covered:
 
 Each process's namespaces, capabilities, seccomp mode and mount table are
 read from `/proc` and compared with the host's own, which are those of
-process 1. A host mount is recognized by its device, so a bind mount is seen
-whatever path it is mounted at inside the container.
+process 1. A host mount is recognized by its device and its path within that
+filesystem, so a bind mount is seen whatever path it is mounted at inside the
+container, including on a Btrfs subvolume root mounted from `/@`.
+
+A process in a container's control group that runs in the host's mount
+namespace is an escape. There are two exceptions:
+- **runtime helpers,** but only when the process runs the installed `runc`,
+  `crun`, `conmon`, containerd shim, `systemd-nspawn` or similar file (the same
+  file, by inode). Process names are the process's own to set, so they are not
+  trusted;
+- **processes gone a second later,** such as runc's own init step, which runs
+  from an in-memory copy for a few milliseconds. Everything else is looked at
+  again after a second and reported if it is still there, with the same start
+  time.
 
 When the Docker (or Podman) socket can be read, container names and images
 are asked of it with a read-only `GET /containers/json`. Otherwise containers
@@ -102,6 +114,9 @@ reported.
 
 * **Root is needed** to read other processes' namespaces. Without it, the
   check reports how many container processes it could not inspect.
+* **An escape that finishes within a second** (one command run in the
+  host's namespace) may be gone before the second look. The hook, mount or
+  socket it used is still reported.
 * **An escape that stays in the container's mount namespace** but writes to
   the host through a mounted folder, a socket or a hook is not caught as an
   escape. The exposure that made it possible is reported instead.

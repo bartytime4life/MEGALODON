@@ -33,6 +33,7 @@ import re
 import socket
 import stat
 import tempfile
+import time
 
 SCHEMA = 'megalodon-container-watch-v1'
 REPORT_SCHEMA = 'megalodon-container-report-v1'
@@ -52,9 +53,17 @@ _CGROUP = (
     ('lxc', re.compile(r'lxc\.payload\.([A-Za-z0-9_.-]{1,128})')),
     ('nspawn', re.compile(r'machine-([A-Za-z0-9_.\\-]{1,128})\.scope')),
 )
-# Runtime helpers that sit in the container's group but stay in the host's namespaces by design.
-RUNTIME_HELPERS = frozenset({'runc', 'crun', 'youki', 'runsc', 'conmon', 'containerd-shim', 'containerd-shim-runc-v2',
-                             'systemd-nspawn', 'lxc-start', 'catatonit', 'runc:[1:CHILD]', 'runc:[2:INIT]'})
+# Runtime helpers that sit in the container's group but stay in the host's namespaces by design. A process is taken
+# for one only when it runs one of these installed files (same file, by inode): names are the process's own to set.
+RUNTIME_HELPERS = ('/usr/bin/runc', '/usr/sbin/runc', '/usr/local/bin/runc', '/usr/local/sbin/runc', '/usr/bin/crun',
+                   '/usr/local/bin/crun', '/usr/bin/youki', '/usr/bin/runsc', '/usr/local/bin/runsc', '/usr/bin/conmon',
+                   '/usr/libexec/podman/conmon', '/usr/local/libexec/podman/conmon', '/usr/bin/containerd-shim',
+                   '/usr/bin/containerd-shim-runc-v2', '/usr/local/bin/containerd-shim-runc-v2',
+                   '/usr/bin/systemd-nspawn', '/usr/bin/lxc-start', '/usr/bin/catatonit',
+                   '/usr/libexec/podman/catatonit')
+# runc's own init step runs from a sealed in-memory copy for a few milliseconds: anything still in the host's
+# namespace this much later, with the same start time, is reported.
+SETTLE_SECONDS = 1.0
 CAPS = ('CHOWN', 'DAC_OVERRIDE', 'DAC_READ_SEARCH', 'FOWNER', 'FSETID', 'KILL', 'SETGID', 'SETUID', 'SETPCAP',
         'LINUX_IMMUTABLE', 'NET_BIND_SERVICE', 'NET_BROADCAST', 'NET_ADMIN', 'NET_RAW', 'IPC_LOCK', 'IPC_OWNER',
         'SYS_MODULE', 'SYS_RAWIO', 'SYS_CHROOT', 'SYS_PTRACE', 'SYS_PACCT', 'SYS_ADMIN', 'SYS_BOOT', 'SYS_NICE',
@@ -154,16 +163,47 @@ def mounts(text):
 
 
 def _host_paths(host_mounts):
-    """{device: host mountpoint} for the host's mounts of whole filesystems, the root one first."""
+    """{device: [(filesystem root, host mountpoint)]}: a Btrfs subvolume, for one, is mounted from /@, not /."""
     found = {}
     for device, root, point, _, _ in sorted(host_mounts, key=lambda m: len(m[2])):
-        if root == '/':
-            found.setdefault(device, point)
+        found.setdefault(device, []).append((root, point))
     return found
 
 
 def _join(base, rest):
     return '/' + '/'.join(p for p in (base.strip('/'), rest.strip('/')) if p)
+
+
+def _within(path, folder):
+    return folder == '/' or path == folder or path.startswith(folder.rstrip('/') + '/')
+
+
+def _outside(devices, device, inner):
+    """Where a container's mount of (device, path in that filesystem) is on the host, or None."""
+    best = None
+    for fs_root, point in devices.get(device, ()):
+        if _within(inner, fs_root) and (best is None or len(fs_root) > len(best[0])):
+            best = (fs_root, point)
+    if best is None:
+        return None
+    rest = inner[len(best[0].rstrip('/')):] if best[0] != '/' else inner
+    return _join(best[1], rest)
+
+
+def _helper(here, root):
+    """Whether a process runs one of the installed runtime helper files, by device and inode."""
+    try:
+        running = os.stat(here / 'exe')
+    except OSError:
+        return False
+    for path in RUNTIME_HELPERS:
+        try:
+            installed = os.stat(Path(root, path.lstrip('/')))
+        except OSError:
+            continue
+        if (installed.st_dev, installed.st_ino) == (running.st_dev, running.st_ino):
+            return True
+    return False
 
 
 def _risky_path(path):
@@ -270,11 +310,12 @@ def _hook_findings(old, new, root):
     for name, value in sorted(new.items()):
         was = None if old is None else old.get(name)
         program = _hook_program(name, value)
-        if program is None or (old is not None and (was is None or was == value)):
+        # Unchanged values were judged when recorded; a hook first seen now (a new cgroup hierarchy) is judged now.
+        if program is None or (old is not None and was == value):
             continue
         if not program.startswith(SYSTEM_DIRS) or not os.path.exists(Path(root, program.lstrip('/'))):
             findings.append(_finding('ESCAPE_HOOK_SET', f'hook:{name}', f'{name} runs {program}', value=value[:512]))
-        elif old is not None:
+        elif old is not None and was is not None:
             findings.append(_finding('ESCAPE_HOOK_CHANGED', f'hook:{name}', f'{name} changed from {was!r} to {value!r}',
                                      value=value[:512]))
     return findings
@@ -314,7 +355,7 @@ def _group_members(root):
     return found
 
 
-def snapshot(*, root='/', api=None):
+def snapshot(*, root='/', api=None, settle=None):
     """Containers and what they share with the host, escaped processes, hooks and exposures."""
     proc = Path(root, 'proc')
     host = proc / '1'
@@ -346,7 +387,7 @@ def snapshot(*, root='/', api=None):
         exe = (_link(here / 'exe') or '').removesuffix(' (deleted)')
         comm = (_text(here / 'comm', 256) or '').strip()
         if host_ns['mnt'] and mnt == host_ns['mnt']:
-            if os.path.basename(exe) not in RUNTIME_HELPERS and comm not in RUNTIME_HELPERS:
+            if not _helper(here, root):
                 escaped.append(dict(pid=pid, start=_start(here), program=exe or comm, container=f'{runtime}:{ident}'))
             continue
         status = _status(_text(here / 'status', 64 * 1024))
@@ -374,13 +415,18 @@ def snapshot(*, root='/', api=None):
         if status.get('Seccomp') == '0' and 'privileged' not in risks:
             risks.add('seccomp_off')
         for device, inner, point, options, _ in mounts(_text(here / 'mountinfo')):
-            outside = _join(devices[device], inner) if device in devices else None
+            outside = _outside(devices, device, inner)
             if os.path.basename(point) in SOCKETS or (outside and os.path.basename(outside) in SOCKETS):
                 risks.add(f'socket:{outside or point}')
             elif outside and _risky_path(outside) and point != '/':
                 risks.add(f'mount:{outside}' + ('' if options.split(',')[0] == 'rw' else ' (read-only)'))
     if hidden:
         gaps.append(f'{hidden} container processes could not be inspected' + _why())
+    if escaped:
+        # Still there, the same process, still in the host's namespace: not a runtime caught mid-start.
+        (settle or (lambda: time.sleep(SETTLE_SECONDS)))()
+        escaped = [e for e in escaped if _start(proc / str(e['pid'])) == e['start']
+                   and _link(proc / str(e['pid']) / 'ns/mnt') == host_ns['mnt']]
     for entry in containers.values():
         if 'privileged' in entry['risks']:
             entry['risks'] = {r for r in entry['risks'] if not r.startswith('cap:') and r != 'seccomp_off'}
@@ -491,11 +537,11 @@ def _summary(state):
             for k, v in sorted(state['containers'].items())]
 
 
-def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, root='/', api=None):
+def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, root='/', api=None, settle=None):
     path = Path(manifest).expanduser()
     if path.exists() and not replace:
         raise ContainerError(f'{path} exists; use accept to record the reviewed state')
-    state = snapshot(root=root, api=api)
+    state = snapshot(root=root, api=api, settle=settle)
     _write(path, dict(schema=SCHEMA, recorded_at=_now(), root=os.path.realpath(root), **_recorded(state)))
     # An escape, an open API or socket, or a hook run from outside the system is reported now, not recorded.
     return dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), containers=_summary(state),
@@ -504,10 +550,10 @@ def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, root='/', api=None):
                 gaps=state['gaps'])
 
 
-def check(manifest=DEFAULT_MANIFEST, *, root=None, api=None):
+def check(manifest=DEFAULT_MANIFEST, *, root=None, api=None, settle=None):
     old = _read(manifest)
     root = root or old.get('root', '/')
-    new = snapshot(root=root, api=api)
+    new = snapshot(root=root, api=api, settle=settle)
     findings, added, removed = compare(old, new, root=root)
     return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()), checked_at=_now(),
                 baseline_recorded_at=old.get('recorded_at'), findings=findings, added=added, removed=removed,
@@ -515,6 +561,7 @@ def check(manifest=DEFAULT_MANIFEST, *, root=None, api=None):
                 note='After review, `megalodon containers accept` records the current containers.')
 
 
-def accept(manifest=DEFAULT_MANIFEST, *, root=None, api=None):
+def accept(manifest=DEFAULT_MANIFEST, *, root=None, api=None, settle=None):
     old = _read(manifest)
-    return dict(baseline(manifest, replace=True, root=root or old.get('root', '/'), api=api), action='accept')
+    return dict(baseline(manifest, replace=True, root=root or old.get('root', '/'), api=api, settle=settle),
+                action='accept')
