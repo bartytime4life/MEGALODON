@@ -23,7 +23,11 @@ megalodon fleet enroll web-1 --key-file web-1-heartbeat.key
 This prints a new **alert token** for that machine, once. Only its SHA-256 is
 kept, in `~/.local/share/megalodon/fleet/machines.json` (mode 600). Pass
 `--sensor` when the machine's heartbeats carry a name other than the one you
-enroll it under.
+enroll it under. A sensor name belongs to one machine only.
+
+`--replace` gives a machine a new key and token, for example after it is set
+up again. Its earlier heartbeats are kept, but set aside as
+`heartbeats-before-TIME.jsonl`, so they are not checked against the new key.
 
 Then run the collector:
 
@@ -31,9 +35,10 @@ Then run the collector:
 megalodon fleet serve --listen 0.0.0.0:8650 --certificate fleet.crt --private-key fleet.key
 ```
 
-It receives heartbeats at `/heartbeat` and alerts at `/alert`. Off loopback it
-needs TLS, because alert tokens would otherwise cross the network in the
-clear. `--plain-http` is only for running behind a TLS proxy.
+It receives heartbeats at `/heartbeat` and alerts at `/alert`, and answers
+nothing else. Off loopback it needs TLS, because alert tokens would otherwise
+cross the network in the clear. `--plain-http` is only for running behind a
+TLS proxy.
 
 ## Setting up each machine
 
@@ -93,15 +98,18 @@ It exits 1 when any machine is not `ok`, and `--alert` sends the heartbeat
 findings through the collector's own alerts. Schedule it on the collector to
 be told when a machine goes quiet.
 
-`fleet serve` also shows the same view:
+`fleet serve` also shows the same view on a **separate listener**,
+`--view 127.0.0.1:8651` by default, which binds to loopback only:
 - at `/status`, as JSON;
 - at `/`, as a page that refreshes every minute and has no scripts.
 
-It shows them **only to the collector itself**. Reach them from elsewhere
-through an SSH tunnel:
+The receiving listener never shows the view. A proxy in front of it forwards
+requests from loopback, and keeping the two apart means a proxy can only ever
+reach the receiving side. `--view off` turns the view off. Reach it from
+elsewhere through an SSH tunnel:
 
 ```bash
-ssh -L 8650:127.0.0.1:8650 collector
+ssh -L 8651:127.0.0.1:8651 collector
 ```
 
 `megalodon fleet remove NAME` stops accepting a machine. What it already sent

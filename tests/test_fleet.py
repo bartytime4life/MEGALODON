@@ -17,10 +17,13 @@ from megalodon import alerts, fleet, tamper
 def collector(tmp_path):
     data = tmp_path / "fleet"
     httpd = fleet.server("127.0.0.1", 0, data=data)
+    view = fleet.view_server("127.0.0.1", 0, data=data)
     fleet.serve_in_background(httpd)
-    yield data, f"http://127.0.0.1:{httpd.server_address[1]}"
-    httpd.shutdown()
-    httpd.server_close()
+    fleet.serve_in_background(view)
+    yield data, f"http://127.0.0.1:{httpd.server_address[1]}", f"http://127.0.0.1:{view.server_address[1]}"
+    for server in (httpd, view):
+        server.shutdown()
+        server.server_close()
 
 
 def machine(tmp_path, url, name):
@@ -55,7 +58,7 @@ def post(url, value, headers=None):
 
 
 def test_heartbeats_and_alerts_from_two_machines(collector, tmp_path):
-    data, url = collector
+    data, url, view = collector
     config_a, key_a = machine(tmp_path, url, "web-1")
     config_b, key_b = machine(tmp_path, url, "db-1")
     token_a = fleet.enroll("web-1", key_a, data=data)["alert_token"]
@@ -80,17 +83,22 @@ def test_heartbeats_and_alerts_from_two_machines(collector, tmp_path):
     stored = json.loads((data / "machines/web-1/alerts.jsonl").read_text().splitlines()[0])
     assert stored["machine"] == "web-1" and stored["claimed_sensor"] == "claims-to-be-db-1", \
         "the token decides the machine, not what the alert claims"
-    # The view, to this machine only.
-    with urllib.request.urlopen(url + "/status", timeout=5) as response:
+    # The view, on its own loopback listener; the receiving listener never shows it.
+    with urllib.request.urlopen(view + "/status", timeout=5) as response:
         assert json.loads(response.read())["summary"] == dict(ok=0, attention=1, silent=1)
-    with urllib.request.urlopen(url + "/", timeout=5) as response:
+    for path in ("/status", "/"):
+        with pytest.raises(urllib.error.HTTPError) as hidden:
+            urllib.request.urlopen(url + path, timeout=5)
+        assert hidden.value.code == 404, "a proxy in front of the receiver forwards from loopback"
+    assert post(view + "/alert", dict(rule_id="X", severity="HIGH"), {"Authorization": f"Bearer {token_a}"}) == 404
+    with urllib.request.urlopen(view + "/", timeout=5) as response:
         page = response.read().decode()
         assert "web-1" in page and "<script" not in page
         assert "default-src 'none'" in response.headers["Content-Security-Policy"]
 
 
 def test_forged_unknown_and_oversized_posts(collector, tmp_path):
-    data, url = collector
+    data, url, view = collector
     config, key = machine(tmp_path, url, "web-1")
     token = fleet.enroll("web-1", key, data=data)["alert_token"]
     stranger_config, _ = machine(tmp_path, url, "stranger")
@@ -110,12 +118,36 @@ def test_forged_unknown_and_oversized_posts(collector, tmp_path):
     assert post(url + "/nowhere", alert) == 404
 
 
-def test_the_view_is_refused_off_this_machine(collector, monkeypatch):
-    _data, url = collector
+def test_the_view_is_refused_off_this_machine(collector, tmp_path, monkeypatch):
+    _data, _url, view = collector
     monkeypatch.setattr(fleet.Handler, "_local", lambda self: False)
     with pytest.raises(urllib.error.HTTPError) as refused:
-        urllib.request.urlopen(url + "/status", timeout=5)
+        urllib.request.urlopen(view + "/status", timeout=5)
     assert refused.value.code == 403
+    with pytest.raises(fleet.FleetError, match="loopback only"):
+        fleet.view_server("0.0.0.0", 0, data=tmp_path / "fleet")
+
+
+def test_a_replaced_key_and_sensor_names(collector, tmp_path):
+    data, url, _view = collector
+    config, key = machine(tmp_path, url, "web-1")
+    fleet.enroll("web-1", key, data=data)
+    assert beat(tmp_path, config, "web-1") == 200
+    # The machine is set up again with a new key; its old heartbeats are kept aside, not judged by the new key.
+    config.unlink()
+    (tmp_path / "web-1-sequence.json").unlink()
+    config, key = machine(tmp_path, url, "web-1")
+    fleet.enroll("web-1", key, data=data, replace=True)
+    assert beat(tmp_path, config, "web-1") == 200
+    row = fleet.status(data=data)["machines"][0]
+    assert row["state"] == "ok" and row["heartbeat_findings"] == [] and row["last_sequence"] == 1
+    assert any(p.name.startswith("heartbeats-before-") for p in (data / "machines/web-1").iterdir())
+    # One sensor name, one machine.
+    with pytest.raises(fleet.FleetError, match="already belongs to web-1"):
+        fleet.enroll("web-2", "b" * 64, sensor="web-1", data=data)
+    fleet.enroll("db-1", "c" * 64, data=data)
+    with pytest.raises(fleet.FleetError, match="already belongs to db-1"):
+        fleet.enroll("web-3", "d" * 64, sensor="db-1", data=data)
 
 
 def test_silence_rules_and_refusals(tmp_path, monkeypatch, capsys):

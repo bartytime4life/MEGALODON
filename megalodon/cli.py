@@ -539,6 +539,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="listen off loopback without TLS (only behind a TLS proxy on the same network)")
     command.add_argument("--max-gap", type=int, default=900, help="seconds without a heartbeat before a machine "
                                                                   "is silent (default 900)")
+    command.add_argument("--view", default="127.0.0.1:8651",
+                         help="loopback address:port for the view, / and /status (default 127.0.0.1:8651; "
+                              "'off' for none)")
     command = fleet_sub.add_parser("status", help="every machine's heartbeats and recent alerts (exit 1 if any "
                                                   "needs attention)")
     command.add_argument("--max-gap", type=int, default=900, help="seconds without a heartbeat before a machine "
@@ -2265,8 +2268,15 @@ def _fleet(args: argparse.Namespace) -> int:
                 raise fleet.FleetError("--listen is address:port, such as 0.0.0.0:8650")
             httpd = fleet.server(host.strip("[]"), int(port), data=data, certificate=args.certificate,
                                  private_key=args.private_key, max_gap=args.max_gap, plain_http=args.plain_http)
-            print(json.dumps(dict(listening=args.listen, tls=bool(args.certificate), data=str(data)), sort_keys=True),
-                  flush=True)
+            view = None
+            if args.view != "off":
+                view_host, _, view_port = args.view.rpartition(":")
+                if not view_host or not view_port.isdigit():
+                    raise fleet.FleetError("--view is a loopback address:port, such as 127.0.0.1:8651, or off")
+                view = fleet.view_server(view_host.strip("[]"), int(view_port), data=data, max_gap=args.max_gap)
+                fleet.serve_in_background(view)
+            print(json.dumps(dict(listening=args.listen, tls=bool(args.certificate), view=args.view, data=str(data)),
+                             sort_keys=True), flush=True)
             try:
                 httpd.serve_forever()
             except KeyboardInterrupt:

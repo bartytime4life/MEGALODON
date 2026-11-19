@@ -113,9 +113,20 @@ def enroll(name, heartbeat_key, *, sensor=None, data=DEFAULT_DATA, replace=False
     registry = machines(data)
     if name in registry and not replace:
         raise FleetError(f'{name} is already enrolled; pass --replace to give it a new key and token')
+    claimed = sensor or name
+    other = next((n for n, m in registry.items() if n != name and m['sensor'] == claimed), None)
+    if other:
+        raise FleetError(f'the sensor name {claimed!r} already belongs to {other}; heartbeats name one machine')
     if name not in registry and len(registry) >= MAX_MACHINES:
         raise FleetError(f'at most {MAX_MACHINES} machines can be enrolled')
     token = secrets.token_urlsafe(32)
+    if name in registry:
+        # Heartbeats signed with the old key would all look forged under the new one: set them aside, kept.
+        folder = Path(data).expanduser() / 'machines' / name
+        stamp = _now().strftime('%Y%m%dT%H%M%SZ')
+        for kind in ('heartbeats.1.jsonl', 'heartbeats.jsonl'):
+            if (folder / kind).exists():
+                os.replace(folder / kind, folder / f'{kind.split(".")[0]}-before-{stamp}.{kind.split(".", 1)[1]}')
     registry[name] = dict(sensor=sensor or name, heartbeat_key=heartbeat_key, enrolled_at=_iso(_now()),
                           alert_token_sha256=hashlib.sha256(token.encode()).hexdigest())
     _save(data, registry)
@@ -271,6 +282,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     sys_version = ''
     data = DEFAULT_DATA
     max_gap = 900
+    view = False                                   # a view listener answers GET and nothing else
 
     def log_message(self, format, *args):          # noqa: A002 - quiet; nothing secret is logged
         pass
@@ -293,6 +305,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return False
 
     def do_GET(self):                              # noqa: N802
+        if not self.view:
+            # The receiving listener never shows the view: a proxy in front of it may forward from loopback.
+            return self._reply(404, dict(error='not found'))
         if not self._local():
             return self._reply(403, dict(error='the view is served to this machine only; use an SSH tunnel'))
         try:
@@ -306,6 +321,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self._reply(404, dict(error='not found'))
 
     def do_POST(self):                             # noqa: N802
+        if self.view:
+            return self._reply(404, dict(error='not found'))
         try:
             length = int(self.headers.get('Content-Length', ''))
         except ValueError:
@@ -345,6 +362,21 @@ def server(host='127.0.0.1', port=8650, *, data=DEFAULT_DATA, certificate=None, 
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(certificate, private_key)
         httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+    return httpd
+
+
+def view_server(host='127.0.0.1', port=8651, *, data=DEFAULT_DATA, max_gap=900):
+    """The view (/ and /status) on its own listener, on loopback only."""
+    try:
+        local = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        local = host == 'localhost'
+    if not local:
+        raise FleetError('the view listens on loopback only; reach it through an SSH tunnel')
+    machines(data)
+    handler = type('FleetViewHandler', (Handler,), dict(data=data, max_gap=max_gap, view=True))
+    httpd = http.server.ThreadingHTTPServer((host, port), handler)
+    httpd.daemon_threads = True
     return httpd
 
 
