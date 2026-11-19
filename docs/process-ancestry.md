@@ -78,7 +78,8 @@ line (up to 512 bytes), the service and the chain of parents.
   processes cannot be read, and the `/proc` scan misses short-lived commands.
 * **Code that never starts a program is invisible.** A PHP web shell that
   reads files or opens sockets from inside PHP, without running a command,
-  is not seen here.
+  is not seen here. The [web-root watch](webroot-watch.md) looks at the
+  files themselves.
 * **Services are known by their program name.** A web application run by a
   general interpreter (`python3 app.py`, `node server.js`, `java -jar`) is
   not recognized as a service.

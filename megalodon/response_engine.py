@@ -77,14 +77,14 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'devices', 'canary', 'ingest')
+           'devices', 'webroot', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
                              '/usr/sbin/sshd', '/usr/sbin/dbus-daemon', '/usr/bin/dbus-daemon'})
 SYSTEM_FOLDERS = ('/usr/', '/bin/', '/sbin/', '/lib/', '/lib64/', '/etc/', '/boot/', '/var/log/', '/var/lib/', '/proc/',
                   '/sys/', '/dev/')
-DEFAULT_QUARANTINE_ROOTS = ('/tmp/', '/var/tmp/', '/dev/shm/', '/home/', '/root/', '/srv/', '/opt/')
+DEFAULT_QUARANTINE_ROOTS = ('/tmp/', '/var/tmp/', '/dev/shm/', '/home/', '/root/', '/srv/', '/opt/', '/var/www/')
 PROCESS_SEVERITY = {'STDIO_SHELL_ON_NETWORK': 'HIGH', 'SHELL_HOLDS_SOCKET': 'HIGH', 'PIPED_TO_SHELL': 'HIGH',
                     'EXECUTABLE_IN_MEMORY': 'HIGH', 'STDIO_ON_NETWORK': 'MEDIUM', 'EXECUTABLE_DELETED': 'MEDIUM',
                     'EXECUTABLE_IN_TEMPORARY': 'MEDIUM'}
@@ -103,7 +103,7 @@ never_touch_addresses = []
 never_touch_programs = []
 never_touch_accounts = []
 # Files outside these folders are never quarantined.
-quarantine_roots = ["/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/", "/srv/", "/opt/"]
+quarantine_roots = ["/tmp/", "/var/tmp/", "/dev/shm/", "/home/", "/root/", "/srv/", "/opt/", "/var/www/"]
 
 [response.sources]
 # The network audit store; use an absolute path when running from a timer. "" turns a source off.
@@ -120,6 +120,7 @@ persistence_manifest = "~/.config/megalodon/persistence.json"
 binaries_manifest = "~/.config/megalodon/binaries.json"
 logwatch_manifest = "~/.config/megalodon/log-integrity.json"
 devices_manifest = "~/.config/megalodon/devices.json"
+webroot_manifest = "~/.config/megalodon/webroot.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -153,6 +154,12 @@ rules = ["HIDDEN_PROCESS", "HIDDEN_MODULE", "HIDDEN_PORT", "HIDDEN_DIRECTORY", "
 min_severity = "HIGH"
 # A machine that hides things from itself cannot be trusted to clean itself: preserve and escalate.
 actions = ["collect_evidence", "notify"]
+
+[[response.playbook]]
+name = "web-shell-file"
+rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
+min_severity = "HIGH"
+actions = ["collect_evidence", "quarantine_file", "notify"]
 
 [[response.playbook]]
 name = "new-hardware"
@@ -350,7 +357,7 @@ def load_policy(path=DEFAULT_POLICY):
     sources = table.get('sources', {})
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
-               'devices_manifest', 'canary_manifest'}
+               'devices_manifest', 'webroot_manifest', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -625,7 +632,8 @@ def collect(policy, state, now, *, root='/'):
                lambda r: path_signals(r, 'binaries', 'path')),
               ('logwatch_manifest', 'log_integrity', 'LogIntegrityError',
                lambda r: path_signals(r, 'logwatch', 'log')),
-              ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')))
+              ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')),
+              ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')

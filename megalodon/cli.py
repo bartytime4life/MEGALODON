@@ -299,6 +299,27 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    webroot = sub.add_parser(
+        "webroot", help="baseline and check web roots for dropped scripts, hidden code and web shells")
+    webroot_sub = webroot.add_subparsers(dest="webroot_command", required=True)
+    for name, text in (("baseline", "record the server-side scripts under the web roots, reporting any web shell "
+                                    "already there"),
+                       ("check", "report new and changed scripts, hidden code and web-shell shapes (exit 1 on "
+                                 "findings)"),
+                       ("accept", "after review, record the current scripts as the new baseline")):
+        command = webroot_sub.add_parser(name, help=text)
+        command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/webroot.json)")
+        command.add_argument("--root", action="append", dest="roots",
+                             help="a web document root (repeatable; default /var/www, /srv/www, /srv/http, ... "
+                                  "or the baseline's roots)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send a summary to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     rootkit = sub.add_parser(
         "rootkit", help="cross-check processes, kernel modules, ports and folders for hidden ones (Linux)")
     rootkit_sub = rootkit.add_subparsers(dest="rootkit_command", required=True)
@@ -1479,6 +1500,42 @@ def _devices(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _webroot(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import webroot_watch as watch
+    from .validation import ValidationError
+
+    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    try:
+        if args.webroot_command == "baseline":
+            result = watch.baseline(manifest, replace=args.replace, web_roots=args.roots)
+        elif args.webroot_command == "accept":
+            result = watch.accept(manifest, web_roots=args.roots)
+        else:
+            result = watch.check(manifest, web_roots=args.roots)
+    except (watch.WebrootError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.webroot_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} web-root findings: {listed}", ("T1505.003",),
+                                          "A server-side script was added, changed or hidden under a web root.")])
+    # A baseline that finds a web shell already in place still records it, and says so with exit 1.
+    return 1 if findings else 0
+
+
 def _rootkit(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -2346,6 +2403,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _rootkit(args)
     elif args.command == "devices":
         code = _devices(args)
+    elif args.command == "webroot":
+        code = _webroot(args)
     elif args.command == "drill":
         code = _drill(args)
     elif args.command == "logwatch":
