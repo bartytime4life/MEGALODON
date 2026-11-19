@@ -48,7 +48,9 @@ ROOT_CAPS = frozenset({'CHOWN', 'DAC_OVERRIDE', 'DAC_READ_SEARCH', 'FOWNER', 'SE
 # Not walked: kernel views, other machines' files and container image layers.
 SKIP = ('/proc', '/sys', '/run', '/var/lib/docker', '/var/lib/containers', '/var/lib/containerd',
         '/snap', '/var/lib/snapd/snaps')
-LOCAL = frozenset({'ext2', 'ext3', 'ext4', 'xfs', 'btrfs', 'f2fs', 'jfs', 'reiserfs', 'zfs', 'bcachefs', 'tmpfs',
+# Overlay is local too: it is how containers and live systems mount their root.
+LOCAL = frozenset({'overlay', 'ext2', 'ext3', 'ext4', 'xfs', 'btrfs', 'f2fs', 'jfs', 'reiserfs', 'zfs', 'bcachefs',
+                   'tmpfs',
                    'vfat', 'exfat', 'ntfs', 'ntfs3'})
 
 RULES = {
@@ -107,7 +109,9 @@ def file_capabilities(root='/', *, budget=MAX_SECONDS):
     """{path: {caps, effective}} for every file with a capability on the local filesystems, and gaps."""
     found, gaps, seen = {}, [], 0
     real = os.path.realpath(root)
-    remote = {point for point, kind in _mounts(root).items() if kind not in LOCAL}
+    # The root file system is always searched, whatever it is; other network and FUSE mounts are not.
+    remote = {point for point, kind in _mounts(root).items() if kind not in LOCAL and point != '/'}
+    skipped = set()
     started = time.monotonic()
     stack = [real]
     while stack:
@@ -116,7 +120,10 @@ def file_capabilities(root='/', *, budget=MAX_SECONDS):
         if shown == '/dev':
             stack.append(os.path.join(folder, 'shm'))      # of /dev, only shared memory holds files
             continue
-        if shown in remote or any(shown == s or shown.startswith(s + '/') for s in SKIP):
+        if shown in remote:
+            skipped.add(shown)
+            continue
+        if any(shown == s or shown.startswith(s + '/') for s in SKIP):
             continue
         try:
             entries = list(os.scandir(folder))
@@ -141,6 +148,9 @@ def file_capabilities(root='/', *, budget=MAX_SECONDS):
             if decoded:
                 path = '/' + os.path.relpath(entry.path, real)
                 found[path] = dict(caps=decoded[0], effective=decoded[1])
+    if skipped:
+        gaps.append(f'{len(skipped)} network or FUSE mounts were not searched for file capabilities: '
+                    + ', '.join(sorted(skipped)[:8]))
     return found, gaps
 
 
@@ -186,6 +196,31 @@ def _paths(root):
 TRUSTED_UID, TRUSTED_GID = 0, 0
 
 
+def _resolve(real, path):
+    """Where `path` leads, following symlinks inside `real` (absolute targets start from it), or None."""
+    parts, done, hops = [p for p in path.split('/') if p], [], 0
+    while parts:
+        part = parts.pop(0)
+        if part == '..':
+            done = done[:-1]
+            continue
+        if part == '.':
+            continue
+        here = os.path.join(real, *done, part)
+        try:
+            target = os.readlink(here)
+        except OSError:
+            done.append(part)
+            continue
+        hops += 1
+        if hops > 40:
+            return None
+        if target.startswith('/'):
+            done = []
+        parts = [p for p in target.split('/') if p] + parts
+    return '/' + '/'.join(done)
+
+
 def _writable_by_others(info):
     """Whether an account other than root can change this file or folder."""
     return info.st_uid != TRUSTED_UID or bool(info.st_mode & 0o002) or \
@@ -212,18 +247,20 @@ def search_path(root='/'):
             else:
                 entries.setdefault(os.path.normpath(item), where)
     for folder, where in sorted(entries.items()):
-        # The folder and every one above it: whoever can rename a parent can swap the folder.
-        current = folder
-        while True:
-            try:
-                info = os.stat(Path(real, current.lstrip('/')), follow_symlinks=True)
-            except OSError:
-                info = None
-            if info is not None and stat.S_ISDIR(info.st_mode) and _writable_by_others(info):
-                folders.setdefault(current, dict(on_path=folder, set_in=where, writable_by=_who(info)))
-            if current == '/':
-                break
-            current = os.path.dirname(current)
+        # The folder and every one above it: whoever can rename a parent can swap the folder. A folder that is a
+        # symlink is walked twice: up from its own path, and up from where it leads.
+        for start in dict.fromkeys(p for p in (folder, _resolve(real, folder)) if p):
+            current = start
+            while True:
+                try:
+                    info = os.stat(Path(real, current.lstrip('/')), follow_symlinks=True)
+                except OSError:
+                    info = None
+                if info is not None and stat.S_ISDIR(info.st_mode) and _writable_by_others(info):
+                    folders.setdefault(current, dict(on_path=folder, set_in=where, writable_by=_who(info)))
+                if current == '/':
+                    break
+                current = os.path.dirname(current)
         try:
             names = sorted(os.listdir(Path(real, folder.lstrip('/'))))[:8192]
         except OSError:
@@ -308,7 +345,11 @@ def compare(old, new):
                                      f"({was['state']} → {now['state']})",
                                      severity='HIGH' if check in HIGH_CHECKS else 'MEDIUM', check=check))
     for path, entry in sorted(new['capabilities'].items()):
-        before = set(old['capabilities'].get(path, {}).get('caps', []))
+        was = old['capabilities'].get(path, {})
+        before = set(was.get('caps', []))
+        # A capability that was only permitted and is now also effective is switched on: count it as added.
+        if was and entry['effective'] and not was.get('effective'):
+            before = set()
         added = sorted(set(entry['caps']) - before)
         if not added or (first and not _backdoor(path, entry['caps'])):
             continue
