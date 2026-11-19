@@ -92,7 +92,7 @@ def test_who_can_read_a_file(root):
         "the file's group is alice's own, with nobody else in it"
     put(root, "/etc/group", f"staff:x:{os.getgid()}:bob\n")
     shared = sc._Accounts(str(root))
-    assert sc._Reach(str(root), shared).who("/home/alice/notes.conf", open_file.stat()) == "group staff"
+    assert sc._Reach(str(root), shared).who("/home/alice/notes.conf", open_file.stat()) == "accounts bob"
     put(root, "/etc/group", f"ssl-cert:x:{os.getgid()}:bob\n")
     assert sc._Reach(str(root), sc._Accounts(str(root))).who("/home/alice/notes.conf", open_file.stat()) is None, \
         "ssl-cert members are meant to read TLS keys"
@@ -208,3 +208,31 @@ def test_findings_become_shadow_decisions_and_the_cli(root, tmp_path, capsys, mo
         main(["secrets", "scan"])
     assert exit_.value.code == 1
     assert json.loads(capsys.readouterr().out)["findings"][0]["rule_id"] == "SECRET_FILE_IN_WEB_ROOT"
+
+
+def test_a_folder_only_one_group_can_enter(root):
+    from types import SimpleNamespace as Info
+    # /srv/app is root:app 750; the file in it is root:root 644. Members of app read it through the other bits.
+    put(root, "/etc/passwd", "root:x:0:0::/root:/bin/sh\ncarol:x:1001:1001::/home/carol:/bin/sh\n"
+                             "dave:x:1002:1002::/home/dave:/bin/sh\n")
+    put(root, "/etc/group", "root:x:0:\napp:x:50:carol\ncarol:x:1001:\ndave:x:1002:\n")
+    reach = sc._Reach(str(root), sc._Accounts(str(root)))
+    table = {"/": Info(st_mode=0o40755, st_uid=0, st_gid=0), "/srv": Info(st_mode=0o40755, st_uid=0, st_gid=0),
+             "/srv/app": Info(st_mode=0o40750, st_uid=0, st_gid=50)}
+    reach._stat = table.get
+    secret = Info(st_mode=0o100644, st_uid=0, st_gid=0)
+    assert reach.who("/srv/app/app.conf", secret) == "accounts carol", "carol can enter; dave cannot"
+    table["/srv/app"] = Info(st_mode=0o40751, st_uid=0, st_gid=50)
+    reach.through.clear()
+    assert reach.who("/srv/app/app.conf", secret) == "everyone"
+
+
+def test_a_second_token_in_a_reviewed_file_is_new(root, tmp_path):
+    manifest = tmp_path / "secrets.json"
+    other = "gh" + "p_" + "Mn4bV8" * 6
+    put(root, "/var/www/html/app.js", f"const a = '{GITHUB}';\n")
+    sc.baseline(manifest, root=str(root), search=("/var/www",))
+    put(root, "/var/www/html/app.js", f"const a = '{GITHUB}';\nconst b = '{other}';\n")
+    found = sc.check(manifest)["findings"]
+    assert [(f["rule_id"], f["kind"]) for f in found] == [("SECRET_IN_WEB_ROOT", "GitHub token")]
+    assert found[0]["fingerprint"] != sc._fingerprint(GITHUB)

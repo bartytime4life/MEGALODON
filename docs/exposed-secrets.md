@@ -51,13 +51,18 @@ not stored in the baseline either.
 ## What is checked
 
 * **Who can read a file.** A file counts as exposed only if another account
-  can actually reach and read it:
-  - every folder on the way must let it through;
-  - for group access, the group must hold someone other than the file's owner.
-    A user's own private group does not count, nor does `shadow` for the
-    password files or `ssl-cert` for TLS keys, which exist to be read that way.
+  can actually reach and read it. Each account other than the owner and root
+  is judged as the kernel judges it, by the owner, group or other bits of the
+  file and of every folder on the way. That covers:
+  - a file anyone can read;
+  - a file readable by its group;
+  - a file anyone could read, inside a folder only one group can enter. Then
+    the members of that group can read it.
 
-  Files only their owner can read are not opened at all.
+  The report names the accounts, or says `everyone`. Members of `shadow`
+  reading the password files, and of `ssl-cert` reading TLS keys, do not count:
+  those groups exist to be read that way. Files only their owner can read are
+  not opened at all.
 * **Credential files by name:**
   - **In each home folder:** `.ssh/id_*` (not `.pub`), `.aws/credentials`,
     `.docker/config.json`, `.kube/config`, `.netrc`, `.pgpass`, `.my.cnf`,

@@ -85,6 +85,11 @@ TOKENS = (
 )
 # Reported only in configuration files and histories: program code ships these as examples and public client keys.
 LOOSE = frozenset({'Google API key', 'password in a URL'})
+# Text each token shape must contain: a pattern is only run over a file that has it, which is most of the cost saved.
+MARKERS = {'AWS access key': ('AKIA', 'ASIA'), 'GitHub token': ('gh', 'github_pat_'), 'GitLab token': ('glpat-',),
+           'Slack token': ('xox',), 'Slack webhook': ('hooks.slack.com',), 'Stripe live key': ('_live_',),
+           'Google API key': ('AIza',), 'Anthropic API key': ('sk-ant-',), 'npm token': ('npm_',),
+           'PyPI token': ('pypi-',)}
 PRIVATE_KEY = re.compile(r'-----BEGIN ((?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?)-----\s*'
                          r'([\s\S]{0,16384}?)-----END')
 KEY_HEADER = re.compile(r'^[A-Za-z-]+: .*$')
@@ -190,7 +195,7 @@ def secrets_in(text, *, passwords=True):
 
     def line_of(index):
         return text.count('\n', 0, index) + 1
-    for match in PRIVATE_KEY.finditer(text):
+    for match in PRIVATE_KEY.finditer(text) if 'PRIVATE KEY' in text else ():
         label, body = match.group(1), match.group(2)
         if not _key_body(body):
             continue
@@ -198,15 +203,16 @@ def secrets_in(text, *, passwords=True):
             label.startswith('OPENSSH') and _openssh_encrypted(body))
         kind = ('encrypted ' if encrypted else '') + 'private key'
         found.append((kind, kind, None, line_of(match.start())))
+    tokens = []
     for kind, pattern in TOKENS:
-        if kind in LOOSE and not passwords:
+        if kind in LOOSE and not passwords or not any(marker in text for marker in MARKERS[kind]):
             continue
         for match in pattern.finditer(text):
             value = match.group(0)
+            tokens.append(value)
             if not _placeholder(value[4:]):
                 found.append((kind, _shown(kind, value, token=True), _fingerprint(value), line_of(match.start())))
-    tokens = [value for kind, pattern in TOKENS for value in pattern.findall(text)]
-    for match in URL_PASSWORD.finditer(text) if passwords else ():
+    for match in URL_PASSWORD.finditer(text) if passwords and '://' in text and '@' in text else ():
         # A token used as the password in a URL is one secret, already reported as the token.
         if any(token in match.group(1) for token in tokens):
             continue
@@ -219,29 +225,24 @@ def secrets_in(text, *, passwords=True):
 # ------------------------------------------------------------------ who can read a file
 
 class _Accounts:
-    """Which groups other accounts share, read from the passwd and group files under the root."""
+    """The accounts on the machine scanned and the groups each is in, from its passwd and group files."""
 
     def __init__(self, root):
-        self.names, self.members = {}, {}
+        self.names, people = {}, []
         for line in _text(root, '/etc/passwd').splitlines():
             fields = line.split(':')
-            if len(fields) > 3 and fields[3].isdigit():
-                self.members.setdefault(int(fields[3]), set()).add(fields[0])
-        self.uid_of = {}
-        for line in _text(root, '/etc/passwd').splitlines():
-            fields = line.split(':')
-            if len(fields) > 2 and fields[2].isdigit():
-                self.uid_of[fields[0]] = int(fields[2])
+            if len(fields) > 3 and fields[2].isdigit() and fields[3].isdigit():
+                people.append((fields[0], int(fields[2]), int(fields[3])))
+        members = {}
         for line in _text(root, '/etc/group').splitlines():
             fields = line.split(':')
             if len(fields) > 3 and fields[2].isdigit():
-                gid = int(fields[2])
-                self.names[gid] = fields[0]
-                self.members.setdefault(gid, set()).update(m for m in fields[3].split(',') if m)
-
-    def shared(self, gid, owner):
-        """Whether an account other than the file's owner is in this group."""
-        return any(self.uid_of.get(name) != owner for name in self.members.get(gid, ()))
+                self.names[int(fields[2])] = fields[0]
+                for name in fields[3].split(','):
+                    if name:
+                        members.setdefault(name, set()).add(int(fields[2]))
+        # (name, uid, every group the account is in)
+        self.people = [(name, uid, frozenset({gid} | members.get(name, set()))) for name, uid, gid in people]
 
     def name(self, gid):
         return self.names.get(gid, str(gid))
@@ -255,37 +256,62 @@ def _text(root, path):
 
 
 class _Reach:
-    def __init__(self, root, accounts):
-        self.root, self.accounts, self.dirs = root, accounts, {}
+    """Who other than a file's owner and root can reach and read it.
 
-    def _dir(self, path):
-        if path not in self.dirs:
+    Every account is judged the way the kernel judges it: by the owner bits if it owns a file or folder, by the
+    group bits if it is in its group, and by the other bits otherwise. That covers a world-readable file inside a
+    folder only one group can enter, as well as a file readable by its own group.
+    """
+
+    def __init__(self, root, accounts):
+        self.root, self.accounts, self.stats, self.through = root, accounts, {}, {}
+
+    def _stat(self, path):
+        if path not in self.stats:
             try:
-                self.dirs[path] = os.stat(os.path.join(self.root, path.lstrip('/')))
+                self.stats[path] = os.stat(os.path.join(self.root, path.lstrip('/')))
             except OSError:
-                self.dirs[path] = None
-        return self.dirs[path]
+                self.stats[path] = None
+        return self.stats[path]
+
+    @staticmethod
+    def _allowed(info, uid, groups, bit):
+        if uid == info.st_uid:
+            return bool(info.st_mode & (bit << 6))
+        if info.st_gid in groups:
+            return bool(info.st_mode & (bit << 3))
+        return bool(info.st_mode & bit)
+
+    def _can_enter(self, folder, uid, groups):
+        """Whether the account can pass through this folder and every one above it."""
+        key = (folder, uid)
+        if key not in self.through:
+            info = self._stat(folder)
+            above = True if folder == '/' else self._can_enter(os.path.dirname(folder), uid, groups)
+            self.through[key] = above and info is not None and self._allowed(info, uid, groups, 0o1)
+        return self.through[key]
 
     def who(self, path, info):
-        """'everyone', 'group NAME', or None: who other than the owner can reach and read this file."""
-        world = bool(info.st_mode & 0o004)
-        group = bool(info.st_mode & 0o040) and self.accounts.shared(info.st_gid, info.st_uid) and \
-            self.accounts.name(info.st_gid) not in DESIGNED_GROUPS
-        current = os.path.dirname(path)
-        while world or group:
-            folder = self._dir(current)
-            if folder is None:
-                return None
-            if not folder.st_mode & 0o001:
-                world = False
-            if group and not (folder.st_mode & 0o010 if folder.st_gid == info.st_gid else folder.st_mode & 0o001):
-                group = False
-            if current == '/':
-                break
-            current = os.path.dirname(current)
-        if world:
+        """'everyone', 'accounts A, B', or None."""
+        if not info.st_mode & 0o044:
+            return None
+        folder = os.path.dirname(path)
+        # Any account in none of the groups involved: the other bits, all the way down.
+        if info.st_mode & 0o004 and self._can_enter(folder, -1, frozenset()):
             return 'everyone'
-        return f'group {self.accounts.name(info.st_gid)}' if group else None
+        readers = []
+        for name, uid, groups in self.accounts.people:
+            if uid in (0, info.st_uid) or not self._allowed(info, uid, groups, 0o4):
+                continue
+            # Members of shadow and ssl-cert are meant to read the password files and TLS keys.
+            if info.st_gid in groups and self.accounts.name(info.st_gid) in DESIGNED_GROUPS:
+                continue
+            if self._can_enter(folder, uid, groups):
+                readers.append(name)
+        if not readers:
+            return None
+        readers.sort()
+        return 'accounts ' + ', '.join(readers[:4]) + (f' and {len(readers) - 4} more' if len(readers) > 4 else '')
 
 
 def _severity(rule, who, encrypted=False):
@@ -483,7 +509,8 @@ def scan_files(root='/', *, search=SEARCH, budget=MAX_SECONDS):
 def _unique(findings):
     out, keys = [], set()
     for f in findings:
-        key = (f['rule_id'], f['subject'], f.get('kind'))
+        # Two tokens of one kind in one file are two secrets: each keeps its fingerprint.
+        key = (f['rule_id'], f['subject'], f.get('kind'), f.get('fingerprint'))
         if key not in keys:
             keys.add(key)
             out.append(f)
