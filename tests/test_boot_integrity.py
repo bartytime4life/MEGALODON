@@ -93,6 +93,19 @@ def test_an_initramfs_rebuilt_during_an_update_is_explained(root, tmp_path):
     assert bi.check(manifest)["explained"] == []
 
 
+def test_setting_the_modification_time_back_does_not_hide_a_change(root, tmp_path):
+    manifest = tmp_path / "boot.json"
+    bi.baseline(manifest, root=str(root))
+    # The only package activity is long ago. The edited initramfs claims, by its mtime, to date from then.
+    target = root / "boot/initrd.img-6.1.0-9"
+    target.write_bytes(b"initramfs with an extra hook")
+    old = datetime(2026, 1, 1, 10, 5).timestamp()
+    os.utime(target, (old, old))
+    report = bi.check(manifest)
+    assert rules(report) == [("BOOT_FILE_CHANGED", "/boot/initrd.img-6.1.0-9")]
+    assert report["explained"] == []
+
+
 def test_weakened_boot_time_protections(root, tmp_path):
     manifest = tmp_path / "boot.json"
     bi.baseline(manifest, root=str(root))
