@@ -86,6 +86,10 @@ JOBS = (
     Job('packages', 'MEGALODON package sources and signing keys check', ('packages', 'check', '--alert'), 'hourly',
         manifest='~/.config/megalodon/packages.json', baseline=('packages', 'baseline'), cron='29 * * * *',
         interval=3600),
+    # Reads home folders and web roots: daily, at low priority.
+    Job('secrets', 'MEGALODON exposed secrets check', ('secrets', 'check', '--alert'), '*-*-* 04:23:00',
+        manifest='~/.config/megalodon/secrets.json', baseline=('secrets', 'baseline'), cron='23 4 * * *',
+        interval=86400),
     Job('vulns', 'MEGALODON known-vulnerable software check', ('vulns', 'check', '--alert'), '*-*-* 06:41:00',
         cron='41 6 * * *', interval=86400),
     Job('boot', 'MEGALODON boot integrity check', ('boot', 'check', '--alert'), 'hourly',

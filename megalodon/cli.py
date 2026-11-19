@@ -415,6 +415,29 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    secrets = sub.add_parser(
+        "secrets", help="find private keys, tokens and passwords other people can read, on command lines, or under "
+                        "web roots")
+    secrets_sub = secrets.add_subparsers(dest="secrets_command", required=True)
+    for name, text in (("scan", "report every exposed secret now (exit 1 on findings); records nothing"),
+                       ("baseline", "scan, report everything found, and record it as reviewed"),
+                       ("check", "report exposed secrets not in the baseline (exit 1 on findings)"),
+                       ("accept", "after review, record the current findings")):
+        command = secrets_sub.add_parser(name, help=text)
+        if name != "scan":
+            command.add_argument("--manifest", type=Path,
+                                 help="baseline file (default ~/.config/megalodon/secrets.json)")
+        if name in ("scan", "baseline"):
+            command.add_argument("--path", action="append", default=None,
+                                 help="search this folder instead of the default ones (repeatable)")
+        if name == "baseline":
+            command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
+        if name == "check":
+            command.add_argument("--alert", action="store_true",
+                                 help="also send findings to the [alerts] destinations in the settings file")
+            command.add_argument("--config", type=Path,
+                                 help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+
     containers = sub.add_parser(
         "containers", help="baseline and check containers for escapes and for ways out to the host (root)")
     containers_sub = containers.add_subparsers(dest="containers_command", required=True)
@@ -2016,6 +2039,48 @@ def _packages(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _secrets(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from . import exposed_secrets as sc
+    from .validation import ValidationError
+
+    search = tuple(os.path.abspath(p) for p in args.path) if getattr(args, "path", None) else sc.SEARCH
+    try:
+        if args.secrets_command == "scan":
+            findings, gaps = sc.scan(search=search)
+            result = sc.report(findings, gaps, "scan")
+        else:
+            manifest = args.manifest or Path(sc.DEFAULT_MANIFEST).expanduser()
+            if args.secrets_command == "baseline":
+                result = sc.baseline(manifest, replace=args.replace, search=search)
+            elif args.secrets_command == "accept":
+                result = sc.accept(manifest)
+            else:
+                result = sc.check(manifest)
+    except (sc.SecretsError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    findings = result.get("findings", [])
+    if args.secrets_command == "check" and args.alert and findings:
+        from .alerts import HostNotice, dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 1
+        if dispatcher is not None:
+            # The details name places and kinds of secrets, never their values.
+            listed = "; ".join(f["detail"] for f in findings[:5])
+            dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
+                                          f"{len(findings)} exposed secrets: {listed}",
+                                          tuple(sorted({t for f in findings for t in f["techniques"]})),
+                                          "A key, token or password can be read by people it was not meant for.")])
+    return 1 if findings else 0
+
+
 def _containers(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
@@ -3303,6 +3368,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _hardening(args)
     elif args.command == "packages":
         code = _packages(args)
+    elif args.command == "secrets":
+        code = _secrets(args)
     elif args.command == "memory":
         code = _memory(args)
     elif args.command == "fleet":
