@@ -69,6 +69,9 @@ JOBS = (
     Job('binaries', 'MEGALODON program integrity check', ('binaries', 'check', '--alert'), '*-*-* 03:17:00',
         manifest='~/.config/megalodon/binaries.json', baseline=('binaries', 'baseline'), cron='17 3 * * *',
         interval=86400),
+    Job('ebpf', 'MEGALODON eBPF program check', ('ebpf', 'check', '--alert'), '*:0/15',
+        manifest='~/.config/megalodon/ebpf.json', baseline=('ebpf', 'baseline'), cron='*/15 * * * *', interval=900,
+        root_only=True),
     Job('boot', 'MEGALODON boot integrity check', ('boot', 'check', '--alert'), 'hourly',
         manifest='~/.config/megalodon/boot.json', baseline=('boot', 'baseline'), cron='23 * * * *', interval=3600),
     # The port test briefly binds every free port; scheduled runs leave it out.

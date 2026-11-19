@@ -77,7 +77,7 @@ ACTIONS = {
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
-           'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'canary', 'ingest')
+           'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -130,6 +130,7 @@ credential_allow_file = "~/.config/megalodon/credential-allow.json"
 # with its own position, separate from `logins check`.
 logins_manifest = "~/.config/megalodon/logins.json"
 boot_manifest = "~/.config/megalodon/boot.json"
+ebpf_manifest = "~/.config/megalodon/ebpf.json"
 canary_manifest = ""
 
 [[response.playbook]]
@@ -169,6 +170,19 @@ name = "web-shell-file"
 rules = ["SCRIPT_IN_UPLOAD_FOLDER", "CODE_IN_NON_SCRIPT_FILE", "WEB_SHELL_PATTERN"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "quarantine_file", "notify"]
+
+[[response.playbook]]
+name = "ebpf-rootkit"
+rules = ["EBPF_HIDDEN_PROGRAM", "EBPF_LOADED_BY_DROPPED_TOOL"]
+min_severity = "CRITICAL"
+actions = ["collect_evidence", "suspend_process", "notify"]
+
+[[response.playbook]]
+name = "ebpf-change"
+rules = ["EBPF_NEW_PROGRAM", "EBPF_PROGRAM_CHANGED", "EBPF_UNPRIVILEGED_ENABLED"]
+min_severity = "HIGH"
+# Tracing and network tools load programs too: preserve and ask.
+actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "boot-tampering"
@@ -425,7 +439,7 @@ def load_policy(path=DEFAULT_POLICY):
     allowed = {'audit_db', 'process_review', 'ancestry_allow_file', 'rootkit_check', 'rootkit_ports',
                'listeners_manifest', 'persistence_manifest', 'binaries_manifest', 'logwatch_manifest',
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
-               'credential_allow_file', 'logins_manifest', 'boot_manifest', 'canary_manifest'}
+               'credential_allow_file', 'logins_manifest', 'boot_manifest', 'ebpf_manifest', 'canary_manifest'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -627,6 +641,19 @@ def login_signals(report):
     return signals
 
 
+def ebpf_signals(report):
+    signals = []
+    for f in report.get('findings', []):
+        processes = f.get('evidence', {}).get('processes') or f.get('processes') or []
+        ids = [f"{p['pid']}@{p['start']}:{p['program']}" for p in processes
+               if type(p.get('pid')) is int and type(p.get('start')) is int and str(p.get('program')).startswith('/')]
+        signals.append(Signal(f"ebpf:{f['rule_id']}:{f.get('subject')}", 'ebpf', f['rule_id'],
+                              _severity(f.get('severity')), report.get('checked_at', ''), f.get('detail', ''),
+                              _entities(process=[p.get('program') for p in processes if p.get('program')],
+                                        process_id=ids)))
+    return signals
+
+
 def listener_signals(report):
     signals = []
     for f in report.get('findings', []):
@@ -762,7 +789,8 @@ def collect(policy, state, now, *, root='/'):
               ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')),
               ('tamper_manifest', 'tamper', 'TamperError', lambda r: path_signals(r, 'tamper', 'subject')),
               ('egress_manifest', 'egress_watch', 'EgressError', lambda r: egress_signals(r)),
-              ('boot_manifest', 'boot_integrity', 'BootError', lambda r: path_signals(r, 'boot', 'subject')))
+              ('boot_manifest', 'boot_integrity', 'BootError', lambda r: path_signals(r, 'boot', 'subject')),
+              ('ebpf_manifest', 'ebpf_watch', 'EbpfError', lambda r: ebpf_signals(r)))
     import importlib
     for setting, module_name, error_name, convert in checks:
         manifest = sources.get(setting, '')
