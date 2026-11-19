@@ -51,6 +51,7 @@ CONFIG_KINDS = {
     'ancestry-allow.json': ('ALLOW_LIST_CHANGED', 'HIGH', 'the process ancestry allow list'),
     'credential-allow.json': ('ALLOW_LIST_CHANGED', 'HIGH', 'the credential reader allow list'),
     'heartbeat.json': ('HEARTBEAT_CONFIG_CHANGED', 'HIGH', 'the heartbeat destination and key'),
+    'enforce.toml': ('ENFORCEMENT_CHANGED', 'HIGH', 'which response actions are carried out'),
 }
 # The files that decide what MEGALODON reports. Other files there (the HUD's own settings) change in normal use.
 BASELINES = ('canary.json', 'listeners.json', 'persistence.json', 'binaries.json', 'log-integrity.json',
@@ -72,6 +73,7 @@ RULES = {
     'ALERTS_CONFIG_CHANGED': ('HIGH', 'The settings changed, including where alerts are sent.'),
     'ALLOW_LIST_CHANGED': ('HIGH', 'An allow list changed, so something is no longer reported.'),
     'HEARTBEAT_CONFIG_CHANGED': ('HIGH', 'The heartbeat destination or key changed.'),
+    'ENFORCEMENT_CHANGED': ('HIGH', 'The enforcement policy changed: which response actions are carried out.'),
     'DETECTION_RULES_CHANGED': ('HIGH', 'A YARA rule file changed, so different files are flagged.'),
     'POLICY_CHANGED': ('MEDIUM', 'The response policy changed.'),
     'BASELINE_CHANGED': ('MEDIUM', 'A watch\'s baseline changed. `accept` does this after review; so does an '

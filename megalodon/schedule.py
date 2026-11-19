@@ -41,6 +41,9 @@ JOBS = (
     Job('respond', 'MEGALODON response engine, shadow pass', ('respond', 'run'), '*:0/5',
         manifest='~/.config/megalodon/response-policy.toml', baseline=('respond', 'init'), cron='*/5 * * * *',
         interval=300),
+    # Carries out the decisions the enforcement policy allows; with no policy, or one that is off, it does nothing.
+    Job('enforce', 'MEGALODON enforcement (off until its policy is enabled)', ('enforce', 'run'), '*:*:00',
+        cron='* * * * *', interval=60, root_only=True),
     # A signed heartbeat off the machine: its silence is what an intruder who stops everything cannot hide.
     Job('heartbeat', 'MEGALODON heartbeat', ('heartbeat', 'send'), '*:0/5',
         manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,

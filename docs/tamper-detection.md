@@ -54,6 +54,7 @@ watch's baseline yourself.
 | `ALLOW_LIST_CHANGED` | HIGH | The process ancestry or credential reader allow list changed |
 | `DETECTION_RULES_CHANGED` | HIGH | A YARA rule file changed |
 | `HEARTBEAT_CONFIG_CHANGED` | HIGH | The heartbeat destination or key changed |
+| `ENFORCEMENT_CHANGED` | HIGH | The [enforcement](enforcement.md) policy changed: which response actions are carried out |
 | `CONFIG_REMOVED` | HIGH | A recorded baseline or configuration file was removed |
 | `BASELINE_CHANGED` | MEDIUM | A watch's baseline changed, as `accept` does after review |
 | `POLICY_CHANGED` | MEDIUM | The response policy changed |

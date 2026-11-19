@@ -505,6 +505,21 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--alert", action="store_true", help="also send findings to this machine's alerts")
     command.add_argument("--config", type=Path, help="settings file for --alert")
 
+    enforce = sub.add_parser(
+        "enforce", help="carry out the response engine's decisions you allowed, with a way to undo each (off by "
+                        "default)")
+    enforce_sub = enforce.add_subparsers(dest="enforce_command", required=True)
+    command = enforce_sub.add_parser("init", help="write an enforcement policy that is off, pinned to the current "
+                                                  "response policy")
+    command.add_argument("--replace", action="store_true", help="pin the current response policy again")
+    command = enforce_sub.add_parser("run", help="carry out the allowed decisions recorded since the last run")
+    command.add_argument("--dry-run", action="store_true", help="show what would be carried out, and change nothing")
+    enforce_sub.add_parser("list", help="applied actions that have not been undone")
+    command = enforce_sub.add_parser("undo", help="undo one applied action")
+    command.add_argument("id", help="the ID that run or list printed")
+    for command in enforce_sub.choices.values():
+        command.add_argument("--policy", type=Path, help="enforcement policy (default ~/.config/megalodon/enforce.toml)")
+
     fleet = sub.add_parser(
         "fleet", help="collect every machine's heartbeats and alerts in one place, and show them together")
     fleet_sub = fleet.add_subparsers(dest="fleet_command", required=True)
@@ -2206,6 +2221,33 @@ def _heartbeat(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def _enforce(args: argparse.Namespace) -> int:
+    from . import enforcement
+    from . import response_engine
+
+    policy = args.policy or Path(enforcement.DEFAULT_POLICY).expanduser()
+    try:
+        if args.enforce_command == "init":
+            result = enforcement.init(policy, replace=args.replace)
+        elif args.enforce_command == "run":
+            if not policy.exists():
+                # Scheduled runs on a machine where enforcement was never set up: nothing to do, nothing wrong.
+                print(json.dumps(dict(enabled=False, note=f"no enforcement policy at {policy}; "
+                                                          "`megalodon enforce init` writes one that is off"),
+                                 sort_keys=True))
+                return 0
+            result = enforcement.run(policy_path=policy, dry_run=args.dry_run)
+        elif args.enforce_command == "list":
+            result = dict(active=enforcement.active())
+        else:
+            result = enforcement.undo(args.id)
+    except (enforcement.EnforcementError, response_engine.ResponseError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 1 if args.enforce_command == "run" and any(r.get("status") == "failed" for r in result["refused"]) else 0
+
+
 def _fleet(args: argparse.Namespace) -> int:
     from . import fleet
     from .alerts import AlertConfigError, read_secret
@@ -3159,6 +3201,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _memory(args)
     elif args.command == "fleet":
         code = _fleet(args)
+    elif args.command == "enforce":
+        code = _enforce(args)
     elif args.command == "heartbeat":
         code = _heartbeat(args)
     elif args.command == "drill":

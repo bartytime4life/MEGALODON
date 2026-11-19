@@ -35,7 +35,9 @@ megalodon respond report
   playbook, actions that would apply or were refused, the guards that
   refused them, and the most frequent targets.
 
-`mode = "enforce"` is refused. Only shadow mode exists.
+`mode = "enforce"` is refused: this engine only records decisions. The
+separate [enforcement](enforcement.md) step carries out the ones its own
+policy allows, each with a way to undo it.
 
 ## How a decision is made
 
