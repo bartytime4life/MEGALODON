@@ -73,7 +73,7 @@ The same finding is decided at most once a day.
 | `collect_evidence` | — | Save a hashed, read-only snapshot of the programs, sockets and files involved, before anything else: what [`megalodon evidence collect`](evidence-collection.md) does |
 | `notify` | — | Send a summary to the [off-machine alerts](off-machine-alerts.md) |
 | `block_address` | address | Drop traffic to and from the address for `block_minutes` |
-| `suspend_process` | program | Pause (SIGSTOP) its processes, keeping them for investigation |
+| `suspend_process` | process, or program | Pause (SIGSTOP) the process, keeping it for investigation |
 | `quarantine_file` | file | Move the file aside with no permissions, recording its hash |
 | `disable_persistence` | persistence entry | Disable a service, job or startup entry without deleting it |
 | `lock_account` | account | Lock the account's password and logins |
@@ -88,7 +88,12 @@ Guards apply whatever the playbooks say:
   network need switch-level controls. This machine's gateways, DNS servers
   and own addresses, and anything in `never_touch_addresses`, are refused.
 * **Programs.** init, systemd, sshd and dbus, and anything in
-  `never_touch_programs`, are never suspended.
+  `never_touch_programs`, are never suspended. A plan names the processes
+  behind the finding (`pid@start:program`; the start time keeps a reused
+  process ID from matching). Without one, a whole program is planned only
+  when nothing else shares it: a shell, an interpreter or anything in a
+  system folder is refused, because pausing `/usr/bin/bash` would pause
+  every login.
 * **Files.** Files in system folders (`/usr`, `/etc`, `/var/lib`,
   `/var/log`...) are never quarantined; reinstall the package instead.
   Only files under `quarantine_roots` are.
@@ -128,9 +133,10 @@ decision or escalate it to you, never start an action.
   nothing more.
 * **Correlation is by shared values.** Two findings about the same attack
   with nothing in common stay separate incidents.
-* **Process targets are programs, not process IDs.** A shadow plan names the
-  program path. Enforcement would have to resolve which processes run it at
-  that moment.
+* **Process targets name processes where the source knows them.** The
+  process review and the process ancestry watch name the processes; the
+  listener watch names only programs, so its plans are limited by the
+  shared-program guard.
 * **The policy file is protected by its permissions only.** It must be owned
   by you and writable only by you, and every decision records its SHA-256.
   Cryptographic signing comes with enforcement.

@@ -313,6 +313,20 @@ def _parent(proc):
         return None
 
 
+def start_time(proc):
+    """The process's start time in clock ticks since boot (stat field 22): with the PID, it names one process."""
+    try:
+        text = (proc/'stat').read_text('utf-8', 'replace')
+        return int(text[text.rindex(')') + 2:].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+# Flags that hold for every process running the flagged file, not only the one that showed them.
+FILE_FLAGS = ('EXECUTABLE_IN_MEMORY', 'EXECUTABLE_DELETED', 'EXECUTABLE_IN_TEMPORARY')
+MAX_FLAG_PROCESSES = 8
+
+
 def _namespace(path):
     try:
         return os.readlink(path)
@@ -320,7 +334,9 @@ def _namespace(path):
         return None
 
 
-def review(root='/', *, uid=None, now=_now):
+def review(root='/', *, uid=None, now=_now, with_pids=False):
+    """with_pids adds flag_processes, the 'pid@start' of the processes behind each flag (for the
+    response engine; the HUD's row format is fixed)."""
     uid = os.getuid() if uid is None else uid
     base = Path(root, 'proc')
     # Socket tables are per network namespace. The HUD's own comes from /proc/net; a process in
@@ -467,6 +483,13 @@ def review(root='/', *, uid=None, now=_now):
         for flag in found:
             if flag not in row['flags']:
                 row['flags'].append(flag)
+        if with_pids:
+            marks, start = row.setdefault('_flag_pids', {}), start_time(proc)
+            if start is not None:
+                for flag in [f for f in row['flags'] if f in FILE_FLAGS] + found:
+                    bucket = marks.setdefault(flag, [])
+                    if f'{proc.name}@{start}' not in bucket and len(bucket) < MAX_FLAG_PROCESSES:
+                        bucket.append(f'{proc.name}@{start}')
         row['processes'] += 1
         if len(row['_procs']) < MAX_HASH_SOURCES:
             row['_procs'].append(proc)
@@ -482,6 +505,9 @@ def review(root='/', *, uid=None, now=_now):
     for row in programs.values():
         remotes = sorted(row.pop('_remotes'))
         row.pop('_inodes')
+        marks = row.pop('_flag_pids', {})
+        if with_pids:
+            row['flag_processes'] = marks
         row.update(remotes=remotes[:MAX_REMOTES], remotes_total=len(remotes))
         rows.append(row)
     rows.sort(key=lambda r: (not r['flags'], -(r['established'] + r['listening'] + r['other']), r['executable']))

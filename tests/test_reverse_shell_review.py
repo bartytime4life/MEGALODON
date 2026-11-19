@@ -128,3 +128,18 @@ const text=n=>n.textContent+' '+n.children.map(text).join(' ');process.stdout.wr
     assert "Network connection piped into a shell · ATT&CK T1059.004" in out.stdout
     assert "Program file deleted" in out.stdout and "Program in a temporary folder" in out.stdout
     assert "undefined" not in out.stdout
+
+
+def test_the_response_engine_is_told_which_processes_showed_a_flag(root):
+    # Two bash processes share one row; only the reverse shell may become a response target.
+    process(root, 100, "/usr/bin/bash", {0: "socket:501", 1: "socket:501", 2: "socket:501"})
+    process(root, 120, "/usr/bin/bash", {0: "/dev/pts/1", 1: "/dev/pts/1", 3: "socket:506"})
+    for pid, start in ((100, 5551), (120, 7772)):
+        fields = ["S", "1"] + ["0"] * 17 + [str(start)]   # field 22 is the start time
+        (root / f"proc/{pid}/stat").write_text(f"{pid} (bash) {' '.join(fields)} 0 0\n")
+    plain = process_network.review(root, uid=UID, now=NOW)
+    assert "flag_processes" not in plain["programs"][0], "the HUD's row format is unchanged"
+    row = next(p for p in process_network.review(root, uid=UID, now=NOW, with_pids=True)["programs"]
+               if p["executable"] == "/usr/bin/bash")
+    assert row["flags"] == ["STDIO_SHELL_ON_NETWORK"] and row["processes"] == 2
+    assert row["flag_processes"] == {"STDIO_SHELL_ON_NETWORK": ["100@5551"]}

@@ -30,6 +30,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import stat
@@ -61,8 +62,10 @@ ACTIONS = {
     'notify': dict(entity=None, effect='Send a summary to the off-machine alert destinations', reversible=True),
     'block_address': dict(entity='address', effect='Drop traffic to and from this address for a limited time',
                           reversible=True),
-    'suspend_process': dict(entity='process', effect='Pause (SIGSTOP) the processes running this program, '
-                                                     'keeping them for investigation', reversible=True),
+    # Targets are processes ('pid@start:program'), so a shared program such as a shell is never paused
+    # everywhere. A program-wide target is planned only for an unshared program outside system folders.
+    'suspend_process': dict(entity='process', effect='Pause (SIGSTOP) this process, or the processes running this '
+                                                     'program, keeping them for investigation', reversible=True),
     'quarantine_file': dict(entity='file', effect='Move the file aside with no permissions, recording its hash',
                             reversible=True),
     'disable_persistence': dict(entity='persistence', effect='Disable this service, job or startup entry without '
@@ -70,7 +73,9 @@ ACTIONS = {
     'lock_account': dict(entity='account', effect='Lock this account\'s password and logins', reversible=True),
 }
 # 'peer' links incidents but is never an action target (a finding's other addresses).
-ENTITY_KINDS = ('address', 'peer', 'process', 'file', 'port', 'persistence', 'account')
+# 'process_id' is 'pid@start:program': the PID with its start time names one process, not a reused PID.
+ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
+PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'listeners', 'persistence', 'binaries', 'logwatch', 'canary', 'ingest')
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
@@ -444,11 +449,12 @@ def process_signals(review):
                 continue
             remotes = [_host(r) for r in row.get('remotes', [])]
             exe = row.get('executable', '')
+            ids = [f'{i}:{exe}' for i in row.get('flag_processes', {}).get(flag, [])] if exe.startswith('/') else []
             signals.append(Signal(
                 f'process:{flag}:{exe}:{",".join(sorted(r for r in remotes if r))}', 'process_review', flag,
                 PROCESS_SEVERITY[flag], review.get('reviewed_at', ''),
                 f"{row.get('program', '?')} ({exe}) {flag.lower().replace('_', ' ')}",
-                _entities(process=[exe], address=remotes)))
+                _entities(process=[exe], process_id=ids, address=remotes)))
     return signals
 
 
@@ -529,7 +535,7 @@ def collect(policy, state, now, *, root='/'):
     if sources.get('process_review', True):
         try:
             from . import process_network
-            review = process_network.review(root)
+            review = process_network.review(root, with_pids=True)
             signals += process_signals(review)
             gaps += [f'process_review: {gap}' for gap in review.get('gaps', [])]
         except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -623,10 +629,19 @@ class Guards:
             if any(address in network for network in self.networks):
                 return 'listed in never_touch_addresses'
         elif action == 'suspend_process':
-            if target in SYSTEM_PROGRAMS or target in policy.never_touch_programs:
+            match = PROCESS_ID.fullmatch(target)
+            program = match.group(3) if match else target
+            if program in SYSTEM_PROGRAMS or program in policy.never_touch_programs:
                 return 'a system program or listed in never_touch_programs'
-            if not target.startswith('/'):
+            if match and int(match.group(1)) <= 1:
+                return 'the init process'
+            if not program.startswith('/'):
                 return 'program path unknown'
+            if not match:
+                from .process_network import _program_kind
+                if _program_kind(program, '') or program.startswith(SYSTEM_FOLDERS):
+                    return ('a shared program: pausing it would pause every process running it, and the finding '
+                            'names no specific process')
         elif action == 'quarantine_file':
             if target.startswith(SYSTEM_FOLDERS):
                 return 'a system file: reinstall the package or restore it instead'
@@ -709,6 +724,9 @@ def _targets(action, signal, incident):
     entity = ACTIONS[action]['entity']
     if entity is None:
         return [None]
+    if action == 'suspend_process' and signal.entities.get('process_id'):
+        # The processes behind the finding, rather than every process running the same program.
+        return sorted(signal.entities['process_id'])[:8]
     return sorted(signal.entities.get(entity, ()))[:8]
 
 
