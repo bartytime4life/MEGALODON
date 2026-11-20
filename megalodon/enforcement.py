@@ -92,6 +92,14 @@ class EnforcementError(ValueError):
     pass
 
 
+class ProcessIdentityGone(EnforcementError):
+    """The recorded process has positively exited or been replaced."""
+
+
+class ProcessIdentityUnavailable(EnforcementError):
+    """Identity could not be verified; an existing pause still needs recovery."""
+
+
 NOT_ADDED = ('only an entry the persistence baseline did not have is disabled: one that existed before and was '
              'changed has to be put back by hand, from a backup or configuration management')
 
@@ -165,9 +173,13 @@ def load_policy(path=DEFAULT_POLICY):
 def _start(pid, root='/'):
     try:
         text = Path(root, 'proc', str(pid), 'stat').read_text('utf-8', 'replace')
-        return int(text[text.rindex(')') + 2:].split()[19])
-    except (OSError, ValueError, IndexError):
-        return None
+        value = text[text.rindex(')') + 2:].split()[19]
+        if not value.isascii() or not value.isdigit():
+            raise ValueError('invalid start time')
+        return int(value)
+    except (OSError, ValueError, IndexError) as exc:
+        # An unreadable or incomplete /proc entry is not proof of exit or PID reuse.
+        raise ProcessIdentityUnavailable(f'cannot verify process {pid} start time: {exc}') from None
 
 
 class Executor:
@@ -202,17 +214,17 @@ class Executor:
         try:
             handle = os.pidfd_open(pid)
         except ProcessLookupError:
-            raise EnforcementError(f'process {pid} has exited') from None
+            raise ProcessIdentityGone(f'process {pid} has exited') from None
         try:
             # The pidfd holds this process; its start time, read now, proves it is the one decided on.
             if _start(pid, self.root) != start:
-                raise EnforcementError(f'process {pid} is no longer the one decided on (start time differs)')
+                raise ProcessIdentityGone(f'process {pid} is no longer the one decided on (start time differs)')
             try:
                 running = os.readlink(Path(self.root, 'proc', str(pid), 'exe')).removesuffix(' (deleted)')
-            except OSError:
-                running = None
-            if running not in (program, None):
-                raise EnforcementError(f'process {pid} runs {running}, not {program}')
+            except OSError as exc:
+                raise ProcessIdentityUnavailable(f'cannot verify process {pid} executable: {exc}') from None
+            if running != program:
+                raise ProcessIdentityUnavailable(f'process {pid} runs {running}, not {program}')
             signal.pidfd_send_signal(handle, number)
         finally:
             os.close(handle)
@@ -631,14 +643,14 @@ def _expire(journal, executor, now):
         try:
             executor.undo_suspend_process(record)
             entry = dict(base, status='undone')
-        except EnforcementError as exc:
+        except ProcessIdentityGone as exc:
             # Exited, or its PID now names another process: there is nothing left to resume, and nothing is
             # signalled. The pause is over either way.
             entry = dict(base, status='undone', note=str(exc)[:300])
-        except OSError as exc:
-            # Still paused, and still listed: tried again on the next run.
-            done.append(dict(base, status='failed', reason=f'could not resume it: {exc}'[:300]))
-            continue
+        except (EnforcementError, OSError) as exc:
+            # Unknown identity or a failed signal must not retire the recovery obligation. Keep the pause
+            # active and record this failed attempt, so the next run can retry and the failure is auditable.
+            entry = dict(base, status='failed', reason=f'could not resume it: {exc}'[:300])
         _journal(journal, [entry])
         done.append(entry)
     resumed = [e for e in done if e['status'] == 'undone' and not e.get('note')]
