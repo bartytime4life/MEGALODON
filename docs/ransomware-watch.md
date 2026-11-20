@@ -45,11 +45,22 @@ All three map to ATT&CK T1486 (Data Encrypted for Impact).
   The watch records what existing files look like when it starts, so
   in-place rewrites can be compared.
 * **Who is doing it.** Each finding lists, best effort, the processes that
-  have files open under the watched folders, with process ID, name and program
-  path, read from `/proc`. Run as an ordinary user, the watch sees that
-  user's processes. Run it as root to see everyone's.
-* **Never acts.** Nothing is blocked, killed or restored. On an alarm, take
-  the machine off the network, stop the listed process and restore from an
+  held files open under the watched folders while encrypted-looking files
+  were written, read from `/proc`. Ransomware closes each file as it goes, so
+  the watch looks every time such a file is written (at most five times a
+  second) and keeps what it saw for the window, not only at the alarm. Each
+  process is named by process ID, start time, name and program path, so one
+  process can be paused without pausing everything else running the same
+  program. `writing` says whether it held one of those files open for
+  writing. `samples` says how often it was seen. Writers come first. Run as
+  an ordinary user, the watch sees that user's processes. Run it as root to
+  see everyone's.
+* **Acts only with `--respond`.** On its own, the watch blocks, kills and
+  restores nothing. With `--respond`, each finding goes to the
+  [response engine](response-engine.md) and then to
+  [enforcement](enforcement.md) as soon as it is raised. See
+  [answer it at once](#answer-it-at-once). Either way, on an alarm, take the
+  machine off the network, stop the listed process and restore from an
   offline backup.
 
 Everyday activity does not count: new or copied photos, archives and Office
@@ -58,29 +69,73 @@ files all carry signatures, text edits stay text, and an ordinary
 
 ## Run it all the time
 
-A systemd user service keeps the watch running. Create
-`~/.config/systemd/user/megalodon-ransomware.service`:
-
-```ini
-[Unit]
-Description=MEGALODON ransomware watch
-
-[Service]
-ExecStart=%h/.local/share/megalodon/current/venv/bin/python -I -m megalodon ransomware watch --dir %h/Documents --dir %h/Pictures
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-```
-
-Then enable it:
+Save the folders once, then let the [scheduler](scheduling.md) keep the watch
+running:
 
 ```bash
-systemctl --user enable --now megalodon-ransomware.service
+sudo megalodon ransomware init --dir /home --dir /srv
 ```
 
-Findings then appear in `journalctl --user -u megalodon-ransomware`, and in
-your configured alerts.
+```bash
+sudo megalodon schedule install --yes
+```
+
+`init` writes `~/.config/megalodon/ransomware.json` (mode 600), with
+`--min-files` and `--window` if you give them. The watch refuses the file
+unless you own it and nobody else can change it, because whoever can edit it
+chooses what is watched. `watch` without `--dir` reads it. `--folders-file`
+names another file. The `megalodon-ransomware` service runs
+`ransomware watch --respond` and starts again if it stops. As root, it sees
+every account's processes.
+
+Findings appear in `journalctl -u megalodon-ransomware` (or
+`journalctl --user -u megalodon-ransomware` for a user unit), and in your
+configured alerts.
+
+## Answer it at once
+
+The [response engine](response-engine.md)'s timer reads the other checks every
+five minutes, and [enforcement](enforcement.md) runs every minute. Encryption
+does not wait that long. With `--respond`, the watch decides each finding as
+soon as it is raised, then runs enforcement, before it reads the next file
+event:
+
+```bash
+megalodon ransomware watch --dir ~/Documents --respond
+```
+
+1. The finding is decided under the response policy, with the same guards and
+   ledger as the timer's pass. The default `ransomware` playbook plans to
+   collect evidence, pause each process seen writing in the watched folders,
+   and send a notice. A process seen only reading, such as a viewer or a
+   backup, is listed but never paused.
+2. If `~/.config/megalodon/enforce.toml` exists, enforcement runs at once. It
+   carries out only what that policy allows: enforcement must be on, and
+   `suspend_process` and the `ransomware` playbook must be listed. The pause
+   is SIGSTOP to the exact process, checked again by PID and start time. The
+   process keeps its memory for [capture](memory-capture.md), and
+   `megalodon enforce undo ID` resumes it.
+3. What was decided and done is written to standard error as one
+   `megalodon: response {...}` line, beside the start message. Standard output
+   stays one finding per line.
+
+A policy that cannot be read is reported on that line, and the watch keeps
+watching and alerting. A ransom note alone matches no playbook, so nothing is
+carried out for it.
+
+Turn it on for real like this:
+
+```bash
+megalodon respond init
+```
+
+```bash
+megalodon enforce init
+```
+
+Then, in `~/.config/megalodon/enforce.toml`, set `enabled = true`, add
+`"suspend_process"` to `actions` and `"ransomware"` to `playbooks`. Run
+`megalodon ransomware selftest` and `megalodon drill` afterwards.
 
 ## Limits
 
@@ -99,6 +154,14 @@ your configured alerts.
   containers, encrypted backups written into a watched folder) looks exactly
   like this. Point the watch at the folders you care about, not at backup
   destinations.
-* **Process list.** The list is best effort. A process that has already
-  closed its files is not listed, and the list never proves which process
-  wrote what.
+* **Process list.** The list is best effort. A process that did not hold a
+  watched file open at any of the watch's looks is not listed, and a process
+  that does all its work through another one, such as a file server writing
+  for a remote client, is listed as that other one. Being listed as writing
+  never proves which process wrote what. A legitimate writer caught in the
+  same window, such as an editor saving a document, is paused too. Undo it
+  with `megalodon enforce undo ID`.
+* **One process per decision.** A pause stops the processes listed. A child
+  started after the alarm, or another program it hands the work to, keeps
+  going until a later finding names it, and the same alarm is raised at
+  most once every five minutes. Disconnect the machine as well.

@@ -195,7 +195,9 @@ def test_real_watch_catches_encryption_in_new_and_existing_folders(tmp_path):
         thread.join(2)
         watcher.close()
     assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"]
-    assert found[0].evidence["processes"] == [{"pid": 1}]
+    [listed] = found[0].evidence["processes"]
+    assert (listed["pid"], listed["writing"]) == (1, False) and listed["samples"] >= 2, \
+        "looked for writers while files were encrypted, and again at the alarm"
 
 
 @linux

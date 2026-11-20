@@ -196,6 +196,9 @@ class Executor:
         if not match:
             raise EnforcementError('only one exact process (PID and start time) is ever signalled')
         pid, start, program = int(match.group(1)), int(match.group(2)), match.group(3)
+        if pid == os.getpid():
+            # A live watch deciding on its own findings never pauses itself, and so never stops watching.
+            raise EnforcementError('this is MEGALODON\'s own process')
         try:
             handle = os.pidfd_open(pid)
         except ProcessLookupError:

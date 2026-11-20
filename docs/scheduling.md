@@ -63,6 +63,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | commands | always running (root) | `commands record`, after `megalodon commands init --key-file ...` ([command log](command-log.md)) |
 | credentials | always running | `credentials watch --alert` ([credential access watch](credential-watch.md); as root it names every reader) |
 | egress | always running | `egress watch --alert`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md)) |
+| ransomware | always running | `ransomware watch --respond`, after `megalodon ransomware init --dir FOLDER ...`; each finding is decided and enforced as it is raised ([ransomware watch](ransomware-watch.md#answer-it-at-once)) |
 
 Timers start up to a minute late at random, so that machines set up the same
 way do not all run at once, and they catch up after the machine was off.
