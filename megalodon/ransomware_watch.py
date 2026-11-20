@@ -54,6 +54,7 @@ MAX_SUSPECTS = 16
 DEFAULT_FOLDERS_FILE = '~/.config/megalodon/ransomware.json'
 FOLDERS_SCHEMA = 'megalodon-ransomware-folders-v1'
 SAMPLE_GAP = 0.2     # seconds between looks for the processes writing encrypted-looking files
+RECOVERY_INTERVAL = 30.0  # seconds between recovery-only checks while an answering watch is running
 ATTACK = ('T1486',)
 
 # Leading bytes of formats people keep, and that encryption destroys.
@@ -417,11 +418,25 @@ class Watcher:
             if self.notify.add(folder):
                 self.watched += 1
 
-    def run(self, stop, *, poll=0.5):
+    def run(self, stop, *, poll=0.5, maintenance=None):
         moves: dict[int, str] = {}
         folder_moves: dict[int, str] = {}
+        next_maintenance = None
+
+        def maintain():
+            nonlocal next_maintenance
+            if maintenance is not None:
+                now = self.clock()
+                if next_maintenance is None or now >= next_maintenance:
+                    next_maintenance = now + RECOVERY_INTERVAL
+                    maintenance()
+
         while not stop.is_set():
-            for mask, cookie, folder, name in self.notify.events(poll):
+            # A quiet watch still owns recovery obligations. A busy batch must not starve them either.
+            maintain()
+            timeout = poll if maintenance is None else min(poll, max(0, next_maintenance - self.clock()))
+            for mask, cookie, folder, name in self.notify.events(timeout):
+                maintain()
                 if mask & IN_Q_OVERFLOW:
                     self.overflows += 1
                     continue
@@ -565,6 +580,20 @@ class Responder:
         self.journal = Path(journal or enforcement.DEFAULT_JOURNAL).expanduser()
         self.enforcement_state = Path(enforcement_state or enforcement.DEFAULT_STATE).expanduser()
 
+    def recover(self):
+        """Retry due suspension recovery without reading policies or admitting new actions."""
+        from . import enforcement
+        try:
+            return dict(expired=enforcement.expire(journal=self.journal))
+        except (enforcement.EnforcementError, OSError, ValueError) as exc:
+            return dict(expired=[], error=f'could not recover suspensions: {exc}'[:300])
+
+    def _with_recovery(self, out):
+        recovery = self.recover()
+        if recovery['expired'] or recovery.get('error'):
+            out['recovery'] = recovery
+        return out
+
     def __call__(self, finding):
         from . import enforcement, response_engine
         out = dict(rule_id=finding.rule_id)
@@ -573,22 +602,25 @@ class Responder:
             decided = response_engine.ingest([line], policy_path=self.policy, ledger=self.ledger,
                                              state_path=self.state)
         except (response_engine.ResponseError, OSError, ValueError) as exc:
-            return dict(out, decided=False, error=f'not decided: {exc}'[:300])
+            return self._with_recovery(dict(out, decided=False, error=f'not decided: {exc}'[:300]))
         out.update(decided=True, decisions=decided['decisions'], would_apply=decided['would_apply'])
         if not decided['decisions']:
-            return out           # no playbook covers it: nothing to carry out
-        if not self.enforcement_policy.exists():
-            return dict(out, enforcement=f'no enforcement policy at {self.enforcement_policy}')
+            return self._with_recovery(out)  # no new action, but an earlier pause may still be due
         try:
             ran = enforcement.run(policy_path=self.enforcement_policy, response_policy=self.policy,
                                   ledger=self.ledger, journal=self.journal, state_path=self.enforcement_state)
         except (enforcement.EnforcementError, response_engine.ResponseError, OSError, ValueError) as exc:
             return dict(out, enforcement=f'not carried out: {exc}'[:300])
-        return dict(out, enforcement=dict(
+        carried = dict(
             enabled=ran['enabled'],
             applied=[dict(id=r['id'], action=r['action'], target=r.get('target')) for r in ran['applied']],
-            refused=[dict(action=r['action'], target=r.get('target'), reason=r.get('reason'))
-                     for r in ran['refused']]))
+            refused=[dict(action=r['action'], target=r.get('target'), reason=r.get('reason'),
+                          status=r.get('status')) for r in ran['refused']],
+            expired=ran.get('expired', []))
+        for key in ('policy_error', 'note'):
+            if key in ran:
+                carried[key] = ran[key]
+        return dict(out, enforcement=carried)
 
 
 def selftest(directory, *, files=12):

@@ -94,10 +94,11 @@ configured alerts.
 
 ## Answer it at once
 
-The [response engine](response-engine.md)'s timer reads the other checks every
-five minutes, and [enforcement](enforcement.md) runs every minute. Encryption
-does not wait that long. With `--respond`, the watch decides each finding as
-soon as it is raised, then runs enforcement, before it reads the next file
+When separately installed and running, the [response engine](response-engine.md)'s
+timer reads the other checks every five minutes, and the
+[enforcement](enforcement.md) timer schedules a pass every minute. Those timers
+are separate from the watch. With `--respond`, the watch decides each finding as
+soon as it is raised, then hands it to enforcement before reading the next file
 event:
 
 ```bash
@@ -109,8 +110,8 @@ megalodon ransomware watch --dir ~/Documents --respond
    collect evidence, pause each process seen writing in the watched folders,
    and send a notice. A process seen only reading, such as a viewer or a
    backup, is listed but never paused.
-2. If `~/.config/megalodon/enforce.toml` exists, enforcement runs at once. It
-   carries out only what that policy allows: enforcement must be on, and
+2. New enforcement carries out only what `~/.config/megalodon/enforce.toml`
+   allows: enforcement must be on, and
    `suspend_process` and the `ransomware` playbook must be listed. The pause
    is SIGSTOP to the exact process, checked again by PID and start time. The
    process keeps its memory for [capture](memory-capture.md), and
@@ -120,8 +121,8 @@ megalodon ransomware watch --dir ~/Documents --respond
    stays one finding per line.
 
 A policy that cannot be read is reported on that line, and the watch keeps
-watching and alerting. A ransom note alone matches no playbook, so nothing is
-carried out for it.
+watching and alerting. A ransom note alone matches no playbook, so it creates no
+new action. Existing suspension recovery is separate from that decision.
 
 Turn it on for real like this:
 
@@ -136,6 +137,41 @@ megalodon enforce init
 Then, in `~/.config/megalodon/enforce.toml`, set `enabled = true`, add
 `"suspend_process"` to `actions` and `"ransomware"` to `playbooks`. Run
 `megalodon ransomware selftest` and `megalodon drill` afterwards.
+
+### Recovery while the watch is running
+
+With `--respond`, the watch checks for due suspension expirations at startup
+and at 30-second intervals measured by a monotonic clock. It checks during
+quiet polling and between events in a busy batch. This periodic callback runs
+only recovery; it does not ingest findings or apply new enforcement decisions.
+Ordinary `watch` without `--respond` does not run it.
+
+Recovery reads the existing enforcement journal even when the enforcement
+policy is missing, disabled or invalid, or no finding produces a new decision.
+Failed SIGCONT attempts leave the hold available for another attempt. The
+normal PID, start-time and pidfd checks still apply. A suspension with no finite
+expiry remains active until explicitly undone.
+
+Periodic recovery results and errors appear as `megalodon: recovery {...}` on
+standard error, leaving standard output as finding JSON lines. Successful
+checks with nothing due do not emit a recovery line. An expired hold is not
+necessarily a resumed process: another hold can keep that process paused, or
+the original process may have exited or been replaced. Read each result's
+`status` and `note`. If the signal outcome could not be persisted,
+`recovery_status` and `journal_error` retain the distinction between the
+recovery operation and its audit failure. Per-finding output also preserves
+expiry results and policy errors; a finding that produces no decision can
+still report a separate `recovery` result.
+
+These checks are best effort while the watch keeps running. Startup work, a
+blocked event handler or recovery operation, scheduling delays, and interruption
+can delay them; there is no independent watchdog or maximum resume deadline.
+Stopping the watch leaves recovery to a later invocation or a separately
+running enforcement timer that uses the same account and journal. The scheduler's
+enforcement job is root-only; a user ransomware watch does not receive a user
+enforcement timer automatically, and a root timer does not read that user's
+default journal. Source and synthetic checks do not establish real systemd
+service recovery; see [recovery acceptance](enforcement-recovery-acceptance.md).
 
 ## Limits
 

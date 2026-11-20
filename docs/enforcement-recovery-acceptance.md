@@ -64,12 +64,39 @@ environment:
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=. python -m pytest -q \
   tests/test_enforcement_no_stop.py \
-  tests/test_enforcement_scheduled_cli.py
+  tests/test_enforcement_scheduled_cli.py \
+  tests/test_ransomware_recovery.py
 ```
 
 The existing identity, admission, journal, overlap, and persistence tests provide
 additional coverage. Native child-process fixtures are a separate test tier and
 must not be included in a run authorized only for synthetic process operations.
+
+## Synthetic ransomware-watch recovery checks
+
+[`test_ransomware_recovery.py`](../tests/test_ransomware_recovery.py) covers the
+watch's separate recovery callback with synthetic events, clocks, process
+identities and signal outcomes. With `--respond`, the callback checks at startup
+and every 30 seconds of monotonic time, including quiet polls and busy event
+batches. It invokes recovery only: a periodic check does not ingest a finding,
+read pending decisions for new actions, or enable enforcement. Without
+`--respond`, the watch has no recovery callback.
+
+The regression contract includes recovery with missing, disabled or invalid
+new-action policy, and when no new decision is produced. Failed SIGCONT attempts
+remain retryable. Recovery output preserves failed expiry results, policy
+errors, overlapping-hold notes and the distinction between a recovery operation
+and failure to persist its completion. An expired record is not counted as proof
+that a process received SIGCONT: another hold can remain, or the original
+process can have exited or been replaced.
+
+The interval is not a recovery deadline. Watch startup, blocked callbacks and
+interruption can delay recovery. There is no independent watchdog, and stopping
+the watch does not itself resume a process. A separate enforcement timer helps
+only if it is installed, running and resolves the same journal under the same
+account. The generated enforcement job is root-only; a user watch does not
+automatically gain a user enforcement timer. These synthetic checks neither
+start systemd nor establish installed-service or workstation acceptance.
 
 ## Evidence that remains separate
 
