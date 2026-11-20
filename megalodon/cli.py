@@ -674,6 +674,8 @@ def build_parser() -> argparse.ArgumentParser:
                               "the manifest digest recorded when it arrived")
     command.add_argument("--key-file", type=Path,
                          help="the command log key from `commands init`, to check the copy of the log with")
+    command.add_argument("--from-sequence", type=_bounded_cli_integer("from-sequence", 1, 2**62), default=1,
+                         help="check the log from this line: only for lines you let go of on purpose (default 1)")
     for command in fleet_sub.choices.values():
         command.add_argument("--data", type=Path, help="collector folder (default ~/.local/share/megalodon/fleet)")
 
@@ -2632,7 +2634,8 @@ def _fleet(args: argparse.Namespace) -> int:
                     key = read_secret(str(args.key_file)) if args.key_file else None
                     if key is not None and not args.machine:
                         raise fleet.FleetError("a command log key belongs to one machine: name it")
-                    checked = [shipping.verify(data, n, key_hex=key) for n in names]
+                    checked = [shipping.verify(data, n, key_hex=key, from_sequence=args.from_sequence)
+                               for n in names]
                     result = dict(schema=shipping.SCHEMA, action="verify", machines=checked)
                     print(json.dumps(result, indent=2, sort_keys=True))
                     return 1 if any(c["findings"] for c in checked) else 0

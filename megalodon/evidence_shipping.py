@@ -41,6 +41,8 @@ MAX_REQUESTS = 400
 MAX_LINES = 2000
 MAX_STORED = 64 * 1024 * 1024 * 1024        # per machine, on the collector
 MAX_CONFLICTS = 8 * 1024 * 1024
+MAX_REJECTED = 64 * 1024 * 1024             # refused lines and manifests kept for comparison
+EMPTY_SHA256 = hashlib.sha256(b'').hexdigest()
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 _BUNDLE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,200}')
 _PART = re.compile(r'[A-Za-z0-9._-]{1,255}')
@@ -273,6 +275,8 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
                         break
                     offset = reached
 
+    blocked = set()                     # logs with a batch the collector did not take this run
+
     def deliver(batch):
         moment = now or _now()
         body = dict(schema=BATCH_SCHEMA, sensor=settings.get('sensor', ''),
@@ -287,9 +291,13 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
             result = result if isinstance(result, dict) else {}
             if item['kind'] == 'commands':
                 last = max(e['seq'] for e in item['lines'])
-                if result.get('ok'):
+                # Lines are acknowledged only up to the first batch not taken: later ones accepted past it
+                # would leave lines the push record says were sent, and the collector never got.
+                if result.get('ok') and item['key_id'] not in blocked:
                     totals['lines'] += len(item['lines'])
                     cursor['commands'][item['key_id']] = max(last, cursor['commands'].get(item['key_id'], 0))
+                else:
+                    blocked.add(item['key_id'])
             elif item['kind'] == 'manifest':
                 if result.get('ok'):
                     totals['manifests'] += 1
@@ -308,6 +316,8 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
 
     batch, size, too_large = [], 0, 0
     for item in items:
+        if item['kind'] == 'commands' and item['key_id'] in blocked:
+            continue                    # an earlier batch of this log was not taken: the rest waits for it
         length = _size(item)
         if length > MAX_BATCH_BYTES:
             too_large += 1              # counted, never blocks the rest (a manifest listing thousands of files)
@@ -317,6 +327,9 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
                 break
             deliver(batch)
             batch, size = [], 0
+            # Flushing the request can refuse this log after the check above.
+            if item['kind'] == 'commands' and item['key_id'] in blocked:
+                continue
         batch.append(item)
         size += length
     if batch and totals['requests'] < MAX_REQUESTS:
@@ -407,8 +420,12 @@ class _Usage:
         _private_write(self.path, json.dumps(self.value).encode())
 
 
-def _stored_macs(folder, wanted):
-    """{seq: mac} of the copy's lines among `wanted`, read from every file of it."""
+def _canonical(entry):
+    return json.dumps(entry, sort_keys=True, separators=(',', ':'))
+
+
+def _stored_lines(folder, wanted):
+    """{seq: the whole line as first kept} for the copy's lines among `wanted`, read from every file of it."""
     found = {}
     for path in command_log.log_files(folder / 'commands.jsonl'):
         for line in path.read_bytes().splitlines():
@@ -417,7 +434,7 @@ def _stored_macs(folder, wanted):
             except ValueError:
                 continue
             if type(entry) is dict and entry.get('seq') in wanted:
-                found[entry['seq']] = entry.get('mac')
+                found[entry['seq']] = _canonical(entry)
     return found
 
 
@@ -431,23 +448,24 @@ def _take_commands(store, item, received, usage):
     state = _load(folder / 'received.json', dict(last=0, lines=0, first=None, current_first=None, gaps=[]))
     lines = sorted(lines, key=lambda e: e['seq'])
     again = {e['seq'] for e in lines if e['seq'] <= state['last']}
-    stored = _stored_macs(folder, again) if again else {}
+    stored = _stored_lines(folder, again) if again else {}
     new = []
     for entry in lines:
         sequence = entry['seq']
         if sequence <= state['last'] or any(e['seq'] == sequence for e in new):
-            if stored.get(sequence) == entry['mac'] or any(e['seq'] == sequence and e['mac'] == entry['mac']
-                                                            for e in new):
-                continue                    # the same line again: a retry, or a machine that lost its record
-            detail = (f'line {sequence} arrived again with another signature' if sequence in stored else
+            # The same line again (a retry, or a machine that lost its record) must match in every field: the
+            # batch's signature proves only who sent it, and a matching line signature can be copied.
+            if stored.get(sequence) == _canonical(entry) or any(
+                    e['seq'] == sequence and _canonical(e) == _canonical(entry) for e in new):
+                continue
+            detail = (f'line {sequence} arrived again with other content' if sequence in stored else
                       f'line {sequence} arrived after line {state["last"]}, where the copy has none')
             _conflict(store, 'SHIPPED_COMMANDS_REWRITTEN', f'commands:{key_id}:{sequence}', detail, received)
-            kept = folder / 'rewritten.jsonl'
-            if not kept.exists() or kept.stat().st_size < MAX_CONFLICTS:
-                _append_line(kept, dict(entry, received_at=received))     # the rewritten line, for comparison
+            _keep_rejected(store, folder / 'rewritten.jsonl', dict(entry, received_at=received), usage)
             continue
         previous = new[-1]['seq'] if new else state['last']
-        if previous and sequence > previous + 1:
+        # A log's first copy starting after line 1 is a gap too: its first lines were removed before any left.
+        if sequence > previous + 1:
             state['gaps'] = (state['gaps'] + [[previous + 1, sequence - 1]])[-100:]
             _conflict(store, 'SHIPPED_COMMANDS_GAP', f'commands:{key_id}:{previous + 1}-{sequence - 1}',
                       f'lines {previous + 1} to {sequence - 1} were missing when line {sequence} was sent', received)
@@ -476,6 +494,21 @@ def _take_commands(store, item, received, usage):
     return dict(ok=True, last=state['last'])
 
 
+def _keep_rejected(store, path, value, usage):
+    """Keep what was refused, for comparison, within its own allowance: rejections cannot fill the collector."""
+    raw = value if isinstance(value, bytes) else _canonical(value).encode() + b'\n'
+    if usage.value.get('rejected', 0) + len(raw) > MAX_REJECTED or not usage.room(len(raw)):
+        return
+    if isinstance(value, bytes):
+        if path.exists():
+            return
+        _private_write(path, raw)
+    else:
+        _append_line(path, value)
+    usage.value['rejected'] = usage.value.get('rejected', 0) + len(raw)
+    usage.add(len(raw))
+
+
 def _take_manifest(store, item, received, usage):
     name = item.get('bundle')
     try:
@@ -484,7 +517,8 @@ def _take_manifest(store, item, received, usage):
     except ValueError:
         return dict(ok=False, error='not a manifest')
     if not _BUNDLE.fullmatch(str(name)) or type(manifest) is not dict or manifest.get('schema') != evidence.SCHEMA \
-            or type(manifest.get('files')) is not list or len(_listed(manifest)) != len(manifest['files']):
+            or type(manifest.get('files')) is not list or len(_listed(manifest)) != len(manifest['files']) \
+            or any(f['file'] == 'manifest.json' for f in _listed(manifest)):
         return dict(ok=False, error='not an evidence manifest with plain file names')
     digest = hashlib.sha256(raw).hexdigest()
     record_path = store / 'evidence-state' / f'{name}.json'
@@ -494,7 +528,7 @@ def _take_manifest(store, item, received, usage):
             return dict(ok=True)
         _conflict(store, 'SHIPPED_EVIDENCE_CHANGED', f'evidence:{name}:manifest.json',
                   f'bundle {name} was sent again with another manifest; the first one is kept', received)
-        _private_write(store / 'evidence-rejected' / name / f'manifest-{digest[:16]}.json', raw)
+        _keep_rejected(store, store / 'evidence-rejected' / name / f'manifest-{digest[:16]}.json', raw, usage)
         return dict(ok=False, error='a different manifest for this bundle is already held')
     if not usage.room(len(raw)):
         return dict(ok=False, error='the collector holds as much as it keeps for this machine')
@@ -505,6 +539,15 @@ def _take_manifest(store, item, received, usage):
                                                 kind=manifest.get('kind', 'snapshot'),
                                                 files={f['file']: dict(size=f['size'], sha256=f['sha256'])
                                                        for f in _listed(manifest)}), sort_keys=True).encode())
+    # An empty file has no pieces to send: it is placed here, if the manifest says it is empty.
+    for listed in _listed(manifest):
+        if listed['size'] == 0:
+            if listed['sha256'] == EMPTY_SHA256:
+                _private_write(store / 'evidence' / name / listed['file'], b'', mode=0o400)
+            else:
+                _conflict(store, 'SHIPPED_EVIDENCE_CHANGED', f"evidence:{name}:{listed['file']}",
+                          f"{listed['file']} of bundle {name} is listed as empty with the digest of other content",
+                          received)
     return dict(ok=True)
 
 
@@ -590,10 +633,18 @@ def receive(body, *, data, now=None):
             return 409, dict(result='this batch, or a later one, was already received')
         usage = _Usage(store)
         answers = []
+        refused = set()                 # logs with a batch not taken in this request
         for item in body['items']:
             kind = item.get('kind') if type(item) is dict else None
             take = dict(commands=_take_commands, manifest=_take_manifest, chunk=_take_chunk).get(kind)
-            answers.append(take(store, item, received, usage) if take else dict(ok=False, error='unknown item'))
+            if kind == 'commands' and str(item.get('key_id')) in refused:
+                # Taking a later batch past one not taken would open a gap that could never be filled.
+                answers.append(dict(ok=False, error='an earlier batch of this log was not taken'))
+                continue
+            answer = take(store, item, received, usage) if take else dict(ok=False, error='unknown item')
+            if kind == 'commands' and not answer.get('ok'):
+                refused.add(str(item.get('key_id')))
+            answers.append(answer)
         _private_write(sequence_path, json.dumps(dict(sequence=body['sequence'], at=received)).encode())
     return 200, dict(result='ok', items=answers)
 
@@ -657,9 +708,10 @@ def summary(data, name):
                 bundles_complete=sum(b['files_received'] == b['files'] for b in report['bundles']))
 
 
-def verify(data, name, *, key_hex=None, now=None):
-    """Check the collector's copies: the command log with its key, up to the line the last heartbeat named, and
-    every complete bundle against the manifest digest recorded when it arrived."""
+def verify(data, name, *, key_hex=None, now=None, from_sequence=1):
+    """Check the collector's copies: the command log with its key, from line 1 (or from_sequence, a boundary
+    only the operator sets) up to the line the last heartbeat named, and every complete bundle against the
+    manifest digest recorded when it arrived."""
     from . import fleet, tamper
     registry = fleet.machines(data)
     if name not in registry:
@@ -680,7 +732,7 @@ def verify(data, name, *, key_hex=None, now=None):
                                sensor=registry[name]['sensor'])
         expect = beats.get('command_log_sequence') if beats.get('command_log_key_id') == key_id else None
         commands = command_log.verify(key_hex, log=copy['path'], expect_sequence=expect,
-                                      from_sequence=copy['first'] or 1)
+                                      from_sequence=from_sequence)
         problems += [dict(f, machine=name, subject=f'{name}:{f["subject"]}', detail=f'{name}: {f["detail"]}')
                      for f in commands['findings']]
     checked = []
@@ -689,7 +741,11 @@ def verify(data, name, *, key_hex=None, now=None):
             checked.append(dict(bundle=bundle['bundle'], intact=None,
                                 note=f"{bundle['files_received']} of {bundle['files']} files have arrived"))
             continue
-        result = evidence.verify(bundle['path'], expected=bundle['manifest_sha256'])
+        try:
+            result = evidence.verify(bundle['path'], expected=bundle['manifest_sha256'])
+        except evidence.EvidenceError as exc:
+            # A copy that cannot even be read is a finding about that bundle, not the end of the check.
+            result = dict(intact=False, problems=[dict(file='manifest.json', problem=str(exc))])
         checked.append(dict(bundle=bundle['bundle'], intact=result['intact'], problems=result['problems']))
         if not result['intact']:
             problems.append(_finding('SHIPPED_EVIDENCE_CHANGED', name, f"evidence:{bundle['bundle']}",
