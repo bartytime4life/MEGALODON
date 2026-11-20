@@ -109,7 +109,14 @@ programs, and never on MEGALODON's own units. The default
 out. After an undo, run `megalodon persistence accept` if the entry is wanted,
 or it is reported, and decided, again.
 
-`enforce list` shows the applied actions that have not been undone.
+`enforce list` shows applied actions and unresolved suspension intents that
+have not been undone.
+
+For process suspensions, `enforce undo ID` releases that individual hold. If
+another active hold names the same exact process, the result names those IDs
+with `still paused by`, and sends no SIGCONT. Release the remaining holds to
+resume the process. This changes the earlier behavior where undoing one ID
+resumed it immediately even when another hold remained.
 
 ## Timed pauses and scheduled recovery
 
@@ -139,6 +146,12 @@ carries out new decisions:
   decision paused the same process, for longer or until undone, the pause
   that ended is recorded as over, with `still paused by ID`, and the process
   is resumed only when the last pause ends.
+  If several holds for the same exact process are due together, one expiry
+  pass attempts SIGCONT once and records an outcome for each hold. A failed
+  attempt keeps all those holds eligible for retry. A successful resume
+  submits one notice for the process, with one representative result carrying
+  the notification outcome. This is not an exactly-once guarantee across
+  interrupted runs or failed journal writes.
 * **A resume that fails**, for example for lack of permission, is reported as
   failed and makes `run` exit 1. The process stays listed by `enforce list`,
   and the next run tries again.
@@ -166,6 +179,33 @@ Resuming is a trade-off. It frees a process paused by a wrong decision, but it
 also frees a real intruder's process. The default playbooks set no
 `suspend_minutes`: set it on the playbooks where a wrong pause costs more than
 a resumed attacker, and capture the process's memory before the time is up.
+
+## Recovery records and interruptions
+
+Before attempting SIGSTOP, enforcement writes and syncs a `pending` suspension
+record containing the exact target and any expiry. It appends the outcome
+immediately after the attempt. Both records identify one hold. If the command
+is interrupted between them, the pending record remains available for undo or
+timed recovery; journal history also prevents replaying that same decision
+after a lost cursor. A pending record means the stop may or may not have
+happened. It does not prove the process is currently stopped, and an indefinite
+intent still requires explicit undo.
+
+When an expiry outcome cannot be appended, the command reports `status =
+"failed"`, `journal_error`, and the original `recovery_status`. Other readable
+due records are still attempted, and no new enforcement action is admitted in
+that run. A successful SIGCONT can therefore be reported alongside an audit
+failure, and still triggers notice submission. Command output does not prove
+the result was durably recorded: a complete line may be readable even if its
+sync failed.
+
+The journal retains its 64 MiB read limit. New appends refuse to cross that
+limit or follow an incomplete trailing record; enforcement does not silently
+truncate or repair it. Complete records before a torn tail remain readable,
+but an unreadable or oversized journal can prevent recovery entirely. Resolve
+storage and journal errors through a separately reviewed repair. These checks
+do not establish power-loss durability or exactly-once signaling across
+interruptions, and do not replace scheduled-service acceptance.
 
 ## Limits
 
