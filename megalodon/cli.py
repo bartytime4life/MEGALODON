@@ -441,6 +441,15 @@ def build_parser() -> argparse.ArgumentParser:
     timeline = sub.add_parser(
         "timeline", help="each incident's findings, decisions and actions in order, from every check")
     timeline_sub = timeline.add_subparsers(dest="timeline_command", required=True)
+    command = timeline_sub.add_parser("push", help="send events not yet sent to the fleet collector, signed with this "
+                                                   "machine's heartbeat key")
+    command.add_argument("--config", type=Path, help="heartbeat configuration (default "
+                                                     "~/.config/megalodon/heartbeat.json)")
+    command.add_argument("--url", help="the collector's /events address (default: the heartbeat address with "
+                                       "/events in place of /heartbeat)")
+    command.add_argument("--dry-run", action="store_true", help="count what would be sent; send nothing")
+    command.add_argument("--ledger", type=Path, help="the response engine's shadow ledger")
+    command.add_argument("--journal", type=Path, help="the enforcement journal")
     for name, text in (("list", "incidents with activity in the last --hours, worst first"),
                        ("show", "one incident in order, or every incident that involved --entity")):
         command = timeline_sub.add_parser(name, help=text)
@@ -650,6 +659,13 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--hours", type=int, default=24, help="alerts from this many hours (default 24)")
     command.add_argument("--alert", action="store_true", help="also send heartbeat findings to this machine's alerts")
     command.add_argument("--config", type=Path, help="settings file for --alert")
+    command = fleet_sub.add_parser("timeline", help="incidents across every machine, joined by shared addresses; "
+                                                    "give an ID or --entity to tell one")
+    command.add_argument("incident", nargs="?", help="a fleet incident ID, or the start of one")
+    command.add_argument("--entity", help="KIND:VALUE, such as address:203.0.113.7")
+    command.add_argument("--hours", type=int, default=168, help="for the list: how far back (default 168)")
+    command.add_argument("--format", choices=("text", "json", "html"), default="text")
+    command.add_argument("--output", type=Path, help="write the result to this file (mode 600)")
     for command in fleet_sub.choices.values():
         command.add_argument("--data", type=Path, help="collector folder (default ~/.local/share/megalodon/fleet)")
 
@@ -2137,6 +2153,24 @@ def _timeline(args: argparse.Namespace) -> int:
     from . import timeline as tl
 
     paths = dict(ledger=args.ledger or engine.DEFAULT_LEDGER, journal=args.journal)
+    if args.timeline_command == "push":
+        import urllib.error
+        from .tamper import TamperError
+        try:
+            result = tl.push(config=args.config, url=args.url, dry_run=args.dry_run, **paths)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                # A heartbeat monitor that is not a fleet collector takes no timelines: nothing to send it.
+                print(json.dumps(dict(sent=0, note="the heartbeat destination takes no timelines (404); run a "
+                                                   "fleet collector, or give --url"), sort_keys=True))
+                return 0
+            print(f"megalodon: the collector refused the timeline: HTTP {exc.code}", file=sys.stderr)
+            return 2
+        except (tl.TimelineError, engine.ResponseError, TamperError, OSError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     try:
         if args.timeline_command == "list":
             result = tl.incidents(hours=args.hours, **paths)
@@ -2564,6 +2598,23 @@ def _fleet(args: argparse.Namespace) -> int:
                 httpd.serve_forever()
             except KeyboardInterrupt:
                 pass
+            return 0
+        elif args.fleet_command == "timeline":
+            from . import timeline as tl
+            if args.incident or args.entity:
+                result = fleet.fleet_show(args.incident, entity=args.entity, data=data)
+                rendered = tl.page(result) if args.format == "html" else None
+            else:
+                result = fleet.fleet_timeline(data=data, hours=args.hours)
+                rendered = tl.list_page(result) if args.format == "html" else None
+            if args.format == "json":
+                rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
+            elif rendered is None:
+                rendered = tl.text(result)
+            if args.output:
+                print(f"wrote {tl.write_private(args.output, rendered)}")
+            else:
+                sys.stdout.write(rendered)
             return 0
         else:
             result = fleet.status(data=data, max_gap=args.max_gap, hours=args.hours)

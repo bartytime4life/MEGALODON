@@ -71,5 +71,6 @@ shows with `--entity`.
 * **Incidents are the engine's.** Findings join an incident when they share
   something within `correlation_minutes` (30 by default). Findings further apart
   are separate incidents; `--entity` shows them together.
-* **Local only.** The [fleet view](fleet.md) shows other machines; their timelines
-  are on each machine.
+* **One machine's view.** `megalodon timeline push` sends this machine's
+  timeline to the [fleet collector](fleet.md#incidents-across-machines), which
+  joins incidents across machines.

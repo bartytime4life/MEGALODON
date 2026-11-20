@@ -17,6 +17,7 @@ kept for as long as they are.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 import html
 import json
 import os
@@ -272,18 +273,24 @@ def text(result):
         if not result['incidents']:
             return f"No incidents in the last {result['hours']} hours.\n"
         for row in result['incidents']:
+            where = f" on {', '.join(row['machines'])}" if row.get('machines') else ''
             lines.append(f"{row['incident']}  {row['severity']:<8} {row['first']} .. {row['last']}  "
-                         f"{row['findings']} findings from {', '.join(row['sources']) or '-'}; "
-                         f"{row['actions_applied']} actions carried out")
+                         f"{row['findings']} findings from {', '.join(row['sources']) or '-'}{where}; "
+                         f"{row['actions_applied']} actions carried out"
+                         + (f"; joined by {', '.join(row['linked_by'][:4])}" if row.get('linked_by') else ''))
         return '\n'.join(lines) + '\n'
     for row in result['incidents']:
         lines.append(f"Incident {row['incident']} ({row['severity']}), {row['first']} .. {row['last']}")
         lines.append(f"  seen by: {', '.join(row['sources']) or '-'}")
+        if row.get('machines'):
+            lines.append(f"  machines: {', '.join(row['machines'])}"
+                         + (f" (joined by {', '.join(row['linked_by'])})" if row.get('linked_by') else ''))
         for kind, values in row['entities'].items():
             lines.append(f"  {kind}: {', '.join(values)}")
     lines.append('')
     for event in result['events']:
-        tag = '' if result.get('incident') else f"{(event.get('incident') or '-')[:12]:<12} "
+        machine = f"{event['machine']:<14} " if event.get('machine') else ''
+        tag = machine + ('' if result.get('incident') else f"{(event.get('incident') or '-')[:12]:<12} ")
         lines.append(f"{event.get('at') or '?':<20} {tag}{event['kind']:<8} {_line(event)}")
     return '\n'.join(lines) + '\n'
 
@@ -293,7 +300,8 @@ def page(result):
     e = html.escape
     title = f"Incident {result.get('incident')}" if result.get('incident') else f"Timeline of {result.get('entity')}"
     rows = ''.join(f"<tr class=\"{e(ev['kind'])}\"><td>{e(str(ev.get('at') or ''))}</td>"
-                   f"<td>{e(str(ev.get('incident') or ''))}</td><td>{e(ev['kind'])}</td>"
+                   f"<td>{e((ev['machine'] + '/') if ev.get('machine') else '')}{e(str(ev.get('incident') or ''))}</td>"
+                   f"<td>{e(ev['kind'])}</td>"
                    f"<td>{e(ev.get('severity', ''))}</td><td>{e(_line(ev))}</td></tr>" for ev in result['events'])
     heads = ''.join(f"<li><b>{e(r['incident'])}</b> {e(r['severity'])}, {e(str(r['first']))} to {e(str(r['last']))}: "
                     f"{r['findings']} findings from {e(', '.join(r['sources']))}; {r['actions_applied']} actions "
@@ -316,6 +324,28 @@ tr.action td{{background:#3a2e10}}tr.undo td{{background:#10283a}}tr.decision td
 """
 
 
+def list_page(result):
+    """Incidents as a static HTML page, each linking to its own page on the fleet view."""
+    e = html.escape
+    rows = ''.join(f"<tr><td><a href=\"/timeline/{e(r['incident'])}\">{e(r['incident'])}</a></td>"
+                   f"<td>{e(r['severity'])}</td><td>{e(str(r['first']))}</td><td>{e(str(r['last']))}</td>"
+                   f"<td>{e(', '.join(r.get('machines', [])))}</td><td>{e(', '.join(r['sources']))}</td>"
+                   f"<td>{r['findings']}</td><td>{r['actions_applied']}</td>"
+                   f"<td>{e(', '.join(r.get('linked_by', [])))}</td></tr>" for r in result['incidents'])
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Fleet incidents</title>
+<style>body{{font:14px/1.4 system-ui,sans-serif;margin:16px;background:#fff;color:#111}}
+table{{border-collapse:collapse;width:100%}}td{{border-bottom:1px solid #ddd;padding:4px 6px}}
+a{{color:#0645ad}}@media (prefers-color-scheme: dark){{body{{background:#111;color:#eee}}td{{border-color:#333}}
+a{{color:#8ab4f8}}}}</style></head><body><h1>Fleet incidents, last {result.get('hours')} hours</h1>
+<table><tr><td><b>Incident</b></td><td><b>Severity</b></td><td><b>First</b></td><td><b>Last</b></td>
+<td><b>Machines</b></td><td><b>Seen by</b></td><td><b>Findings</b></td><td><b>Actions</b></td>
+<td><b>Joined by</b></td></tr>{rows}</table></body></html>
+"""
+
+
 def write_private(path, content):
     """Write an export mode 600: it names addresses, programs, files and accounts."""
     path = Path(path).expanduser()
@@ -333,3 +363,92 @@ def write_private(path, content):
             os.unlink(temporary)
         raise
     return str(path)
+
+
+# ------------------------------------------------------------------ sending the timeline to the fleet collector
+
+BATCH_SCHEMA = 'megalodon-timeline-batch-v1'
+DEFAULT_CURSOR = '~/.local/state/megalodon/timeline-push.json'
+MAX_BATCH_BYTES = 56 * 1024          # under the collector's 64 KiB limit, with room for the envelope
+MAX_BATCHES = 50
+
+
+def event_id(event):
+    """A stable identity for an event: its content, without the incident it is filed under (that can merge)."""
+    canonical = json.dumps({k: v for k, v in event.items() if k != 'incident'}, sort_keys=True,
+                           separators=(',', ':'), default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()[:24]
+
+
+def _cursor(path):
+    path = Path(path).expanduser()
+    if not path.exists():
+        return dict(last_at='', ids=[])
+    try:
+        return json.loads(b''.join(_lines(path)))
+    except ValueError:
+        raise TimelineError(f'{path} is not valid JSON') from None
+
+
+def _events_url(settings, url=None):
+    if url:
+        return url
+    base = settings['url']
+    return base[:-len('/heartbeat')] + '/events' if base.endswith('/heartbeat') else base.rstrip('/') + '/events'
+
+
+def pending(cursor, *, ledger=engine.DEFAULT_LEDGER, journal=None):
+    """Events not yet sent, oldest first: those after the last one sent, by time and identity."""
+    sent_at, sent = cursor.get('last_at', ''), set(cursor.get('ids', []))
+    out = []
+    for event in events(ledger=ledger, journal=journal):
+        identity = event_id(event)
+        at = str(event.get('at') or '')
+        if at > sent_at or (at == sent_at and identity not in sent):
+            out.append(dict(event, event_id=identity))
+    return out
+
+
+def push(*, config=None, cursor_path=DEFAULT_CURSOR, ledger=engine.DEFAULT_LEDGER, journal=None, url=None,
+         send=None, now=None, dry_run=False):
+    """Send events not yet sent to the fleet collector, signed with this machine's heartbeat key."""
+    from . import tamper
+    settings = tamper._read(config or tamper.DEFAULT_HEARTBEAT, tamper.HEARTBEAT_SCHEMA + '-config',
+                            'heartbeat configuration')
+    settings = dict(settings, url=_events_url(settings, url))
+    cursor = _cursor(cursor_path)
+    queue = pending(cursor, ledger=ledger, journal=journal)
+    sent, batches, skipped = 0, 0, 0
+    send = send or tamper.send
+    while queue and batches < MAX_BATCHES:
+        batch, size = [], 0
+        while queue:
+            line = len(json.dumps(queue[0], sort_keys=True, default=str))
+            if line > MAX_BATCH_BYTES:
+                skipped += 1           # one event too large to send alone: counted, never blocks the rest
+                queue.pop(0)
+                continue
+            if batch and size + line > MAX_BATCH_BYTES:
+                break
+            batch.append(queue.pop(0))
+            size += line
+        if not batch:
+            break
+        moment = now or _now()
+        # The sequence is the time in milliseconds: it only grows, even if this machine's cursor is deleted.
+        body = dict(schema=BATCH_SCHEMA, sensor=settings.get('sensor', ''), sequence=int(moment.timestamp() * 1000)
+                    + batches, sent_at=moment.strftime('%Y-%m-%dT%H:%M:%SZ'), events=batch)
+        body['mac'] = tamper._sign(settings['key'], body)
+        if dry_run:
+            sent, batches = sent + len(batch), batches + 1
+            continue
+        send(settings, body)
+        sent, batches = sent + len(batch), batches + 1
+        last = max(str(e.get('at') or '') for e in batch)
+        ids = [e['event_id'] for e in batch if str(e.get('at') or '') == last]
+        if last == cursor.get('last_at'):
+            ids = sorted(set(cursor.get('ids', [])) | set(ids))
+        cursor = dict(last_at=last, ids=ids)
+        write_private(cursor_path, json.dumps(cursor, sort_keys=True))
+    return dict(schema=SCHEMA, action='dry_run' if dry_run else 'push', url=settings['url'], sent=sent,
+                batches=batches, remaining=len(queue), too_large=skipped)
