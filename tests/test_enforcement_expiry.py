@@ -79,7 +79,7 @@ def test_a_pause_ends_when_its_time_is_up(p, child):
     from megalodon import timeline as tl
     ended = [e for e in tl.events(ledger=p["ledger"], journal=p["journal"]) if e["kind"] == "undo"]
     assert len(ended) == 1 and ended[0]["expired"] is True
-    assert tl._line(ended[0]).startswith("ended on time: suspend_process"), "the timeline says it ended on time"
+    assert tl._line(ended[0]).startswith("expiry recorded: suspend_process"), "expiry is not an on-time guarantee"
 
 
 def test_a_pause_ends_even_when_enforcement_is_turned_off(p, child):
