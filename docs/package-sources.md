@@ -165,6 +165,38 @@ reads.
   own `.npmrc` is the account's, not a project's. On this project's test
   machine, a warm check took 0.2 seconds over 4,500 folders; the first after
   a boot can take much longer on slow disks.
+* **Python project files.** In the same folders:
+  - **`pyproject.toml`:** Poetry's `[[tool.poetry.source]]`, uv's
+    `index-url`, `extra-index-url`, `find-links` and `[[tool.uv.index]]` (also
+    under `[tool.uv.pip]`), and PDM's `[[tool.pdm.source]]`;
+  - **`Pipfile`:** Pipenv's `[[source]]` entries.
+
+  Each index is recorded as a source labelled with the tool and the file, for
+  example `poetry for /srv/api/pyproject.toml`. These are reported:
+  - a plain-HTTP index;
+  - `verify_ssl = false` (Pipenv, PDM) and uv's `allow-insecure-host`;
+  - mixed indexes, only where the tool compares versions across them. That is
+    uv with `index-strategy = "unsafe-best-match"`, and PDM without
+    `respect-source-order = true` for a source without `include_packages`.
+    Poetry, Pipenv and uv's default take each package from one index.
+* **npm and yarn lockfiles.** `package-lock.json`, `npm-shrinkwrap.json` and
+  `yarn.lock` give a URL for every package, and `npm ci` downloads each one
+  from that URL. npm swaps `registry.npmjs.org` for the configured registry,
+  but any other host is fetched as written. So an edited lockfile can install
+  code from anywhere, whatever the settings say.
+  - **Recorded.** The hosts each lockfile downloads from, as sources labelled
+    `npm lockfile PATH`. Lockfile versions 1, 2 and 3 are read, and yarn's
+    `resolved` and `resolution` URLs. Git and file dependencies are not
+    hosts, and are skipped.
+  - **Foreign hosts.** A host that none of the project's registries names is
+    `PACKAGE_LOCKFILE_FOREIGN_HOST`. The registries are the system's,
+    account's and project's `.npmrc` and the environment, as for that
+    project; `registry.npmjs.org` and `registry.yarnpkg.com` always count.
+    It is reported at baseline time too. On this project's test machine it
+    found two tool folders built against a private mirror the machine's own
+    settings do not name.
+  - **Plain HTTP.** A host reached over plain HTTP is reported as
+    `PACKAGE_TRANSPORT_WEAKENED`.
 * **flatpak.** It reads the remotes in `/var/lib/flatpak/repo/config` and in
   each account's `~/.local/share/flatpak/repo/config`. Disabled remotes are
   skipped. Each remote's trusted keys, `NAME.trustedkeys.gpg`, are read and
@@ -213,6 +245,7 @@ reads.
 | `PACKAGE_SOURCE_ADDED` | MEDIUM | A new source |
 | `PACKAGE_TRANSPORT_WEAKENED` | MEDIUM; HIGH for pip and npm | HTTPS certificates or host names are not checked, or a pip or npm index is reached over plain HTTP. For apt and dnf, signatures still protect packages, but not keys or lists downloaded that way. pip and npm packages have no signatures, so nothing checks them. |
 | `PACKAGE_INDEX_MIXED` | MEDIUM | pip installs from an `extra-index-url` as well as its index and takes the higher version: a package with an internal name can be replaced from the other index. Reported at baseline time too. |
+| `PACKAGE_LOCKFILE_FOREIGN_HOST` | MEDIUM | A lockfile downloads packages from a host none of its project's registries names, which `npm ci` fetches as written. Reported at baseline time too. |
 | `WEAK_SIGNING_KEY` | MEDIUM | A key that is trusted, or used by a source, is RSA or DSA under 2048 bits or an old version 3 key. Keys kept only as removed keys, which nothing uses, are not reported. |
 
 The **package-trust-changed** response playbook covers the HIGH and CRITICAL
@@ -231,10 +264,11 @@ administrator's to put back.
   the folders above, or deeper or past the limit, are not seen. Nor are:
   - an environment variable set anywhere other than the login files above,
     such as a systemd unit, a CI job or a command line;
-  - an index named in `pyproject.toml` (Poetry, uv, PDM) or `Pipfile`;
-  - the hosts in an npm lockfile's `resolved` URLs, which `npm ci` fetches as
-    written;
-  - yarn and pnpm settings;
+  - yarn's and pnpm's own settings (`.yarnrc.yml`, `pnpm-workspace.yaml`), or
+    pnpm's lockfile;
+  - indexes in `setup.cfg`, `tox.ini` or a `uv.toml` outside a project;
+  - which host a lockfile's package actually came from, or whether its
+    integrity hash matches;
   - a snap store proxy set with `snap set`;
   - container registries.
 * **A project's files are its owner's to change.** Write access is checked

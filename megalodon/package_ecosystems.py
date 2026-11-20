@@ -20,8 +20,11 @@ value winning. Accounts without settings of their own use the system ones and ar
 from __future__ import annotations
 
 import configparser
+import json
 import os
 import re
+import tomllib
+from urllib.parse import urlsplit
 
 PIP_SYSTEM = ('/etc/pip.conf', '/etc/xdg/pip/pip.conf')
 PIP_USER = ('.config/pip/pip.conf', '.pip/pip.conf')
@@ -66,6 +69,13 @@ SKIP_FOLDERS = frozenset(('node_modules', '__pycache__', 'site-packages', 'dist-
 KEEP_HIDDEN = frozenset(('.venv', '.virtualenvs'))
 REQUIREMENTS = re.compile(r'(requirements|constraints)[\w.-]*\.(txt|in)')
 # The pip options a requirements file can give, and what each one sets.
+# Files that name where a project's packages come from, apart from settings files.
+LOCKFILES = ('package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock')
+# npm fetches a lockfile's registry.npmjs.org URLs from the registry configured instead; yarn's default host serves the
+# same packages. Any other host in a lockfile is fetched as written.
+NPM_DEFAULT_HOSTS = frozenset(('registry.npmjs.org', 'registry.yarnpkg.com'))
+_YARN_RESOLVED = re.compile(r'^\s+resolved\s+"?([^"\s#]+)', re.M)
+_YARN_RESOLUTION = re.compile(r'^\s+resolution:\s+"[^"]*?@(https?://[^"#\s]+)', re.M)
 REQUIREMENT_OPTIONS = {'-i': 'index-url', '--index-url': 'index-url', '--extra-index-url': 'extra-index-url',
                        '--trusted-host': 'trusted-host', '-f': 'find-links', '--find-links': 'find-links'}
 
@@ -140,11 +150,12 @@ def _environment(root, read, listing, gaps, home=''):
 
 def _projects(root, homes, gaps):
     """Virtual environments with a pip.conf, folders with a project .npmrc, and requirements files:
-    {'venvs': [(folder, account)], 'npm': [(folder, account)], 'requirements': [(file, account)]}.
+    {'venvs': [(folder, account)], 'npm': [(folder, account)], 'requirements': [(file, account)],
+    'python': [(pyproject.toml or Pipfile, account)], 'lockfiles': [(folder, file, account)]}.
 
     `account` is the account whose home holds it, or None. Symbolic links are not followed, hidden folders other
     than virtual environments are skipped, and nothing inside a virtual environment or node_modules is read."""
-    found, budget, seen = dict(venvs=[], npm=[], requirements=[]), MAX_WALK_FOLDERS, set()
+    found, budget, seen = dict(venvs=[], npm=[], requirements=[], python=[], lockfiles=[]), MAX_WALK_FOLDERS, set()
     starts = [(home, account, True) for account, home in homes] + [(place, None, False) for place in PROJECT_PLACES]
     for start, account, is_home in starts:
         stack = [(start, 0)]
@@ -179,6 +190,9 @@ def _projects(root, homes, gaps):
                 found['npm'].append((folder, account))
             found['requirements'] += [(f'{folder}/{e.name}', account) for e in entries
                                       if REQUIREMENTS.fullmatch(e.name) and is_file(e.name)]
+            found['python'] += [(f'{folder}/{name}', account) for name in ('pyproject.toml', 'Pipfile')
+                                if is_file(name)]
+            found['lockfiles'] += [(folder, f'{folder}/{name}', account) for name in LOCKFILES if is_file(name)]
             if depth >= MAX_WALK_DEPTH:
                 continue
             for entry in reversed(entries):
@@ -217,6 +231,149 @@ def _requirement_options(read, path, gaps):
     if 'index-url' in found:
         found['index-url'] = (found['index-url'][0][-1:], path)    # the last one wins
     return found
+
+
+def _toml(read, path, gaps):
+    raw = read(path)
+    if raw is None:
+        return None
+    try:
+        return tomllib.loads(raw.decode('utf-8', 'replace'))
+    except tomllib.TOMLDecodeError as exc:
+        gaps.append(f'{path} is not valid TOML: {str(exc)[:120]}')
+        return None
+
+
+def _table(value, *keys):
+    for key in keys:
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+
+def _python_project(path, read, gaps, weaken, add_source):
+    """The package indexes a pyproject.toml (Poetry, uv, PDM) or a Pipfile (Pipenv) names, as pip sources."""
+    document = _toml(read, path, gaps)
+    if document is None:
+        return
+    indexes = []          # (tool, setting, url, checks certificates)
+
+    def listed(value):
+        return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+    if path.endswith('Pipfile'):
+        for item in listed(document.get('source')):
+            indexes.append(('pipenv', f"source {item.get('name', '?')}", item.get('url'),
+                            item.get('verify_ssl') is not False))
+    for item in listed(_table(document, 'tool', 'poetry', 'source')):
+        indexes.append(('poetry', f"source {item.get('name', '?')}", item.get('url'), True))
+    for item in listed(_table(document, 'tool', 'pdm', 'source')):
+        kind = 'find-links' if item.get('type') == 'find_links' else 'source'
+        indexes.append(('pdm', f"{kind} {item.get('name', '?')}", item.get('url'), item.get('verify_ssl') is not False))
+    uv_insecure = []
+    for table in (_table(document, 'tool', 'uv'), _table(document, 'tool', 'uv', 'pip')):
+        if not isinstance(table, dict):
+            continue
+        for item in listed(table.get('index')):
+            indexes.append(('uv', f"index {item.get('name', '?')}", item.get('url'), True))
+        for name in ('index-url', 'extra-index-url', 'find-links'):
+            values = table.get(name)
+            for value in values if isinstance(values, list) else [values] if values else []:
+                indexes.append(('uv', name, value, True))
+        hosts = table.get('allow-insecure-host')
+        uv_insecure += hosts if isinstance(hosts, list) else []
+    for tool, setting, url, verified in indexes:
+        label = f'{tool} for {path}'
+        if not isinstance(url, str) or not url:
+            continue
+        if '${' in url or '$' in url.split('://', 1)[0]:
+            gaps.append(f'{setting} in {path} is built from an environment variable: its value is not known')
+            continue
+        add_source('pip', label, url, setting, TLS_ONLY, path)
+        if _plain(url):
+            weaken('PACKAGE_TRANSPORT_WEAKENED', f'{tool}:{path}:plain:{url}',
+                   f'{label} installs from {url} over an unencrypted connection: Python packages are not signed, so '
+                   f'nothing checks them', path, 'HIGH')
+        elif not verified:
+            weaken('PACKAGE_TRANSPORT_WEAKENED', f'{tool}:{path}:verify_ssl:{url}',
+                   f'{label} installs from {url} without checking its certificate (verify_ssl = false): Python '
+                   f'packages are not signed, so TLS is their only check', path, 'HIGH')
+    for host in uv_insecure:
+        weaken('PACKAGE_TRANSPORT_WEAKENED', f'uv:{path}:allow-insecure-host:{host}',
+               f'uv for {path} trusts {host} without checking its certificate: Python packages are not signed, so '
+               f'TLS is their only check', path, 'HIGH')
+    # Most of these tools take each package from one index. uv does with its default strategy, and PDM does once
+    # told to respect source order; otherwise they compare versions across indexes, as pip does with an extra index.
+    uv = [i for i in indexes if i[0] == 'uv' and i[1] != 'find-links' and isinstance(i[2], str)]
+    strategy = {_table(document, 'tool', 'uv', 'index-strategy'), _table(document, 'tool', 'uv', 'pip',
+                                                                         'index-strategy')}
+    if 'unsafe-best-match' in strategy and uv:
+        weaken('PACKAGE_INDEX_MIXED', f'uv:{path}:unsafe-best-match',
+               f'uv for {path} takes the highest version across its indexes ({", ".join(i[2] for i in uv)}, '
+               f'and PyPI unless one is the default), set by index-strategy = "unsafe-best-match"', path)
+    pdm = [i for i, item in zip([i for i in indexes if i[0] == 'pdm'],
+                                listed(_table(document, 'tool', 'pdm', 'source')))
+           if i[1].startswith('source') and not item.get('include_packages') and item.get('name') != 'pypi']
+    if pdm and _table(document, 'tool', 'pdm', 'resolution', 'respect-source-order') is not True:
+        weaken('PACKAGE_INDEX_MIXED', f'pdm:{path}:sources',
+               f'pdm for {path} takes the highest version across its sources ({", ".join(i[2] for i in pdm)}, '
+               f'and PyPI unless a source named pypi replaces it): set [tool.pdm.resolution] '
+               f'respect-source-order = true, or include_packages on each source', path)
+
+
+# ------------------------------------------------------------------ npm lockfiles
+
+def _lockfile_hosts(read, path, gaps):
+    """{(scheme, host): number of packages} for the URLs a lockfile downloads packages from."""
+    raw = read(path)
+    if raw is None:
+        return {}
+    urls = []
+    if path.endswith('yarn.lock'):
+        text = raw.decode('utf-8', 'replace')
+        urls = _YARN_RESOLVED.findall(text) + _YARN_RESOLUTION.findall(text)
+    else:
+        try:
+            document = json.loads(raw)
+        except ValueError:
+            gaps.append(f'{path} is not valid JSON')
+            return {}
+        stack = [document]
+        while stack:
+            node = stack.pop()
+            if not isinstance(node, dict):
+                continue
+            if isinstance(node.get('resolved'), str):
+                urls.append(node['resolved'])
+            for key in ('packages', 'dependencies'):        # lockfile version 2 and 3, and version 1
+                if isinstance(node.get(key), dict):
+                    stack.extend(node[key].values())
+    hosts = {}
+    for url in urls:
+        try:
+            parts = urlsplit(url.strip())
+        except ValueError:
+            continue
+        if parts.scheme in ('http', 'https') and parts.hostname:
+            key = (parts.scheme, parts.hostname.lower())
+            hosts[key] = hosts.get(key, 0) + 1
+    return hosts
+
+
+def _lockfile_report(path, hosts, registries, weaken, add_source):
+    """Record a lockfile's download hosts, and report one no registry of the project names."""
+    label = f'npm lockfile {path}'
+    known = set(NPM_DEFAULT_HOSTS) | {(urlsplit(uri).hostname or '').lower() for uri in registries}
+    for (scheme, host), count in sorted(hosts.items()):
+        uri = f'{scheme}://{host}/'
+        packages = f"{count} package{'' if count == 1 else 's'}"
+        add_source('npm', label, uri, 'resolved', TLS_ONLY, path)
+        if scheme == 'http':
+            weaken('PACKAGE_TRANSPORT_WEAKENED', f'npm:lockfile {path}:plain:{host}',
+                   f'{label} downloads {packages} from {uri} over an unencrypted connection: npm packages are '
+                   f'not signed, so nothing checks them', path, 'HIGH')
+        if host not in known:
+            weaken('PACKAGE_LOCKFILE_FOREIGN_HOST', f'npm:lockfile {path}:{host}',
+                   f'{label} downloads {packages} from {uri}, which none of the project\'s registries '
+                   f'({", ".join(sorted(registries))}) names: npm ci fetches them as written', path)
 
 
 # ------------------------------------------------------------------ pip
@@ -263,7 +420,7 @@ def _pip(root, read, gaps, weaken, add_source, listing=None, projects=None):
     system_env = {k: v for k, v in system_env.items() if k.startswith('PIP_')}
     if not system and not system_env and not any(files or env for _a, files, env in accounts) and \
             not any(_exists(root, p) for p in PIP_PROGRAMS) and not (projects or {}).get('venvs') and \
-            not (projects or {}).get('requirements'):
+            not (projects or {}).get('requirements') and not (projects or {}).get('python'):
         return
     scopes = [('the system', system, system_env)] + [
         (f'account {a}', system + files, {**system_env, **env}) for a, files, env in accounts if files or env]
@@ -284,6 +441,8 @@ def _pip(root, read, gaps, weaken, add_source, listing=None, projects=None):
         options = _requirement_options(read, path, gaps)
         if options:
             _pip_report(f'requirements {path}', options, weaken, add_source, own=path)
+    for path, _account in (projects or {}).get('python', ()):
+        _python_project(path, read, gaps, weaken, add_source)
 
 
 def _pip_config_file(root, paths, env, gaps):
@@ -360,7 +519,8 @@ def _npm(root, read, gaps, weaken, add_source, listing=None, projects=None):
                  {k: v for k, v in _environment(root, read, listing, gaps, home).items() if k.startswith('npm_')})
                 for account, home in _homes(root)]
     if not system and not system_env and not any(files or env for _a, files, env in accounts) and \
-            not any(_exists(root, p) for p in NPM_PROGRAMS) and not (projects or {}).get('npm'):
+            not any(_exists(root, p) for p in NPM_PROGRAMS) and not (projects or {}).get('npm') and \
+            not (projects or {}).get('lockfiles'):
         return
     scopes = [('the system', system, system_env)] + [
         (f'account {a}', system + files, {**system_env, **env}) for a, files, env in accounts if files or env]
@@ -377,6 +537,18 @@ def _npm(root, read, gaps, weaken, add_source, listing=None, projects=None):
         settings = _with_environment(_npm_settings(read, _npm_config_files(root, system + files, env, gaps) + [own]),
                                      env, NPM_ENV, split=False)
         _npm_report(f'project {folder}', settings, weaken, add_source, gaps, own=own)
+    # A lockfile names the URL of every package. It is judged against the registries its project uses.
+    for folder, path, account in (projects or {}).get('lockfiles', ()):
+        files, env = inherited.get(account, ([], {}))
+        env = {**system_env, **env}
+        own = [f'{folder}/.npmrc'] if _exists(root, f'{folder}/.npmrc') else []
+        settings = _with_environment(_npm_settings(read, _npm_config_files(root, system + files, env, gaps) + own),
+                                     env, NPM_ENV, split=False)
+        registries = [settings.get('registry', (NPM_DEFAULT, None))[0]] + [
+            uri for name, (uri, _path) in settings.items() if name.endswith(':registry')]
+        hosts = _lockfile_hosts(read, path, gaps)
+        if hosts:
+            _lockfile_report(path, hosts, registries, weaken, add_source)
 
 
 def _npm_config_files(root, paths, env, gaps):
