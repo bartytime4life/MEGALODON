@@ -846,10 +846,14 @@ def ingest_signals(lines, now):
             refused += 1
             continue
         evidence = item.get('evidence') if isinstance(item.get('evidence'), dict) else {}
-        processes = [p.get('program') for p in evidence.get('processes', []) if isinstance(p, dict)]
+        listed = evidence.get('processes') if isinstance(evidence.get('processes'), list) else []
+        # A process the finding says was not writing (the ransomware watch lists readers too, such as a viewer
+        # or a backup) is evidence only, never a target.
+        listed = [p for p in listed if isinstance(p, dict) and p.get('writing') is not False]
+        processes = [p.get('program') for p in listed]
         # A process named with its start time (as the ancestry watch writes it) is a suspension target.
-        ids = [f"{p['pid']}@{p['start']}:{p['program']}" for p in evidence.get('processes', [])
-               if isinstance(p, dict) and type(p.get('pid')) is int and type(p.get('start')) is int
+        ids = [f"{p['pid']}@{p['start']}:{p['program']}" for p in listed
+               if type(p.get('pid')) is int and type(p.get('start')) is int
                and isinstance(p.get('program'), str) and p['program'].startswith('/')]
         folder = evidence.get('folder')
         detected = item.get('detected_at') if isinstance(item.get('detected_at'), str) else _iso(now)
@@ -1214,6 +1218,23 @@ def _read_state(path):
     return value if isinstance(value, dict) else {}
 
 
+class _StateLock:
+    """Held while one pass reads the state, decides, and writes the ledger and the state."""
+
+    def __init__(self, state_path):
+        self.path = Path(state_path).expanduser().with_name(Path(state_path).name + '.lock')
+
+    def __enter__(self):
+        import fcntl
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        os.close(self.fd)        # closing releases the lock
+
+
 def observations_path(ledger=DEFAULT_LEDGER):
     return Path(ledger).expanduser().with_name(OBSERVATIONS_NAME)
 
@@ -1251,16 +1272,23 @@ def run(*, policy_path=DEFAULT_POLICY, ledger=DEFAULT_LEDGER, state_path=DEFAULT
     """One shadow pass over every source (or the given signals)."""
     now = now or _now()
     policy = load_policy(policy_path)
-    state = _read_state(state_path)
-    gaps = []
+    gaps, collected = [], {}
     if signals is None:
-        signals, gaps = collect(policy, state, now, root=root)
-    observed = []
-    decisions = decide(policy, state, signals, now, guards=Guards(policy, state, now, root=root, protected=protected),
-                       observations=observed)
-    _append_ledger(ledger, decisions)
-    _append_ledger(observations_path(ledger), observed)
-    _atomic_write(Path(state_path).expanduser(), json.dumps(state, sort_keys=True).encode())
+        # Collecting can take a while, so it is done outside the lock; it only moves the network cursor.
+        collected = _read_state(state_path)
+        signals, gaps = collect(policy, collected, now, root=root)
+    # A live watch (the ransomware watch) and the timer can decide at the same moment: one at a time, each on the
+    # state the last one wrote, so neither loses the other's incidents, seen findings or rate counts.
+    with _StateLock(state_path):
+        state = _read_state(state_path)
+        if 'cursor' in collected:
+            state['cursor'] = collected['cursor']
+        observed = []
+        decisions = decide(policy, state, signals, now,
+                           guards=Guards(policy, state, now, root=root, protected=protected), observations=observed)
+        _append_ledger(ledger, decisions)
+        _append_ledger(observations_path(ledger), observed)
+        _atomic_write(Path(state_path).expanduser(), json.dumps(state, sort_keys=True).encode())
     return _summary(decisions, signals, gaps, policy)
 
 

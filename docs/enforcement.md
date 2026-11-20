@@ -81,15 +81,19 @@ A `--dry-run` and a run or undo refused in Stage 0 create no effectful lock or
 journal records. A run that is off also creates nothing when no suspension is
 due. When recovery is due, it takes the same lock and records its outcome even
 though new enforcement is disabled.
-The scheduled `megalodon-enforce` service keeps `ProtectSystem=full` but can
-write to `/etc`. `usermod` needs this to lock an account, because it writes
+Runs come from the scheduled `megalodon-enforce` service every minute, and
+from the [ransomware watch](ransomware-watch.md#answer-it-at-once) as soon as it
+raises a finding. The watch's run is a whole run: it also carries out any other
+decision recorded since the last one.
+The scheduled `megalodon-enforce` and `megalodon-ransomware` services keep
+`ProtectSystem=full` but can write to `/etc`. `usermod` needs this to lock an account, because it writes
 lock and temporary files beside `/etc/shadow`.
 
 ## What each action does
 
 | Action | What happens | Undo |
 | --- | --- | --- |
-| `suspend_process` | SIGSTOP to the one process named by PID and start time. It is sent through a pidfd after checking that the start time and program still match, so a reused PID is never signalled. Program-wide targets are never signalled. The process is paused, not killed: its memory and files stay for [capture](memory-capture.md). With the playbook's `suspend_minutes`, the pause ends by itself: see below. | SIGCONT |
+| `suspend_process` | SIGSTOP to the one process named by PID and start time. It is sent through a pidfd after checking that the start time and program still match, so a reused PID is never signalled. Program-wide targets are never signalled, and neither is MEGALODON's own process, so a live watch that decides on its own findings keeps watching. The process is paused, not killed: its memory and files stay for [capture](memory-capture.md). With the playbook's `suspend_minutes`, the pause ends by itself: see below. | SIGCONT |
 | `block_address` | A time-limited element in MEGALODON's own nftables table (`inet megalodon`), dropping traffic to and from the address. It expires by itself after the playbook's `block_minutes`. | The element is deleted |
 | `quarantine_file` | The file is copied into the quarantine folder with no permissions, checked to be the same file, and removed. Its SHA-256, owner and mode are recorded. The path is opened one folder at a time without following symlinks, so a folder swapped for a symlink after the decision cannot lead outside the folders the guards checked. | Restored with its mode and owner, if the copy still matches its hash, nothing new is at that path, and no folder on the way is now a symlink |
 | `lock_account` | `usermod --lock --expiredate 1`. A locked password alone still lets SSH keys in; an expired account does not. Accounts with UID 0 are never locked. | Its previous expiry put back; the password is unlocked only if it was not already locked before |

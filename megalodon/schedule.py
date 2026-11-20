@@ -112,6 +112,11 @@ JOBS = (
         manifest='~/.local/state/megalodon/commands-state.json',
         setup='megalodon commands init --key-file /path/to/move/off/this/machine'),
     Job('credentials', 'MEGALODON credential access watch', ('credentials', 'watch', '--alert')),
+    # Encryption is decided and enforced as it is seen, not on the next timer; enforcement may disable a
+    # persistence entry decided earlier in the same pass, so the same folders as the enforce job are writable.
+    Job('ransomware', 'MEGALODON ransomware watch, answered at once', ('ransomware', 'watch', '--respond'),
+        manifest='~/.config/megalodon/ransomware.json', setup='megalodon ransomware init --dir /home --dir /srv',
+        writable=('/etc', '-/usr/local/lib/systemd/system')),
     Job('egress', 'MEGALODON outgoing-program watch', ('egress', 'watch', '--alert'),
         manifest='~/.config/megalodon/egress.json', setup='megalodon egress learn --minutes 60'),
 )

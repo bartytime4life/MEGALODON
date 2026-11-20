@@ -801,15 +801,32 @@ def build_parser() -> argparse.ArgumentParser:
     ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
     ransom_watch = ransom_sub.add_parser(
         "watch", help="watch folders until stopped; print each finding as JSON and send it to configured alerts")
-    ransom_watch.add_argument("--dir", type=Path, action="append", required=True,
-                              help="folder to watch, recursively (repeat for more)")
-    ransom_watch.add_argument("--min-files", type=_bounded_cli_integer("min-files", 2, 10000), default=10,
+    ransom_watch.add_argument("--dir", type=Path, action="append",
+                              help="folder to watch, recursively (repeat for more; default: the folders saved "
+                                   "by `ransomware init`)")
+    ransom_watch.add_argument("--min-files", type=_bounded_cli_integer("min-files", 2, 10000),
                               help="encrypted files within the window that raise the alarm (default 10)")
-    ransom_watch.add_argument("--window", type=_bounded_cli_integer("window", 5, 3600), default=60,
+    ransom_watch.add_argument("--window", type=_bounded_cli_integer("window", 5, 3600),
                               help="seconds (default 60)")
+    ransom_watch.add_argument("--folders-file", type=Path,
+                              help="saved folders to watch when no --dir is given "
+                                   "(default ~/.config/megalodon/ransomware.json)")
     ransom_watch.add_argument("--config", type=Path,
                               help="settings file whose [alerts] receive findings "
                                    "(default ~/.config/megalodon/settings.toml when present)")
+    ransom_watch.add_argument("--respond", action="store_true",
+                              help="decide each finding at once with the response engine, and carry out what "
+                                   "the enforcement policy allows")
+    ransom_init = ransom_sub.add_parser("init", help="save the folders for a scheduled watch")
+    ransom_init.add_argument("--dir", type=Path, action="append", required=True,
+                             help="folder to watch, recursively (repeat for more)")
+    ransom_init.add_argument("--min-files", type=_bounded_cli_integer("min-files", 2, 10000), default=10,
+                             help="encrypted files within the window that raise the alarm (default 10)")
+    ransom_init.add_argument("--window", type=_bounded_cli_integer("window", 5, 3600), default=60,
+                             help="seconds (default 60)")
+    ransom_init.add_argument("--folders-file", type=Path,
+                             help="where to save them (default ~/.config/megalodon/ransomware.json)")
+    ransom_init.add_argument("--replace", action="store_true", help="replace folders saved before")
     ransom_sub.add_parser("selftest", help="encrypt throwaway files in a temporary folder and confirm the alarm")
 
     alerts = sub.add_parser("alerts", help="off-machine alerts: webhooks (JSON, Slack, Discord, ntfy) and syslog")
@@ -2892,13 +2909,29 @@ def _ransomware(args: argparse.Namespace) -> int:
         ok = {"RANSOMWARE_ENCRYPTION", "RANSOM_NOTE"} <= set(rules)
         print(json.dumps(dict(schema="megalodon-ransomware-selftest-v1", detected=rules, ok=ok), indent=2))
         return 0 if ok else 1
+    folders_file = args.folders_file or watch.DEFAULT_FOLDERS_FILE
+    if args.ransomware_command == "init":
+        try:
+            result = watch.save_folders(args.dir, path=folders_file, min_files=args.min_files,
+                                        window_seconds=args.window, replace=args.replace)
+        except (watch.WatchError, OSError, ValueError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     path = args.config or Path.home() / ".config/megalodon/settings.toml"
     dispatcher = None
+    responder = None
     try:
+        saved = dict(folders=[str(item) for item in args.dir], min_files=10, window_seconds=60) if args.dir \
+            else watch.load_folders(folders_file)
         if args.config or path.exists():
             dispatcher = dispatcher_for(load_settings(path).alerts)
-        detector = watch.RansomwareDetector(min_files=args.min_files, window_seconds=args.window)
-        roots = [str(item) for item in args.dir]
+        detector = watch.RansomwareDetector(min_files=args.min_files or saved["min_files"],
+                                            window_seconds=args.window or saved["window_seconds"])
+        roots = saved["folders"]
+        if args.respond:
+            responder = watch.Responder()
         seeded = 0
         for root in roots:
             seeded += detector.seed([root])
@@ -2913,10 +2946,16 @@ def _ransomware(args: argparse.Namespace) -> int:
             dispatcher.submit([HostNotice(finding.rule_id, finding.severity, finding.detected_at,
                                           finding.message, watch.ATTACK,
                                           "Files are being rewritten as encrypted data, as ransomware does.")])
+        if responder is not None:
+            # Decided and carried out before the next event is read; said on standard error, beside the
+            # start message, so standard output stays one finding per line.
+            print("megalodon: response " + json.dumps(responder(finding), sort_keys=True), file=sys.stderr,
+                  flush=True)
     watcher.emit = emit
     print(f"megalodon: watching {watcher.watched} folders ({seeded} files recorded)"
           + ("; folder limit reached, some subfolders are not watched" if watcher.truncated else "")
-          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else "; no alerts configured"),
+          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else "; no alerts configured")
+          + ("; findings are decided at once" if responder else ""),
           file=sys.stderr, flush=True)
     stop = Event()
     try:

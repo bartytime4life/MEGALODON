@@ -28,11 +28,17 @@ megalodon respond report
   [incident timeline](incident-timeline.md) reads both.
 * **`watch --interval 300`** repeats `run` until stopped.
 * **`ingest`** decides on findings read as JSON lines from standard input,
-  for example from the ransomware watch:
+  for example from the credential access watch:
 
   ```bash
-  megalodon ransomware watch --dir ~/Documents | megalodon respond ingest
+  megalodon credentials watch | megalodon respond ingest
   ```
+
+  A process a finding lists with `"writing": false` is kept as evidence and
+  is never a target. The ransomware watch lists readers, such as a viewer
+  or a backup, that way. The ransomware watch does not need this pipe:
+  `ransomware watch --respond` decides each finding itself, and then runs
+  enforcement ([answer it at once](ransomware-watch.md#answer-it-at-once)).
 
 * **`report --hours 168`** summarizes the last week: decisions per
   playbook, actions that would apply or were refused, the guards that
@@ -83,6 +89,12 @@ policy allows, each with a way to undo it.
 
 The same finding is decided at most once a day.
 
+Passes take turns. Collecting runs on its own, so a long collection never holds
+up a live watch. Correlating, deciding and recording run one pass at a time:
+each pass reads the incidents, seen findings and rate counts the last pass
+wrote. The timer's pass and a ransomware finding can be decided at the same
+moment without either losing the other's state.
+
 ## Actions
 
 | Action | Target | What it would do |
@@ -126,7 +138,7 @@ Guards apply whatever the playbooks say:
 | Playbook | Findings | Would do |
 | --- | --- | --- |
 | reverse-shell | `STDIO_SHELL_ON_NETWORK`, `SHELL_HOLDS_SOCKET`, `PIPED_TO_SHELL` | Collect evidence, suspend the program, block the remote address for 15 minutes, notify |
-| ransomware | `RANSOMWARE_ENCRYPTION`, `RANSOMWARE_MASS_WRITE` | Collect evidence, suspend the suspect programs, notify |
+| ransomware | `RANSOMWARE_ENCRYPTION`, `RANSOMWARE_MASS_WRITE` | Collect evidence, suspend the processes seen writing in the watched folders, notify |
 | bind-shell-or-dropped-listener | HIGH `NEW_LISTENER`, `LISTENER_PROGRAM_CHANGED` | Collect evidence, suspend the program, notify |
 | web-shell-or-exploited-service | HIGH `SERVICE_SPAWNED_SHELL`, `SERVICE_SPAWNED_TOOL` | Collect evidence, suspend the started process, notify |
 | rootkit | `HIDDEN_PROCESS`, `HIDDEN_MODULE`, `HIDDEN_PORT`, `HIDDEN_DIRECTORY`, `HIDDEN_FILE`, `PRELOAD_LIBRARY` | Collect evidence, notify: a machine that hides things from itself cannot be trusted to clean itself |
@@ -181,5 +193,5 @@ decision or escalate it to you, never start an action.
   by you and writable only by you, and every decision records its SHA-256.
   Cryptographic signing comes with enforcement.
 * **Sources are read when `run` runs.** A reverse shell that opens and closes
-  between passes is missed. The ransomware watch is real-time only when
-  piped into `ingest`.
+  between passes is missed. The ransomware watch, run with `--respond`, and
+  findings piped into `ingest` are decided as they arrive.
