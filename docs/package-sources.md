@@ -100,6 +100,37 @@ reads.
 
   The keys are those in `/etc/pki/rpm-gpg` and those imported into rpm.
   Hooks are the commands in dnf's post-transaction actions.
+* **pip.** It reads `/etc/pip.conf`, `/etc/xdg/pip/pip.conf` and each
+  account's own `~/.config/pip/pip.conf` and `~/.pip/pip.conf`, the last value
+  winning, as pip does. Accounts with no settings of their own use the
+  system's and are not listed apart. It records `index-url`, with PyPI when it
+  is not set, and every `extra-index-url`. pip packages are not signed: TLS is
+  their only check. So these are reported:
+  - an index or a `trusted-host` that pip reaches without checking its
+    certificate;
+  - an `extra-index-url`. pip takes whichever index offers the higher version,
+    so a package with an internal name can be replaced from the other index
+    (dependency confusion).
+* **npm.** It reads npm's built-in `npmrc`, `/etc/npmrc`, `/usr/etc/npmrc`,
+  `/usr/local/etc/npmrc` and each account's `~/.npmrc`. It records `registry`,
+  with the npm registry when it is not set, and every scoped registry, such as
+  `@corp:registry`. npm packages are checked only by TLS too, so a
+  plain-HTTP registry and `strict-ssl=false` are reported.
+* **flatpak.** It reads the remotes in `/var/lib/flatpak/repo/config` and in
+  each account's `~/.local/share/flatpak/repo/config`. Disabled remotes are
+  skipped. Each remote's trusted keys, `NAME.trustedkeys.gpg`, are read and
+  recorded like apt keys, so a key added to a remote is reported.
+  `gpg-verify=false` turns signature checks off. `gpg-verify-summary=false`
+  leaves the remote's list of apps unchecked.
+* **snap.** A snap installed with `snap install --dangerous` has a revision
+  starting with `x`, and its signature was not checked. `SNAPPY_FORCE_API_URL`
+  and snapd's other store variables, set in a `snapd.service.d` drop-in, send
+  snapd to another store.
+* **When these tools are present.** pip and npm are recorded when the
+  program or a settings file is there, flatpak when it has a repository, and
+  snap when snapd has a state folder. A tool's default index, first seen after
+  an upgrade, is not reported as added. A move away from it is reported as
+  redirected.
 * **Who can change it.** These folders, every folder above them and the files
   in them are checked for whether an account other than root can change them.
   So is every keyring a source names, together with the folders above it and,
@@ -108,7 +139,12 @@ reads.
   - `/etc/apt` and its folders;
   - `/usr/share/keyrings`;
   - `/etc/yum.repos.d`, `/etc/dnf`;
-  - `/etc/pki/rpm-gpg`.
+  - `/etc/pki/rpm-gpg`;
+  - the system-wide pip and npm settings, flatpak's repository settings and
+    its trusted keys, snapd's drop-ins, and root's own pip and npm settings.
+
+  Other accounts' own settings are theirs to change, and are not reported as
+  writable.
 
 ## What is reported
 
@@ -124,7 +160,8 @@ reads.
 | `PACKAGE_MANAGER_HOOK_SUSPICIOUS` | HIGH | At baseline: a hook already runs from a temporary folder or fetches from the network |
 | `PACKAGE_SIGNATURE_CHECK_WEAKENED` | HIGH | Signatures are checked less strictly, or a signing key is fetched over a plain connection. Reported at baseline time too. |
 | `PACKAGE_SOURCE_ADDED` | MEDIUM | A new source |
-| `PACKAGE_TRANSPORT_WEAKENED` | MEDIUM | HTTPS certificates or host names are not checked. Signatures still protect packages, but not keys or lists downloaded that way. |
+| `PACKAGE_TRANSPORT_WEAKENED` | MEDIUM; HIGH for pip and npm | HTTPS certificates or host names are not checked, or a pip or npm index is reached over plain HTTP. For apt and dnf, signatures still protect packages, but not keys or lists downloaded that way. pip and npm packages have no signatures, so nothing checks them. |
+| `PACKAGE_INDEX_MIXED` | MEDIUM | pip installs from an `extra-index-url` as well as its index and takes the higher version: a package with an internal name can be replaced from the other index. Reported at baseline time too. |
 | `WEAK_SIGNING_KEY` | MEDIUM | A key that is trusted, or used by a source, is RSA or DSA under 2048 bits or an old version 3 key. Keys kept only as removed keys, which nothing uses, are not reported. |
 
 The **package-trust-changed** response playbook covers the HIGH and CRITICAL
@@ -139,8 +176,10 @@ administrator's to put back.
 * **Signatures, not trust.** A source that is signed by the key it names is
   accepted, even if the key and the source were added together by an intruder.
   That is why every added key and source is reported for you to confirm.
-* **apt and dnf only.** pip, npm, snap, flatpak and container registries are
-  not read.
+* **System and account settings only.** pip and npm settings in a project,
+  a virtual environment or an environment variable (`PIP_INDEX_URL`,
+  `npm_config_registry`) are not seen. Nor are a snap store proxy set with
+  `snap set`, yarn and pnpm settings, or container registries.
 * **No expiry or revocation.** Key signatures are not parsed, so an expired or
   revoked key is reported only by its size and algorithm.
 * **The files as written.** Settings given on apt's command line, or a
