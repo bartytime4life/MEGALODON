@@ -90,7 +90,7 @@ The same finding is decided at most once a day.
 | `block_address` | address | Drop traffic to and from the address for `block_minutes` |
 | `suspend_process` | process, or program | Pause (SIGSTOP) the process, keeping it for investigation |
 | `quarantine_file` | file | Move the file aside with no permissions, recording its hash |
-| `disable_persistence` | persistence entry | Disable a service, job or startup entry without deleting it |
+| `disable_persistence` | persistence entry | Disable a service, job or startup entry without deleting it. Refused for locations the [persistence watch](persistence-watch.md) does not cover, and for MEGALODON's own units |
 | `lock_account` | account | Lock the account's password and logins |
 
 Every action is designed to be reversible.
@@ -152,6 +152,7 @@ Guards apply whatever the playbooks say:
 | attacker-at-the-door | HIGH `BRUTE_FORCE`, `HOST_SWEEP`, `DECOY_TOUCH`, `SYN_FLOOD`, `PORT_SCAN` | Block the source for 30 minutes, notify |
 | command-and-control-or-exfiltration | HIGH `BEACONING`, `DATA_EXFILTRATION`, `IOC_MATCH`, DNS rules | Only when corroborated: collect evidence, block for 60 minutes, notify |
 | new-backdoor-account | CRITICAL account changes in the persistence watch | Collect evidence, lock the account, notify |
+| new-persistence-entry | `PERSISTENCE_ADDED`: a service, timer, cron or at job, startup file, SSH key file, preload, sudoers, PAM, init or module file the baseline did not have | Collect evidence, disable the entry, notify |
 | trojaned-program-or-wiped-log | Program integrity, log integrity and canary findings | Collect evidence, notify |
 
 Findings no playbook matches, such as `DNS_BYPASS`, are not decided.

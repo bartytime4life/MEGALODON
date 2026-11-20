@@ -353,6 +353,16 @@ min_severity = "CRITICAL"
 actions = ["collect_evidence", "lock_account", "notify"]
 
 [[response.playbook]]
+name = "new-persistence-entry"
+# A service, job or startup file the persistence baseline did not have. Disabling moves it aside, kept for undo;
+# entries that existed before and were changed are never moved.
+rules = ["PERSISTENCE_ADDED"]
+categories = ["systemd", "cron", "at", "autostart", "shell_startup", "ssh", "preload", "sudoers", "pam", "init",
+              "module_config"]
+min_severity = "MEDIUM"
+actions = ["collect_evidence", "disable_persistence", "notify"]
+
+[[response.playbook]]
 name = "trojaned-program-or-wiped-log"
 rules = ["PACKAGE_MISMATCH", "PACKAGE_RECORD_CHANGED", "LOG_DELETED", "LOG_TRUNCATED", "LOG_REWRITTEN",
          "CANARY_MODIFIED", "CANARY_REMOVED", "CANARY_READ"]
@@ -1033,8 +1043,10 @@ class Guards:
             if target in self.me or target in policy.never_touch_accounts:
                 return 'root, the account running MEGALODON, or listed in never_touch_accounts'
         elif action == 'disable_persistence':
-            if target.split(':', 1)[0] in ('kernel_module', 'setuid', 'account'):
-                return 'not a service, job or startup entry'
+            from .persistence_watch import why_not_disabled
+            category, _, location = target.partition(':')
+            if why := why_not_disabled(category, location):
+                return why
         return self._rate(action, target)
 
     def _rate(self, action, target):

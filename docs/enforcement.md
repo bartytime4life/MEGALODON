@@ -92,7 +92,18 @@ lock and temporary files beside `/etc/shadow`.
 | `collect_evidence` | An [evidence bundle](evidence-collection.md), plus the [memory](memory-capture.md) of up to four processes the finding names | Nothing to undo |
 | `notify` | A summary of what was enforced, to the alert destinations | Nothing to undo |
 
-`disable_persistence` is not carried out by this version, even when listed.
+| `disable_persistence` | For an entry the [persistence](persistence-watch.md) baseline did not have (`PERSISTENCE_ADDED`): the file is moved into the quarantine folder like a quarantined file. A symlink, such as a systemd enablement link, is removed and where it led is recorded; what it leads to is never touched. For a system systemd unit, systemd is told to reload, and a timer, socket or path unit is also stopped, so it fires no more. A service is left running, so its memory can be captured: pause it with `suspend_process`. | The file or link is put back if nothing is at that path now, systemd reloads, and a timer, socket or path unit that was running is started again |
+
+`disable_persistence` never moves an entry that existed before and was
+changed, such as an edited `/etc/sudoers`, `sshd_config` or `.bashrc`. Moving
+it would also remove what was there before, so it is refused with the reason
+recorded, whatever the playbook says. It acts only on locations the
+persistence watch covers, never on accounts, kernel modules or setuid
+programs, and never on MEGALODON's own units. The default
+`new-persistence-entry` playbook decides it for new entries; list
+`disable_persistence` and that playbook in `enforce.toml` to have it carried
+out. After an undo, run `megalodon persistence accept` if the entry is wanted,
+or it is reported, and decided, again.
 
 `enforce list` shows the applied actions that have not been undone.
 
@@ -102,6 +113,12 @@ lock and temporary files beside `/etc/shadow`.
   own processes.
 * **A paused process stays paused** until you undo it or stop it yourself.
   Blocks expire; suspensions do not.
+* **`~/` is one account's home.** A persistence location under `~/` is in the
+  home of the account that ran the persistence check, and enforcement resolves
+  it in its own home. The [scheduler](scheduling.md) runs both as the same
+  account. Other accounts' startup files are not reached this way.
+* **A disabled service keeps running** until it is paused or stopped. Its unit
+  file is gone, so it does not start again at the next boot.
 * **Quarantine keeps one copy.** The quarantine folder is on the local disk,
   so keep it off the machine if the file matters.
 * **Decisions are only as good as the findings.** Every rule here can be

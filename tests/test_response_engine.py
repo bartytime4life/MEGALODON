@@ -55,7 +55,7 @@ def actions(decision):
 
 def test_default_policy_is_private_and_only_shadow_mode_exists(paths):
     policy = re_.load_policy(paths["policy_path"])
-    assert len(policy.playbooks) == 30 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
+    assert len(policy.playbooks) == 31 and stat.S_IMODE(paths["policy_path"].stat().st_mode) == 0o600
     with pytest.raises(re_.ResponseError, match="exists"):
         re_.write_default_policy(paths["policy_path"])
     for old, new, message in [
@@ -148,8 +148,11 @@ def test_backdoor_accounts_are_locked_but_never_root(paths):
         {"change": "added", "category": "cron", "location": "/etc/cron.d/x", "severity": "CRITICAL"}]}
     re_.run(signals=re_.persistence_signals(report), now=NOW, **paths)
     decisions = ledger(paths)
-    assert [d["signal"]["entities"].get("account") for d in decisions] == [["svc-backup"], ["root"]], \
-        "the cron finding matches no account playbook"
+    assert [d["signal"]["entities"].get("account") for d in decisions] == [["svc-backup"], ["root"], None]
+    assert [d["playbook"] for d in decisions] == ["new-backdoor-account", "new-backdoor-account",
+                                                  "new-persistence-entry"], \
+        "the cron finding matches no account playbook: it is a new persistence entry"
+    assert ("disable_persistence", "cron:/etc/cron.d/x", "would_apply") in actions(decisions[2])
     assert ("lock_account", "svc-backup", "would_apply") in actions(decisions[0])
     assert ("lock_account", "root", "refused") in actions(decisions[1])
 

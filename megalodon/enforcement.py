@@ -24,10 +24,14 @@ it takes to undo it, and can be undone with `megalodon enforce undo ID`:
   permissions, after its hash, owner and mode are recorded. Undo: restored.
 * lock_account: the password is locked and the account expired, which stops
   key logins too. Undo: unlocked, with the previous expiry put back.
+* disable_persistence: a service, job or startup entry the persistence
+  baseline did not have is moved into the quarantine folder (a symlink, such
+  as a systemd enablement link, is removed and its target recorded). A
+  systemd timer, socket or path unit is also stopped. Entries that existed
+  before are never moved: undoing an edit is not something one move can do.
+  Undo: put back, and started again if it was running.
 * collect_evidence: an evidence bundle, and the memory of the processes the
   finding names. notify: a summary to the alert destinations.
-
-disable_persistence is not carried out by this version.
 """
 from __future__ import annotations
 
@@ -54,7 +58,10 @@ DEFAULT_POLICY = '~/.config/megalodon/enforce.toml'
 DEFAULT_JOURNAL = '~/.local/state/megalodon/enforced.jsonl'
 DEFAULT_STATE = '~/.local/state/megalodon/enforce-state.json'
 DEFAULT_QUARANTINE = '~/.local/share/megalodon/quarantine'
-SUPPORTED = ('collect_evidence', 'notify', 'suspend_process', 'block_address', 'quarantine_file', 'lock_account')
+SUPPORTED = ('collect_evidence', 'notify', 'suspend_process', 'block_address', 'quarantine_file', 'lock_account',
+             'disable_persistence')
+# Units that fire something on their own: disabling them also stops them, or they fire until the next boot.
+ACTIVATING_UNITS = ('.timer', '.socket', '.path')
 MAX_COPY = 512 * 1024 * 1024
 MAX_APPLIED_KEYS = 50_000
 
@@ -79,6 +86,10 @@ quarantine_folder = "{quarantine}"
 
 class EnforcementError(ValueError):
     pass
+
+
+NOT_ADDED = ('only an entry the persistence baseline did not have is disabled: one that existed before and was '
+             'changed has to be put back by hand, from a backup or configuration management')
 
 
 def _now():
@@ -158,8 +169,11 @@ def _start(pid, root='/'):
 class Executor:
     """What each action does to the machine, and how it is undone. Tests replace `run` (commands) only."""
 
-    def __init__(self, *, root='/', run=None, quarantine=None):
+    def __init__(self, *, root='/', run=None, quarantine=None, home=None):
         self.root, self.quarantine = root, Path(quarantine or DEFAULT_QUARANTINE).expanduser()
+        # `~/` in a persistence location is the home of the account that ran the persistence check: the
+        # scheduler runs that check and this step as the same account.
+        self.home = str(home or Path.home())
         self.run = run or (lambda argv, data=None: subprocess.run(argv, input=data, capture_output=True, text=True,
                                                                   timeout=30, check=False))
 
@@ -239,8 +253,21 @@ class Executor:
         return fd, names[-1]
 
     def quarantine_file(self, target, decision):
+        return self._move_aside(target)
+
+    def _move_aside(self, target, *, links=False):
+        """Move a file into the quarantine folder, or with `links`, remove a symlink and record where it led."""
         parent, name = self._folder(target)
         try:
+            if links:
+                try:
+                    info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                except FileNotFoundError:
+                    raise EnforcementError(f'{target} is no longer there') from None
+                if stat.S_ISLNK(info.st_mode):
+                    pointed = os.readlink(name, dir_fd=parent)
+                    os.unlink(name, dir_fd=parent)
+                    return dict(kind='link', link_target=pointed, uid=info.st_uid, gid=info.st_gid)
             fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent)
             try:
                 info = os.fstat(fd)
@@ -268,18 +295,26 @@ class Executor:
         finally:
             os.close(parent)
         os.chmod(kept, 0)
-        return dict(kept=str(kept), sha256=digest.hexdigest(), mode=stat.S_IMODE(info.st_mode), uid=info.st_uid,
-                    gid=info.st_gid)
+        return dict(kind='file', kept=str(kept), sha256=digest.hexdigest(), mode=stat.S_IMODE(info.st_mode),
+                    uid=info.st_uid, gid=info.st_gid)
 
     def undo_quarantine_file(self, record):
-        undo, target = record['undo'], record['target']
+        self._put_back(record['target'], record['undo'])
+
+    def _put_back(self, target, undo):
         parent, name = self._folder(target)
         try:
             try:
                 os.stat(name, dir_fd=parent, follow_symlinks=False)
-                raise EnforcementError(f'{target} exists again; the quarantined copy is left at {undo["kept"]}')
+                kept = f'; the quarantined copy is left at {undo["kept"]}' if undo.get('kept') else ''
+                raise EnforcementError(f'{target} exists again{kept}')
             except FileNotFoundError:
                 pass
+            if undo.get('kind') == 'link':
+                os.symlink(undo['link_target'], name, dir_fd=parent)
+                if os.geteuid() == 0:
+                    os.chown(name, undo['uid'], undo['gid'], dir_fd=parent, follow_symlinks=False)
+                return
             os.chmod(undo['kept'], 0o600)
             with open(undo['kept'], 'rb') as source:
                 data = source.read()
@@ -298,6 +333,45 @@ class Executor:
         finally:
             os.close(parent)
         shutil.rmtree(Path(undo['kept']).parent)
+
+    # --- persistence
+    def _entry(self, target):
+        """(category, location, the path on this machine) for a persistence target the watch covers."""
+        from . import persistence_watch
+        category, _, location = (target or '').partition(':')
+        if why := persistence_watch.why_not_disabled(category, location):
+            raise EnforcementError(why)
+        if location.startswith('~/'):
+            return category, location, os.path.join(self.home, location[2:])
+        return category, location, (location if self.root == '/' else os.path.join(self.root, location[1:]))
+
+    def disable_persistence(self, target, decision):
+        if (decision.get('signal') or {}).get('rule_id') != 'PERSISTENCE_ADDED':
+            raise EnforcementError(NOT_ADDED)
+        category, location, path = self._entry(target)
+        system_unit = category == 'systemd' and not location.startswith('~/')
+        moved = self._move_aside(path, links=True)
+        unit = None
+        if system_unit:
+            # systemd forgets the unit file only when told; a timer, socket or path unit is also stopped, or it
+            # would go on firing until the next boot. A service is left running: pause it with suspend_process,
+            # or stop it once its memory is captured.
+            self.run(['systemctl', 'daemon-reload'])
+            name = os.path.basename(path)
+            if name.endswith(ACTIVATING_UNITS) and '.wants' not in path and '.requires' not in path:
+                active = self.run(['systemctl', 'is-active', '--quiet', name]).returncode == 0
+                if active:
+                    self._command(['systemctl', 'stop', name])
+                unit = dict(name=name, was_active=active)
+        return dict(moved, path=path, category=category, unit=unit, system_unit=system_unit)
+
+    def undo_disable_persistence(self, record):
+        undo = record['undo']
+        self._put_back(undo['path'], undo)
+        if undo.get('system_unit'):
+            self.run(['systemctl', 'daemon-reload'])
+            if (undo.get('unit') or {}).get('was_active'):
+                self._command(['systemctl', 'start', undo['unit']['name']])
 
     # --- accounts
     def _shadow(self, user):
@@ -488,6 +562,8 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
                 reason = 'decided under a response policy other than the pinned one'
             elif now - _parse(decision['decided_at']) > policy['max_age']:
                 reason = 'the decision is too old to act on'
+            elif plan['action'] == 'disable_persistence' and decision['signal'].get('rule_id') != 'PERSISTENCE_ADDED':
+                reason = NOT_ADDED
             elif plan.get('target') is not None and (why := guards.check(plan['action'], plan['target'])):
                 reason = f'a guard refuses it now: {why}'
             elif plan['action'] not in ('collect_evidence', 'notify') and recent >= policy['max_per_hour']:
