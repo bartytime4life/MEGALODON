@@ -116,6 +116,25 @@ reads.
   with the npm registry when it is not set, and every scoped registry, such as
   `@corp:registry`. npm packages are checked only by TLS too, so a
   plain-HTTP registry and `strict-ssl=false` are reported.
+* **pip and npm environment variables.** These override the settings files,
+  so they are read where a login sets them:
+  - for every account: `/etc/environment`, `/etc/environment.d/*.conf`,
+    `/etc/profile`, `/etc/profile.d/*.sh`, `/etc/bash.bashrc` and
+    `/etc/zsh/zshenv`;
+  - for one account: its `~/.pam_environment`,
+    `~/.config/environment.d/*.conf`, `~/.profile`, `~/.bash_profile`,
+    `~/.bashrc`, `~/.zshenv` and `~/.zshrc`.
+
+  The variables read are `PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`,
+  `PIP_TRUSTED_HOST`, npm's `npm_config_registry` and `npm_config_strict_ssl`
+  in any letter case, and the variables that name another settings file:
+  `PIP_CONFIG_FILE`, `npm_config_userconfig` and `npm_config_globalconfig`.
+  That file is then read too. A source or setting found this way says where
+  it was set, for example `/etc/environment (PIP_INDEX_URL)`. An index set
+  for every login is reported like one set in `/etc/pip.conf`: a move away
+  from PyPI is a redirect. A value built from other variables or commands,
+  such as `"$CORP_INDEX/simple"`, cannot be known without running the shell.
+  It is listed as a gap, not guessed.
 * **flatpak.** It reads the remotes in `/var/lib/flatpak/repo/config` and in
   each account's `~/.local/share/flatpak/repo/config`. Disabled remotes are
   skipped. Each remote's trusted keys, `NAME.trustedkeys.gpg`, are read and
@@ -141,7 +160,9 @@ reads.
   - `/etc/yum.repos.d`, `/etc/dnf`;
   - `/etc/pki/rpm-gpg`;
   - the system-wide pip and npm settings, flatpak's repository settings and
-    its trusted keys, snapd's drop-ins, and root's own pip and npm settings.
+    its trusted keys, snapd's drop-ins, and root's own pip and npm settings;
+  - the system's environment and login files listed above, since whoever
+    can change them can point every install elsewhere.
 
   Other accounts' own settings are theirs to change, and are not reported as
   writable.
@@ -176,10 +197,11 @@ administrator's to put back.
 * **Signatures, not trust.** A source that is signed by the key it names is
   accepted, even if the key and the source were added together by an intruder.
   That is why every added key and source is reported for you to confirm.
-* **System and account settings only.** pip and npm settings in a project,
-  a virtual environment or an environment variable (`PIP_INDEX_URL`,
-  `npm_config_registry`) are not seen. Nor are a snap store proxy set with
-  `snap set`, yarn and pnpm settings, or container registries.
+* **System and account settings only.** pip and npm settings in a project
+  or a virtual environment are not seen. Neither is an environment variable
+  set anywhere other than the login files above: in a systemd unit, a CI
+  job, or a command line. Nor are a snap store proxy set with `snap set`,
+  yarn and pnpm settings, or container registries.
 * **No expiry or revocation.** Key signatures are not parsed, so an expired or
   revoked key is reported only by its size and algorithm.
 * **The files as written.** Settings given on apt's command line, or a

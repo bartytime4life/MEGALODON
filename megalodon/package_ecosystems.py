@@ -42,6 +42,20 @@ SNAPD_REDIRECTS = ('SNAPPY_FORCE_API_URL', 'SNAPPY_FORCE_CPI_URL', 'SNAPPY_FORCE
                    'SNAPPY_USE_STAGING_STORE', 'SNAPPY_TESTING')
 TLS_ONLY = 'nothing but TLS: packages are not signed'
 
+# Environment variables override pip's and npm's own files. They are read where a login sets them: the system's
+# environment and shell startup files, then each account's own. Values are taken as written: one built from other
+# variables or commands cannot be known without running the shell, and is listed as a gap.
+ENV_SYSTEM = ('/etc/environment', '/etc/environment.d/', '/etc/profile', '/etc/profile.d/', '/etc/bash.bashrc',
+              '/etc/zsh/zshenv')
+ENV_USER = ('.pam_environment', '.config/environment.d/', '.profile', '.bash_profile', '.bashrc', '.zshenv', '.zshrc')
+PIP_ENV = {'PIP_INDEX_URL': 'index-url', 'PIP_EXTRA_INDEX_URL': 'extra-index-url', 'PIP_TRUSTED_HOST': 'trusted-host'}
+NPM_ENV = {'npm_config_registry': 'registry', 'npm_config_strict_ssl': 'strict-ssl'}
+# Variables that point pip or npm at another configuration file, read as if it were theirs.
+PIP_CONFIG_ENV = 'PIP_CONFIG_FILE'
+NPM_CONFIG_ENV = ('npm_config_userconfig', 'npm_config_globalconfig')
+_ASSIGNMENT = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$')
+_WANTED = {name.lower() for name in (*PIP_ENV, *NPM_ENV, PIP_CONFIG_ENV, *NPM_CONFIG_ENV)}
+
 
 def _homes(root):
     """(account, home) for root and every folder in /home, inside the root scanned."""
@@ -73,6 +87,42 @@ def _plain(uri):
     return uri.lower().startswith(('http://', 'ftp://'))
 
 
+# ------------------------------------------------------------------ environment variables
+
+def _env_files(root, listing, places, home=''):
+    files = []
+    for place in places:
+        path = f'{home}/{place}' if home else place
+        if path.endswith('/'):
+            files += sorted(listing(path.strip('/'), ('.conf', '.sh')) if _exists(root, path) else [])
+        elif _exists(root, path):
+            files.append(path)
+    return files
+
+
+def _environment(root, read, listing, gaps, home=''):
+    """{variable: (value, file)} for the pip and npm variables a login sets, the last assignment winning.
+
+    npm reads its variables in any letter case; pip's are upper case. Both are kept as written, matched by name.
+    """
+    found = {}
+    for path in _env_files(root, listing, ENV_USER if home else ENV_SYSTEM, home):
+        for line in (read(path) or b'').decode('utf-8', 'replace').splitlines():
+            match = _ASSIGNMENT.match(line)
+            if not match or match.group(1).lower() not in _WANTED:
+                continue
+            name, value = match.group(1), match.group(2).strip()
+            value = value.split(' #', 1)[0].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+                value = value[1:-1]
+            if any(mark in value for mark in ('$', '`')):
+                gaps.append(f'{name} in {path} is built from other variables or commands: its value is not known')
+                continue
+            canonical = name if name.isupper() and name.startswith('PIP_') else name.lower()
+            found[canonical] = (value, path)
+    return found
+
+
 # ------------------------------------------------------------------ pip
 
 def _pip_settings(read, paths, gaps):
@@ -96,17 +146,40 @@ def _pip_settings(read, paths, gaps):
     return found
 
 
-def _pip(root, read, gaps, weaken, add_source):
+def _with_environment(settings, env, names, split=True):
+    """Settings from files, overridden by the environment variables that set the same thing."""
+    out = dict(settings)
+    for variable, name in names.items():
+        if variable in env:
+            value, path = env[variable]
+            out[name] = (value.split() if split else value, f'{path} ({variable})')
+    return out
+
+
+def _pip(root, read, gaps, weaken, add_source, listing=None):
+    listing = listing or (lambda folder, suffixes: [])
     system = [p for p in PIP_SYSTEM if _exists(root, p)]
-    accounts = [(account, [f'{home}/{p}' for p in PIP_USER if _exists(root, f'{home}/{p}')])
+    system_env = _environment(root, read, listing, gaps)
+    accounts = [(account, [f'{home}/{p}' for p in PIP_USER if _exists(root, f'{home}/{p}')],
+                 _environment(root, read, listing, gaps, home))
                 for account, home in _homes(root)]
-    if not system and not any(files for _a, files in accounts) and \
+    accounts = [(a, files, {k: v for k, v in env.items() if k.startswith('PIP_')}) for a, files, env in accounts]
+    system_env = {k: v for k, v in system_env.items() if k.startswith('PIP_')}
+    if not system and not system_env and not any(files or env for _a, files, env in accounts) and \
             not any(_exists(root, p) for p in PIP_PROGRAMS):
         return
-    scopes = [('the system', system)] + [(f'account {a}', system + files) for a, files in accounts if files]
-    for scope, paths in scopes:
+    scopes = [('the system', system, system_env)] + [
+        (f'account {a}', system + files, {**system_env, **env}) for a, files, env in accounts if files or env]
+    for scope, paths, env in scopes:
         label = f'pip for {scope}'
-        settings = _pip_settings(read, paths, gaps)
+        if PIP_CONFIG_ENV in env:
+            # PIP_CONFIG_FILE names one more file, read after the others.
+            extra, where = env[PIP_CONFIG_ENV]
+            if extra.startswith('/') and _exists(root, extra):
+                paths = paths + [extra]
+            elif extra:
+                gaps.append(f'{PIP_CONFIG_ENV} in {where} names {extra}, which could not be read')
+        settings = _with_environment(_pip_settings(read, paths, gaps), env, PIP_ENV)
         index, where = settings.get('index-url', ([PYPI], '(default)'))
         add_source('pip', label, (index or [PYPI])[0], 'index-url', TLS_ONLY, where)
         extras, extras_where = settings.get('extra-index-url', ([], None))
@@ -144,17 +217,28 @@ def _npm_settings(read, paths):
     return found
 
 
-def _npm(root, read, gaps, weaken, add_source):
+def _npm(root, read, gaps, weaken, add_source, listing=None):
+    listing = listing or (lambda folder, suffixes: [])
     system = [p for p in NPM_SYSTEM if _exists(root, p)]
-    accounts = [(account, [f'{home}/{p}' for p in NPM_USER if _exists(root, f'{home}/{p}')])
+    system_env = {k: v for k, v in _environment(root, read, listing, gaps).items() if k.startswith('npm_')}
+    accounts = [(account, [f'{home}/{p}' for p in NPM_USER if _exists(root, f'{home}/{p}')],
+                 {k: v for k, v in _environment(root, read, listing, gaps, home).items() if k.startswith('npm_')})
                 for account, home in _homes(root)]
-    if not system and not any(files for _a, files in accounts) and \
+    if not system and not system_env and not any(files or env for _a, files, env in accounts) and \
             not any(_exists(root, p) for p in NPM_PROGRAMS):
         return
-    scopes = [('the system', system)] + [(f'account {a}', system + files) for a, files in accounts if files]
-    for scope, paths in scopes:
+    scopes = [('the system', system, system_env)] + [
+        (f'account {a}', system + files, {**system_env, **env}) for a, files, env in accounts if files or env]
+    for scope, paths, env in scopes:
         label = f'npm for {scope}'
-        settings = _npm_settings(read, paths)
+        for variable in NPM_CONFIG_ENV:
+            if variable in env:
+                extra, where = env[variable]
+                if extra.startswith('/') and _exists(root, extra):
+                    paths = paths + [extra]
+                elif extra:
+                    gaps.append(f'{variable} in {where} names {extra}, which could not be read')
+        settings = _with_environment(_npm_settings(read, paths), env, NPM_ENV, split=False)
         registry, where = settings.get('registry', (NPM_DEFAULT, '(default)'))
         add_source('npm', label, registry, 'registry', TLS_ONLY, where)
         registries = [(registry, where)]
@@ -239,12 +323,15 @@ def _snap(root, read, gaps, weaken, listing):
 def collect(root, gaps, *, read, listing, weaken, add_source, keyring):
     """Record the sources and weakened settings of pip, npm, flatpak and snap; returns the system-wide files
     whose write access matters (accounts' own files are theirs to change)."""
-    _pip(root, read, gaps, weaken, add_source)
-    _npm(root, read, gaps, weaken, add_source)
+    _pip(root, read, gaps, weaken, add_source, listing)
+    _npm(root, read, gaps, weaken, add_source, listing)
+    gaps[:] = list(dict.fromkeys(gaps))     # pip and npm read the same login files: each gap once
     _flatpak(root, read, gaps, weaken, add_source, keyring)
     _snap(root, read, gaps, weaken, listing)
     guarded = [*PIP_SYSTEM, *NPM_SYSTEM, f'{FLATPAK_SYSTEM}/config', SNAPD_DROPINS,
-               *(f'/root/{p}' for p in PIP_USER + NPM_USER)]
+               *(f'/root/{p}' for p in PIP_USER + NPM_USER),
+               # Whoever can change the system's environment or login scripts can point every install elsewhere.
+               *_env_files(root, listing, ENV_SYSTEM)]
     try:
         guarded += [f'{FLATPAK_SYSTEM}/{n}' for n in os.listdir(os.path.join(root, FLATPAK_SYSTEM.lstrip('/')))
                     if n.endswith('.trustedkeys.gpg')]
