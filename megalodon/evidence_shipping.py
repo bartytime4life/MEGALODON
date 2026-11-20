@@ -275,6 +275,8 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
                         break
                     offset = reached
 
+    blocked = set()                     # logs with a batch the collector did not take this run
+
     def deliver(batch):
         moment = now or _now()
         body = dict(schema=BATCH_SCHEMA, sensor=settings.get('sensor', ''),
@@ -289,9 +291,13 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
             result = result if isinstance(result, dict) else {}
             if item['kind'] == 'commands':
                 last = max(e['seq'] for e in item['lines'])
-                if result.get('ok'):
+                # Lines are acknowledged only up to the first batch not taken: later ones accepted past it
+                # would leave lines the push record says were sent, and the collector never got.
+                if result.get('ok') and item['key_id'] not in blocked:
                     totals['lines'] += len(item['lines'])
                     cursor['commands'][item['key_id']] = max(last, cursor['commands'].get(item['key_id'], 0))
+                else:
+                    blocked.add(item['key_id'])
             elif item['kind'] == 'manifest':
                 if result.get('ok'):
                     totals['manifests'] += 1
@@ -310,6 +316,8 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
 
     batch, size, too_large = [], 0, 0
     for item in items:
+        if item['kind'] == 'commands' and item['key_id'] in blocked:
+            continue                    # an earlier batch of this log was not taken: the rest waits for it
         length = _size(item)
         if length > MAX_BATCH_BYTES:
             too_large += 1              # counted, never blocks the rest (a manifest listing thousands of files)
@@ -506,7 +514,8 @@ def _take_manifest(store, item, received, usage):
     except ValueError:
         return dict(ok=False, error='not a manifest')
     if not _BUNDLE.fullmatch(str(name)) or type(manifest) is not dict or manifest.get('schema') != evidence.SCHEMA \
-            or type(manifest.get('files')) is not list or len(_listed(manifest)) != len(manifest['files']):
+            or type(manifest.get('files')) is not list or len(_listed(manifest)) != len(manifest['files']) \
+            or any(f['file'] == 'manifest.json' for f in _listed(manifest)):
         return dict(ok=False, error='not an evidence manifest with plain file names')
     digest = hashlib.sha256(raw).hexdigest()
     record_path = store / 'evidence-state' / f'{name}.json'
@@ -621,10 +630,18 @@ def receive(body, *, data, now=None):
             return 409, dict(result='this batch, or a later one, was already received')
         usage = _Usage(store)
         answers = []
+        refused = set()                 # logs with a batch not taken in this request
         for item in body['items']:
             kind = item.get('kind') if type(item) is dict else None
             take = dict(commands=_take_commands, manifest=_take_manifest, chunk=_take_chunk).get(kind)
-            answers.append(take(store, item, received, usage) if take else dict(ok=False, error='unknown item'))
+            if kind == 'commands' and str(item.get('key_id')) in refused:
+                # Taking a later batch past one not taken would open a gap that could never be filled.
+                answers.append(dict(ok=False, error='an earlier batch of this log was not taken'))
+                continue
+            answer = take(store, item, received, usage) if take else dict(ok=False, error='unknown item')
+            if kind == 'commands' and not answer.get('ok'):
+                refused.add(str(item.get('key_id')))
+            answers.append(answer)
         _private_write(sequence_path, json.dumps(dict(sequence=body['sequence'], at=received)).encode())
     return 200, dict(result='ok', items=answers)
 
@@ -721,7 +738,11 @@ def verify(data, name, *, key_hex=None, now=None, from_sequence=1):
             checked.append(dict(bundle=bundle['bundle'], intact=None,
                                 note=f"{bundle['files_received']} of {bundle['files']} files have arrived"))
             continue
-        result = evidence.verify(bundle['path'], expected=bundle['manifest_sha256'])
+        try:
+            result = evidence.verify(bundle['path'], expected=bundle['manifest_sha256'])
+        except evidence.EvidenceError as exc:
+            # A copy that cannot even be read is a finding about that bundle, not the end of the check.
+            result = dict(intact=False, problems=[dict(file='manifest.json', problem=str(exc))])
         checked.append(dict(bundle=bundle['bundle'], intact=result['intact'], problems=result['problems']))
         if not result['intact']:
             problems.append(_finding('SHIPPED_EVIDENCE_CHANGED', name, f"evidence:{bundle['bundle']}",

@@ -95,8 +95,13 @@ for the copy.
   its record of what it sent (`~/.local/state/megalodon/evidence-push.json`)
   carries on where the collector is, without sending everything again.
 * **Paths stay inside their bundle.** A manifest whose file names are absolute,
-  contain `..` or contain anything but plain name characters is refused before
-  anything is written.
+  contain `..`, contain anything but plain name characters, or name the
+  manifest itself is refused before anything is written.
+* **The log arrives in order.** When the collector does not take a batch of
+  command log lines, for example because it is full, it takes no later batch
+  of that log in the same request. The machine sends no later batch either,
+  and records nothing as sent past it. Nothing is skipped: the next push starts
+  again at the batch that was not taken.
 * **Sizes are bounded.** `/evidence` takes bodies up to 1 MiB, and pieces are
   384 KiB before base64. Heartbeats, alerts and timelines keep the 64 KiB
   limit. The collector keeps at most 64 GiB per machine and then takes nothing

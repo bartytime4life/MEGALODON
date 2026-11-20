@@ -352,3 +352,58 @@ def test_refused_manifests_have_an_allowance(collector, tmp_path, monkeypatch):
     assert 0 < len(kept) < 8, "kept until the allowance is spent, then only reported"
     usage = json.loads((data / "machines/web-1/shipped/usage.json").read_text())
     assert usage["rejected"] == sum(p.stat().st_size for p in kept) <= 600
+
+
+def test_a_batch_not_taken_holds_back_the_ones_after_it(collector, tmp_path, monkeypatch):
+    """A nearly full collector refuses a large batch: a smaller one after it must not be taken past it."""
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data)
+    with cl.Recorder(clock=web.clock, state=web.state, log=web.log) as recorder:
+        for number in range(100):                       # about 400 KiB: one large batch and a smaller one
+            recorder.add("exec", pid=number, uid=0, program="/usr/bin/env", argv=["env", "x" * 4000])
+    monkeypatch.setattr(shipping, "MAX_STORED", 150 * 1024)
+    assert web.push()["command_lines"] == 0
+    monkeypatch.setattr(shipping, "MAX_STORED", 1 << 40)
+    assert web.push()["command_lines"] == 100
+    held = shipping.held(data, "web-1")
+    assert held["findings"] == [] and held["command_logs"][0]["lines"] == 100
+    assert shipping.verify(data, "web-1", key_hex=web.key)["findings"] == []
+
+
+def test_the_machine_holds_back_a_log_after_a_refused_batch(collector, tmp_path, monkeypatch):
+    """Even if a collector took a later batch, the push record stops at the first one not taken."""
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data)
+    web.run(*[f"/usr/bin/p{n}" for n in range(6)])
+    monkeypatch.setattr(shipping, "MAX_BATCH_BYTES", 1200)          # a few lines per batch
+    sent = []
+
+    def answer(settings, body):
+        sent.append(len(body["items"]))
+        # The very first batch is not taken; every one after it is.
+        return dict(items=[dict(ok=not (len(sent) == 1 and index == 0)) for index, _item in enumerate(body["items"])])
+    result = web.push(send=answer)
+    assert sum(sent) > 1 and result["command_lines"] == 0
+    assert json.loads((web.dir / "cursor.json").read_text())["commands"] == {}
+
+
+def test_a_manifest_cannot_name_itself(collector, tmp_path):
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data)
+    base = web.bundle("b1", {"processes.json": b"[]\n"})
+    unseal(base)
+    manifest = json.loads((base / "manifest.json").read_text())
+    manifest["files"].append(dict(file="manifest.json", size=0, sha256=hashlib.sha256(b"").hexdigest()))
+    (base / "manifest.json").write_text(json.dumps(manifest))
+    web.push()
+    assert shipping.held(data, "web-1")["bundles"] == [], "refused before anything is written"
+    # A copy that cannot be read is reported, and the check goes on.
+    good = web.bundle("b2", {"processes.json": b"[]\n"})
+    web.push()
+    copy = Path(next(b for b in shipping.held(data, "web-1")["bundles"] if b["bundle"] == "b2")["path"])
+    os.chmod(copy, 0o700)
+    os.chmod(copy / "manifest.json", 0o600)
+    (copy / "manifest.json").write_text("not json")
+    checked = shipping.verify(data, "web-1")
+    assert rules(checked) == ["SHIPPED_EVIDENCE_CHANGED"] and checked["bundles"][0]["intact"] is False
+    assert good.exists()
