@@ -297,3 +297,58 @@ def test_a_long_backlog_one_push_at_a_time_and_a_full_collector(collector, tmp_p
     assert web.push()["command_lines"] == 0
     monkeypatch.setattr(shipping, "MAX_STORED", 1 << 40)
     assert web.push()["command_lines"] == 1
+
+
+def test_a_resent_line_must_match_in_every_field(collector, tmp_path):
+    """A rewrite that keeps the line's signature is still a rewrite."""
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data)
+    web.run("/usr/bin/id", "/tmp/.x")
+    web.push()
+    rewrite_line(web.log, 2, lambda line: line.update(program="/usr/bin/true"))     # mac kept as it was
+    (web.dir / "cursor.json").unlink()
+    web.push()
+    assert rules(shipping.held(data, "web-1")) == ["SHIPPED_COMMANDS_REWRITTEN"]
+
+
+def test_the_first_lines_removed_before_any_left(collector, tmp_path):
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data)
+    web.run("/usr/bin/id", "/tmp/.x", "/usr/bin/uname")
+    web.log.write_text(web.log.read_text().splitlines()[2] + "\n")       # only line 3 is left
+    web.push()
+    held = shipping.held(data, "web-1")
+    assert rules(held) == ["SHIPPED_COMMANDS_GAP"] and held["command_logs"][0]["gaps"] == [[1, 2]]
+    checked = shipping.verify(data, "web-1", key_hex=web.key)
+    assert "COMMAND_LOG_GAP" in rules(checked), "verified from line 1, not from what the machine kept"
+    # A boundary the operator sets, for lines they moved off the machine on purpose, is honoured.
+    bounded = shipping.verify(data, "web-1", key_hex=web.key, from_sequence=3)
+    assert "COMMAND_LOG_GAP" not in rules(bounded) and bounded["commands"]["verified"] == 1
+
+
+def test_an_empty_file_completes_its_bundle(collector, tmp_path):
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data)
+    web.bundle("b1", {"sessions.json": b"", "processes.json": b"[]\n"})
+    web.push()
+    held = shipping.held(data, "web-1")
+    assert held["bundles"][0]["files_received"] == 2 and held["findings"] == []
+    assert shipping.verify(data, "web-1")["bundles"][0]["intact"] is True
+
+
+def test_refused_manifests_have_an_allowance(collector, tmp_path, monkeypatch):
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data)
+    bundle = web.bundle("b1", {"processes.json": b"[]\n"})
+    web.push()
+    monkeypatch.setattr(shipping, "MAX_REJECTED", 600)
+    unseal(bundle)
+    for number in range(8):                              # eight different manifests for the same bundle
+        manifest = json.loads((bundle / "manifest.json").read_text())
+        manifest["collected_at"] = f"2026-11-19T12:00:0{number}Z"
+        (bundle / "manifest.json").write_text(json.dumps(manifest))
+        web.push()
+    kept = list((data / "machines/web-1/shipped/evidence-rejected/b1").iterdir())
+    assert 0 < len(kept) < 8, "kept until the allowance is spent, then only reported"
+    usage = json.loads((data / "machines/web-1/shipped/usage.json").read_text())
+    assert usage["rejected"] == sum(p.stat().st_size for p in kept) <= 600

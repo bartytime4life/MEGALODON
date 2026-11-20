@@ -46,8 +46,12 @@ megalodon fleet evidence web-1 --verify --key-file /media/usb/megalodon-commands
   It exits 1 when something is reported.
 * **`fleet evidence MACHINE --verify`** checks the collector's copies:
   - **The command log**, with `--key-file`: the key that `commands init` wrote.
-    It checks the copy up to the line the machine's last heartbeat named, so a
-    copy that ends earlier is reported as cut (`COMMAND_LOG_TRUNCATED`).
+    It checks the copy from line 1 up to the line the machine's last heartbeat
+    named. A copy that starts later is reported as having a gap, and one that
+    ends earlier as cut (`COMMAND_LOG_TRUNCATED`). If you moved the oldest
+    lines off the machine yourself before the first push, give the first line
+    you kept with `--from-sequence`. That boundary comes from you, never from
+    the machine.
   - **Every bundle** whose files have all arrived, against the manifest digest
     recorded when the manifest arrived.
 
@@ -57,11 +61,13 @@ megalodon fleet evidence web-1 --verify --key-file /media/usb/megalodon-commands
 ## The first copy is kept
 
 The collector never replaces anything it already holds:
-- a command log line sent again must match the first copy, signature and all;
+- a command log line sent again must match the first copy in every field, not
+  only its signature;
 - a manifest sent again must match the first one;
 - a file piece sent again must match the bytes that arrived first;
 - a finished file must match the SHA-256 in its manifest, or it is not placed
-  in the bundle.
+  in the bundle. An empty file is placed when the manifest arrives, if the
+  manifest gives it the digest of empty content.
 
 Anything else is kept aside and reported. An intruder who gets root later can
 stop the copying. They can also send whatever they like from then on, because
@@ -72,7 +78,7 @@ left the machine.
 | --- | --- | --- |
 | `SHIPPED_COMMANDS_REWRITTEN` | CRITICAL | A command log line the collector holds was sent again with other content, or a line missing from the copy was sent later: the log on the machine was rewritten |
 | `SHIPPED_EVIDENCE_CHANGED` | CRITICAL | A bundle's manifest or file was sent again with other content, a file did not match its manifest, or the collector's copy no longer matches its manifest |
-| `SHIPPED_COMMANDS_GAP` | HIGH | Lines were already missing when the machine sent the lines after them: they were removed before they left the machine |
+| `SHIPPED_COMMANDS_GAP` | HIGH | Lines were already missing when the machine sent the lines after them, or the first line to arrive was not line 1: they were removed before they left the machine |
 
 These appear in [`fleet status`](fleet.md), and put the machine in `attention`.
 `--verify` adds the [command log's own rules](command-log.md#what-is-reported)
@@ -95,7 +101,9 @@ for the copy.
   384 KiB before base64. Heartbeats, alerts and timelines keep the 64 KiB
   limit. The collector keeps at most 64 GiB per machine and then takes nothing
   more; the machine keeps what was not taken for later. A machine sending
-  rewrite after rewrite stops being recorded once 8 MiB of reports are kept.
+  rewrite after rewrite stops being recorded once 8 MiB of reports are kept,
+  and refused lines and manifests stop being kept once 64 MiB of them are,
+  within the 64 GiB.
 * **One push at a time.** A second push while one runs is refused.
 
 ## Where the collector keeps it
