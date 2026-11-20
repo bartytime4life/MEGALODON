@@ -135,6 +135,36 @@ reads.
   from PyPI is a redirect. A value built from other variables or commands,
   such as `"$CORP_INDEX/simple"`, cannot be known without running the shell.
   It is listed as a gap, not guessed.
+* **Projects and virtual environments.** These have settings of their own,
+  which win over the system's and the account's:
+  - a virtual environment's own `pip.conf`, in the folder that holds its
+    `pyvenv.cfg`, read after the account's files;
+  - a project's own `.npmrc`, read after the account's `~/.npmrc`;
+  - the pip options in a `requirements*.txt` or `constraints*.txt` file, or
+    a pip-tools `.in` file:
+    `-i`/`--index-url` (the last one wins), `--extra-index-url`,
+    `--trusted-host` and `-f`/`--find-links`. They apply to
+    `pip install -r` on that file, over every settings file.
+
+  Each is labelled with where it is, for example `pip for virtual environment
+  /home/dev/app/.venv` or `npm for project /srv/web`. Only what that file
+  sets itself is recorded; what it inherits is recorded once, for the
+  account or the system. Environment variables still win over these files,
+  as they do in pip and npm. A virtual environment or project first seen with
+  its own index is reported as an added source. A later change of that index
+  is reported as a redirect. Plain HTTP, trusted hosts, extra indexes and
+  `strict-ssl=false` are reported as for any other scope. A value built from
+  an environment variable, such as `registry=${NPM_REGISTRY}` or
+  `--index-url ${CORP_INDEX}`, is listed as a gap.
+
+  They are looked for in each account's home and in `/opt`, `/srv`,
+  `/var/www` and `/app`, up to 6 folders deep and 20,000 folders in all.
+  Beyond that a gap is listed. Symbolic links are not followed. Hidden
+  folders are skipped, except `.venv` and `.virtualenvs`. Nothing inside a
+  virtual environment, `node_modules` or `site-packages` is read. A home's
+  own `.npmrc` is the account's, not a project's. On this project's test
+  machine, a warm check took 0.2 seconds over 4,500 folders; the first after
+  a boot can take much longer on slow disks.
 * **flatpak.** It reads the remotes in `/var/lib/flatpak/repo/config` and in
   each account's `~/.local/share/flatpak/repo/config`. Disabled remotes are
   skipped. Each remote's trusted keys, `NAME.trustedkeys.gpg`, are read and
@@ -197,11 +227,18 @@ administrator's to put back.
 * **Signatures, not trust.** A source that is signed by the key it names is
   accepted, even if the key and the source were added together by an intruder.
   That is why every added key and source is reported for you to confirm.
-* **System and account settings only.** pip and npm settings in a project
-  or a virtual environment are not seen. Neither is an environment variable
-  set anywhere other than the login files above: in a systemd unit, a CI
-  job, or a command line. Nor are a snap store proxy set with `snap set`,
-  yarn and pnpm settings, or container registries.
+* **The settings files, not every way to name an index.** Projects outside
+  the folders above, or deeper or past the limit, are not seen. Nor are:
+  - an environment variable set anywhere other than the login files above,
+    such as a systemd unit, a CI job or a command line;
+  - an index named in `pyproject.toml` (Poetry, uv, PDM) or `Pipfile`;
+  - the hosts in an npm lockfile's `resolved` URLs, which `npm ci` fetches as
+    written;
+  - yarn and pnpm settings;
+  - a snap store proxy set with `snap set`;
+  - container registries.
+* **A project's files are its owner's to change.** Write access is checked
+  for the system's files only, as for accounts' own settings.
 * **No expiry or revocation.** Key signatures are not parsed, so an expired or
   revoked key is reported only by its size and algorithm.
 * **The files as written.** Settings given on apt's command line, or a
