@@ -59,10 +59,10 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
 | vulns | daily at 06:41 | `vulns check --alert` ([known-vulnerable software](known-vulnerable-software.md)) |
 | binaries | daily at 03:17 | `binaries check --alert` |
-| ancestry | always running (root) | `ancestry watch --alert` |
+| ancestry | always running (root) | `ancestry watch --alert --respond`: each service starting a shell or tool is decided at once, and the process paused if the enforcement policy allows ([process ancestry](process-ancestry.md)) |
 | commands | always running (root) | `commands record`, after `megalodon commands init --key-file ...` ([command log](command-log.md)) |
-| credentials | always running | `credentials watch --alert` ([credential access watch](credential-watch.md); as root it names every reader) |
-| egress | always running | `egress watch --alert`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md)) |
+| credentials | always running | `credentials watch --alert --respond` ([credential access watch](credential-watch.md); as root it names every reader; each finding is decided at once) |
+| egress | always running | `egress watch --alert --respond`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md); each finding is decided at once) |
 | ransomware | always running | `ransomware watch --respond`, after `megalodon ransomware init --dir FOLDER ...`; each finding is decided and enforced as it is raised ([ransomware watch](ransomware-watch.md#answer-it-at-once)) |
 
 Timers add a random delay of up to a minute, so that machines set up the same

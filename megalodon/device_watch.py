@@ -430,6 +430,5 @@ def watch(manifest=DEFAULT_MANIFEST, emit=print, *, interval=2.0, stop=None, eve
 
 def respond(finding, responder):
     """Decide one finding at once, and carry out what enforcement allows (a `respond_now.Responder`)."""
-    from . import response_engine
-    signals = response_engine.device_signals(dict(checked_at=_now(), findings=[finding]))
-    return responder.answer(finding['rule_id'], signals)
+    from . import respond_now
+    return respond_now.answer(responder, 'devices', finding)

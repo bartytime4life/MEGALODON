@@ -76,3 +76,22 @@ class Responder:
         from . import response_engine
         return self.carry(rule_id, lambda: response_engine.run(signals=signals, policy_path=self.policy,
                                                                ledger=self.ledger, state_path=self.state))
+
+
+# The response engine's own reading of each live watch's findings: the same as the timer's pass, so a finding
+# decided here is the same signal the timer would decide, and is never decided twice.
+LIVE_SOURCES = ('ancestry', 'credentials', 'devices', 'egress')
+
+
+def signals_of(source, finding):
+    from . import response_engine
+    from datetime import datetime, timezone
+    report = dict(checked_at=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), findings=[finding])
+    reader = dict(ancestry=response_engine.ancestry_signals, credentials=response_engine.credential_signals,
+                  devices=response_engine.device_signals, egress=response_engine.egress_signals)[source]
+    return reader(report)
+
+
+def answer(responder, source, finding):
+    """Decide one live watch's finding at once, and carry out what enforcement allows."""
+    return responder.answer(finding['rule_id'], signals_of(source, finding))

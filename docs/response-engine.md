@@ -36,9 +36,11 @@ megalodon respond report
 
   A process a finding lists with `"writing": false` is kept as evidence and
   is never a target. The ransomware watch lists readers, such as a viewer
-  or a backup, that way. The ransomware watch does not need this pipe:
-  `ransomware watch --respond` decides each finding itself, and then runs
-  enforcement ([answer it at once](ransomware-watch.md#answer-it-at-once)).
+  or a backup, that way. MEGALODON's own live watches do not need this pipe.
+  With `--respond` (process ancestry, egress, credential access, devices and
+  ransomware), each decides its findings itself and then runs enforcement,
+  as the [scheduler](scheduling.md) runs them. `ingest` is for findings from
+  other tools, or a watch you run by hand.
 
 * **`report --hours 168`** summarizes the last week: decisions per
   playbook, actions that would apply or were refused, the guards that
@@ -194,5 +196,8 @@ decision or escalate it to you, never start an action.
   by you and writable only by you, and every decision records its SHA-256.
   Cryptographic signing comes with enforcement.
 * **Sources are read when `run` runs.** A reverse shell that opens and closes
-  between passes is missed. The ransomware watch, run with `--respond`, and
-  findings piped into `ingest` are decided as they arrive.
+  between passes is missed by the pass. The live watches, run with
+  `--respond` as the scheduler runs them, decide each finding as it arrives:
+  process ancestry, egress, credential access, devices and ransomware. So
+  are findings piped into `ingest`. A live watch and the pass decide the
+  same finding once.

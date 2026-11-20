@@ -31,12 +31,20 @@ sudo megalodon egress check
 * **`watch`** scans the kernel's socket tables every `--interval` seconds
   (default 1) and prints each new finding as a JSON line, at most once an
   hour for the same program and port. It picks up `allow` and `learn`
-  changes without a restart. Pipe it into the
-  [response engine](response-engine.md):
+  changes without a restart.
+  With `--respond`, it decides each finding itself, at once, and runs
+  [enforcement](enforcement.md) before it reads the next event, so the
+  process it names can be paused while it still runs. What was decided and
+  done is written to standard error as one `megalodon: response {...}`
+  line. The scheduled `megalodon-egress` job runs it this way:
 
   ```bash
-  sudo megalodon egress watch | megalodon respond ingest
+  sudo megalodon egress watch --respond
   ```
+
+  The five-minute response pass still reads `check`. The same process is
+  decided only once, whichever sees it first. Enforcement acts only when its
+  policy is on and lists the action and the playbook.
 
 * **`check`** reviews the connections open now and exits 1 on findings. The
   response engine runs it on every pass.

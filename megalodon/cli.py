@@ -274,6 +274,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "watch":
             command.add_argument("--interval", type=float, default=0.25,
                                  help="seconds between /proc scans when not root (default 0.25)")
+            command.add_argument("--respond", action="store_true", help=RESPOND_HELP)
         command.add_argument("--alert", action="store_true",
                              help="also send findings to the [alerts] destinations in the settings file")
         command.add_argument("--config", type=Path,
@@ -348,6 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
                                  help="do not read DNS answers and TLS server names to name destinations")
             command.add_argument("--watchlist", type=Path,
                                  help="domain watchlist (default [threat_detection] watchlist_path in the settings)")
+            command.add_argument("--respond", action="store_true", help=RESPOND_HELP)
         if name in ("check", "watch"):
             command.add_argument("--alert", action="store_true",
                                  help="also send findings to the [alerts] destinations in the settings file")
@@ -565,6 +567,8 @@ def build_parser() -> argparse.ArgumentParser:
         command = credentials_sub.add_parser(name, help=text)
         command.add_argument("--allow-file", type=Path,
                              help="reviewed readers (default ~/.config/megalodon/credential-allow.json)")
+        if name == "watch":
+            command.add_argument("--respond", action="store_true", help=RESPOND_HELP)
         if name == "allow":
             command.add_argument("program", help="the program as reported, e.g. /usr/bin/rsync")
             command.add_argument("--category", default="any",
@@ -1805,6 +1809,24 @@ def _listeners(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+RESPOND_HELP = ("decide each finding at once with the response engine, and carry out what the enforcement policy "
+                "allows (such as pausing the process)")
+
+
+def _answer_at_once(args, source):
+    """With --respond, a function that decides one live finding at once and says so on standard error."""
+    if not getattr(args, "respond", False):
+        return lambda found: None
+    from . import respond_now
+    responder = respond_now.Responder()
+
+    def answer(found):
+        # Before the alert and before the next event: the process the finding names is still running.
+        print("megalodon: response " + json.dumps(respond_now.answer(responder, source, found), sort_keys=True),
+              file=sys.stderr, flush=True)
+    return answer
+
+
 def _ancestry(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
     from threading import Event
@@ -1846,8 +1868,11 @@ def _ancestry(args: argparse.Namespace) -> int:
             notify(found)
         return 1 if report["findings"] else 0
 
+    respond = _answer_at_once(args, "ancestry")
+
     def emit(found):
         print(json.dumps(found, sort_keys=True), flush=True)
+        respond(found)
         notify(found)
     try:
         watcher = ancestry.Watcher(emit, allow_path=allow_file, interval=args.interval)
@@ -1855,7 +1880,8 @@ def _ancestry(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(f"megalodon: watching programs that services start ({watcher.mode})"
-          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else ""), file=sys.stderr, flush=True)
+          + (f"; alerts to {len(dispatcher.channels)} destinations" if dispatcher else "")
+          + ("; findings are decided at once" if args.respond else ""), file=sys.stderr, flush=True)
     stop = Event()
     try:
         watcher.run(stop)
@@ -2000,8 +2026,11 @@ def _egress(args: argparse.Namespace) -> int:
         elif args.egress_command == "allow":
             result = egress.allow(manifest, args.program, args.port)
         elif args.egress_command == "watch":
+            respond = _answer_at_once(args, "egress")
+
             def emit(found):
                 print(json.dumps(found, sort_keys=True), flush=True)
+                respond(found)
                 notify(found)
             names = watchlist = None
             if not args.no_names:
@@ -2446,15 +2475,19 @@ def _credentials(args: argparse.Namespace) -> int:
                 notify(found)
             return 1 if report["findings"] else 0
 
+        respond = _answer_at_once(args, "credentials")
+
         def emit(found):
             print(json.dumps(found, sort_keys=True), flush=True)
+            respond(found)
             notify(found)
         watcher = credentials.Watcher(emit, allow_path=allow_file)
     except (credentials.CredentialError, OSError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(f"megalodon: watching {len(watcher.files)} credential files and {len(watcher.folders)} folders "
-          f"({watcher.mode})", file=sys.stderr, flush=True)
+          f"({watcher.mode})" + ("; findings are decided at once" if args.respond else ""),
+          file=sys.stderr, flush=True)
     stop = Event()
     try:
         watcher.run(stop)
