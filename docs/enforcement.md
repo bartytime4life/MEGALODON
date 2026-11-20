@@ -108,6 +108,12 @@ or it is reported, and decided, again.
 `enforce list` shows applied actions and unresolved suspension intents that
 have not been undone.
 
+For process suspensions, `enforce undo ID` releases that individual hold. If
+another active hold names the same exact process, the result names those IDs
+with `still paused by`, and sends no SIGCONT. Release the remaining holds to
+resume the process. This changes the earlier behavior where undoing one ID
+resumed it immediately even when another hold remained.
+
 ## Pauses that end on time
 
 A playbook's `suspend_minutes` in the response policy (0, the default, means
@@ -132,6 +138,12 @@ carries out new decisions:
   decision paused the same process, for longer or until undone, the pause
   that ended is recorded as over, with `still paused by ID`, and the process
   is resumed only when the last pause ends.
+  If several holds for the same exact process are due together, one expiry
+  pass attempts SIGCONT once and records an outcome for each hold. A failed
+  attempt keeps all those holds eligible for retry. A successful resume
+  submits one notice for the process, with one representative result carrying
+  the notification outcome. This is not an exactly-once guarantee across
+  interrupted runs or failed journal writes.
 * **A resume that fails**, for example for lack of permission, is reported as
   failed and makes `run` exit 1. The process stays listed by `enforce list`,
   and the next run tries again.
