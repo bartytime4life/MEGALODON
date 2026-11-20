@@ -162,10 +162,14 @@ def load_policy(path=DEFAULT_POLICY):
     folder = table.get('quarantine_folder', DEFAULT_QUARANTINE)
     if not isinstance(folder, str) or not folder:
         raise EnforcementError('quarantine_folder must be a folder')
+    try:
+        quarantine = Path(folder).expanduser()
+    except RuntimeError as exc:
+        raise EnforcementError(f'quarantine_folder cannot be expanded: {exc}') from None
     return dict(enabled=enabled, digest=digest, actions=frozenset(actions), playbooks=frozenset(playbooks),
                 max_age=timedelta(minutes=engine._integer(table, 'max_age_minutes', 10, 1, 1440)),
                 max_per_hour=engine._integer(table, 'max_actions_per_hour', 5, 1, 100),
-                quarantine=Path(folder).expanduser(), sha256=hashlib.sha256(data).hexdigest())
+                quarantine=quarantine, sha256=hashlib.sha256(data).hexdigest())
 
 
 # ------------------------------------------------------------------ carrying out
@@ -584,23 +588,52 @@ class _Lock:
 def run(*, policy_path=DEFAULT_POLICY, response_policy=engine.DEFAULT_POLICY, ledger=engine.DEFAULT_LEDGER,
         journal=DEFAULT_JOURNAL, state_path=DEFAULT_STATE, now=None, executor=None, dry_run=False, protected=None):
     """Resume pauses whose time is up, then carry out the allowed decisions recorded since the last run."""
-    policy = load_policy(policy_path)
-    now = now or _now()
-    if not policy['enabled'] and not dry_run:
-        # Turning enforcement off never leaves a process paused past its time.
-        return dict(schema=SCHEMA, action='run', enabled=False, applied=[], refused=[],
-                    expired=expire(journal=journal, executor=executor, now=now),
-                    note='Enforcement is off: set enabled = true in the enforcement policy to carry out decisions.')
-    arguments = dict(policy=policy, response_policy=response_policy, ledger=ledger, journal=journal,
-                     state_path=state_path, now=now, executor=executor, dry_run=dry_run,
-                     protected=protected)
+    expired = []
+
+    def read_policy():
+        # A missing or invalid new-action policy never cancels an existing recovery obligation.
+        try:
+            target = Path(policy_path).expanduser()
+            try:
+                target.lstat()
+            except FileNotFoundError:
+                return None, None, f'no enforcement policy at {target}; new enforcement is off'
+            policy = load_policy(target)
+            return policy, None, 'New enforcement is off; due suspensions are still recovered.'
+        except (EnforcementError, engine.ResponseError, OSError) as exc:
+            return None, str(exc)[:500], 'New enforcement refused: the enforcement policy could not be validated.'
+
+    def stopped(note, error=None):
+        result = dict(schema=SCHEMA, action='dry_run' if dry_run else 'run', enabled=False,
+                      decisions=0, applied=[], refused=[], expired=expired, note=note)
+        if error is not None:
+            result['policy_error'] = error
+        return result
+
+    def new_actions(policy, moment):
+        try:
+            rules = engine.load_policy(response_policy)
+        except (engine.ResponseError, OSError) as exc:
+            return stopped('New enforcement refused: the response policy could not be validated.', str(exc)[:500])
+        return dict(_run(policy=policy, response_policy=response_policy, ledger=ledger, journal=journal,
+                         state_path=state_path, now=moment, executor=executor, dry_run=dry_run,
+                         protected=protected, rules=rules), expired=expired)
+
+    policy, error, note = read_policy()
     if dry_run:
-        return dict(_run(**arguments), expired=[dict(r, status='would_resume') for r in due(journal, now)])
-    # Refused before anything is created or waited for: a run that is off or in Stage 0 leaves no trace.
+        moment = now if now is not None else _now()
+        expired = [dict(r, status='would_resume') for r in due(journal, moment)]
+        return new_actions(policy, moment) if policy and policy['enabled'] else stopped(note, error)
+    if (policy is None or not policy['enabled']) and not due(journal, now):
+        return stopped(note, error)          # no due recovery and no new actions: no lock or state writes
+    # Admission precedes lock creation and every effect, including recovery under an invalid policy.
     _admit()
     with _Lock(journal):
-        expired = _expire(journal, executor, now)
-        return dict(_run(**arguments), expired=expired)
+        moment = now if now is not None else _now()
+        expired = _expire(journal, executor, moment)
+        # A queued run must see changes made while it waited, including the operator turning enforcement off.
+        policy, error, note = read_policy()
+        return new_actions(policy, moment) if policy and policy['enabled'] else stopped(note, error)
 
 
 def due(journal=DEFAULT_JOURNAL, now=None):
@@ -612,12 +645,11 @@ def due(journal=DEFAULT_JOURNAL, now=None):
 
 def expire(*, journal=DEFAULT_JOURNAL, executor=None, now=None):
     """Resume every pause whose time is up. Reads only, and creates nothing, when none is."""
-    now = now or _now()
     if not due(journal, now):
         return []
     _admit()
     with _Lock(journal):
-        return _expire(journal, executor, now)
+        return _expire(journal, executor, now if now is not None else _now())
 
 
 def _expire(journal, executor, now):
@@ -673,8 +705,9 @@ def _admit():
         raise EnforcementError('this process is in Stage 0: no effects are allowed') from None
 
 
-def _run(*, policy, response_policy, ledger, journal, state_path, now, executor, dry_run, protected):
-    rules = engine.load_policy(response_policy)
+def _run(*, policy, response_policy, ledger, journal, state_path, now, executor, dry_run, protected, rules=None):
+    if rules is None:
+        rules = engine.load_policy(response_policy)
     state = _state(state_path)
     decisions = _decisions(ledger, state)
     executor = executor or Executor(quarantine=policy['quarantine'])
