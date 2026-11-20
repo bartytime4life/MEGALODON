@@ -265,7 +265,9 @@ def _line(event):
         if event.get('evidence'):
             text += ' -> ' + ', '.join(event['evidence'])
         return text + (f"  [id {event['id']}]" if event.get('id') else '')
-    what = 'ended on time' if event.get('expired') else 'undone'
+    # Processing may be late, or another hold may still stop the process. This records a lease event,
+    # not proof of an on-time physical resume. Keep event identity and exported history unchanged.
+    what = 'expiry recorded' if event.get('expired') else 'undone'
     return f"{what}: {event.get('action')} {event.get('target') or ''}".rstrip() + f"  [undo of {event.get('undo_of')}]"
 
 

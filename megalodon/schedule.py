@@ -42,8 +42,8 @@ JOBS = (
     Job('respond', 'MEGALODON response engine, shadow pass', ('respond', 'run'), '*:0/5',
         manifest='~/.config/megalodon/response-policy.toml', baseline=('respond', 'init'), cron='*/5 * * * *',
         interval=300),
-    # Carries out the decisions the enforcement policy allows; with no policy, or one that is off, it does nothing.
-    Job('enforce', 'MEGALODON enforcement (off until its policy is enabled)', ('enforce', 'run'), '*:*:00',
+    # New actions need an enabled policy; due suspension recovery also runs while new enforcement is off.
+    Job('enforce', 'MEGALODON enforcement and suspension recovery', ('enforce', 'run'), '*:*:00',
         # usermod writes /etc/shadow through lock and temporary files beside it, so it needs /etc, not one file.
         # disable_persistence moves units out of /usr/local/lib/systemd/system too; `-` allows it to be absent.
         cron='* * * * *', interval=60, root_only=True, writable=('/etc', '-/usr/local/lib/systemd/system')),
@@ -158,9 +158,11 @@ def units(job, launcher, system):
         service += ['Restart=on-failure', 'RestartSec=10', '', '[Install]',
                     f'WantedBy={"multi-user.target" if system else "default.target"}']
         return {f'{PREFIX}{job.name}.service': '\n'.join(service) + '\n'}
-    service += ['Type=oneshot', 'IOSchedulingClass=idle',
-                # A check exits 1 when it has findings; that is a result, not a failed unit.
-                'SuccessExitStatus=1']
+    service += ['Type=oneshot', 'IOSchedulingClass=idle']
+    # Read-only checks use 1 for findings. Enforcement uses it for failed actions or failed recovery,
+    # which must remain unsuccessful so systemd health and failure handling do not report success.
+    if job.name != 'enforce':
+        service.append('SuccessExitStatus=1')
     timer = [MARKER, '[Unit]', f'Description={job.description} (schedule)', '', '[Timer]',
              f'OnCalendar={job.calendar}', 'Persistent=true', 'RandomizedDelaySec=60', '', '[Install]',
              'WantedBy=timers.target']

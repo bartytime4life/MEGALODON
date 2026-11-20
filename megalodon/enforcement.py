@@ -43,7 +43,6 @@ import fcntl
 import hashlib
 import json
 import os
-from os import getpid as _own_pid     # bound here: tests that stand in for `os` keep the real one
 from pathlib import Path
 import pwd
 import re
@@ -100,6 +99,10 @@ class ProcessIdentityGone(EnforcementError):
 
 class ProcessIdentityUnavailable(EnforcementError):
     """Identity could not be verified; an existing pause still needs recovery."""
+
+
+class SuspensionNotAttempted(EnforcementError):
+    """Initial suspension was rejected before invoking the SIGSTOP operation."""
 
 
 NOT_ADDED = ('only an entry the persistence baseline did not have is disabled: one that existed before and was '
@@ -210,30 +213,37 @@ class Executor:
 
     # --- processes
     def _signal(self, target, number):
-        match = engine.PROCESS_ID.fullmatch(target or '')
-        if not match:
-            raise EnforcementError('only one exact process (PID and start time) is ever signalled')
-        pid, start, program = int(match.group(1)), int(match.group(2)), match.group(3)
-        if pid == _own_pid():
-            # A live watch deciding on its own findings never pauses itself, and so never stops watching.
-            raise EnforcementError('this is MEGALODON\'s own process')
         try:
-            handle = os.pidfd_open(pid)
-        except ProcessLookupError:
-            raise ProcessIdentityGone(f'process {pid} has exited') from None
-        try:
-            # The pidfd holds this process; its start time, read now, proves it is the one decided on.
-            if _start(pid, self.root) != start:
-                raise ProcessIdentityGone(f'process {pid} is no longer the one decided on (start time differs)')
+            match = engine.PROCESS_ID.fullmatch(target or '')
+            if not match:
+                raise EnforcementError('only one exact process (PID and start time) is ever signalled')
+            pid, start, program = int(match.group(1)), int(match.group(2)), match.group(3)
+            if number == signal.SIGSTOP and pid == getpid():
+                raise EnforcementError('the enforcing process cannot suspend itself while holding recovery locks')
             try:
-                running = os.readlink(Path(self.root, 'proc', str(pid), 'exe')).removesuffix(' (deleted)')
-            except OSError as exc:
-                raise ProcessIdentityUnavailable(f'cannot verify process {pid} executable: {exc}') from None
-            if running != program:
-                raise ProcessIdentityUnavailable(f'process {pid} runs {running}, not {program}')
-            signal.pidfd_send_signal(handle, number)
-        finally:
-            os.close(handle)
+                handle = os.pidfd_open(pid)
+            except ProcessLookupError:
+                raise ProcessIdentityGone(f'process {pid} has exited') from None
+            try:
+                # The pidfd holds this process; its start time, read now, proves it is the one decided on.
+                if _start(pid, self.root) != start:
+                    raise ProcessIdentityGone(f'process {pid} is no longer the one decided on (start time differs)')
+                try:
+                    running = os.readlink(Path(self.root, 'proc', str(pid), 'exe')).removesuffix(' (deleted)')
+                except OSError as exc:
+                    raise ProcessIdentityUnavailable(f'cannot verify process {pid} executable: {exc}') from None
+                if running != program:
+                    raise ProcessIdentityUnavailable(f'process {pid} runs {running}, not {program}')
+                # From this point an error cannot prove that no signal was sent. A failed syscall or close
+                # therefore leaves a new suspension intent recoverable, rather than cancelling it.
+                attempted = True
+                signal.pidfd_send_signal(handle, number)
+            finally:
+                os.close(handle)
+        except (EnforcementError, OSError, OverflowError) as exc:
+            if number == signal.SIGSTOP and not attempted:
+                raise SuspensionNotAttempted(str(exc)) from None
+            raise
         return dict(pid=pid, start=start, program=program)
 
     def suspend_process(self, target, decision):
@@ -817,6 +827,8 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
                 applied.append(record)
             except (EnforcementError, OSError, ValueError) as exc:
                 record = dict(base, status='failed', reason=str(exc)[:500])
+                if suspension and isinstance(exc, SuspensionNotAttempted):
+                    record['stop_attempted'] = False
                 refused.append(record)
             if suspension:
                 # Do not wait for another action in this batch. If writing the outcome fails, the durable
@@ -840,9 +852,20 @@ def active(journal=DEFAULT_JOURNAL):
     undone = {r['undo_of'] for r in records if r.get('status') == 'undone'}
     actions = {}
     for record in records:
-        if record.get('status') == 'applied' or (record.get('status') == 'pending'
-                                                and record.get('action') == 'suspend_process'):
+        if record.get('status') == 'applied':
             actions[record['id']] = record
+        elif record.get('status') == 'pending' and record.get('action') == 'suspend_process':
+            # A later pending row must never hide an already confirmed application of the same action.
+            if actions.get(record['id'], {}).get('status') != 'applied':
+                actions[record['id']] = record
+        elif record.get('status') == 'failed' and record.get('action') == 'suspend_process' \
+                and record.get('stop_attempted') is False and 'undo_of' not in record:
+            prior = actions.get(record['id'])
+            if prior and prior.get('status') == 'pending' and all(
+                    prior.get(key) == record.get(key) for key in ('target', 'decided_at', 'signal_key')):
+                # Only a durable, matching proof that the initial SIGSTOP was never invoked cancels an
+                # intent. Missing flags, failed recovery, and ambiguous after-signal errors retain it.
+                del actions[record['id']]
     return [r for r in actions.values() if r['id'] not in undone
             and r['action'] not in ('collect_evidence', 'notify')]
 

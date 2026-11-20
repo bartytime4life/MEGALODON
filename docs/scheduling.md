@@ -39,7 +39,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | Job | Runs | Command |
 | --- | --- | --- |
 | respond | every 5 minutes | `respond run` (shadow mode; nothing is carried out) |
-| enforce | every minute (root) | `enforce run`; does nothing until its policy is enabled ([enforcement](enforcement.md)) |
+| enforce | scheduled every minute (root) | `enforce run`; new actions need an enabled policy; existing timed pauses are still recovered with a missing or valid disabled policy ([enforcement](enforcement.md)) |
 | heartbeat | every 5 minutes | `heartbeat send`, after `megalodon heartbeat init --url ...` ([tamper detection](tamper-detection.md)) |
 | timeline-push | every 5 minutes | `timeline push`, to the [fleet collector](fleet.md#incidents-across-machines); sends nothing to a plain heartbeat monitor |
 | evidence-push | every 5 minutes | `evidence push`: command log lines and evidence bundles to the fleet collector ([evidence off the machine](evidence-shipping.md)); sends nothing to a plain heartbeat monitor |
@@ -65,12 +65,23 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | egress | always running | `egress watch --alert`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md)) |
 | ransomware | always running | `ransomware watch --respond`, after `megalodon ransomware init --dir FOLDER ...`; each finding is decided and enforced as it is raised ([ransomware watch](ransomware-watch.md#answer-it-at-once)) |
 
-Timers start up to a minute late at random, so that machines set up the same
+Timers add a random delay of up to a minute, so that machines set up the same
 way do not all run at once, and they catch up after the machine was off.
+Systemd's timer accuracy, an already-running job, and lock contention can
+delay execution further. The calendar interval is not a recovery deadline.
 Checks run at low CPU and I/O priority, cannot gain privileges, and see
 `/usr`, `/boot` and `/etc` read-only. A check that exits 1 has found
 something. That is reported through `--alert`, and systemd does not count it
-as a failure.
+as a failure. **Enforcement is different:** exit 1 means an action or a resume
+failed, so the generated `megalodon-enforce` service leaves it unsuccessful.
+Its JSON output names the failure, and a failed resume remains eligible for
+the next recovery attempt. New enforcement can be disabled while timed-pause
+recovery continues; stopping its timer stops those attempts too.
+
+These are generated-unit settings. Changing source does not update an
+installed service or prove that it uses the expected account, journal, or
+installed package revision. Service updates and native acceptance remain
+separate operator actions.
 
 ## Notes
 
