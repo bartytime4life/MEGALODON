@@ -338,7 +338,8 @@ def suspects(roots, *, proc='/proc', limit=MAX_SUSPECTS):
             exe = ''
         found.append(dict(pid=int(pid), start=_start_time(base), name=comm, program=exe, open_files=hits,
                           writing=writing))
-    return sorted(found, key=lambda item: (not item['writing'], -item['open_files']))
+    # The same order however /proc lists them: writers, then most files open, then by PID.
+    return sorted(found, key=lambda item: (not item['writing'], -item['open_files'], item['pid']))
 
 
 class _Inotify:

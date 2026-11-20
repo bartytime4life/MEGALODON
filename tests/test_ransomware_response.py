@@ -34,7 +34,7 @@ def fake_process(proc, pid, *, start, exe, files):
         (base / "fdinfo" / str(fd)).write_text(f"pos:\t0\nflags:\t{flags}\nmnt_id:\t1\n")
 
 
-def test_suspects_are_named_by_start_time_and_told_apart_by_writing(tmp_path):
+def test_suspects_are_named_by_start_time_and_told_apart_by_writing(tmp_path, monkeypatch):
     proc, docs = tmp_path / "proc", tmp_path / "docs"
     docs.mkdir()
     fake_process(proc, 4100, start=777, exe="/tmp/.x/locker (deleted)",
@@ -42,6 +42,10 @@ def test_suspects_are_named_by_start_time_and_told_apart_by_writing(tmp_path):
     fake_process(proc, 4200, start=888, exe="/usr/bin/viewer", files={5: (f"{docs}/b.pdf", "0100000")})
     fake_process(proc, 4300, start=999, exe="/usr/bin/editor", files={6: (f"{docs}/c.txt", "0101")})
     fake_process(proc, 4400, start=1, exe="/usr/bin/other", files={7: ("/var/tmp/x", "01")})
+    real_listdir = os.listdir
+    # Whatever order /proc lists processes in, the result is the same: here, the reverse of PID order.
+    monkeypatch.setattr(rw.os, "listdir", lambda path: sorted(real_listdir(path), reverse=True)
+                        if str(path) == str(proc) else real_listdir(path))
     found = rw.suspects([docs], proc=str(proc))
     assert [(f["pid"], f["start"], f["program"], f["writing"]) for f in found] == [
         (4100, 777, "/tmp/.x/locker", True), (4300, 999, "/usr/bin/editor", True),
