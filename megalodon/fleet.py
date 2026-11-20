@@ -14,7 +14,10 @@ send`) and alerts (webhook destinations). `megalodon fleet` is the other end:
   with its heartbeat key (`megalodon timeline push`), and `timeline` tells
   incidents across machines: one machine's incident is joined to another's
   when both involve the same address within a day, as an attacker moving
-  between machines, or reaching several, does.
+  between machines, or reaching several, does;
+* `serve` also receives each machine's command log lines and evidence bundles
+  at /evidence (`megalodon evidence push`), keeps the first copy of each, and
+  reports any later copy that differs; `evidence` lists and checks them.
 
 Heartbeats are checked with the same rules as `megalodon heartbeat monitor`: a
 machine that goes silent, a forged or replayed heartbeat, or a machine whose
@@ -398,6 +401,7 @@ def fleet_show(incident=None, *, entity=None, data=DEFAULT_DATA):
 
 def status(*, data=DEFAULT_DATA, max_gap=900, hours=WINDOW_HOURS, now=None):
     """Every enrolled machine: heartbeat state, recent alerts, and what needs attention."""
+    from . import evidence_shipping
     now = now or _now()
     since = now - timedelta(hours=hours)
     rows, findings = [], []
@@ -416,11 +420,13 @@ def status(*, data=DEFAULT_DATA, max_gap=900, hours=WINDOW_HOURS, now=None):
         counts = {level: sum(a.get('severity') == level for a in alerts) for level in RANK}
         problems = [dict(f, machine=name, subject=f'{name}:{f["subject"]}', detail=f'{name}: {f["detail"]}')
                     for f in beats['findings']]
+        problems += evidence_shipping.findings(data, name)
         findings += problems
         state = ('silent' if any(f['rule_id'] == 'HEARTBEAT_SILENT' for f in problems) else
                  'attention' if problems or counts['CRITICAL'] or counts['HIGH'] else 'ok')
         rows.append(dict(machine=name, sensor=machine['sensor'], state=state, last_heartbeat=beats['last_sent_at'],
                          last_sequence=beats['last_sequence'], heartbeat_findings=[f['rule_id'] for f in problems],
+                         evidence=evidence_shipping.summary(data, name),
                          alerts=counts,
                          recent=[{k: a.get(k) for k in ('received_at', 'severity', 'rule_id', 'message')}
                                  for a in sorted(alerts, key=lambda a: a['received_at'], reverse=True)[:5]]))
@@ -521,8 +527,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length', ''))
         except ValueError:
             return self._reply(411, dict(error='a length is needed'))
-        if length < 0 or length > MAX_BODY:
-            return self._reply(413, dict(error=f'at most {MAX_BODY} bytes'))
+        from . import evidence_shipping
+        # Evidence arrives in larger pieces than heartbeats and alerts; everything else keeps the small limit.
+        limit = evidence_shipping.MAX_BODY if self.path == '/evidence' else MAX_BODY
+        if length < 0 or length > limit:
+            return self._reply(413, dict(error=f'at most {limit} bytes'))
         try:
             body = json.loads(self.rfile.read(length))
         except ValueError:
@@ -532,6 +541,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 code, message = receive_heartbeat(body, data=self.data)
             elif self.path == '/events':
                 code, message = receive_events(body, data=self.data)
+            elif self.path == '/evidence':
+                code, answer = evidence_shipping.receive(body, data=self.data)
+                return self._reply(code, answer)
             elif self.path == '/alert':
                 auth = self.headers.get('Authorization', '')
                 code, message = receive_alert(body, auth[7:] if auth.startswith('Bearer ') else '', data=self.data)

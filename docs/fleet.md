@@ -77,8 +77,16 @@ Nothing is sent to the machines: the collector only listens.
   The machine is the one the token belongs to, whatever the alert's own
   `sensor` field says. That claim is kept as `claimed_sensor`, so a mismatch
   shows.
-* **Bodies** over 64 KiB are refused. Each machine's records are kept in two
+* **Bodies** over 64 KiB are refused, except at `/evidence`, which takes up to
+  1 MiB. Each machine's heartbeats, alerts and timeline events are kept in two
   files of up to 8 MiB each: the current file and the previous one.
+* **Evidence** arrives at `/evidence`: each machine's command log lines and
+  evidence bundles, sent by `megalodon evidence push` and signed with its
+  heartbeat key. The collector keeps the first copy of each. A line or bundle
+  sent again with other content is reported as `SHIPPED_COMMANDS_REWRITTEN` or
+  `SHIPPED_EVIDENCE_CHANGED`, and lines missing when later ones arrive as
+  `SHIPPED_COMMANDS_GAP`. `megalodon fleet evidence` lists the copies and
+  `--verify` checks them. See [evidence off the machine](evidence-shipping.md).
 
 ## The view
 

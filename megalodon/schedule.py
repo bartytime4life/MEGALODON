@@ -54,6 +54,10 @@ JOBS = (
     Job('timeline-push', 'MEGALODON timeline push to the fleet collector', ('timeline', 'push'), '*:0/5',
         manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,
         setup='megalodon heartbeat init --url https://your-collector.example/heartbeat'),
+    # Command log lines and evidence bundles to the fleet collector, so deleting them on the machine loses nothing.
+    Job('evidence-push', 'MEGALODON evidence push to the fleet collector', ('evidence', 'push'), '*:0/5',
+        manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,
+        setup='megalodon heartbeat init --url https://your-collector.example/heartbeat'),
     Job('tamper', 'MEGALODON tamper check', ('tamper', 'check', '--alert'), '*:0/15',
         manifest='~/.config/megalodon/tamper.json', baseline=('tamper', 'baseline'), cron='*/15 * * * *',
         interval=900),

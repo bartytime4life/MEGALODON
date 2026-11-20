@@ -666,6 +666,14 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--hours", type=int, default=168, help="for the list: how far back (default 168)")
     command.add_argument("--format", choices=("text", "json", "html"), default="text")
     command.add_argument("--output", type=Path, help="write the result to this file (mode 600)")
+    command = fleet_sub.add_parser("evidence", help="what each machine's evidence push delivered; with --verify, "
+                                                    "check the collector's copies (exit 1 on findings)")
+    command.add_argument("machine", nargs="?", help="one machine (default: every machine)")
+    command.add_argument("--verify", action="store_true",
+                         help="check the copies: the command log with --key-file, every complete bundle against "
+                              "the manifest digest recorded when it arrived")
+    command.add_argument("--key-file", type=Path,
+                         help="the command log key from `commands init`, to check the copy of the log with")
     for command in fleet_sub.choices.values():
         command.add_argument("--data", type=Path, help="collector folder (default ~/.local/share/megalodon/fleet)")
 
@@ -773,6 +781,19 @@ def build_parser() -> argparse.ArgumentParser:
     verify_bundle = evidence_sub.add_parser("verify", help="re-check every file of a bundle against its manifest")
     verify_bundle.add_argument("bundle", type=Path)
     verify_bundle.add_argument("--expected", help="the manifest SHA-256 recorded when the bundle was collected")
+    push = evidence_sub.add_parser(
+        "push", help="send command log lines and evidence bundles not yet sent to the fleet collector, signed "
+                     "with the heartbeat key")
+    push.add_argument("--config", type=Path, help="heartbeat configuration (default ~/.config/megalodon/heartbeat.json)")
+    push.add_argument("--url", help="where to send (default: the heartbeat URL with /evidence for /heartbeat)")
+    push.add_argument("--log", type=Path, help="the command log (default ~/.local/state/megalodon/commands.jsonl)")
+    push.add_argument("--evidence-root", type=Path,
+                      help="the folder of evidence bundles (default ~/.local/share/megalodon/evidence)")
+    push.add_argument("--max-mib", type=_bounded_cli_integer("max-mib", 1, 4096), default=64,
+                      help="file bytes to send in this run, in MiB; the rest goes next time (default 64)")
+    push.add_argument("--cursor", type=Path,
+                      help="the record of what was sent (default ~/.local/state/megalodon/evidence-push.json)")
+    push.add_argument("--dry-run", action="store_true", help="count what would be sent; send nothing")
 
     ransom = sub.add_parser("ransomware", help="watch folders for ransomware-style file encryption (Linux)")
     ransom_sub = ransom.add_subparsers(dest="ransomware_command", required=True)
@@ -2599,6 +2620,28 @@ def _fleet(args: argparse.Namespace) -> int:
             except KeyboardInterrupt:
                 pass
             return 0
+        elif args.fleet_command == "evidence":
+            from . import evidence_shipping as shipping
+            names = [args.machine] if args.machine else sorted(fleet.machines(data))
+            if args.machine and args.machine not in fleet.machines(data):
+                raise fleet.FleetError(f"{args.machine} is not enrolled")
+            if args.key_file and not args.verify:
+                raise fleet.FleetError("--key-file is for --verify")
+            try:
+                if args.verify:
+                    key = read_secret(str(args.key_file)) if args.key_file else None
+                    if key is not None and not args.machine:
+                        raise fleet.FleetError("a command log key belongs to one machine: name it")
+                    checked = [shipping.verify(data, n, key_hex=key) for n in names]
+                    result = dict(schema=shipping.SCHEMA, action="verify", machines=checked)
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                    return 1 if any(c["findings"] for c in checked) else 0
+            except (shipping.ShippingError, ValueError) as exc:
+                print(f"megalodon: {exc}", file=sys.stderr)
+                return 2
+            result = dict(schema=shipping.SCHEMA, action="list", machines=[shipping.held(data, n) for n in names])
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 1 if any(m["findings"] for m in result["machines"]) else 0
         elif args.fleet_command == "timeline":
             from . import timeline as tl
             if args.incident or args.entity:
@@ -2772,6 +2815,30 @@ def _evidence(args: argparse.Namespace) -> int:
     from . import evidence
     from .validation import ValidationError
 
+    if args.evidence_command == "push":
+        import urllib.error
+
+        from . import evidence_shipping as shipping
+        from .tamper import TamperError
+        try:
+            result = shipping.push(config=args.config, url=args.url, dry_run=args.dry_run,
+                                   log=args.log or shipping.command_log.DEFAULT_LOG,
+                                   evidence_root=args.evidence_root or evidence.DEFAULT_ROOT,
+                                   budget=args.max_mib * 1024 * 1024,
+                                   cursor_path=args.cursor or shipping.DEFAULT_CURSOR)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                # A heartbeat monitor that is not a fleet collector keeps no evidence: nothing to send it.
+                print(json.dumps(dict(sent=0, note="the heartbeat destination keeps no evidence (404); run a fleet "
+                                                   "collector, or give --url"), sort_keys=True))
+                return 0
+            print(f"megalodon: the collector refused the evidence: HTTP {exc.code}", file=sys.stderr)
+            return 2
+        except (shipping.ShippingError, TamperError, OSError, ValueError) as exc:
+            print(f"megalodon: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     try:
         if args.evidence_command == "verify":
             result = evidence.verify(args.bundle, expected=args.expected)

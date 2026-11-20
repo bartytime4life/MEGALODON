@@ -42,6 +42,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | enforce | every minute (root) | `enforce run`; does nothing until its policy is enabled ([enforcement](enforcement.md)) |
 | heartbeat | every 5 minutes | `heartbeat send`, after `megalodon heartbeat init --url ...` ([tamper detection](tamper-detection.md)) |
 | timeline-push | every 5 minutes | `timeline push`, to the [fleet collector](fleet.md#incidents-across-machines); sends nothing to a plain heartbeat monitor |
+| evidence-push | every 5 minutes | `evidence push`: command log lines and evidence bundles to the fleet collector ([evidence off the machine](evidence-shipping.md)); sends nothing to a plain heartbeat monitor |
 | logins | every 5 minutes | `logins check --alert` ([login watch](login-watch.md)) |
 | devices | every 5 minutes | `devices check --alert` |
 | listeners | every 10 minutes | `listeners check --alert` |

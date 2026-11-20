@@ -15,8 +15,10 @@ megalodon evidence verify ~/.local/share/megalodon/evidence/20261118T232901Z --e
 
 * **`collect`** writes a new folder under
   `~/.local/share/megalodon/evidence/` (or `--output`). It prints the bundle
-  path and its `manifest_sha256`. **Keep that digest somewhere off the
-  machine**, or pass `--alert` to send it to your
+  path and its `manifest_sha256`. `megalodon evidence push` copies the whole
+  bundle, digest included, to the fleet collector
+  ([evidence off the machine](evidence-shipping.md)). Without a collector,
+  **keep that digest somewhere off the machine**, or pass `--alert` to send it to your
   [off-machine alerts](off-machine-alerts.md). The digest is sent whatever
   the alert minimum severity and detail level are; if alerts are off, `collect` says so and
   exits 1. Run it as root to see every process.

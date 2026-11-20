@@ -560,4 +560,5 @@ def monitor(lines, key, *, max_gap=900, now=None, sensor=None):
     findings.sort(key=lambda f: RANK.index(f['severity']))
     return dict(schema=REPORT_SCHEMA, action='monitor', checked_at=_iso(now), last_sequence=last,
                 command_log_sequence=log_sequence,
+                command_log_key_id=log_key,
                 last_sent_at=_iso(last_time) if last_time else None, findings=findings, refused_lines=refused)
