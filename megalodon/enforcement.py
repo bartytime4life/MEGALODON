@@ -43,6 +43,7 @@ import fcntl
 import hashlib
 import json
 import os
+from os import getpid
 from pathlib import Path
 import pwd
 import re
@@ -213,6 +214,7 @@ class Executor:
 
     # --- processes
     def _signal(self, target, number):
+        attempted = False
         try:
             match = engine.PROCESS_ID.fullmatch(target or '')
             if not match:

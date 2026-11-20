@@ -77,6 +77,16 @@ decision is reported with its reason. A failed one is recorded, and makes
 
 One run or undo happens at a time. A run started while another is going, by
 hand or by the scheduler, waits for it, so no decision is carried out twice.
+A `--dry-run` and a run or undo refused in Stage 0 create no effectful lock or
+journal records. A run that is off also creates nothing when no suspension is
+due. When recovery is due, it takes the same lock and records its outcome even
+though new enforcement is disabled.
+Runs come from the scheduled `megalodon-enforce` service every minute, and
+from the [ransomware watch](ransomware-watch.md#answer-it-at-once) as soon as it
+raises a finding. The watch's run is a whole run: it also carries out any other
+decision recorded since the last one.
+The scheduled `megalodon-enforce` and `megalodon-ransomware` services keep
+`ProtectSystem=full` but can write to `/etc`. `usermod` needs this to lock an account, because it writes
 lock and temporary files beside `/etc/shadow`.
 
 ## What each action does
