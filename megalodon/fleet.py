@@ -50,7 +50,7 @@ MAX_MACHINES = 4096
 WINDOW_HOURS = 24
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 BATCH_SCHEMA = 'megalodon-timeline-batch-v1'
-EVENT_KINDS = frozenset({'finding', 'decision', 'action', 'undo'})
+EVENT_KINDS = frozenset({'finding', 'decision', 'action', 'undo', 'merge'})
 MAX_BATCH_EVENTS = 2000
 LINK_HOURS = 24
 _RECEIVING = threading.Lock()
@@ -294,6 +294,9 @@ def fleet_groups(*, data=DEFAULT_DATA):
     """{fleet incident ID: events}: each machine's incidents, joined across machines by a shared address."""
     from .timeline import _entity_keys
     every = fleet_events(data=data)
+    # A machine merges two of its incidents after it sent their events: the merge joins them here too.
+    merges = [e for e in every if e.get('kind') == 'merge']
+    every = [e for e in every if e.get('kind') != 'merge']
     parent = {}
 
     def node(event):
@@ -308,6 +311,9 @@ def fleet_groups(*, data=DEFAULT_DATA):
 
     def union(a, b):
         parent[find(a)] = find(b)
+    for merge in merges:
+        if isinstance(merge.get('incident'), str) and isinstance(merge.get('merged'), str):
+            union((merge['machine'], merge['merged']), (merge['machine'], merge['incident']))
     by_address = {}
     for event in every:
         find(node(event))
@@ -317,13 +323,16 @@ def fleet_groups(*, data=DEFAULT_DATA):
     window = timedelta(hours=LINK_HOURS)
     linked = {}
     for key, sightings in by_address.items():
-        latest = {}                                    # machine -> (time, node) of its latest sighting
+        recent = {}                                    # node -> its latest sighting, oldest first
         for moment, item in sorted((s for s in sightings if s[0]), key=lambda s: s[0]):
-            for machine, (seen_at, other) in latest.items():
-                if machine != item[0] and moment - seen_at <= window:
+            for other in [n for n, seen_at in recent.items() if moment - seen_at > window]:
+                del recent[other]
+            for other in recent:
+                if other[0] != item[0]:
                     union(item, other)
                     linked.setdefault(frozenset((item, other)), set()).add(key.partition(':')[2])
-            latest[item[0]] = (moment, item)
+            recent.pop(item, None)
+            recent[item] = moment
     groups = {}
     for event in every:
         groups.setdefault(find(node(event)), []).append(event)

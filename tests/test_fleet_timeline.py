@@ -131,3 +131,36 @@ def test_the_cli_and_a_plain_monitor(collector, tmp_path, capsys):
     with pytest.raises(SystemExit) as exit_:
         main(["fleet", "timeline", "--data", str(data), "--hours", "1000000"])
     assert exit_.value.code == 0 and "on web-1" in capsys.readouterr().out
+
+
+def test_every_incident_in_the_window_is_joined(collector, tmp_path):
+    """Two of one machine's incidents saw the address before another machine did: both are joined."""
+    data, url, _view = collector
+    web, db = (Machine(tmp_path, url, data, n) for n in ("web-1", "db-1"))
+    web.finds("w1", "egress", "UNDECIDED_RULE", "first", 0, address=["198.51.100.20"])
+    web.finds("w2", "egress", "UNDECIDED_RULE", "two hours on", 120, address=["198.51.100.20"])
+    db.finds("d1", "logins", "UNDECIDED_RULE", "three hours on", 180, address=["198.51.100.20"])
+    assert len(tl.incidents(ledger=web.ledger, journal=web.dir / "enforced.jsonl", now=T0)["incidents"]) == 2, \
+        "on web-1 they are two incidents, too far apart to correlate"
+    web.push(), db.push()
+    listed = fleet.fleet_timeline(data=data, now=T0 + timedelta(hours=4))["incidents"]
+    assert len(listed) == 1 and len(listed[0]["machine_incidents"]) == 3
+
+
+def test_a_merge_after_the_push_reaches_the_fleet(collector, tmp_path):
+    """Incidents already sent, then merged on the machine: the fleet tells them as one, all events kept."""
+    data, url, _view = collector
+    web = Machine(tmp_path, url, data, "web-1")
+    web.finds("a", "webroot", "UNDECIDED_RULE", "file a", 0, file=["/srv/a"])
+    web.finds("b", "webroot", "UNDECIDED_RULE", "file b", 5, file=["/srv/b"])
+    web.push()
+    assert len(fleet.fleet_timeline(data=data, now=T0 + timedelta(hours=1))["incidents"]) == 2
+    web.finds("c", "webroot", "UNDECIDED_RULE", "both files", 10, file=["/srv/a", "/srv/b"])
+    local = tl.incidents(ledger=web.ledger, journal=web.dir / "enforced.jsonl", now=T0)["incidents"]
+    assert len(local) == 1, "on the machine the two incidents merged"
+    assert web.push()["sent"] >= 2, "the new finding and the merge"
+    listed = fleet.fleet_timeline(data=data, now=T0 + timedelta(hours=1))["incidents"]
+    assert len(listed) == 1
+    shown = fleet.fleet_show(listed[0]["incident"], data=data)
+    assert sorted(e["summary"] for e in shown["events"]) == ["both files", "file a", "file b"]
+    assert all(e["kind"] != "merge" for e in shown["events"]), "a merge is applied, not told"
