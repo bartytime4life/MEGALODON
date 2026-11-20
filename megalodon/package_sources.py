@@ -116,6 +116,9 @@ RULES = {
     'PACKAGE_SIGNATURE_CHECK_WEAKENED': ('HIGH', ['T1553', 'T1195.002'],
                                          'Signatures are checked less strictly than the default.'),
     'PACKAGE_SOURCE_ADDED': ('MEDIUM', ['T1195.002'], 'A package source was added.'),
+    'PACKAGE_INDEX_MIXED': ('MEDIUM', ['T1195.002'],
+                            'pip installs from more than one index and takes the higher version: a package with an '
+                            'internal name can be replaced from the other index (dependency confusion).'),
     'PACKAGE_TRANSPORT_WEAKENED': ('MEDIUM', ['T1557'],
                                    'The connection to a source is not verified. Signatures still protect packages, '
                                    'but a keys or lists download is open to whoever is in the middle.'),
@@ -709,8 +712,29 @@ def snapshot(*, root='/', runner=None):
                 if line and not line.startswith('#'):
                     hooks[_hook_id(path, 'action', line)] = dict(file=path, option='action', command=line[:4096])
 
+    # pip, npm, flatpak and snap: their sources and the settings that weaken them.
+    from . import package_ecosystems
+
+    def add_source(manager, label, uri, suite, signed_by, set_in, trusts=()):
+        sid = _source_id(manager, dict(type=manager), uri, f'{label} {suite}')
+        sources[sid] = dict(file=label, manager=manager, uri=uri, suite=suite, signed_by=signed_by, set_in=set_in,
+                            keys=sorted(trusts))
+        for fingerprint in trusts:
+            if sid not in keys[fingerprint]['used_by']:
+                keys[fingerprint]['used_by'].append(sid)
+        return sid
+
+    def fingerprints(path):
+        """The keys in a keyring, recorded as keys a named source uses; their fingerprints."""
+        keyring(path, 'named')
+        return [fp for fp, entry in keys.items() if path in entry['files']]
+    ecosystem_files = package_ecosystems.collect(
+        root, gaps, read=lambda path: _read(root, path, gaps),
+        listing=lambda folder, suffixes: _listing(root, folder, gaps, suffixes),
+        weaken=weaken, add_source=add_source, keyring=fingerprints)
+
     signed_files = [p for s in sources.values() for p in re.split(r'[\s,]+', s['signed_by']) if p.startswith('/')]
-    writable = _guarded_writable(root, signed_files + (sorted(where.values()) if has_apt else []))
+    writable = _guarded_writable(root, signed_files + (sorted(where.values()) if has_apt else []) + ecosystem_files)
     for entry in keys.values():
         entry['files'].sort()
         entry['used_by'].sort()
@@ -770,6 +794,8 @@ def compare(old, new):
                     findings.append(_finding('PACKAGE_SOURCE_REDIRECTED', f'source:{sid}',
                                              f"{entry['suite'] or 'a source'} in {entry['file']}: {replaced['uri']} → "
                                              f"{entry['uri']}", path=entry['file']))
+                elif entry.get('set_in') == '(default)':
+                    continue        # a tool's built-in default, not a setting: first seen after an upgrade
                 else:
                     findings.append(_finding('PACKAGE_SOURCE_ADDED', f'source:{sid}',
                                              f"{entry['uri']} {entry['suite']} in {entry['file']}, signed by "
