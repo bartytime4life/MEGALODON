@@ -144,3 +144,33 @@ def test_cli(capsys, monkeypatch):
         main(["rootkit", "check", "--skip-ports", "--max-pid", "1000"])
     assert exit_.value.code == 0
     assert json.loads(capsys.readouterr().out)["kw"] == ["max_pid", "ports"]
+
+
+def test_a_hidden_port_on_another_address_is_found():
+    """A backdoor bound to one address, not loopback's 127.0.0.1, is in use on every probe of that port."""
+    with socket.socket() as backdoor, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as quiet:
+        backdoor.bind(("127.0.0.2", 0))   # stands in for a machine's network address: not 127.0.0.1
+        backdoor.listen(1)
+        port = backdoor.getsockname()[1]
+        quiet.bind(("127.0.0.2", 0))
+        udp = quiet.getsockname()[1]
+
+        def hiding(root):
+            ports, gaps = rk.table_ports(root)
+            return {"tcp": ports["tcp"] - {port}, "udp": ports["udp"] - {udp}}, gaps
+        found, _ = rk.hidden_ports(tables=hiding, first_port=min(port, udp))
+        assert {(f["protocol"], f["port"]) for f in found} >= {("tcp", port), ("udp", udp)}
+
+
+@pytest.mark.skipif(not socket.has_ipv6, reason="needs IPv6")
+def test_a_hidden_ipv6_port_is_found():
+    try:
+        backdoor = socket.socket(socket.AF_INET6)
+        backdoor.bind(("::1", 0))
+    except OSError:
+        pytest.skip("no IPv6 loopback here")
+    with backdoor:
+        backdoor.listen(1)
+        port = backdoor.getsockname()[1]
+        assert rk._in_use("tcp", socket.AF_INET6, port) is True
+        assert rk._in_use("tcp", socket.AF_INET, port) is False, "an IPv6 socket is not reported for IPv4"

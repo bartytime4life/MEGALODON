@@ -204,13 +204,18 @@ def table_ports(root='/'):
 
 
 def _in_use(protocol, family, port):
-    """True when binding the port fails because something holds it."""
+    """True when binding the port fails because something holds it, on any address of this machine.
+
+    The probe binds the wildcard address. That conflicts with a socket bound to the port on any one address,
+    such as a backdoor on the machine's network address, where a loopback probe would not. The probe is never
+    listened on and is closed at once: a TCP connection to it is refused, and a UDP packet that arrives in
+    that instant is dropped with it."""
     kind = socket.SOCK_STREAM if protocol == 'tcp' else socket.SOCK_DGRAM
     with socket.socket(family, kind) as probe:
         if family == socket.AF_INET6:
             probe.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         try:
-            probe.bind(('::1' if family == socket.AF_INET6 else '127.0.0.1', port))
+            probe.bind(('::' if family == socket.AF_INET6 else '0.0.0.0', port))
         except OSError as exc:
             if exc.errno == errno.EADDRINUSE:
                 return True
