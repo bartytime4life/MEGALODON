@@ -45,7 +45,8 @@ JOBS = (
     # Carries out the decisions the enforcement policy allows; with no policy, or one that is off, it does nothing.
     Job('enforce', 'MEGALODON enforcement (off until its policy is enabled)', ('enforce', 'run'), '*:*:00',
         # usermod writes /etc/shadow through lock and temporary files beside it, so it needs /etc, not one file.
-        cron='* * * * *', interval=60, root_only=True, writable=('/etc',)),
+        # disable_persistence moves units out of /usr/local/lib/systemd/system too; `-` allows it to be absent.
+        cron='* * * * *', interval=60, root_only=True, writable=('/etc', '-/usr/local/lib/systemd/system')),
     # A signed heartbeat off the machine: its silence is what an intruder who stops everything cannot hide.
     Job('heartbeat', 'MEGALODON heartbeat', ('heartbeat', 'send'), '*:0/5',
         manifest='~/.config/megalodon/heartbeat.json', cron='*/5 * * * *', interval=300,

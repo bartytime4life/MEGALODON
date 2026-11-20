@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime, timezone
+import fnmatch
 import glob
 import hashlib
 import json
@@ -81,6 +82,29 @@ RANK = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2, 'CRITICAL': 3}
 
 class PersistenceError(ValueError):
     pass
+
+
+# Categories whose entries are services, jobs or startup files; the others are not something to disable.
+DISABLE_CATEGORIES = ('systemd', 'cron', 'at', 'autostart', 'shell_startup', 'ssh', 'preload', 'sudoers', 'pam',
+                      'init', 'module_config')
+
+
+def why_not_disabled(category, location):
+    """Why an entry cannot be disabled by moving it aside, or None. Only locations this watch covers qualify."""
+    if category not in DISABLE_CATEGORIES:
+        return 'not a service, job or startup entry'
+    parts = location.split('/')
+    if any(part in ('', '.', '..') for part in parts[1:]) or not (location.startswith('/') or
+                                                                  location.startswith('~/')):
+        return 'not a plain path'
+    patterns = next(p for c, _t, _s, p in LOCATIONS if c == category)
+    if not any(len(pattern.split('/')) == len(parts) and
+               all(fnmatch.fnmatchcase(part, piece) for part, piece in zip(parts, pattern.split('/')))
+               for pattern in patterns):
+        return 'not a location the persistence watch covers'
+    if os.path.basename(location).startswith('megalodon'):
+        return "MEGALODON's own: disabling it would turn off a watch"
+    return None
 
 
 def _now():
