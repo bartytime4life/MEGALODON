@@ -20,11 +20,19 @@ megalodon credentials check
 ```
 
 * **`watch`** reports each unexpected open as a JSON line, as it happens.
-  Pipe it into the [response engine](response-engine.md):
+  With `--respond`, it decides each finding itself, at once, and runs
+  [enforcement](enforcement.md) before it reads the next event, so the
+  process it names can be paused while it still runs. What was decided and
+  done is written to standard error as one `megalodon: response {...}`
+  line. The scheduled `megalodon-credentials` job runs it this way:
 
   ```bash
-  sudo megalodon credentials watch | megalodon respond ingest
+  sudo megalodon credentials watch --respond
   ```
+
+  The five-minute response pass still reads `check`. The same process is
+  decided only once, whichever sees it first. Enforcement acts only when its
+  policy is on and lists the action and the playbook.
 
   As root it uses the kernel's file-access notifications (fanotify), which
   name the process behind every open. It also follows the kernel's process

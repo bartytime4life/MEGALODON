@@ -18,12 +18,20 @@ megalodon ancestry check
   JSON line per finding. Run as root, it uses the kernel's process events, so
   a command that ends within milliseconds (`id`, `uname -a`) is still seen.
   Without root it scans `/proc` every `--interval` seconds (default 0.25) and
-  misses programs that end sooner. Pipe it into the
-  [response engine](response-engine.md):
+  misses programs that end sooner.
+  With `--respond`, it decides each finding itself, at once, and runs
+  [enforcement](enforcement.md) before it reads the next event, so the
+  process it names can be paused while it still runs. What was decided and
+  done is written to standard error as one `megalodon: response {...}`
+  line. The scheduled `megalodon-ancestry` job runs it this way:
 
   ```bash
-  sudo megalodon ancestry watch | megalodon respond ingest
+  sudo megalodon ancestry watch --respond
   ```
+
+  The five-minute response pass still reads `check`. The same process is
+  decided only once, whichever sees it first. Enforcement acts only when its
+  policy is on and lists the action and the playbook.
 
 * **`check`** reviews the processes running now and exits 1 on findings. The
   response engine runs it on every pass.

@@ -108,19 +108,24 @@ JOBS = (
     # The port test briefly binds every free port; scheduled runs leave it out.
     Job('rootkit', 'MEGALODON rootkit cross-checks', ('rootkit', 'check', '--skip-ports', '--alert'), 'hourly',
         cron='41 * * * *', interval=3600),
-    Job('ancestry', 'MEGALODON process ancestry watch', ('ancestry', 'watch', '--alert'), root_only=True),
+    # The live watches answer each finding as it is seen; their enforcement run is a whole run, so they can
+    # write what the enforce job writes.
+    Job('ancestry', 'MEGALODON process ancestry watch, answered at once', ('ancestry', 'watch', '--alert', '--respond'),
+        root_only=True, writable=('/etc', '-/usr/local/lib/systemd/system')),
     # Every started program, in a signed log; its first key is printed once by init and kept off the machine.
     Job('commands', 'MEGALODON command log', ('commands', 'record'), root_only=True,
         manifest='~/.local/state/megalodon/commands-state.json',
         setup='megalodon commands init --key-file /path/to/move/off/this/machine'),
-    Job('credentials', 'MEGALODON credential access watch', ('credentials', 'watch', '--alert')),
+    Job('credentials', 'MEGALODON credential access watch, answered at once',
+        ('credentials', 'watch', '--alert', '--respond'), writable=('/etc', '-/usr/local/lib/systemd/system')),
     # Encryption is decided and enforced as it is seen, not on the next timer; enforcement may disable a
     # persistence entry decided earlier in the same pass, so the same folders as the enforce job are writable.
     Job('ransomware', 'MEGALODON ransomware watch, answered at once', ('ransomware', 'watch', '--respond'),
         manifest='~/.config/megalodon/ransomware.json', setup='megalodon ransomware init --dir /home --dir /srv',
         writable=('/etc', '-/usr/local/lib/systemd/system')),
-    Job('egress', 'MEGALODON outgoing-program watch', ('egress', 'watch', '--alert'),
-        manifest='~/.config/megalodon/egress.json', setup='megalodon egress learn --minutes 60'),
+    Job('egress', 'MEGALODON outgoing-program watch, answered at once', ('egress', 'watch', '--alert', '--respond'),
+        manifest='~/.config/megalodon/egress.json', setup='megalodon egress learn --minutes 60',
+        writable=('/etc', '-/usr/local/lib/systemd/system')),
 )
 
 
