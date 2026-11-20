@@ -191,6 +191,15 @@ after a lost cursor. A pending record means the stop may or may not have
 happened. It does not prove the process is currently stopped, and an indefinite
 intent still requires explicit undo.
 
+If the executor rejects SIGSTOP before invoking it, the failed outcome records
+`stop_attempted = false`. A matching outcome cancels only that pending intent;
+it cannot cancel a confirmed applied hold. The command still reports failure.
+Errors during or after the signal call, legacy failures without this proof,
+and outcomes with no complete readable record leave the intent available for
+recovery. A complete matching line can affect the active view even if a later
+sync fails; reading it does not establish durability.
+The signal boundary also refuses to suspend the enforcing process itself.
+
 When an expiry outcome cannot be appended, the command reports `status =
 "failed"`, `journal_error`, and the original `recovery_status`. Other readable
 due records are still attempted, and no new enforcement action is admitted in
@@ -206,6 +215,10 @@ but an unreadable or oversized journal can prevent recovery entirely. Resolve
 storage and journal errors through a separately reviewed repair. These checks
 do not establish power-loss durability or exactly-once signaling across
 interruptions, and do not replace scheduled-service acceptance.
+
+See [suspension recovery evidence and acceptance](enforcement-recovery-acceptance.md)
+for the synthetic CLI checks, their limits, and the proposed disposable-VM
+acceptance scope that requires separate approval before execution.
 
 ## Limits
 
