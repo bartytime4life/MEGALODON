@@ -181,3 +181,50 @@ def test_the_enforce_service_can_write_every_system_unit_folder():
             assert "ReadWritePaths=/etc\n" in unit
         else:
             assert f"ReadWritePaths=-{folder}\n" in unit, f"{folder} is read-only under ProtectSystem=full"
+
+
+def test_removing_the_link_that_enabled_a_timer_stops_it(p, tmp_path):
+    machine = Machine(tmp_path, p)
+    machine.place("/etc/systemd/system/sync.timer", b"[Timer]\nOnCalendar=minutely\n")     # in the baseline
+    link = machine.path("/etc/systemd/system/timers.target.wants/sync.timer")
+    link.parent.mkdir(parents=True)
+    link.symlink_to("/etc/systemd/system/sync.timer")
+    enable(p, ["disable_persistence"], ["new-persistence-entry"])
+    decide(p, found("added", "systemd", "/etc/systemd/system/timers.target.wants/sync.timer"))
+    result = enforce(p, executor=machine.executor)
+    assert not os.path.lexists(link) and ["systemctl", "stop", "sync.timer"] in ran(machine), \
+        "a running timer keeps firing after its link is gone, until it is stopped"
+    machine.commands.ran.clear()
+    en.undo(result["applied"][0]["id"], journal=p["journal"], executor=machine.executor)
+    assert os.path.islink(link) and ["systemctl", "start", "sync.timer"] in ran(machine)
+
+
+def test_a_failed_stop_puts_the_entry_back(p, tmp_path):
+    machine = Machine(tmp_path, p)
+    timer = machine.place("/etc/systemd/system/sync.timer", b"[Timer]\nOnCalendar=minutely\n")
+    calls = []
+
+    def systemctl(argv, data=None):
+        calls.append(list(argv))
+        return SimpleNamespace(returncode=1 if argv[1:2] == ["stop"] else 0, stdout="", stderr="Access denied")
+    machine.executor.run = systemctl
+    enable(p, ["disable_persistence"], ["new-persistence-entry"])
+    decide(p, found("added", "systemd", "/etc/systemd/system/sync.timer"))
+    result = enforce(p, executor=machine.executor)
+    assert result["applied"] == [] and result["refused"][0]["status"] == "failed"
+    assert "put back as it was" in result["refused"][0]["reason"]
+    assert timer.read_bytes() == b"[Timer]\nOnCalendar=minutely\n", "never left moved aside without an undo record"
+    assert not any(p["quarantine"].glob("*/file")), "and no copy left behind"
+    assert calls[-1] == ["systemctl", "daemon-reload"], "systemd is told the unit is back"
+
+
+def test_global_user_units_are_not_the_system_managers(p, tmp_path):
+    machine = Machine(tmp_path, p)
+    unit = machine.place("/etc/systemd/user/sync.timer", b"[Timer]\nOnCalendar=minutely\n")
+    enable(p, ["disable_persistence"], ["new-persistence-entry"])
+    decide(p, found("added", "systemd", "/etc/systemd/user/sync.timer"))
+    result = enforce(p, executor=machine.executor)
+    assert not unit.exists() and result["applied"][0]["undo"]["system_unit"] is False
+    assert ran(machine) == [], "the system manager is never told to stop a unit of the same name"
+    en.undo(result["applied"][0]["id"], journal=p["journal"], executor=machine.executor)
+    assert unit.exists() and ran(machine) == []
