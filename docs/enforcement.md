@@ -41,8 +41,10 @@ what you want done. Then:
 
 3. **`enforce run --dry-run`** shows what would be carried out now, and
    changes nothing.
-4. **The scheduler's `enforce` job** runs `enforce run` every minute as root.
-   With no policy, or one that is off, it does nothing.
+4. **The scheduler's `enforce` job** schedules `enforce run` every minute as
+   root. A missing policy or a valid policy that is off prevents new actions,
+   but due suspension recovery still runs. The timer must continue running
+   for that recovery to happen.
 
 `enforce.toml` is one of the files the [tamper check](tamper-detection.md)
 watches: a change to it is reported as `ENFORCEMENT_CHANGED` (HIGH).
@@ -75,8 +77,10 @@ decision is reported with its reason. A failed one is recorded, and makes
 
 One run or undo happens at a time. A run started while another is going, by
 hand or by the scheduler, waits for it, so no decision is carried out twice.
-A run that is off, a `--dry-run`, and a run or undo refused in Stage 0 create
-no files and wait for nothing.
+A `--dry-run` and a run or undo refused in Stage 0 create no effectful lock or
+journal records. A run that is off also creates nothing when no suspension is
+due. When recovery is due, it takes the same lock and records its outcome even
+though new enforcement is disabled.
 The scheduled `megalodon-enforce` service keeps `ProtectSystem=full` but can
 write to `/etc`. `usermod` needs this to lock an account, because it writes
 lock and temporary files beside `/etc/shadow`.
@@ -114,26 +118,30 @@ with `still paused by`, and sends no SIGCONT. Release the remaining holds to
 resume the process. This changes the earlier behavior where undoing one ID
 resumed it immediately even when another hold remained.
 
-## Pauses that end on time
+## Timed pauses and scheduled recovery
 
 A playbook's `suspend_minutes` in the response policy (0, the default, means
 until undone) sets how long a pause lasts. The record then carries `until`.
 Every `enforce run` first resumes the pauses whose time is up, before it
 carries out new decisions:
 
-* **Even when enforcement is off**, or its policy has been removed, so turning
-  it off never leaves a process paused past its time.
+* **Even when new enforcement is off**, or its policy has been removed. This
+  permits recovery of existing timed pauses; it does not authorize new ones.
+  Removing or stopping the scheduler also stops these recovery attempts.
 * **With the same checks as an undo.** SIGCONT goes through a pidfd, and only
   if the start time and program still match. A process that has exited, or
   whose PID now names another process, is not signalled, and its pause is
   recorded as over.
-* **You are told.** Each pause that ends with its process running again sends
-  a `PAUSE_ENDED` notice (HIGH) to the [alert destinations](off-machine-alerts.md),
+* **Notice submission is attempted.** Each pause that ends with its process running again
+  submits a `PAUSE_ENDED` notice (HIGH) to the [alert destinations](off-machine-alerts.md),
   whatever their minimum severity. It names the process, the pause and the
   incident. A pause whose process has exited, or that another pause still
   holds, sends none. A notice that cannot be sent, because alerts are off or
   the settings cannot be read, never keeps the pause from ending: the run's
-  output says why, with `notified = false`.
+  output says why, with `notified = false`. `notified = true` means submission
+  to the alert dispatcher returned; it proves neither queue acceptance nor
+  delivery. A full or closed queue can discard the notice.
+  Notification outcome fields are command output, not durable delivery receipts.
 * **A process paused twice stays paused until both end.** When another
   decision paused the same process, for longer or until undone, the pause
   that ended is recorded as over, with `still paused by ID`, and the process
@@ -148,9 +156,24 @@ carries out new decisions:
   failed and makes `run` exit 1. The process stays listed by `enforce list`,
   and the next run tries again.
 * **Recorded like an undo**, with `reason = "expired"`. The
-  [incident timeline](incident-timeline.md) shows it as ended on time.
+  [incident timeline](incident-timeline.md) labels this `expiry recorded`.
+  Its timestamp is when recovery was processed, not proof of an on-time resume.
   `--dry-run` lists what it would resume, and resumes nothing, also when
   the enforcement policy has been removed.
+
+Expiration is eligible on the next successful recovery pass. Timer delay,
+lock contention, scheduler interruption, or a failed resume can make recovery
+late; there is no established maximum recovery delay. The generated service
+counts exit 1 from a failed action or resume as a service failure, while the
+JSON result still identifies the failed record and the next timer can retry
+due recovery. Existing installed units need a separately authorized update;
+updating the source alone does not change their settings.
+
+The service and any manual enforcement command must use the same account and
+the same resolved policy, journal, and state paths. These defaults are under
+`~/`; a root timer does not automatically recover another account's journal.
+Verify those paths, file ownership, installed revision, and generated unit in
+an isolated service acceptance test before workstation activation.
 
 Resuming is a trade-off. It frees a process paused by a wrong decision, but it
 also frees a real intruder's process. The default playbooks set no
