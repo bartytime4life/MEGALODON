@@ -83,7 +83,11 @@ ACTIONS = {
 }
 # 'peer' links incidents but is never an action target (a finding's other addresses).
 # 'process_id' is 'pid@start:program': the PID with its start time names one process, not a reused PID.
-ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account', 'device')
+ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account', 'device',
+                'namespace_address')
+# An address seen from another network namespace (a container): 'ADDRESS@net:[ID]'. It is blocked in that
+# namespace only, since this machine's own blocks do not stop traffic routed for the container.
+NAMESPACE_ADDRESS = re.compile(r'([0-9A-Fa-f:.]{2,45})@(net:\[[0-9]{1,20}\])')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
@@ -700,6 +704,16 @@ def rootkit_signals(report):
     return signals
 
 
+def _inside(address, namespace):
+    """['ADDRESS@net:[ID]'] for an address seen from another network namespace, or [] when either is malformed."""
+    try:
+        shown = str(ipaddress.ip_address(str(address)))
+    except ValueError:
+        return []
+    target = f'{shown}@{namespace}'
+    return [target] if NAMESPACE_ADDRESS.fullmatch(target) else []
+
+
 def egress_signals(report):
     signals = []
     for f in report.get('findings', []):
@@ -708,9 +722,11 @@ def egress_signals(report):
         ids = [f"{process['pid']}@{process['start']}:{program}"] if (
             type(process.get('pid')) is int and type(process.get('start')) is int and program.startswith('/')) else []
         where = f"{f.get('protocol')}/{f.get('port')}"
-        # From another network namespace (a container), this machine's address blocks do not stop the traffic,
-        # which is routed rather than sent from here: the address links incidents but is not a block target.
-        remote = dict(peer=[f.get('address')]) if f.get('namespace') else dict(address=[f.get('address')])
+        # From another network namespace (a container), this machine's own address blocks do not stop the traffic,
+        # which is routed rather than sent from here: the address links incidents as a peer, and is blocked inside
+        # that namespace instead.
+        remote = (dict(peer=[f.get('address')], namespace_address=_inside(f.get('address'), f.get('namespace')))
+                  if f.get('namespace') else dict(address=[f.get('address')]))
         signals.append(Signal(f"egress:{f['rule_id']}:{f.get('program')}:{where}:{f.get('address')}", 'egress',
                               f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
                               f.get('detail', ''), _entities(process=[program], process_id=ids,
@@ -882,8 +898,10 @@ def ingest_signals(lines, now):
         detected = item.get('detected_at') if isinstance(item.get('detected_at'), str) else _iso(now)
         digest = hashlib.sha256(line.encode()).hexdigest()[:16]
         addresses = [item.get('src_ip'), item.get('dst_ip')]
-        # A finding from another network namespace (a container): its addresses link incidents, as for egress.
-        remote = dict(peer=addresses) if item.get('namespace') else dict(address=addresses)
+        # A finding from another network namespace (a container): its addresses link incidents, as for egress, and
+        # its destination is blocked inside that namespace.
+        remote = (dict(peer=addresses, namespace_address=_inside(item.get('dst_ip'), item.get('namespace')))
+                  if item.get('namespace') else dict(address=addresses))
         signals.append(Signal(f"ingest:{item['rule_id']}:{digest}", 'ingest', item['rule_id'][:64],
                               _severity(item.get('severity')), detected, str(item.get('message', ''))[:300],
                               _entities(process=processes, process_id=ids,
@@ -1044,10 +1062,12 @@ class Guards:
         """None when the plan may proceed, else the guard's reason."""
         policy = self.policy
         if action == 'block_address':
+            inside = NAMESPACE_ADDRESS.fullmatch(target)
             try:
-                address = ipaddress.ip_address(target)
+                address = ipaddress.ip_address(inside.group(1) if inside else target)
             except ValueError:
                 return 'not an address'
+            target = str(address) if inside else target
             if not address.is_global:
                 return 'not a public address: local attackers need switch-level controls'
             if target in self.protected:
@@ -1164,6 +1184,9 @@ def _targets(action, signal, incident):
     if action == 'suspend_process' and signal.entities.get('process_id'):
         # The processes behind the finding, rather than every process running the same program.
         return sorted(signal.entities['process_id'])[:8]
+    if action == 'block_address' and signal.entities.get('namespace_address'):
+        # Seen from a container: blocked in its own network namespace, which this machine's table never reaches.
+        return sorted(signal.entities['namespace_address'])[:8]
     return sorted(signal.entities.get(entity, ()))[:8]
 
 

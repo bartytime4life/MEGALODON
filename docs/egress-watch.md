@@ -129,12 +129,20 @@ of its processes (`/proc/PID/net`), without entering it or changing anything.
   all containers share one set of entries: what any container may run.
 * **The process itself.** A finding names the process by PID and start time,
   as for the host's, so `suspend_process` pauses that one process.
-* **Not blocked by address.** This machine's address blocks drop its own
-  traffic. A container's traffic is routed through it, and the block does
-  not stop it. So for a finding from another namespace, the response engine
-  records the address as a `peer`: it still links incidents, but a
-  `block_address` plan is refused because the finding names no address.
-  Pause the process instead.
+* **Blocked inside the container.** This machine's own address blocks drop
+  its own traffic. A container's traffic is routed through it, and those
+  blocks do not stop it. So for a finding from another namespace, the
+  response engine plans `block_address` for `ADDRESS@net:[ID]`. Enforcement
+  then adds the same time-limited block to MEGALODON's table inside that
+  namespace, entered with `nsenter --net` through one of the namespace's own
+  processes. That process is checked to still be in the namespace just
+  before. Only that container loses the address: this machine, other
+  containers and the rest of the network keep it. `enforce undo` deletes it
+  there. If the container is gone, its block went with it, and undo has
+  nothing to do. The same guards apply as on the host: public addresses
+  only, never this machine's gateway, DNS servers or own addresses, never
+  anything in `never_touch_addresses`. The remote address is also a `peer`,
+  so it still links incidents.
 * **An older baseline.** A baseline learned before this, or without root,
   never saw other namespaces. Their programs are not reported as new. `check`
   lists them under `newly_watched` until you run `megalodon egress learn` as
