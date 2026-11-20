@@ -25,11 +25,13 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import select
 import stat
+import sys
 import tempfile
 import time
 
-from . import net_namespaces
+from . import closed_connections, net_namespaces
 from .process_network import TABLES, TEMPORARY, _endpoint, _program_kind, _read_table
 
 SCHEMA = 'megalodon-egress-v1'
@@ -59,7 +61,15 @@ RULES = {
     'OUTBOUND_TO_GENERATED_NAME': ('MEDIUM', ['T1568.002'], 'A program connects to a name spelled the way generated '
                                                             '(DGA) and encoded names are. Cloud and tracking names '
                                                             'are sometimes spelled this way too.'),
+    # Heard as the connection closed, between two scans: too late to name the program.
+    'BRIEF_OUTBOUND_CONNECTION': ('MEDIUM', ['T1071', 'T1041'], 'A connection opened and closed between two scans, '
+                                                                'to a port and network no learned program uses. Its '
+                                                                'program was gone before it could be named: a short '
+                                                                'beacon or upload looks like this, and so does a '
+                                                                'quick update check.'),
 }
+MAX_DESTINATIONS = 4096
+UNNAMED = '(closed before it was seen)'
 
 
 class EgressError(ValueError):
@@ -85,10 +95,11 @@ def _network(address):
     return str(ipaddress.ip_network(f'{address}/{24 if address.version == 4 else 48}', strict=False))
 
 
-def connections(root='/', *, include_private=False, net='proc/net'):
+def connections(root='/', *, include_private=False, net='proc/net', listeners=None):
     """Outgoing connections in one network namespace: {inode: (protocol, remote address, remote port)}.
 
-    `net` is that namespace's table folder: `proc/net` for this one, `proc/PID/net` for the one PID is in.
+    `net` is that namespace's table folder: `proc/net` for this one, `proc/PID/net` for the one PID is in. The TCP
+    ports listened on are added to the set `listeners`, when given.
     """
     found, gaps, tables = {}, [], []
     for protocol, _family, name, length in TABLES:
@@ -111,6 +122,8 @@ def connections(root='/', *, include_private=False, net='proc/net'):
                 local = _endpoint(fields[1], length)
                 if local is not None:
                     listening.add(local[1])
+    if listeners is not None:
+        listeners.update(listening)
     for protocol, length, lines in tables:
         for line in lines:
             fields = line.split()
@@ -215,13 +228,19 @@ def owners(root, inodes):
     return found, truncated
 
 
-def every_connection(root='/', *, include_private=False):
+def every_connection(root='/', *, include_private=False, listeners=None, spaces=None):
     """Outgoing connections in every network namespace that can be read: ({inode: connection}, {inode: namespace},
-    gaps). Socket inodes are unique across namespaces, so one table holds them all."""
-    spaces, gaps = net_namespaces.namespaces(root)
+    gaps). Socket inodes are unique across namespaces, so one table holds them all.
+
+    `listeners`, when given, is filled with {namespace id, or None for this one: TCP ports listened on}, and `spaces`
+    (a list) with the namespaces read."""
+    found_spaces, gaps = net_namespaces.namespaces(root)
+    if spaces is not None:
+        spaces.extend(found_spaces)
     table, where = {}, {}
-    for space in spaces:
-        found, more = connections(root, include_private=include_private, net=space['net'])
+    for space in found_spaces:
+        ports = None if listeners is None else listeners.setdefault(None if space['own'] else space['id'], set())
+        found, more = connections(root, include_private=include_private, net=space['net'], listeners=ports)
         gaps += more
         for inode, connection in found.items():
             if inode not in table:
@@ -231,10 +250,10 @@ def every_connection(root='/', *, include_private=False):
     return table, where, gaps
 
 
-def observe(root='/', *, include_private=False, known=None):
+def observe(root='/', *, include_private=False, known=None, listeners=None, spaces=None):
     """Current outgoing connections with their programs; `known` caches inode owners between calls."""
     known = {} if known is None else known
-    table, where, gaps = every_connection(root, include_private=include_private)
+    table, where, gaps = every_connection(root, include_private=include_private, listeners=listeners, spaces=spaces)
     for inode in [i for i in known if i not in table]:
         del known[inode]
     missing = [i for i in table if i not in known]
@@ -386,6 +405,8 @@ def _finding(rule, connection, detail, name=None):
     if rule == 'NEW_OUTBOUND_PROGRAM' and connection['scope'] == 'private':
         severity = 'MEDIUM'
     extra = dict(name=name) if name else {}
+    if connection.get('closed'):
+        extra.update(closed=True, sent=connection.get('sent'), received=connection.get('received'))
     if connection.get('namespace'):
         extra.update(namespace=connection['namespace'], container=connection.get('container'))
         detail = f"in {net_namespaces.label(dict(id=connection['namespace'], container=connection.get('container')))}: " \
@@ -397,26 +418,168 @@ def _finding(rule, connection, detail, name=None):
                 dst_ip=connection['address'],
                 protocol=connection['protocol'], detected_at=_now(),
                 evidence=dict(processes=[dict(program=connection['executable'], pid=connection['pid'],
-                                              start=connection['start'])],
-                              argv=connection['argv']))
+                                              start=connection['start'])] if connection.get('executable') else [],
+                              argv=connection.get('argv') or []))
+
+
+# ------------------------------------------------------------------ connections heard as they closed
+
+def _kind(namespace, container):
+    """How a program's entry is prefixed for where it runs: '' here, '[container] ' or '[namespace] ' elsewhere."""
+    return '' if namespace is None else ('[container] ' if container else '[namespace] ')
+
+
+def destination(protocol, port, address, namespace=None, container=None):
+    """How a learned or allowed destination is written: `tcp/443@203.0.113.0/24`, prefixed as programs are."""
+    return f"{_kind(namespace, container)}{protocol}/{port}@{_network(ipaddress.ip_address(address))}"
+
+
+def _parse_destination(text):
+    kind, _, rest = text.rpartition('] ')
+    kind = f'{kind}] ' if kind else ''
+    where, _, network = rest.partition('@')
+    protocol, _, port = where.partition('/')
+    if kind not in ('', '[container] ', '[namespace] ') or protocol not in ('tcp', 'udp') or not port.isdigit() \
+            or not 0 < int(port) < 65536:
+        raise EgressError('a destination is written tcp/443@203.0.113.0/24, or [container] tcp/443@...')
+    try:
+        network = ipaddress.ip_network(network, strict=False)
+    except ValueError:
+        raise EgressError(f'{network!r} is not a network, such as 203.0.113.0/24 or 0.0.0.0/0') from None
+    return kind, protocol, int(port), network
+
+
+def known_destination(baseline, connection):
+    """Whether a learned program, or a learned or allowed destination, already uses this port and network."""
+    kind = _kind(connection.get('namespace'), connection.get('container'))
+    address = ipaddress.ip_address(connection['address'])
+    address = getattr(address, 'ipv4_mapped', None) or address
+    port, network = f"{connection['protocol']}/{connection['port']}", _network(address)
+    for name, entry in baseline['programs'].items():
+        if (name.startswith(kind) if kind else not name.startswith('[')) and network in entry.get('networks', ()) and (
+                entry.get('any_port') or port in entry.get('ports', ())):
+            return True
+    for text in baseline.get('destinations', ()):
+        try:
+            listed_kind, protocol, number, listed = _parse_destination(text)
+        except EgressError:
+            continue
+        if listed_kind == kind and protocol == connection['protocol'] and number == connection['port'] \
+                and address.version == listed.version and address in listed:
+            return True
+    return False
+
+
+def heard(closed, namespace=None, container=None, *, include_private=False, listening=()):
+    """A closed socket as an outgoing connection, or None: a listener, an accepted connection, local traffic."""
+    if closed['port'] == 0:
+        return None
+    scope = _scope(closed['address'])
+    if scope is None or (scope == 'private' and not include_private):
+        return None
+    if closed['protocol'] == 'tcp' and closed['local_port'] in listening:
+        return None                         # accepted on a port listened on: it came in
+    return dict(protocol=closed['protocol'], address=str(closed['address']), port=closed['port'], scope=scope,
+                local_port=closed['local_port'], closed=True, sent=closed['sent'], received=closed['received'], namespace=namespace, container=container,
+                program=_kind(namespace, container) + UNNAMED, pid=None)
+
+
+def _seen(connection):
+    return (connection.get('namespace'), connection['protocol'], connection.get('local_port'), connection['address'],
+            connection['port'])
+
+
+def judge_closed(baseline, connection, watchlist=None):
+    """Findings for one connection heard as it closed, never seen by a scan."""
+    found, names = [], connection.get('names') or []
+    where = (f"{names[0]} ({connection['address']}):{connection['port']}/{connection['protocol']}" if names
+             else f"{connection['address']}:{connection['port']}/{connection['protocol']}")
+    amount = ('' if connection.get('sent') is None else
+              f", sending about {connection['sent']} bytes and receiving about {connection['received']}")
+    who = 'a program, gone before it could be named,'
+    for name in names:
+        hit = watchlist.match_domain(name) if watchlist is not None else None
+        if hit:
+            found.append(_finding('OUTBOUND_TO_WATCHLISTED_NAME', connection,
+                                  f"{who} connected to {name} ({connection['address']}:{connection['port']}/"
+                                  f"{connection['protocol']}){amount}, on the watchlist as {hit[0]}"
+                                  f"{': ' + hit[1] if hit[1] else ''}", name=name))
+            break
+    for name in names:
+        from .domain_signals import assess
+        signals = assess(name)
+        if signals and signals['level'] == 'review':
+            found.append(_finding('OUTBOUND_TO_GENERATED_NAME', connection,
+                                  f"{who} connected to {name} ({connection['address']}){amount}: "
+                                  + ' '.join(s['detail'] for s in signals['signals'][:2]), name=name))
+            break
+    if connection.get('namespace') and baseline.get('all_namespaces') is not True:
+        return found
+    if not known_destination(baseline, connection):
+        finding = _finding('BRIEF_OUTBOUND_CONNECTION', connection,
+                           f"{who} opened a connection to {where}{amount}, and closed it between two scans")
+        if connection['scope'] == 'private':
+            finding['severity'] = 'LOW'
+        found.append(finding)
+    return found
+
+
+def record_destination(baseline, connection):
+    """Learn one connection heard as it closed, by its port and network."""
+    listed = baseline.setdefault('destinations', [])
+    text = destination(connection['protocol'], connection['port'], connection['address'],
+                       connection.get('namespace'), connection.get('container'))
+    if text in listed or len(listed) >= MAX_DESTINATIONS:
+        return False
+    listed.append(text)
+    listed.sort()
+    return True
+
+
+def _closings(root, closings):
+    if closings == 'auto':
+        return closed_connections.Closings(root) if root == '/' else None
+    return closings
 
 
 def learn(manifest=DEFAULT_MANIFEST, *, seconds=0, interval=1.0, root='/', include_private=False, clock=time.monotonic,
-          sleep=time.sleep, all_namespaces=None):
-    """Record every program seen connecting out, now and for `seconds` more, into the baseline."""
+          sleep=time.sleep, all_namespaces=None, closings='auto'):
+    """Record every program seen connecting out, now and for `seconds` more, into the baseline.
+
+    While learning for `seconds`, connections too short for a scan are heard as they close and recorded by their
+    port and network: the program is gone by then."""
     path = Path(manifest).expanduser()
     baseline = read(path) if path.exists() else _empty()
-    known, gaps, observed = {}, set(), 0
+    known, gaps, observed, brief = {}, set(), 0, 0
+    closings = _closings(root, closings) if seconds > 0 else None
+    live, listeners, containers = set(), {}, {}
     deadline = clock() + max(0, seconds)
-    while True:
-        seen, more = observe(root, include_private=include_private, known=known)
-        gaps.update(more)
-        for connection in seen:
-            if not _temporary(connection):      # a program run from a temporary folder is never learned as normal
-                observed += record(baseline, connection)
-        if clock() >= deadline:
-            break
-        sleep(interval)
+    try:
+        while True:
+            if closings is not None:
+                for space, closed in closings.drain():
+                    connection = heard(closed, space, containers.get(space), include_private=include_private,
+                                       listening=listeners.get(space, ()))
+                    if connection is not None and _seen(connection) not in live:
+                        brief += record_destination(baseline, connection)
+            listeners, spaces = {}, []
+            seen, more = observe(root, include_private=include_private, known=known, listeners=listeners,
+                                 spaces=spaces)
+            gaps.update(more)
+            live = {_seen(connection) for connection in seen}
+            containers = {space['id']: space.get('container') for space in spaces}
+            if closings is not None:
+                closings.subscribe(spaces)
+                gaps.update(closings.gaps)
+            for connection in seen:
+                if not _temporary(connection):      # a program run from a temporary folder is never learned as normal
+                    observed += record(baseline, connection)
+            if clock() >= deadline:
+                break
+            sleep(interval)
+    finally:
+        if closings is not None:
+            closings.close()
     baseline['recorded_at'] = _now()
     baseline['include_private'] = include_private
     # Learned as root, every namespace was read: what other namespaces run from now on is compared, not listed.
@@ -424,13 +587,25 @@ def learn(manifest=DEFAULT_MANIFEST, *, seconds=0, interval=1.0, root='/', inclu
         baseline['all_namespaces'] = True
     _write(path, baseline)
     return dict(schema=REPORT_SCHEMA, action='learn', manifest=str(path), programs=len(baseline['programs']),
-                connections_recorded=observed, gaps=sorted(gaps))
+                connections_recorded=observed, brief_destinations_recorded=brief, gaps=sorted(gaps))
 
 
-def allow(manifest, program, port=None):
-    """After review: record a program, and optionally one of its ports ('tcp/443'), as normal."""
+def allow(manifest, program=None, port=None, destination=None):
+    """After review: record a program, and optionally one of its ports ('tcp/443'), as normal; or a destination
+    ('tcp/443@203.0.113.0/24'), for connections too short to name their program."""
     path = Path(manifest).expanduser()
     baseline = read(path) if path.exists() else _empty()
+    if destination is not None:
+        kind, protocol, number, network = _parse_destination(destination)
+        text = f'{kind}{protocol}/{number}@{network}'
+        listed = baseline.setdefault('destinations', [])
+        if text not in listed:
+            listed.append(text)
+            listed.sort()
+        _write(path, baseline)
+        return dict(manifest=str(path), destination=text)
+    if not program:
+        raise EgressError('name a program, or a destination with --destination')
     entry = baseline['programs'].setdefault(program, dict(ports=[], networks=[], first_seen=_now()))
     if port:
         if not (port.count('/') == 1 and port.split('/')[0] in ('tcp', 'udp') and port.split('/')[1].isdigit()):
@@ -464,11 +639,59 @@ class Watcher:
     """Poll the socket tables and report each new finding once per hour."""
 
     def __init__(self, manifest=DEFAULT_MANIFEST, emit=print, *, root='/', interval=1.0, clock=time.monotonic,
-                 names=None, watchlist=None):
+                 names=None, watchlist=None, closings='auto', warn=None):
         self.manifest, self.emit, self.root, self.interval, self.clock = manifest, emit, root, interval, clock
         self.names, self.watchlist = names, watchlist
         self.baseline, self.loaded = read(manifest), self._stamp()
-        self.known, self.last, self.stats = {}, {}, dict(polls=0, findings=0)
+        self.known, self.last, self.stats = {}, {}, dict(polls=0, findings=0, closed=0, brief=0)
+        # Connections too short for a scan are heard as they close (as root), from this namespace and, once a scan
+        # has listed them, every other one.
+        self.closings = _closings(root, closings)
+        self.warn = warn or (lambda text: print(f'megalodon: {text}', file=sys.stderr, flush=True))
+        self.live, self.listeners, self.containers, self.warned, self.missed = set(), {}, {}, set(), 0
+        self._tell()
+
+    def _tell(self):
+        if self.closings is None:
+            return
+        for gap in sorted(self.closings.gaps - self.warned):
+            self.warned.add(gap)
+            self.warn(gap)
+        if self.closings.missed > self.missed:
+            self.warn(f'{self.closings.missed - self.missed} bursts of closed connections came faster than they '
+                      'could be read: some short connections were missed')
+            self.missed = self.closings.missed
+
+    def _report(self, found, now, where):
+        key = (found['rule_id'], found['program'], found['protocol'], found['port'], found.get('name') or where)
+        if now - self.last.get(key, -1e18) < COOLDOWN_SECONDS:
+            return False
+        self.last[key] = now
+        self.stats['findings'] += 1
+        self.emit(found)
+        return True
+
+    def hear(self):
+        """Judge the connections heard closing since the last call that no scan saw."""
+        if self.closings is None:
+            return []
+        out, now = [], self.clock()
+        include_private = self.baseline.get('include_private', False)
+        for space, closed in self.closings.drain():
+            self.stats['closed'] += 1
+            connection = heard(closed, space, self.containers.get(space), include_private=include_private,
+                               listening=self.listeners.get(space, ()))
+            if connection is None or _seen(connection) in self.live:
+                continue                    # a scan saw it open, and judged it with its program
+            self.stats['brief'] += 1
+            if self.names is not None:
+                connection['names'] = self.names.lookup(connection['address'], connection['port'],
+                                                        connection.get('local_port'))
+            for found in judge_closed(self.baseline, connection, self.watchlist):
+                if self._report(found, now, _network(ipaddress.ip_address(connection['address']))):
+                    out.append(found)
+        self._tell()
+        return out
 
     def _stamp(self):
         try:
@@ -482,25 +705,47 @@ class Watcher:
         stamp = self._stamp()
         if stamp != self.loaded:                 # `allow` or `learn` changed the baseline while watching
             self.baseline, self.loaded = read(self.manifest), stamp
-        seen, _ = observe(self.root, include_private=self.baseline.get('include_private', False), known=self.known)
-        now, out = self.clock(), []
+        out = self.hear()                       # before the scan, while the last one's connections are known
+        listeners, spaces = {}, []
+        seen, _ = observe(self.root, include_private=self.baseline.get('include_private', False), known=self.known,
+                          listeners=listeners, spaces=spaces)
+        self.live, self.listeners = {_seen(connection) for connection in seen}, listeners
+        self.containers = {space['id']: space.get('container') for space in spaces}
+        if self.closings is not None:
+            self.closings.subscribe(spaces)
+            self._tell()
+        now = self.clock()
         for connection in seen:
             if self.names is not None:
                 connection['names'] = self.names.lookup(connection['address'], connection['port'],
                                                         connection.get('local_port'))
             for found in judge(self.baseline, connection, self.watchlist):
-                key = (found['rule_id'], found['program'], found['protocol'], found['port'], found.get('name'))
-                if now - self.last.get(key, -1e18) < COOLDOWN_SECONDS:
-                    continue
-                self.last[key] = now
-                self.stats['findings'] += 1
-                out.append(found)
-                self.emit(found)
+                if self._report(found, now, None):
+                    out.append(found)
         if len(self.last) > 65536:
             self.last.clear()
         return out
 
     def run(self, stop):
-        while not stop.is_set():
-            self.poll()
-            stop.wait(self.interval)
+        """Scan every `interval` seconds, and judge each connection heard closing as soon as it is heard."""
+        try:
+            due = self.clock()
+            while not stop.is_set():
+                if self.clock() >= due:
+                    self.poll()
+                    due = self.clock() + self.interval
+                wait = max(0.0, min(due - self.clock(), 1.0))
+                listening = self.closings.filenos() if self.closings is not None else []
+                if not listening:
+                    stop.wait(wait)
+                    continue
+                try:
+                    ready, _, _ = select.select(listening, [], [], wait)
+                except (OSError, ValueError):
+                    stop.wait(wait)
+                    continue
+                if ready:
+                    self.hear()
+        finally:
+            if self.closings is not None:
+                self.closings.close()
