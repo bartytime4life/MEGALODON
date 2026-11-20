@@ -187,8 +187,12 @@ def test_a_finding_without_enforcement_or_a_policy_is_still_reported(p, tmp_path
                        enforcement_state=p["enforce_state"])
     answer = off(finding)
     assert (answer["decided"], answer["decisions"]) == (True, 1)
-    assert answer["enforcement"].startswith("no enforcement policy")
-    missing = rw.Responder(policy=tmp_path / "missing.toml", ledger=p["ledger"], state=p["state"])
+    assert answer["enforcement"]["enabled"] is False
+    assert "no enforcement policy" in answer["enforcement"]["note"]
+    assert answer["enforcement"]["expired"] == []
+    missing = rw.Responder(policy=tmp_path / "missing.toml", ledger=p["ledger"], state=p["state"],
+                           enforcement_policy=p["enforce"], journal=p["journal"],
+                           enforcement_state=p["enforce_state"])
     answer = missing(finding)
     assert answer["decided"] is False and "not decided" in answer["error"], "the watch keeps going"
     note = rw.Finding("RANSOM_NOTE", "HIGH", re_._now(), "m", dict(file="x", folder=str(tmp_path)))

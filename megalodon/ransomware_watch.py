@@ -45,6 +45,8 @@ import struct
 import sys
 import time
 
+from . import respond_now
+
 SAMPLE_BYTES = 64 * 1024
 MIN_BYTES = 1024
 HIGH_ENTROPY = 7.5
@@ -54,6 +56,7 @@ MAX_SUSPECTS = 16
 DEFAULT_FOLDERS_FILE = '~/.config/megalodon/ransomware.json'
 FOLDERS_SCHEMA = 'megalodon-ransomware-folders-v1'
 SAMPLE_GAP = 0.2     # seconds between looks for the processes writing encrypted-looking files
+RECOVERY_INTERVAL = 30.0  # seconds between recovery-only checks while an answering watch is running
 ATTACK = ('T1486',)
 
 # Leading bytes of formats people keep, and that encryption destroys.
@@ -417,11 +420,25 @@ class Watcher:
             if self.notify.add(folder):
                 self.watched += 1
 
-    def run(self, stop, *, poll=0.5):
+    def run(self, stop, *, poll=0.5, maintenance=None):
         moves: dict[int, str] = {}
         folder_moves: dict[int, str] = {}
+        next_maintenance = None
+
+        def maintain():
+            nonlocal next_maintenance
+            if maintenance is not None:
+                now = self.clock()
+                if next_maintenance is None or now >= next_maintenance:
+                    next_maintenance = now + RECOVERY_INTERVAL
+                    maintenance()
+
         while not stop.is_set():
-            for mask, cookie, folder, name in self.notify.events(poll):
+            # A quiet watch still owns recovery obligations. A busy batch must not starve them either.
+            maintain()
+            timeout = poll if maintenance is None else min(poll, max(0, next_maintenance - self.clock()))
+            for mask, cookie, folder, name in self.notify.events(timeout):
+                maintain()
                 if mask & IN_Q_OVERFLOW:
                     self.overflows += 1
                     continue
@@ -546,22 +563,19 @@ def load_folders(path=DEFAULT_FOLDERS_FILE):
 
 # ------------------------------------------------------------------ responding at once
 
-class Responder:
+class Responder(respond_now.Responder):
     """Decide each finding at once with the response engine, then carry out what enforcement allows.
 
     The scheduled response pass reads the other sources every five minutes, and enforcement runs every minute.
-    Encryption does not wait that long: this hands the finding to both as soon as it is raised (see respond_now).
+    Encryption does not wait that long: this hands the finding to both as soon as it is raised (see respond_now),
+    and `recover` resumes pauses whose time is up while the watch is quiet.
     """
-
-    def __init__(self, **paths):
-        from .respond_now import Responder as Now
-        self.now = Now(**paths)
 
     def __call__(self, finding):
         from . import response_engine
-        signals, _ = response_engine.ingest_signals([json.dumps(finding.to_dict(), sort_keys=True)],
-                                                    response_engine._now())
-        return self.now.answer(finding.rule_id, signals)
+        line = json.dumps(finding.to_dict(), sort_keys=True)
+        return self.carry(finding.rule_id, lambda: response_engine.ingest(
+            [line], policy_path=self.policy, ledger=self.ledger, state_path=self.state))
 
 
 def selftest(directory, *, files=12):

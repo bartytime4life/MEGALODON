@@ -191,3 +191,16 @@ def test_the_scheduled_watch_listens_and_answers_at_once(tmp_path, monkeypatch):
     assert result["retired"] == [str(folder / "megalodon-devices.timer")]
     assert ("disable", "--now", "megalodon-devices.timer") in calls and not (folder / "megalodon-devices.timer").exists()
     assert result["enabled"] == ["megalodon-devices.service"]
+
+
+def test_a_device_finding_that_decides_nothing_still_lets_a_due_pause_end(p, monkeypatch):
+    """The shared responder keeps #854's rule for every live watch: recovery is never skipped."""
+    ended = [dict(id="x", status="undone", undo_of="pause-a")]
+    monkeypatch.setattr(en, "expire", lambda journal: ended)
+    monkeypatch.setattr(en, "run", lambda **kw: pytest.fail("nothing was decided: no new enforcement"))
+    responder = Responder(policy=p["policy"], ledger=p["ledger"], state=p["state"], enforcement_policy=p["enforce"],
+                          journal=p["journal"], enforcement_state=p["enforce_state"])
+    # A new USB stick is reported, but no playbook covers storage: nothing to carry out.
+    answer = dw.respond(dict(rule_id="NEW_USB_STORAGE", severity="MEDIUM", device="usb:0781:5583:S9",
+                             detail="new: stick", targets=["1-9#3@usb:0781:5583:S9"]), responder)
+    assert (answer["decisions"], answer["recovery"]) == (0, dict(expired=ended))

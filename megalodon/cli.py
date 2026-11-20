@@ -2976,6 +2976,12 @@ def _ransomware(args: argparse.Namespace) -> int:
             # start message, so standard output stays one finding per line.
             print("megalodon: response " + json.dumps(responder(finding), sort_keys=True), file=sys.stderr,
                   flush=True)
+
+    def recover():
+        result = responder.recover()
+        if result['expired'] or result.get('error'):
+            print("megalodon: recovery " + json.dumps(result, sort_keys=True), file=sys.stderr, flush=True)
+
     watcher.emit = emit
     print(f"megalodon: watching {watcher.watched} folders ({seeded} files recorded)"
           + ("; folder limit reached, some subfolders are not watched" if watcher.truncated else "")
@@ -2984,7 +2990,7 @@ def _ransomware(args: argparse.Namespace) -> int:
           file=sys.stderr, flush=True)
     stop = Event()
     try:
-        watcher.run(stop)
+        watcher.run(stop, maintenance=recover if responder is not None else None)
     except KeyboardInterrupt:
         pass
     finally:

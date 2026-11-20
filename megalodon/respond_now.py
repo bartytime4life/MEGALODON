@@ -25,27 +25,54 @@ class Responder:
         self.enforcement_state = Path(enforcement_state or enforcement.DEFAULT_STATE).expanduser()
         self.executor = executor
 
-    def answer(self, rule_id, signals):
+    def recover(self):
+        """Resume due suspensions without reading policies or admitting new actions."""
+        from . import enforcement
+        try:
+            return dict(expired=enforcement.expire(journal=self.journal))
+        except (enforcement.EnforcementError, OSError, ValueError) as exc:
+            return dict(expired=[], error=f'could not recover suspensions: {exc}'[:300])
+
+    def _with_recovery(self, out):
+        recovery = self.recover()
+        if recovery['expired'] or recovery.get('error'):
+            out['recovery'] = recovery
+        return out
+
+    def carry(self, rule_id, decide):
+        """Decide with `decide()` (a response engine pass), then run enforcement when anything was decided.
+
+        A finding that decides nothing, or that cannot be decided, still lets an earlier pause end on time.
+        Enforcement runs even without its policy: it then only recovers what is due, and says so.
+        """
         from . import enforcement, response_engine
         out = dict(rule_id=rule_id)
         try:
-            decided = response_engine.run(signals=signals, policy_path=self.policy, ledger=self.ledger,
-                                          state_path=self.state)
+            decided = decide()
         except (response_engine.ResponseError, OSError, ValueError) as exc:
-            return dict(out, decided=False, error=f'not decided: {exc}'[:300])
+            return self._with_recovery(dict(out, decided=False, error=f'not decided: {exc}'[:300]))
         out.update(decided=True, decisions=decided['decisions'], would_apply=decided['would_apply'])
         if not decided['decisions']:
-            return out           # no playbook covers it: nothing to carry out
-        if not self.enforcement_policy.exists():
-            return dict(out, enforcement=f'no enforcement policy at {self.enforcement_policy}')
+            return self._with_recovery(out)  # no new action, but an earlier pause may still be due
         try:
             ran = enforcement.run(policy_path=self.enforcement_policy, response_policy=self.policy,
                                   ledger=self.ledger, journal=self.journal, state_path=self.enforcement_state,
                                   executor=self.executor)
         except (enforcement.EnforcementError, response_engine.ResponseError, OSError, ValueError) as exc:
             return dict(out, enforcement=f'not carried out: {exc}'[:300])
-        return dict(out, enforcement=dict(
+        carried = dict(
             enabled=ran['enabled'],
             applied=[dict(id=r['id'], action=r['action'], target=r.get('target')) for r in ran['applied']],
-            refused=[dict(action=r['action'], target=r.get('target'), reason=r.get('reason'))
-                     for r in ran['refused']]))
+            refused=[dict(action=r['action'], target=r.get('target'), reason=r.get('reason'),
+                          status=r.get('status')) for r in ran['refused']],
+            expired=ran.get('expired', []))
+        for key in ('policy_error', 'note'):
+            if key in ran:
+                carried[key] = ran[key]
+        return dict(out, enforcement=carried)
+
+    def answer(self, rule_id, signals):
+        """Decide a finding's response-engine signals at once, and carry out what enforcement allows."""
+        from . import response_engine
+        return self.carry(rule_id, lambda: response_engine.run(signals=signals, policy_path=self.policy,
+                                                               ledger=self.ledger, state_path=self.state))
