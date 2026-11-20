@@ -19,6 +19,11 @@ executable path and process name. Command lines, process IDs and traffic are
 never read or stored. Owners of other accounts' sockets need root to see; the
 report lists that as a coverage gap. Nothing is stopped or changed: ``accept``
 records the reviewed state as the new baseline.
+
+As root, every network namespace's listeners are read, not only this one's. A
+listener in a container is keyed by kind, ``container/tcp:8080``, so it never
+merges with the host's ``tcp:8080``, and containers recreated with new IDs keep
+the same key. The containers that hold it now are listed under ``where``.
 """
 from __future__ import annotations
 
@@ -30,6 +35,7 @@ from pathlib import Path
 import stat
 import tempfile
 
+from . import net_namespaces
 from .process_network import (TABLES, TCP_LISTEN, TEMPORARY, _endpoint, _loopback, _program_kind,
                               _read_table, _short, _shown)
 
@@ -77,23 +83,26 @@ def _ephemeral(root):
     return DEFAULT_EPHEMERAL
 
 
-def _listening(root):
-    """{inode: (protocol, address, port)} for listening TCP sockets and bound UDP service ports, plus gaps."""
+def _listening(root, net='proc/net'):
+    """{inode: (protocol, address, port)} for listening TCP sockets and bound UDP service ports, plus gaps.
+
+    `net` is one namespace's table folder: `proc/net` for this one, `proc/PID/net` for the one PID is in.
+    """
     low, high = _ephemeral(root)
     found, gaps = {}, []
     for protocol, family, name, length in TABLES:
-        path = Path(root, 'proc/net', name)
+        path = Path(root, net, name)
         try:
             lines, complete = _read_table(path)
         except FileNotFoundError:
-            if family != 'ipv6' or os.path.lexists(Path(root, 'proc/net/if_inet6')):
-                gaps.append(f'/proc/net/{name} is missing')
+            if family != 'ipv6' or os.path.lexists(Path(root, net, 'if_inet6')):
+                gaps.append(f'/{net}/{name} is missing')
             continue
         except (OSError, ValueError):
-            gaps.append(f'/proc/net/{name} could not be read')
+            gaps.append(f'/{net}/{name} could not be read')
             continue
         if not complete:
-            gaps.append(f'/proc/net/{name} was too large to read whole')
+            gaps.append(f'/{net}/{name} was too large to read whole')
         for line in lines:
             fields = line.split()
             if len(fields) < 10 or not fields[9].isdigit() or fields[9] == '0':
@@ -188,13 +197,35 @@ def _scope(addresses):
     return 'loopback' if all(_loopback(a) for a in addresses) else 'specific'
 
 
-def snapshot(*, root='/'):
-    sockets, gaps = _listening(root)
+def _kind(key):
+    """'container' or 'namespace' for a listener in another network namespace, None for this one's."""
+    head = key.split(':', 1)[0]
+    return head.split('/', 1)[0] if '/' in head else None
+
+
+def snapshot(*, root='/', all_namespaces=None):
+    """Listeners in this network namespace and, with `all_namespaces` (the default for root), in every other one."""
+    all_namespaces = os.geteuid() == 0 if all_namespaces is None else all_namespaces
+    spaces, gaps = net_namespaces.namespaces(root) if all_namespaces else ([dict(own=True, net='proc/net')], [])
+    sockets, where = {}, {}
+    for space in spaces:
+        found, more = _listening(root, space['net'])
+        gaps += more
+        for inode, socket in found.items():
+            if inode not in sockets:
+                sockets[inode] = socket
+                if not space.get('own'):
+                    where[inode] = space
     owners, owner_gaps = _owners(root, set(sockets))
     grouped: dict[str, dict] = {}
     for inode, (protocol, address, port) in sockets.items():
-        item = grouped.setdefault(f'{protocol}:{port}', dict(protocol=protocol, port=port, addresses=set(),
-                                                             programs={}, unknown=0))
+        space = where.get(inode)
+        kind = ('container' if space['container'] else 'namespace') if space else None
+        key = f'{kind}/{protocol}:{port}' if kind else f'{protocol}:{port}'
+        item = grouped.setdefault(key, dict(protocol=protocol, port=port, addresses=set(), programs={}, unknown=0,
+                                            where=set()))
+        if space:
+            item['where'].add(space['container'] or space['id'])
         item['addresses'].add(address)
         if inode in owners:
             item['programs'].update(owners[inode])
@@ -210,6 +241,8 @@ def snapshot(*, root='/'):
             addresses_complete=len(item['addresses']) <= MAX_ADDRESSES,
             programs=[item['programs'][p] for p in sorted(item['programs'])][:MAX_PROGRAMS],
             owners_known=not item['unknown'])
+        if item['where']:
+            listeners[key]['where'] = sorted(item['where'])[:MAX_ADDRESSES]
     if not owner_gaps:
         # Readable processes hold none of these sockets: another network namespace's process, or the kernel.
         # A port with any such socket gets no owner-change check, so it is listed even when partly owned.
@@ -218,7 +251,7 @@ def snapshot(*, root='/'):
         if partly:
             owner_gaps.append(f"some sockets have no visible owner on {', '.join(sorted(partly)[:8])}; "
                               "a change of owner is not checked there")
-    return dict(listeners=listeners, gaps=gaps + owner_gaps)
+    return dict(listeners=listeners, gaps=gaps + owner_gaps, all_namespaces=bool(all_namespaces))
 
 
 def _write(path, value):
@@ -301,9 +334,12 @@ def _finding(rule, key, entry, severity, detail):
     techniques = [TECHNIQUES[rule]]
     if any(p.get('kind') in ('shell', 'network_tool') for p in entry['programs']):
         techniques.append(SHELL_TECHNIQUE)
-    return dict(rule_id=rule, severity=severity, listener=key, protocol=entry['protocol'], port=entry['port'],
-                scope=entry['scope'], addresses=entry['addresses'], programs=entry['programs'],
-                techniques=techniques, detail=detail)
+    found = dict(rule_id=rule, severity=severity, listener=key, protocol=entry['protocol'], port=entry['port'],
+                 scope=entry['scope'], addresses=entry['addresses'], programs=entry['programs'],
+                 techniques=techniques, detail=detail)
+    if entry.get('where'):
+        found['where'] = entry['where']
+    return found
 
 
 def _address(shown):
@@ -325,9 +361,22 @@ def _newly_reachable(before, after):
     return added
 
 
+def newly_watched(old, new):
+    """Listeners in other namespaces that a baseline taken before they were read cannot be compared with."""
+    if old.get('all_namespaces') is True or not new.get('all_namespaces'):
+        return []
+    return [dict(listener=key, where=entry.get('where', []), programs=[p['path'] for p in entry['programs']])
+            for key, entry in sorted(new['listeners'].items()) if _kind(key)]
+
+
 def compare(old, new):
     findings, closed = [], []
     before_all, after_all = old['listeners'], new['listeners']
+    if not new.get('all_namespaces') or old.get('all_namespaces') is not True:
+        # Other namespaces are compared only when both sides read them: unread now is a gap, not a closed port,
+        # and a baseline that never read them has nothing to compare with.
+        before_all = {k: v for k, v in before_all.items() if not _kind(k)}
+        after_all = {k: v for k, v in after_all.items() if not _kind(k)}
     for key in sorted(set(before_all) | set(after_all), key=lambda k: (k.split(':')[0], int(k.split(':')[1]))):
         before, after = before_all.get(key), after_all.get(key)
         if after is None:
@@ -361,10 +410,16 @@ def check(manifest=DEFAULT_MANIFEST, **options):
     new = snapshot(**options)
     findings, closed = compare(old, new)
     counts = {level: sum(1 for f in findings if f['severity'] == level) for level in RANK}
-    return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
-                baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
-                closed=closed, severity_counts=counts, gaps=new['gaps'],
-                note='Review each listener; accept records the reviewed state. Nothing was stopped or changed.')
+    report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
+                  baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
+                  closed=closed, severity_counts=counts, gaps=new['gaps'],
+                  note='Review each listener; accept records the reviewed state. Nothing was stopped or changed.')
+    watched = newly_watched(old, new)
+    if watched:
+        report['newly_watched'] = watched
+        report['note'] += (' Listeners in other network namespaces (containers) are listed under newly_watched: the '
+                           'baseline was taken before they were read. Review them, then run accept.')
+    return report
 
 
 def accept(manifest=DEFAULT_MANIFEST, **options):

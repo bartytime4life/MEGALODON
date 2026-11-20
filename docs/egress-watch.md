@@ -112,6 +112,35 @@ Findings then name the destination (`updates.example.org
 
 Pass `--no-names` to skip all of this.
 
+## Containers and other network namespaces
+
+Each network namespace has socket tables of its own, and a container with its
+own network (Docker and Podman by default, every Kubernetes pod) never shows in
+the host's. Run as root, the watch reads every namespace's tables through one
+of its processes (`/proc/PID/net`), without entering it or changing anything.
+
+* **Named apart.** A connection from another namespace says which container
+  it is in, from the process's control group (`docker:ab12cd34ef56`,
+  `podman:...`, `containerd:...`), or which namespace when it is not a
+  container, for example a VPN's. Its detail starts `in container ...`.
+* **Learned apart.** Its program is recorded as `[container] /usr/bin/python3
+  /app/server.py` or `[namespace] /usr/bin/openvpn`, never merged with the
+  host's own `/usr/bin/python3`. Containers are recreated with new IDs, so
+  all containers share one set of entries: what any container may run.
+* **The process itself.** A finding names the process by PID and start time,
+  as for the host's, so `suspend_process` pauses that one process.
+* **Not blocked by address.** This machine's address blocks drop its own
+  traffic. A container's traffic is routed through it, and the block does
+  not stop it. So for a finding from another namespace, the response engine
+  records the address as a `peer`: it still links incidents, but a
+  `block_address` plan is refused because the finding names no address.
+  Pause the process instead.
+* **An older baseline.** A baseline learned before this, or without root,
+  never saw other namespaces. Their programs are not reported as new. `check`
+  lists them under `newly_watched` until you run `megalodon egress learn` as
+  root. A program run from a temporary folder, a deleted file or memory is
+  reported whatever the baseline knows.
+
 ## Response
 
 * **dropped-tool-phoning-home** covers `OUTBOUND_FROM_TEMPORARY`. It plans
@@ -144,5 +173,6 @@ Pass `--no-names` to skip all of this.
 * **Programs that run code from elsewhere.** A known program that loads
   hostile code, such as a browser extension or a plugin, connects out as
   itself and is not new.
-* **One network namespace.** Containers with their own network namespace
-  are not covered by a watch running outside them.
+* **Root reads every namespace.** Without root, only this namespace and
+  those of your own processes are read, and the report says how many
+  processes it could not see.

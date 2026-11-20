@@ -708,10 +708,13 @@ def egress_signals(report):
         ids = [f"{process['pid']}@{process['start']}:{program}"] if (
             type(process.get('pid')) is int and type(process.get('start')) is int and program.startswith('/')) else []
         where = f"{f.get('protocol')}/{f.get('port')}"
+        # From another network namespace (a container), this machine's address blocks do not stop the traffic,
+        # which is routed rather than sent from here: the address links incidents but is not a block target.
+        remote = dict(peer=[f.get('address')]) if f.get('namespace') else dict(address=[f.get('address')])
         signals.append(Signal(f"egress:{f['rule_id']}:{f.get('program')}:{where}:{f.get('address')}", 'egress',
                               f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
                               f.get('detail', ''), _entities(process=[program], process_id=ids,
-                                                             address=[f.get('address')], port=[where])))
+                                                             port=[where], **remote)))
     return signals
 
 
@@ -878,11 +881,13 @@ def ingest_signals(lines, now):
         folder = evidence.get('folder')
         detected = item.get('detected_at') if isinstance(item.get('detected_at'), str) else _iso(now)
         digest = hashlib.sha256(line.encode()).hexdigest()[:16]
+        addresses = [item.get('src_ip'), item.get('dst_ip')]
+        # A finding from another network namespace (a container): its addresses link incidents, as for egress.
+        remote = dict(peer=addresses) if item.get('namespace') else dict(address=addresses)
         signals.append(Signal(f"ingest:{item['rule_id']}:{digest}", 'ingest', item['rule_id'][:64],
                               _severity(item.get('severity')), detected, str(item.get('message', ''))[:300],
                               _entities(process=processes, process_id=ids,
-                                        file=[folder] if isinstance(folder, str) else [],
-                                        address=[item.get('src_ip'), item.get('dst_ip')])))
+                                        file=[folder] if isinstance(folder, str) else [], **remote)))
     return signals, refused
 
 

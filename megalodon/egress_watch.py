@@ -11,6 +11,12 @@ or memory that connects out.
 It reads the kernel's socket tables and maps each new connection to its
 process. As root every process is visible; otherwise only your own.
 Read-only.
+
+As root, the socket tables of every network namespace are read, not only this
+one's: a container with its own network is watched too. A connection from
+another namespace names its container (or namespace), and its program is
+recorded apart from the host's: `[container] /usr/bin/curl` is not
+`/usr/bin/curl`.
 """
 from __future__ import annotations
 
@@ -23,6 +29,7 @@ import stat
 import tempfile
 import time
 
+from . import net_namespaces
 from .process_network import TABLES, TEMPORARY, _endpoint, _program_kind, _read_table
 
 SCHEMA = 'megalodon-egress-v1'
@@ -78,19 +85,22 @@ def _network(address):
     return str(ipaddress.ip_network(f'{address}/{24 if address.version == 4 else 48}', strict=False))
 
 
-def connections(root='/', *, include_private=False):
-    """Outgoing connections in this network namespace: {inode: (protocol, remote address, remote port)}."""
+def connections(root='/', *, include_private=False, net='proc/net'):
+    """Outgoing connections in one network namespace: {inode: (protocol, remote address, remote port)}.
+
+    `net` is that namespace's table folder: `proc/net` for this one, `proc/PID/net` for the one PID is in.
+    """
     found, gaps, tables = {}, [], []
     for protocol, _family, name, length in TABLES:
         try:
-            lines, complete = _read_table(Path(root, 'proc/net', name))
+            lines, complete = _read_table(Path(root, net, name))
         except FileNotFoundError:
             continue
         except (OSError, ValueError):
-            gaps.append(f'/proc/net/{name} could not be read')
+            gaps.append(f'/{net}/{name} could not be read')
             continue
         if not complete:
-            gaps.append(f'/proc/net/{name} was too large to read whole')
+            gaps.append(f'/{net}/{name} was too large to read whole')
         tables.append((protocol, length, lines))
     # A connection a server accepted is established too, on the port it listens on: that one came in.
     listening = set()
@@ -205,10 +215,26 @@ def owners(root, inodes):
     return found, truncated
 
 
+def every_connection(root='/', *, include_private=False):
+    """Outgoing connections in every network namespace that can be read: ({inode: connection}, {inode: namespace},
+    gaps). Socket inodes are unique across namespaces, so one table holds them all."""
+    spaces, gaps = net_namespaces.namespaces(root)
+    table, where = {}, {}
+    for space in spaces:
+        found, more = connections(root, include_private=include_private, net=space['net'])
+        gaps += more
+        for inode, connection in found.items():
+            if inode not in table:
+                table[inode] = connection
+                if not space['own']:
+                    where[inode] = space
+    return table, where, gaps
+
+
 def observe(root='/', *, include_private=False, known=None):
     """Current outgoing connections with their programs; `known` caches inode owners between calls."""
     known = {} if known is None else known
-    table, gaps = connections(root, include_private=include_private)
+    table, where, gaps = every_connection(root, include_private=include_private)
     for inode in [i for i in known if i not in table]:
         del known[inode]
     missing = [i for i in table if i not in known]
@@ -224,10 +250,17 @@ def observe(root='/', *, include_private=False, known=None):
             unattributed += 1
             continue
         pid, info = owner
-        seen.append(dict(inode=inode, protocol=protocol, address=str(address), port=port, scope=scope, pid=pid,
-                         local_port=local_port,
-                         start=info['start'], program=identity(info), executable=info['path'], script=script(info),
-                         deleted=info['deleted'], argv=info['argv'][:8]))
+        connection = dict(inode=inode, protocol=protocol, address=str(address), port=port, scope=scope, pid=pid,
+                          local_port=local_port,
+                          start=info['start'], program=identity(info), executable=info['path'], script=script(info),
+                          deleted=info['deleted'], argv=info['argv'][:8])
+        space = where.get(inode)
+        if space is not None:
+            # Inside a container, /usr/bin/curl is the container's, not the host's: its own entry in the baseline.
+            # Containers come and go with new IDs, so they share one: what any container may run.
+            connection.update(namespace=space['id'], container=space['container'],
+                              program=f"[{'container' if space['container'] else 'namespace'}] {connection['program']}")
+        seen.append(connection)
     if unattributed:
         gaps.append(f'{unattributed} outgoing connections could not be matched to a program'
                     + ('; run as root to see every process' if os.geteuid() else ''))
@@ -335,6 +368,9 @@ def judge(baseline, connection, watchlist=None):
                               f"{connection['program']} (pid {connection['pid']}), run from "
                               f"{'a deleted file' if connection['deleted'] else 'a temporary folder or memory'}, "
                               f"connects to {where}"))
+    if connection.get('namespace') and baseline.get('all_namespaces') is not True:
+        # A baseline learned before other namespaces were read knows nothing of them: listed, not reported as new.
+        return found
     if entry is None:
         found.append(_finding('NEW_OUTBOUND_PROGRAM', connection,
                               f"{connection['program']} (pid {connection['pid']}) connects out for the first time, "
@@ -350,6 +386,10 @@ def _finding(rule, connection, detail, name=None):
     if rule == 'NEW_OUTBOUND_PROGRAM' and connection['scope'] == 'private':
         severity = 'MEDIUM'
     extra = dict(name=name) if name else {}
+    if connection.get('namespace'):
+        extra.update(namespace=connection['namespace'], container=connection.get('container'))
+        detail = f"in {net_namespaces.label(dict(id=connection['namespace'], container=connection.get('container')))}: " \
+                 + detail
     return dict(rule_id=rule, severity=severity, techniques=techniques, program=connection['program'],
                 detail=detail, summary=summary, address=connection['address'], port=connection['port'],
                 names=list(connection.get('names') or []), **extra,
@@ -362,7 +402,7 @@ def _finding(rule, connection, detail, name=None):
 
 
 def learn(manifest=DEFAULT_MANIFEST, *, seconds=0, interval=1.0, root='/', include_private=False, clock=time.monotonic,
-          sleep=time.sleep):
+          sleep=time.sleep, all_namespaces=None):
     """Record every program seen connecting out, now and for `seconds` more, into the baseline."""
     path = Path(manifest).expanduser()
     baseline = read(path) if path.exists() else _empty()
@@ -379,6 +419,9 @@ def learn(manifest=DEFAULT_MANIFEST, *, seconds=0, interval=1.0, root='/', inclu
         sleep(interval)
     baseline['recorded_at'] = _now()
     baseline['include_private'] = include_private
+    # Learned as root, every namespace was read: what other namespaces run from now on is compared, not listed.
+    if os.geteuid() == 0 if all_namespaces is None else all_namespaces:
+        baseline['all_namespaces'] = True
     _write(path, baseline)
     return dict(schema=REPORT_SCHEMA, action='learn', manifest=str(path), programs=len(baseline['programs']),
                 connections_recorded=observed, gaps=sorted(gaps))
@@ -404,9 +447,17 @@ def check(manifest=DEFAULT_MANIFEST, *, root='/'):
     seen, gaps = observe(root, include_private=baseline.get('include_private', False))
     findings = [f for connection in seen for f in judge(baseline, connection)]
     findings.sort(key=lambda f: (RANK.index(f['severity']), f['program'], f['port']))
-    return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()), checked_at=_now(),
-                connections=len(seen), findings=findings, gaps=gaps,
-                note='Review each program; `megalodon egress allow PROGRAM` records one as normal.')
+    report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()), checked_at=_now(),
+                  connections=len(seen), findings=findings, gaps=gaps,
+                  note='Review each program; `megalodon egress allow PROGRAM` records one as normal.')
+    if baseline.get('all_namespaces') is not True:
+        unlearned = sorted({(c['program'], c.get('container') or c['namespace']) for c in seen if c.get('namespace')})
+        if unlearned:
+            report['newly_watched'] = [dict(program=program, where=where) for program, where in unlearned]
+            report['note'] += (' Programs in other network namespaces (containers) are listed under newly_watched: '
+                               'the baseline was learned before they were read. Run `megalodon egress learn` as '
+                               'root to start comparing them.')
+    return report
 
 
 class Watcher:

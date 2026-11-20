@@ -60,6 +60,22 @@ when it only listens on loopback. A script interpreter (Python, Node, Perl...)
 is noted in the finding's reasons, but it doesn't raise the severity on its
 own, because development servers are written in those languages too.
 
+## Containers and other network namespaces
+
+Run as root, the listeners of every network namespace are read, not only this
+one's, through one of each namespace's processes (`/proc/PID/net`). A listener
+in a container is recorded as `container/tcp:8080`, one in another namespace
+as `namespace/tcp:8080`. It never merges with the host's `tcp:8080`. All
+containers share one key per port, so a container recreated with a new ID is
+not a new listener. Each entry, and each finding, lists the containers or
+namespaces that hold it now under `where`.
+
+A bind shell started inside a container is a `NEW_LISTENER` on
+`container/tcp:4444`, rated as on the host. A baseline taken before this, or
+without root, never read other namespaces. `check` lists their listeners
+under `newly_watched` until you run `accept`. A check without root cannot
+read them, so they are a gap, not a closed port.
+
 ## What is recorded
 
 For each listener: protocol, port, the local addresses it is bound to, its
@@ -73,10 +89,11 @@ traffic are never read or stored. Nothing is stopped, closed or changed.
   system services' processes have no visible owner. The report lists that as
   a coverage gap, and a change of owner is not reported for those ports. A
   port where only some sockets have a visible owner is listed too.
-* **This network namespace only.** Containers in their own network namespace
-  are not covered. A port Docker publishes appears only while `docker-proxy`
-  listens for it on the host; with Docker's userland proxy turned off,
-  firewall rules forward it and no listener is seen.
+* **Root reads every namespace.** Without root, only this namespace and
+  those of your own processes are read. A port Docker publishes on the host
+  appears there only while `docker-proxy` listens for it. With Docker's
+  userland proxy turned off, firewall rules forward it, and only the
+  container's own listener is seen.
 * **UDP services only.** An unconnected UDP socket on a port in the kernel's
   outgoing range (`ip_local_port_range`, usually 32768 to 60999) is treated
   as a client and skipped. A UDP backdoor on such a port is missed.
