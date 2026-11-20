@@ -260,19 +260,56 @@ class Executor:
         self._signal(record['target'], signal.SIGCONT)
 
     # --- addresses
+    def _inside(self, namespace):
+        """The command prefix that runs nft in network namespace `namespace` (net:[ID]), or None if it is gone.
+
+        One of the namespace's own processes is the way in, checked to be in that namespace just before."""
+        from . import net_namespaces
+        spaces, _ = net_namespaces.namespaces(self.root)
+        for space in spaces:
+            if space['id'] != namespace:
+                continue
+            if space['own']:
+                return []                     # this machine's own namespace: no way in needed
+            entry = Path(self.root, 'proc', str(space['pid']), 'ns/net')
+            try:
+                if os.readlink(entry) == namespace:
+                    return ['nsenter', f'--net={entry}']
+            except OSError:
+                pass
+        return None
+
     def block_address(self, target, decision):
         from .firewall import NFTABLES_TABLE, NftablesFirewall
         minutes = next((a.get('minutes') for a in decision['actions'] if a.get('target') == target), 60) or 60
-        plan = NftablesFirewall(timeout_seconds=int(minutes) * 60).plan_block(target, decision['playbook'])
+        inside = engine.NAMESPACE_ADDRESS.fullmatch(target or '')
+        address, namespace = (inside.group(1), inside.group(2)) if inside else (target, None)
+        plan = NftablesFirewall(timeout_seconds=int(minutes) * 60).plan_block(address, decision['playbook'])
+        prefix = []
+        if namespace:
+            # A container's traffic is routed, not sent from here: it is blocked in the container's own namespace,
+            # with the same time-limited table, so neither this machine nor the rest of the network is touched.
+            prefix = self._inside(namespace)
+            if prefix is None:
+                raise EnforcementError(f'network namespace {namespace} is gone: no process is left in it')
         # MEGALODON's own table, created once: loading it again would add its rules again.
-        if self.run(['nft', 'list', 'table', 'inet', 'megalodon']).returncode != 0:
-            self._command(['nft', '-f', '-'], NFTABLES_TABLE)
-        self._command(list(plan.command))
-        return dict(set=plan.command[5], until=_iso(plan.expires_at))
+        if self.run([*prefix, 'nft', 'list', 'table', 'inet', 'megalodon']).returncode != 0:
+            self._command([*prefix, 'nft', '-f', '-'], NFTABLES_TABLE)
+        self._command([*prefix, *plan.command])
+        undo = dict(set=plan.command[5], until=_iso(plan.expires_at))
+        if namespace:
+            undo.update(address=address, namespace=namespace)
+        return undo
 
     def undo_block_address(self, record):
-        self._command(['nft', 'delete', 'element', 'inet', 'megalodon', record['undo']['set'],
-                       '{', record['target'], '}'])
+        undo = record['undo']
+        prefix = []
+        if undo.get('namespace'):
+            prefix = self._inside(undo['namespace'])
+            if prefix is None:
+                return                        # the namespace is gone, and its block with it
+        self._command([*prefix, 'nft', 'delete', 'element', 'inet', 'megalodon', undo['set'],
+                       '{', undo.get('address', record['target']), '}'])
 
     # --- files
     @staticmethod

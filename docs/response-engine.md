@@ -103,7 +103,7 @@ moment without either losing the other's state.
 | --- | --- | --- |
 | `collect_evidence` | — | Save a hashed, read-only snapshot of the programs, sockets and files involved, before anything else: what [`megalodon evidence collect`](evidence-collection.md) does |
 | `notify` | — | Send a summary to the [off-machine alerts](off-machine-alerts.md) |
-| `block_address` | address | Drop traffic to and from the address for `block_minutes` |
+| `block_address` | address | Drop traffic to and from the address for `block_minutes`. For a finding from a container (`ADDRESS@net:[ID]`), only inside that container's network namespace |
 | `suspend_process` | process, or program | Pause (SIGSTOP) the process, keeping it for investigation; with `suspend_minutes`, only for that long |
 | `quarantine_file` | file | Move the file aside with no permissions, recording its hash |
 | `disable_persistence` | persistence entry | Disable a service, job or startup entry without deleting it. Refused for locations the [persistence watch](persistence-watch.md) does not cover, and for MEGALODON's own units |
@@ -120,9 +120,10 @@ Guards apply whatever the playbooks say:
   network need switch-level controls. This machine's gateways, DNS servers
   and own addresses, and anything in `never_touch_addresses`, are refused.
   A finding from another network namespace, such as a container's
-  connection, names its remote address as a `peer`. It links incidents, but
-  it is not blocked, because this machine's blocks do not stop routed
-  traffic.
+  connection, names its remote address as a `peer`, which links incidents,
+  and as `ADDRESS@net:[ID]`, which is what `block_address` blocks. This
+  machine's own blocks do not stop routed traffic, so the block is made
+  inside that namespace, under the same guards.
 * **Programs.** init, systemd, sshd and dbus, and anything in
   `never_touch_programs`, are never suspended. A plan names the processes
   behind the finding (`pid@start:program`; the start time keeps a reused
