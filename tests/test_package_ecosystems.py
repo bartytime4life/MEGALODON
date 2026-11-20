@@ -33,7 +33,8 @@ def test_pip_indexes_redirects_extra_indexes_and_trusted_hosts(root, tmp_path):
     assert rules == {("PACKAGE_SOURCE_REDIRECTED", "HIGH"), ("PACKAGE_SOURCE_ADDED", "MEDIUM"),
                      ("PACKAGE_INDEX_MIXED", "MEDIUM"), ("PACKAGE_TRANSPORT_WEAKENED", "HIGH")}
     redirect = next(f for f in report["findings"] if f["rule_id"] == "PACKAGE_SOURCE_REDIRECTED")
-    assert "pypi.internal.example" in redirect["detail"] and "pypi.attacker.example" in redirect["detail"]
+    assert redirect["detail"] == ("index-url in pip for the system: https://pypi.internal.example/simple → "
+                                  "https://pypi.attacker.example/simple")
     # An account's own settings, over plain HTTP, are told apart from the system's.
     ps.accept(manifest, root=str(root))
     place(root, "/home/dev/.config/pip/pip.conf", "[install]\nindex_url = http://mirror.example/simple\n")
@@ -56,9 +57,11 @@ def test_npm_registry_scopes_and_strict_ssl(root, tmp_path):
         ("PACKAGE_SOURCE_REDIRECTED", "HIGH"), ("PACKAGE_SOURCE_ADDED", "MEDIUM"),
         ("PACKAGE_TRANSPORT_WEAKENED", "HIGH")}
     redirect = next(f for f in report["findings"] if f["rule_id"] == "PACKAGE_SOURCE_REDIRECTED")
-    assert "registry.npmjs.org" in redirect["detail"], "from the default registry"
-    assert any("@corp:registry" in f["detail"] and "npm.corp.example" in f["detail"]
-               for f in report["findings"] if f["rule_id"] == "PACKAGE_SOURCE_ADDED"), "a scope's own registry"
+    assert redirect["detail"] == ("registry in npm for the system: https://registry.npmjs.org/ → "
+                                  "https://registry.attacker.example/"), "from the default registry"
+    added = sorted(f["detail"] for f in report["findings"] if f["rule_id"] == "PACKAGE_SOURCE_ADDED")
+    assert ("https://npm.corp.example/ @corp:registry in npm for the system, signed by nothing but TLS: packages "
+            "are not signed") in added, "a scope's own registry"
     assert "account root" in next(f["detail"] for f in report["findings"]
                                   if f["rule_id"] == "PACKAGE_TRANSPORT_WEAKENED")
 
