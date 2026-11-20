@@ -122,8 +122,10 @@ is kept.
 Each machine's [incident timeline](incident-timeline.md) can be sent to the
 collector. The collector joins incidents on different machines when they share
 an address: the same outside address seen by two machines within a day, or one
-machine reaching another. An attacker moving between machines, or working
-through several, then shows up as one fleet incident.
+machine reaching another. Every incident on each machine that saw the address
+in that day is joined, not only the most recent one. An attacker moving
+between machines, or working through several, then shows up as one fleet
+incident.
 
 On each machine:
 
@@ -146,7 +148,10 @@ megalodon fleet timeline --entity address:203.0.113.9
 ```
 
 * **`timeline push`** sends the events this machine has not sent yet:
-  findings, decisions, actions and undos. It sends them in batches to
+  findings, decisions, actions and undos. It also sends merges: when a later
+  finding makes two of the machine's incidents one, the collector joins the
+  two as well, including events it received before the merge. It sends them
+  in batches to
   `/events` on the collector, at the heartbeat address with `/events` in place
   of `/heartbeat` (or `--url`). Each batch is signed with the machine's
   heartbeat key, so enrolling the machine is all it needs. The

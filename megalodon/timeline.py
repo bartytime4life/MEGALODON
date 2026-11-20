@@ -397,11 +397,23 @@ def _events_url(settings, url=None):
     return base[:-len('/heartbeat')] + '/events' if base.endswith('/heartbeat') else base.rstrip('/') + '/events'
 
 
+def _merges(ledger):
+    """The engine's merge records as events: the collector applies them to events it already holds."""
+    return [dict(at=r.get('at'), kind='merge', incident=r['incident'], merged=r['merged'])
+            for r in _records(engine.observations_path(ledger))
+            if r.get('kind') == 'merge' and isinstance(r.get('incident'), str) and isinstance(r.get('merged'), str)]
+
+
 def pending(cursor, *, ledger=engine.DEFAULT_LEDGER, journal=None):
-    """Events not yet sent, oldest first: those after the last one sent, by time and identity."""
+    """Events not yet sent, oldest first: those after the last one sent, by time and identity.
+
+    Merges are sent too. An event already sent keeps the incident it was sent under, so the collector
+    needs to hear when two incidents became one."""
     sent_at, sent = cursor.get('last_at', ''), set(cursor.get('ids', []))
     out = []
-    for event in events(ledger=ledger, journal=journal):
+    every = events(ledger=ledger, journal=journal) + _merges(ledger)
+    every.sort(key=lambda e: str(e.get('at') or ''))
+    for event in every:
         identity = event_id(event)
         at = str(event.get('at') or '')
         if at > sent_at or (at == sent_at and identity not in sent):
