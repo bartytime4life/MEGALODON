@@ -106,6 +106,7 @@ moment without either losing the other's state.
 | `quarantine_file` | file | Move the file aside with no permissions, recording its hash |
 | `disable_persistence` | persistence entry | Disable a service, job or startup entry without deleting it. Refused for locations the [persistence watch](persistence-watch.md) does not cover, and for MEGALODON's own units |
 | `lock_account` | account | Lock the account's password and logins |
+| `block_device` | device | Cut off one plug-in of one USB device (`PORT#NUMBER@identity`): its drivers let go, so it cannot type, store or carry traffic |
 
 Every action is designed to be reversible.
 
@@ -161,7 +162,7 @@ Guards apply whatever the playbooks say:
 | dropped-tool-phoning-home | `OUTBOUND_FROM_TEMPORARY` | Collect evidence, suspend the process, block the address for 60 minutes, notify |
 | new-outbound-program | HIGH `NEW_OUTBOUND_PROGRAM` | Collect evidence, notify |
 | sensor-tampering | HIGH and CRITICAL [tamper](tamper-detection.md) findings | Collect evidence, notify |
-| new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Notify: only you know whether you plugged it in |
+| new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Cut off the USB device, notify: only you know whether you plugged it in, and `enforce undo` lets it back |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
 | attacker-at-the-door | HIGH `BRUTE_FORCE`, `HOST_SWEEP`, `DECOY_TOUCH`, `SYN_FLOOD`, `PORT_SCAN` | Block the source for 30 minutes, notify |
 | command-and-control-or-exfiltration | HIGH `BEACONING`, `DATA_EXFILTRATION`, `IOC_MATCH`, DNS rules | Only when corroborated: collect evidence, block for 60 minutes, notify |

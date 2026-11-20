@@ -45,6 +45,8 @@ import struct
 import sys
 import time
 
+from . import respond_now
+
 SAMPLE_BYTES = 64 * 1024
 MIN_BYTES = 1024
 HIGH_ENTROPY = 7.5
@@ -561,66 +563,19 @@ def load_folders(path=DEFAULT_FOLDERS_FILE):
 
 # ------------------------------------------------------------------ responding at once
 
-class Responder:
+class Responder(respond_now.Responder):
     """Decide each finding at once with the response engine, then carry out what enforcement allows.
 
     The scheduled response pass reads the other sources every five minutes, and enforcement runs every minute.
-    Encryption does not wait that long: this hands the finding to both as soon as it is raised. Nothing is done
-    that the timer would not do: the same response policy decides, under the same guards, and enforcement acts
-    only when it is on and lists the playbook.
+    Encryption does not wait that long: this hands the finding to both as soon as it is raised (see respond_now),
+    and `recover` resumes pauses whose time is up while the watch is quiet.
     """
 
-    def __init__(self, *, policy=None, ledger=None, state=None, enforcement_policy=None, journal=None,
-                 enforcement_state=None):
-        from . import enforcement, response_engine
-        self.policy = Path(policy or response_engine.DEFAULT_POLICY).expanduser()
-        self.ledger = Path(ledger or response_engine.DEFAULT_LEDGER).expanduser()
-        self.state = Path(state or response_engine.DEFAULT_STATE).expanduser()
-        self.enforcement_policy = Path(enforcement_policy or enforcement.DEFAULT_POLICY).expanduser()
-        self.journal = Path(journal or enforcement.DEFAULT_JOURNAL).expanduser()
-        self.enforcement_state = Path(enforcement_state or enforcement.DEFAULT_STATE).expanduser()
-
-    def recover(self):
-        """Retry due suspension recovery without reading policies or admitting new actions."""
-        from . import enforcement
-        try:
-            return dict(expired=enforcement.expire(journal=self.journal))
-        except (enforcement.EnforcementError, OSError, ValueError) as exc:
-            return dict(expired=[], error=f'could not recover suspensions: {exc}'[:300])
-
-    def _with_recovery(self, out):
-        recovery = self.recover()
-        if recovery['expired'] or recovery.get('error'):
-            out['recovery'] = recovery
-        return out
-
     def __call__(self, finding):
-        from . import enforcement, response_engine
-        out = dict(rule_id=finding.rule_id)
+        from . import response_engine
         line = json.dumps(finding.to_dict(), sort_keys=True)
-        try:
-            decided = response_engine.ingest([line], policy_path=self.policy, ledger=self.ledger,
-                                             state_path=self.state)
-        except (response_engine.ResponseError, OSError, ValueError) as exc:
-            return self._with_recovery(dict(out, decided=False, error=f'not decided: {exc}'[:300]))
-        out.update(decided=True, decisions=decided['decisions'], would_apply=decided['would_apply'])
-        if not decided['decisions']:
-            return self._with_recovery(out)  # no new action, but an earlier pause may still be due
-        try:
-            ran = enforcement.run(policy_path=self.enforcement_policy, response_policy=self.policy,
-                                  ledger=self.ledger, journal=self.journal, state_path=self.enforcement_state)
-        except (enforcement.EnforcementError, response_engine.ResponseError, OSError, ValueError) as exc:
-            return dict(out, enforcement=f'not carried out: {exc}'[:300])
-        carried = dict(
-            enabled=ran['enabled'],
-            applied=[dict(id=r['id'], action=r['action'], target=r.get('target')) for r in ran['applied']],
-            refused=[dict(action=r['action'], target=r.get('target'), reason=r.get('reason'),
-                          status=r.get('status')) for r in ran['refused']],
-            expired=ran.get('expired', []))
-        for key in ('policy_error', 'note'):
-            if key in ran:
-                carried[key] = ran[key]
-        return dict(out, enforcement=carried)
+        return self.carry(finding.rule_id, lambda: response_engine.ingest(
+            [line], policy_path=self.policy, ledger=self.ledger, state_path=self.state))
 
 
 def selftest(directory, *, files=12):

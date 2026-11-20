@@ -82,10 +82,11 @@ journal records. A run that is off also creates nothing when no suspension is
 due. When recovery is due, it takes the same lock and records its outcome even
 though new enforcement is disabled.
 Runs come from the scheduled `megalodon-enforce` service every minute, and
-from the [ransomware watch](ransomware-watch.md#answer-it-at-once) as soon as it
-raises a finding. The watch's run is a whole run: it also carries out any other
-decision recorded since the last one.
-The scheduled `megalodon-enforce` and `megalodon-ransomware` services keep
+from the [ransomware watch](ransomware-watch.md#answer-it-at-once) and the
+[device watch](device-watch.md#cut-it-off-at-once) as soon as they raise a
+finding. A watch's run is a whole run: it also carries out any other decision
+recorded since the last one.
+The scheduled `megalodon-enforce`, `megalodon-ransomware` and `megalodon-devices` services keep
 `ProtectSystem=full` but can write to `/etc`. `usermod` needs this to lock an account, because it writes
 lock and temporary files beside `/etc/shadow`.
 
@@ -97,6 +98,7 @@ lock and temporary files beside `/etc/shadow`.
 | `block_address` | A time-limited element in MEGALODON's own nftables table (`inet megalodon`), dropping traffic to and from the address. It expires by itself after the playbook's `block_minutes`. | The element is deleted |
 | `quarantine_file` | The file is copied into the quarantine folder with no permissions, checked to be the same file, and removed. Its SHA-256, owner and mode are recorded. The path is opened one folder at a time without following symlinks, so a folder swapped for a symlink after the decision cannot lead outside the folders the guards checked. | Restored with its mode and owner, if the copy still matches its hash, nothing new is at that path, and no folder on the way is now a symlink |
 | `lock_account` | `usermod --lock --expiredate 1`. A locked password alone still lets SSH keys in; an expired account does not. Accounts with UID 0 are never locked. | Its previous expiry put back; the password is unlocked only if it was not already locked before |
+| `block_device` | `0` is written to the USB device's `authorized` file in `/sys`, after checking that the same plug-in (port, device number the kernel gave it, vendor, product and serial) is still there. Its drivers let go. The only keyboard attached is never cut off. | `1` is written back if the same plug-in is still there; unplugged since, there is nothing to let back |
 | `collect_evidence` | An [evidence bundle](evidence-collection.md), plus the [memory](memory-capture.md) of up to four processes the finding names | Nothing to undo |
 | `notify` | A summary of what was enforced, to the alert destinations | Nothing to undo |
 

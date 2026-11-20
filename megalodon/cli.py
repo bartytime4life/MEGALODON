@@ -292,7 +292,13 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "baseline":
             command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
         if name == "watch":
-            command.add_argument("--interval", type=float, default=2.0, help="seconds between checks (default 2)")
+            command.add_argument("--interval", type=float, default=2.0,
+                                 help="seconds between checks when no device event arrives (default 2)")
+            command.add_argument("--poll", action="store_true",
+                                 help="check every interval only, without listening for the kernel's device events")
+            command.add_argument("--respond", action="store_true",
+                                 help="decide each new device at once with the response engine, and carry out what "
+                                      "the enforcement policy allows (such as block_device)")
         if name in ("check", "watch"):
             command.add_argument("--alert", action="store_true",
                                  help="also send findings to the [alerts] destinations in the settings file")
@@ -1890,13 +1896,32 @@ def _devices(args: argparse.Namespace) -> int:
         elif args.devices_command == "accept":
             result = watch.accept(manifest)
         elif args.devices_command == "watch":
+            responder = None
+            if args.respond:
+                from .respond_now import Responder
+                responder = Responder()
+
             def emit(found):
                 print(json.dumps(found, sort_keys=True), flush=True)
+                if responder is not None:
+                    # Decided and carried out before anything else: a keystroke-injection device types at once.
+                    print("megalodon: response " + json.dumps(watch.respond(found, responder), sort_keys=True),
+                          file=sys.stderr, flush=True)
                 notify(found)
+            events = None if args.poll else watch.uevents()
+            watch.check(manifest)        # refuses a missing or unsafe baseline before anything starts
+            print("megalodon: watching devices: " + (
+                "the kernel's device events, and a check every " + f"{args.interval:g}s" if events is not None else
+                f"a check every {args.interval:g}s" + ("" if args.poll else " (the kernel's device events are not "
+                                                                         "available here)"))
+                  + ("; new devices are decided at once" if responder else ""), file=sys.stderr, flush=True)
             try:
-                watch.watch(manifest, emit, interval=args.interval)
+                watch.watch(manifest, emit, interval=args.interval, events=events)
             except KeyboardInterrupt:
                 pass
+            finally:
+                if events is not None:
+                    events.close()
             return 0
         else:
             result = watch.check(manifest)

@@ -70,12 +70,12 @@ def test_a_unit_that_is_not_ours_is_never_overwritten_or_removed(home, tmp_path)
     with pytest.raises(sc.ScheduleError, match="not MEGALODON's"):
         sc.install(system=False, only=["rootkit"], directory=folder, launcher=["m"], runner=Systemctl())
     (folder / "megalodon-other.service").write_text("[Service]\nExecStart=/bin/true\n")
-    baselines(home, "devices.json")
-    sc.install(system=False, only=["devices"], directory=folder, launcher=["m"], runner=Systemctl())
+    baselines(home, "webroot.json")
+    sc.install(system=False, only=["webroot"], directory=folder, launcher=["m"], runner=Systemctl())
     systemctl = Systemctl()
     result = sc.remove(system=False, directory=folder, runner=systemctl)
-    assert sorted(Path(p).name for p in result["removed"]) == ["megalodon-devices.service", "megalodon-devices.timer"]
-    assert systemctl.calls[0] == (False, ("disable", "--now", "megalodon-devices.timer"))
+    assert sorted(Path(p).name for p in result["removed"]) == ["megalodon-webroot.service", "megalodon-webroot.timer"]
+    assert systemctl.calls[0] == (False, ("disable", "--now", "megalodon-webroot.timer"))
     assert sorted(p.name for p in folder.iterdir()) == ["megalodon-other.service", "megalodon-rootkit.service"]
 
 
