@@ -303,11 +303,31 @@ class Executor:
     def undo_quarantine_file(self, record):
         self._put_back(record['target'], record['undo'])
 
-    def _put_back(self, target, undo):
+    @staticmethod
+    def _restored(parent, name, info, undo):
+        """Whether what is at the path is exactly what this undo puts there: put back by an earlier undo."""
+        if undo.get('kind') == 'link':
+            return stat.S_ISLNK(info.st_mode) and os.readlink(name, dir_fd=parent) == undo.get('link_target')
+        if not stat.S_ISREG(info.st_mode) or not undo.get('sha256'):
+            return False
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent)
+        try:
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: os.read(fd, 1 << 20), b''):
+                digest.update(chunk)
+        finally:
+            os.close(fd)
+        return digest.hexdigest() == undo['sha256']
+
+    def _put_back(self, target, undo, *, resume=False):
+        """Put a moved entry back. With `resume`, an entry already put back by an undo that stopped before its
+        last step counts as put back, so that undo can be run again to finish."""
         parent, name = self._folder(target)
         try:
             try:
-                os.stat(name, dir_fd=parent, follow_symlinks=False)
+                info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                if resume and self._restored(parent, name, info, undo):
+                    return
                 kept = f'; the quarantined copy is left at {undo["kept"]}' if undo.get('kept') else ''
                 raise EnforcementError(f'{target} exists again{kept}')
             except FileNotFoundError:
@@ -383,7 +403,8 @@ class Executor:
 
     def undo_disable_persistence(self, record):
         undo = record['undo']
-        self._put_back(undo['path'], undo)
+        # If systemd fails after the entry is back, the undo is not recorded; running it again finishes it.
+        self._put_back(undo['path'], undo, resume=True)
         if undo.get('system_unit'):
             self._command(['systemctl', 'daemon-reload'])
             if (undo.get('unit') or {}).get('was_active'):

@@ -228,3 +228,34 @@ def test_global_user_units_are_not_the_system_managers(p, tmp_path):
     assert ran(machine) == [], "the system manager is never told to stop a unit of the same name"
     en.undo(result["applied"][0]["id"], journal=p["journal"], executor=machine.executor)
     assert unit.exists() and ran(machine) == []
+
+
+def test_an_undo_stopped_by_systemd_can_be_run_again(p, tmp_path):
+    machine = Machine(tmp_path, p)
+    timer = machine.place("/etc/systemd/system/sync.timer", b"[Timer]\nOnCalendar=minutely\n")
+    enable(p, ["disable_persistence"], ["new-persistence-entry"])
+    decide(p, found("added", "systemd", "/etc/systemd/system/sync.timer"))
+    record = enforce(p, executor=machine.executor)["applied"][0]
+    calls, failing = [], [True]
+
+    def systemctl(argv, data=None):
+        calls.append(list(argv))
+        if argv[1:2] == ["daemon-reload"] and failing[0]:
+            failing[0] = False
+            return SimpleNamespace(returncode=1, stdout="", stderr="Transport endpoint is not connected")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    machine.executor.run = systemctl
+    with pytest.raises(en.EnforcementError, match="Transport endpoint"):
+        en.undo(record["id"], journal=p["journal"], executor=machine.executor)
+    assert timer.exists() and [r["id"] for r in en.active(p["journal"])] == [record["id"]], \
+        "the file is back, and the undo is not recorded as done"
+    en.undo(record["id"], journal=p["journal"], executor=machine.executor)
+    assert ["systemctl", "start", "sync.timer"] in calls and en.active(p["journal"]) == []
+    # Something else at the path is still never taken for the entry put back.
+    other = machine.place("/etc/cron.d/job")
+    enable(p, ["disable_persistence"], ["new-persistence-entry"])
+    decide(p, found("added", "cron", "/etc/cron.d/job"))
+    job = enforce(p, executor=machine.executor)["applied"][0]
+    other.write_bytes(b"something else\n")
+    with pytest.raises(en.EnforcementError, match="exists again"):
+        en.undo(job["id"], journal=p["journal"], executor=machine.executor)
