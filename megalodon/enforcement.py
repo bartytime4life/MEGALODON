@@ -43,6 +43,7 @@ import fcntl
 import hashlib
 import json
 import os
+from os import getpid as _own_pid     # bound here: tests that stand in for `os` keep the real one
 from pathlib import Path
 import pwd
 import re
@@ -208,7 +209,7 @@ class Executor:
         if not match:
             raise EnforcementError('only one exact process (PID and start time) is ever signalled')
         pid, start, program = int(match.group(1)), int(match.group(2)), match.group(3)
-        if pid == os.getpid():
+        if pid == _own_pid():
             # A live watch deciding on its own findings never pauses itself, and so never stops watching.
             raise EnforcementError('this is MEGALODON\'s own process')
         try:

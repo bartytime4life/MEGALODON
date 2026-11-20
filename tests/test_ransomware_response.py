@@ -113,7 +113,7 @@ def test_the_tally_forgets_processes_outside_the_window(tmp_path):
 def test_never_this_process(child, monkeypatch):
     # The child stands in for this process, so a missing guard pauses it and not the test run.
     target = f"{child.pid}@{en._start(child.pid)}:{os.readlink(f'/proc/{child.pid}/exe')}"
-    monkeypatch.setattr(en.os, "getpid", lambda: child.pid)
+    monkeypatch.setattr(en, "_own_pid", lambda: child.pid)
     with pytest.raises(en.EnforcementError, match="own process"):
         en.Executor().suspend_process(target, {})
     time.sleep(0.1)
