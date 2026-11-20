@@ -25,6 +25,11 @@ are kept; for accounts, name, UID, GID, home and shell. File contents are
 never copied into the manifest or the report. Locations the current user
 cannot read are listed as coverage gaps, never silently skipped. Nothing is
 changed or removed: ``accept`` records the reviewed state as the new baseline.
+
+Locations under ``~/`` are in the home of the account running the check. Run
+as root, they are also read in every other account's home, from
+``/etc/passwd``, and recorded as ``~NAME/...``: an SSH key added for another
+account is reported like one added for root.
 """
 from __future__ import annotations
 
@@ -36,6 +41,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import tempfile
 
@@ -49,6 +55,11 @@ DEFAULT_MANIFEST = '~/.config/megalodon/persistence.json'
 SETUID_DIRS = ('/usr/bin', '/usr/sbin', '/bin', '/sbin', '/usr/local/bin', '/usr/local/sbin', '/usr/lib',
                '/usr/libexec', '/opt')
 _SHELLS_NOLOGIN = ('nologin', 'false', 'sync', 'shutdown', 'halt')
+MAX_HOMES = 2000
+# Account names as a home key (~NAME/): what useradd accepts, plus the $ of machine accounts.
+ACCOUNT_NAME = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,62}\$?')
+# Homes that are not homes: nothing an account keeps there is its own startup file.
+NOT_HOMES = ('/', '/nonexistent', '/proc', '/sys', '/dev', '/run')
 
 # (category, ATT&CK technique, severity when added/changed, glob patterns; ~ is the home folder)
 LOCATIONS = (
@@ -95,11 +106,13 @@ def why_not_disabled(category, location):
         return 'not a service, job or startup entry'
     parts = location.split('/')
     if any(part in ('', '.', '..') for part in parts[1:]) or not (location.startswith('/') or
-                                                                  location.startswith('~/')):
+                                                                  location.startswith('~/') or _owner(location)):
         return 'not a plain path'
     patterns = next(p for c, _t, _s, p in LOCATIONS if c == category)
+    # ~NAME/... is the same location in another account's home: it matches the pattern's ~/....
+    first = '~' if _owner(location) else parts[0]
     if not any(len(pattern.split('/')) == len(parts) and
-               all(fnmatch.fnmatchcase(part, piece) for part, piece in zip(parts, pattern.split('/')))
+               all(fnmatch.fnmatchcase(part, piece) for part, piece in zip([first, *parts[1:]], pattern.split('/')))
                for pattern in patterns):
         return 'not a location the persistence watch covers'
     if os.path.basename(location).startswith('megalodon'):
@@ -109,6 +122,41 @@ def why_not_disabled(category, location):
 
 def _now():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _owner(location):
+    """The account NAME of a ~NAME/... location, or None."""
+    head, slash, _ = location.partition('/')
+    if slash and head.startswith('~') and ACCOUNT_NAME.fullmatch(head[1:]):
+        return head[1:]
+    return None
+
+
+def home_folder(home, root='/'):
+    """Where an account's home is on this machine, or None when it is not a home to watch."""
+    # normpath keeps a leading //, which is still /.
+    plain = '/' + os.path.normpath(home).lstrip('/') if home.startswith('/') else None
+    if plain is None or plain in NOT_HOMES or plain.startswith(tuple(f'{h}/' for h in NOT_HOMES[1:])):
+        return None
+    path = _expand(plain, root, '')
+    return path if os.path.isdir(path) else None
+
+
+def other_homes(root, accounts, own_home):
+    """(name, folder) for every account whose home is a real folder other than this account's own, once each."""
+    seen = {os.path.realpath(own_home)}
+    found = []
+    for name, account in sorted((accounts or {}).items(), key=lambda item: (item[1]['uid'], item[0])):
+        if not ACCOUNT_NAME.fullmatch(name):
+            continue
+        folder = home_folder(account['home'], root)
+        if folder is None or os.path.realpath(folder) in seen:
+            continue
+        seen.add(os.path.realpath(folder))
+        found.append((name, folder))
+        if len(found) >= MAX_HOMES:
+            break
+    return sorted(found)
 
 
 def _expand(pattern, root, home):
@@ -225,39 +273,57 @@ def _setuid(root, directories):
     return found, False
 
 
-def snapshot(*, root='/', home=None, setuid_dirs=SETUID_DIRS):
-    """The current state of every location, and the locations that could not be read."""
+def snapshot(*, root='/', home=None, setuid_dirs=SETUID_DIRS, all_homes=None):
+    """The current state of every location, and the locations that could not be read.
+
+    With `all_homes` (the default for root), each ~/ location is also read in every other account's home.
+    """
     home = home or str(Path.home())
+    all_homes = os.geteuid() == 0 if all_homes is None else all_homes
     entries, gaps = {}, []
-    for category, _, _, patterns in LOCATIONS:
-        for pattern in patterns:
-            expanded = _expand(pattern, root, home)
-            parent = os.path.dirname(expanded)
-            if any(ch in expanded for ch in '*?[') and os.path.isdir(parent) and not os.access(parent, os.R_OK | os.X_OK):
-                gaps.append(dict(category=category, location=pattern))
-                continue
-            matches = glob.glob(expanded) if any(ch in expanded for ch in '*?[') else [expanded]
-            for path in sorted(matches)[:2000]:
-                described = _describe(path, category)
-                if described is None:
-                    continue
-                key = _display(path, root, home)
-                if described == 'unreadable':
-                    gaps.append(dict(category=category, location=key))
-                    continue
-                entries[f'{category}:{key}'] = dict(described, category=category)
-                if len(entries) > MAX_ENTRIES:
-                    raise PersistenceError('too many persistence entries to record')
     accounts = _accounts(root)
     if accounts is None:
         gaps.append(dict(category='account', location='/etc/passwd'))
+    homes = other_homes(root, accounts, home) if all_homes else []
+
+    def record(category, pattern, folder, prefix):
+        expanded = _expand(pattern, root, folder)
+        parent = os.path.dirname(expanded)
+        shown = prefix + pattern[2:] if prefix else pattern
+        if any(ch in expanded for ch in '*?[') and os.path.isdir(parent) and not os.access(parent, os.R_OK | os.X_OK):
+            gaps.append(dict(category=category, location=shown))
+            return
+        matches = glob.glob(expanded) if any(ch in expanded for ch in '*?[') else [expanded]
+        for path in sorted(matches)[:2000]:
+            described = _describe(path, category)
+            if described is None:
+                continue
+            key = _display(path, root, folder)
+            if prefix and key.startswith('~/'):
+                key = prefix + key[2:]
+            if described == 'unreadable':
+                gaps.append(dict(category=category, location=key))
+                continue
+            entries[f'{category}:{key}'] = dict(described, category=category)
+            if len(entries) > MAX_ENTRIES:
+                raise PersistenceError('too many persistence entries to record')
+
+    for category, _, _, patterns in LOCATIONS:
+        for pattern in patterns:
+            record(category, pattern, home, None)
+            if pattern.startswith('~/'):
+                for name, folder in homes:
+                    record(category, pattern, folder, f'~{name}/')
+    if not all_homes:
+        gaps.append(dict(category='home', location="other accounts' homes: run as root to read them"))
     modules = _modules(root)
     if modules is None:
         gaps.append(dict(category='kernel_module', location='/proc/modules'))
     setuid, truncated = _setuid(root, setuid_dirs)
     if truncated:
         gaps.append(dict(category='setuid', location='walk limit reached'))
-    return dict(entries=entries, accounts=accounts or {}, modules=modules or [], setuid=setuid, gaps=gaps)
+    return dict(entries=entries, accounts=accounts or {}, modules=modules or [], setuid=setuid, gaps=gaps,
+                all_homes=bool(all_homes), homes={name: accounts[name]['home'] for name, _ in homes})
 
 
 def _write(path, value):
@@ -311,7 +377,7 @@ def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, **options):
     _write(path, dict(schema=SCHEMA, recorded_at=_now(), user=os.geteuid(), **state))
     return dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), entries=len(state['entries']),
                 accounts=len(state['accounts']), modules=len(state['modules']), setuid=len(state['setuid']),
-                gaps=state['gaps'])
+                homes=sorted(state['homes']), gaps=state['gaps'])
 
 
 def _finding(change, category, location, severity, detail=None):
@@ -357,9 +423,34 @@ def _interactive(shell):
     return bool(shell) and not os.path.basename(shell).startswith(_SHELLS_NOLOGIN)
 
 
+def _in_other_home(key):
+    return _owner(key.split(':', 1)[1]) is not None
+
+
+def newly_watched(old, new):
+    """Homes this check reads that the baseline was not taken over: a baseline from before every account's home was
+    watched, or one taken without root. Their entries are listed, not reported as added."""
+    if old.get('all_homes') is True or not new.get('all_homes'):
+        return []
+    found = {}
+    for key, entry in new['entries'].items():
+        name = _owner(key.split(':', 1)[1])
+        if name is None:
+            continue
+        item = found.setdefault(name, dict(account=name, home=new.get('homes', {}).get(name), entries=0, keys=[]))
+        item['entries'] += 1
+        item['keys'] += [k['fingerprint'] for k in entry.get('keys', [])][:20]
+    return [found[name] for name in sorted(found)]
+
+
 def compare(old, new):
     findings = []
-    for key in sorted(set(old['entries']) | set(new['entries'])):
+    keys = set(old['entries']) | set(new['entries'])
+    if not new.get('all_homes') or old.get('all_homes') is not True:
+        # Other accounts' homes are compared only when both sides read them: without root they cannot be read
+        # (that is a gap, not a removal), and a baseline that never read them has nothing to compare with.
+        keys = {key for key in keys if not _in_other_home(key)}
+    for key in sorted(keys):
         item = _compare_entry(key, old['entries'].get(key), new['entries'].get(key))
         if item:
             findings.append(item)
@@ -397,10 +488,18 @@ def check(manifest=DEFAULT_MANIFEST, **options):
     new = snapshot(**options)
     findings = compare(old, new)
     counts = {level: sum(1 for f in findings if f['severity'] == level) for level in RANK}
-    return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
-                baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
-                severity_counts=counts, gaps=new['gaps'],
-                note='Review each change; accept records the reviewed state. Nothing was changed.')
+    report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
+                  baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
+                  severity_counts=counts, gaps=new['gaps'],
+                  note='Review each change; accept records the reviewed state. Nothing was changed.')
+    watched = newly_watched(old, new)
+    if watched:
+        report['newly_watched'] = watched
+        report['note'] = ('Review each change; accept records the reviewed state. Nothing was changed. '
+                          f'{len(watched)} other accounts\' homes are read now but were not in the baseline: their '
+                          'entries are listed under newly_watched, not compared. Review them, then run accept to '
+                          'start watching them.')
+    return report
 
 
 def accept(manifest=DEFAULT_MANIFEST, **options):

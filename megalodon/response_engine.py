@@ -776,8 +776,10 @@ def persistence_signals(report):
     for f in report.get('findings', []):
         rule = f"PERSISTENCE_{f.get('change', 'changed').upper()}"
         location, category = f.get('location', ''), f.get('category', '')
+        # A startup file in another account's home (~NAME/...) joins that account's other findings, such as its logins.
+        owner = location[1:].partition('/')[0] if location.startswith('~') and not location.startswith('~/') else None
         entities = _entities(persistence=[f'{category}:{location}'],
-                             account=[location] if category == 'account' else [],
+                             account=[location] if category == 'account' else [owner] if owner else [],
                              file=[location] if location.startswith('/') else [])
         signals.append(Signal(f'persistence:{rule}:{category}:{location}', 'persistence', rule,
                               _severity(f.get('severity')), report.get('checked_at', ''),
