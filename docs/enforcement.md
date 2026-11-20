@@ -195,7 +195,9 @@ If the executor rejects SIGSTOP before invoking it, the failed outcome records
 `stop_attempted = false`. A matching outcome cancels only that pending intent;
 it cannot cancel a confirmed applied hold. The command still reports failure.
 Errors during or after the signal call, legacy failures without this proof,
-and outcomes that cannot be recorded leave the intent available for recovery.
+and outcomes with no complete readable record leave the intent available for
+recovery. A complete matching line can affect the active view even if a later
+sync fails; reading it does not establish durability.
 The signal boundary also refuses to suspend the enforcing process itself.
 
 When an expiry outcome cannot be appended, the command reports `status =

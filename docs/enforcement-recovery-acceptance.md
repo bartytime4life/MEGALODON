@@ -9,16 +9,18 @@ activating workstation enforcement.
 
 A new suspension is journaled as `pending` before its signal can occur. When
 the executor rejects it before invoking SIGSTOP, the failed outcome also records
-`stop_attempted = false`. A durable matching outcome removes only that pending
-intent from the active view. It remains a failed action in command output and
-makes the command exit 1.
+`stop_attempted = false`. A complete matching outcome removes only that pending
+intent from the active view. When the append completes successfully, the
+rejection remains a failed action in command output and makes the command exit 1.
 
 The matching record must identify the same action, target, and decision. It
 cannot cancel a confirmed applied hold or a failed recovery attempt. Legacy
 failures without this explicit evidence stay uncertain. An error during the
-signal invocation or afterward also stays uncertain. If the rejection outcome
-cannot be persisted, its pending intent remains available for recovery; the
-absence of an outcome is not proof that no stop happened.
+signal invocation or afterward also stays uncertain. If no complete matching
+outcome is readable, its pending intent remains available for recovery. A
+complete line can affect the active view even if a later synchronization fails;
+readback does not establish durability. The absence of an outcome is not proof
+that no stop happened.
 
 This distinction prevents a rejected indefinite attempt from holding a later
 successful finite suspension indefinitely. The signal boundary also rejects
@@ -98,7 +100,9 @@ the controller and unit contents. An installed `systemctl` executable alone does
 not establish that a systemd manager is available.
 
 The proposed scope is one synthetic child owned by the acceptance controller,
-with its pidfd held for identity-safe cleanup. The controller must have an
+with its pidfd held for identity-safe setup and cleanup. The service opens its
+own pidfd for that same child through the production identity checks. The
+controller must have an
 independent deadline and cleanup path; it must not depend on the service under
 test to resume or reap that child. Enforcer policy remains disabled while a
 private fixture journal supplies the due recovery obligation.
@@ -109,7 +113,7 @@ private fixture journal supplies the due recovery obligation.
 | Temporary unit files | `/run/systemd/system/megalodon-suspension-acceptance.service` and `.timer`. |
 | Generated service adaptations | Rename the unit pair; explicitly bind `HOME` to the temporary directory and `ExecStart` to the approved candidate interpreter. Review the complete contents before use. |
 | Service-manager operations | `systemctl daemon-reload`; start/stop only `megalodon-suspension-acceptance.timer` and `.service`; read only those units' results and journal. |
-| Process signals | SIGSTOP/SIGCONT and cleanup only for the controller's own synthetic child through its held pidfd. |
+| Process signals | Controller setup and cleanup use its held pidfd; service SIGCONT uses its own verified pidfd. Both may target only the controller's synthetic child. |
 | Teardown | Stop the named unit pair, remove only the listed temporary unit files and fixture directory, reload the manager, and verify the child is reaped. |
 
 Before approval, produce the exact controller, complete unit files, candidate
