@@ -102,7 +102,8 @@ def test_the_exact_process_is_suspended_once_and_resumed(p, child):
     assert state_of(child.pid) == "T", "stopped, not killed"
     assert enforce(p)["applied"] == [], "carried out once"
     journal = en.entries(p["journal"])
-    assert oct(p["journal"].stat().st_mode & 0o777) == "0o600" and journal[0]["status"] == "applied"
+    assert oct(p["journal"].stat().st_mode & 0o777) == "0o600"
+    assert [r["status"] for r in journal] == ["pending", "applied"]
     assert [r["id"] for r in en.active(p["journal"])] == [result["applied"][0]["id"]]
     en.undo(result["applied"][0]["id"], journal=p["journal"])
     time.sleep(0.05)
