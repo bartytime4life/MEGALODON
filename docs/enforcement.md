@@ -120,12 +120,17 @@ carries out new decisions:
   if the start time and program still match. A process that has exited, or
   whose PID now names another process, is not signalled, and its pause is
   recorded as over.
+* **A process paused twice stays paused until both end.** When another
+  decision paused the same process, for longer or until undone, the pause
+  that ended is recorded as over, with `still paused by ID`, and the process
+  is resumed only when the last pause ends.
 * **A resume that fails**, for example for lack of permission, is reported as
   failed and makes `run` exit 1. The process stays listed by `enforce list`,
   and the next run tries again.
 * **Recorded like an undo**, with `reason = "expired"`. The
   [incident timeline](incident-timeline.md) shows it as ended on time.
-  `--dry-run` lists what it would resume.
+  `--dry-run` lists what it would resume, and resumes nothing, also when
+  the enforcement policy has been removed.
 
 Resuming is a trade-off. It frees a process paused by a wrong decision, but it
 also frees a real intruder's process. The default playbooks set no

@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import json
+import os
+from pathlib import Path
 import time
 
 import pytest
@@ -117,3 +120,44 @@ def test_suspend_minutes_is_checked(p, value):
     p["policy"].write_text(text)
     with pytest.raises(re_.ResponseError, match="suspend_minutes"):
         re_.load_policy(p["policy"])
+
+
+def test_a_process_paused_twice_stays_paused_until_both_end(p, child):
+    """Two decisions pause the same process: the first to end does not resume it under the second."""
+    pause_for(p, 30)
+    text = p["policy"].read_text()
+    marker = 'name = "dropped-tool-phoning-home"\n'
+    p["policy"].write_text(text.replace(marker, marker + "suspend_minutes = 30\n"))
+    en.init(p["enforce"], response_policy=p["policy"], replace=True)
+    enable(p, ["suspend_process"], ["code-loaded-into-memory", "dropped-tool-phoning-home"])
+    start = en._now().replace(microsecond=0)
+    decide(p, memory_signal(child), now=start)
+    first = enforce(p, now=start)["applied"][0]
+    assert wait_for(child.pid, "T") == "T"
+    text = Path(f"/proc/{child.pid}/stat").read_text()
+    started, exe = int(text[text.rindex(")") + 2:].split()[19]), os.readlink(f"/proc/{child.pid}/exe")
+    outbound = re_.egress_signals(dict(checked_at="2026-11-20T00:05:00Z", findings=[dict(
+        rule_id="OUTBOUND_FROM_TEMPORARY", severity="HIGH", program=exe, protocol="tcp", port=443,
+        address="198.51.100.4", evidence=dict(processes=[dict(pid=child.pid, start=started, program=exe)]))]))
+    decide(p, outbound, now=start + timedelta(minutes=5))
+    second = enforce(p, now=start + timedelta(minutes=5))["applied"][0]
+    assert first["target"] == second["target"] and first["id"] != second["id"]
+    ended = enforce(p, now=start + timedelta(minutes=31))["expired"]
+    assert [(r["undo_of"], r["status"]) for r in ended] == [(first["id"], "undone")]
+    assert ended[0]["note"] == f"still paused by {second['id']}"
+    time.sleep(0.1)
+    assert state_of(child.pid) == "T", "the second pause still holds it"
+    assert [r["id"] for r in en.active(p["journal"])] == [second["id"]]
+    assert [r["undo_of"] for r in enforce(p, now=start + timedelta(minutes=36))["expired"]] == [second["id"]]
+    assert wait_for(child.pid, "SR") in "SR"
+
+
+def test_a_dry_run_without_an_enforcement_policy_resumes_nothing(tmp_path, monkeypatch, capsys):
+    from megalodon.cli import main
+    pending = [dict(id="abc", action="suspend_process", target="1@2:/tmp/x", until="2026-11-20T00:00:00Z")]
+    monkeypatch.setattr(en, "due", lambda *a, **k: pending)
+    monkeypatch.setattr(en, "expire", lambda *a, **k: pytest.fail("a dry run must not resume anything"))
+    with pytest.raises(SystemExit) as exit_:
+        main(["enforce", "run", "--dry-run", "--policy", str(tmp_path / "missing.toml")])
+    assert exit_.value.code == 0
+    assert [r["status"] for r in json.loads(capsys.readouterr().out)["expired"]] == ["would_resume"]

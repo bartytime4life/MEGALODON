@@ -2576,7 +2576,8 @@ def _enforce(args: argparse.Namespace) -> int:
             if not policy.exists():
                 # Scheduled runs on a machine where enforcement was never set up: nothing to do, nothing wrong.
                 # Pauses from before the policy was removed still end on time.
-                expired = enforcement.expire()
+                expired = ([dict(r, status="would_resume") for r in enforcement.due()] if args.dry_run
+                           else enforcement.expire())
                 print(json.dumps(dict(enabled=False, expired=expired, note=f"no enforcement policy at {policy}; "
                                                                            "`megalodon enforce init` writes one "
                                                                            "that is off"), sort_keys=True))

@@ -591,9 +591,20 @@ def expire(*, journal=DEFAULT_JOURNAL, executor=None, now=None):
 def _expire(journal, executor, now):
     executor = executor or Executor()
     done = []
-    for record in due(journal, now):
+    ending = due(journal, now)
+    ending_ids = {r['id'] for r in ending}
+    for record in ending:
         base = dict(schema=SCHEMA, id=secrets.token_hex(6), at=_iso(now), action=record['action'],
                     target=record['target'], undo_of=record['id'], incident=record.get('incident'), reason='expired')
+        # Another decision paused the same process, for longer or until undone: this pause is over, the
+        # process stays paused until that one ends too.
+        holding = [r['id'] for r in active(journal) if r['action'] == 'suspend_process'
+                   and r['target'] == record['target'] and r['id'] not in ending_ids]
+        if holding:
+            entry = dict(base, status='undone', note=f'still paused by {", ".join(holding)}')
+            _journal(journal, [entry])
+            done.append(entry)
+            continue
         try:
             executor.undo_suspend_process(record)
             entry = dict(base, status='undone')
