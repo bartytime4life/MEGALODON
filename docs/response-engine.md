@@ -72,6 +72,8 @@ policy allows, each with a way to undo it.
 3. **Match.** The first playbook whose `rules` include the finding's rule,
    at or above `min_severity`, applies. A playbook can also require
    particular `sources` or `categories`, or `require_corroboration`.
+   `block_minutes` sets how long its blocks last, and `suspend_minutes` (0 to
+   10080, 0 by default) how long its pauses last; 0 means until undone.
 4. **Plan and guard.** Each of the playbook's actions is planned against the
    finding's concrete targets, then checked by the guards. A plan is
    recorded as `would_apply`, or as `refused` with the guard's reason.
@@ -88,7 +90,7 @@ The same finding is decided at most once a day.
 | `collect_evidence` | — | Save a hashed, read-only snapshot of the programs, sockets and files involved, before anything else: what [`megalodon evidence collect`](evidence-collection.md) does |
 | `notify` | — | Send a summary to the [off-machine alerts](off-machine-alerts.md) |
 | `block_address` | address | Drop traffic to and from the address for `block_minutes` |
-| `suspend_process` | process, or program | Pause (SIGSTOP) the process, keeping it for investigation |
+| `suspend_process` | process, or program | Pause (SIGSTOP) the process, keeping it for investigation; with `suspend_minutes`, only for that long |
 | `quarantine_file` | file | Move the file aside with no permissions, recording its hash |
 | `disable_persistence` | persistence entry | Disable a service, job or startup entry without deleting it. Refused for locations the [persistence watch](persistence-watch.md) does not cover, and for MEGALODON's own units |
 | `lock_account` | account | Lock the account's password and logins |

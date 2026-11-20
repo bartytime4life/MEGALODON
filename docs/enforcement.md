@@ -85,7 +85,7 @@ lock and temporary files beside `/etc/shadow`.
 
 | Action | What happens | Undo |
 | --- | --- | --- |
-| `suspend_process` | SIGSTOP to the one process named by PID and start time. It is sent through a pidfd after checking that the start time and program still match, so a reused PID is never signalled. Program-wide targets are never signalled. The process is paused, not killed: its memory and files stay for [capture](memory-capture.md). | SIGCONT |
+| `suspend_process` | SIGSTOP to the one process named by PID and start time. It is sent through a pidfd after checking that the start time and program still match, so a reused PID is never signalled. Program-wide targets are never signalled. The process is paused, not killed: its memory and files stay for [capture](memory-capture.md). With the playbook's `suspend_minutes`, the pause ends by itself: see below. | SIGCONT |
 | `block_address` | A time-limited element in MEGALODON's own nftables table (`inet megalodon`), dropping traffic to and from the address. It expires by itself after the playbook's `block_minutes`. | The element is deleted |
 | `quarantine_file` | The file is copied into the quarantine folder with no permissions, checked to be the same file, and removed. Its SHA-256, owner and mode are recorded. The path is opened one folder at a time without following symlinks, so a folder swapped for a symlink after the decision cannot lead outside the folders the guards checked. | Restored with its mode and owner, if the copy still matches its hash, nothing new is at that path, and no folder on the way is now a symlink |
 | `lock_account` | `usermod --lock --expiredate 1`. A locked password alone still lets SSH keys in; an expired account does not. Accounts with UID 0 are never locked. | Its previous expiry put back; the password is unlocked only if it was not already locked before |
@@ -107,12 +107,42 @@ or it is reported, and decided, again.
 
 `enforce list` shows the applied actions that have not been undone.
 
+## Pauses that end on time
+
+A playbook's `suspend_minutes` in the response policy (0, the default, means
+until undone) sets how long a pause lasts. The record then carries `until`.
+Every `enforce run` first resumes the pauses whose time is up, before it
+carries out new decisions:
+
+* **Even when enforcement is off**, or its policy has been removed, so turning
+  it off never leaves a process paused past its time.
+* **With the same checks as an undo.** SIGCONT goes through a pidfd, and only
+  if the start time and program still match. A process that has exited, or
+  whose PID now names another process, is not signalled, and its pause is
+  recorded as over.
+* **A process paused twice stays paused until both end.** When another
+  decision paused the same process, for longer or until undone, the pause
+  that ended is recorded as over, with `still paused by ID`, and the process
+  is resumed only when the last pause ends.
+* **A resume that fails**, for example for lack of permission, is reported as
+  failed and makes `run` exit 1. The process stays listed by `enforce list`,
+  and the next run tries again.
+* **Recorded like an undo**, with `reason = "expired"`. The
+  [incident timeline](incident-timeline.md) shows it as ended on time.
+  `--dry-run` lists what it would resume, and resumes nothing, also when
+  the enforcement policy has been removed.
+
+Resuming is a trade-off. It frees a process paused by a wrong decision, but it
+also frees a real intruder's process. The default playbooks set no
+`suspend_minutes`: set it on the playbooks where a wrong pause costs more than
+a resumed attacker, and capture the process's memory before the time is up.
+
 ## Limits
 
 * **Root is needed** for every action except notices and evidence about your
   own processes.
-* **A paused process stays paused** until you undo it or stop it yourself.
-  Blocks expire; suspensions do not.
+* **A paused process stays paused** until you undo it or stop it yourself,
+  unless its playbook sets `suspend_minutes`.
 * **`~/` is one account's home.** A persistence location under `~/` is in the
   home of the account that ran the persistence check, and enforcement resolves
   it in its own home. The [scheduler](scheduling.md) runs both as the same

@@ -2575,10 +2575,13 @@ def _enforce(args: argparse.Namespace) -> int:
         elif args.enforce_command == "run":
             if not policy.exists():
                 # Scheduled runs on a machine where enforcement was never set up: nothing to do, nothing wrong.
-                print(json.dumps(dict(enabled=False, note=f"no enforcement policy at {policy}; "
-                                                          "`megalodon enforce init` writes one that is off"),
-                                 sort_keys=True))
-                return 0
+                # Pauses from before the policy was removed still end on time.
+                expired = ([dict(r, status="would_resume") for r in enforcement.due()] if args.dry_run
+                           else enforcement.expire())
+                print(json.dumps(dict(enabled=False, expired=expired, note=f"no enforcement policy at {policy}; "
+                                                                           "`megalodon enforce init` writes one "
+                                                                           "that is off"), sort_keys=True))
+                return 1 if any(r.get("status") == "failed" for r in expired) else 0
             result = enforcement.run(policy_path=policy, dry_run=args.dry_run)
         elif args.enforce_command == "list":
             result = dict(active=enforcement.active())
@@ -2588,7 +2591,8 @@ def _enforce(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 1 if args.enforce_command == "run" and any(r.get("status") == "failed" for r in result["refused"]) else 0
+    failed = [r for r in result.get("refused", []) + result.get("expired", []) if r.get("status") == "failed"]
+    return 1 if args.enforce_command == "run" and failed else 0
 
 
 def _fleet(args: argparse.Namespace) -> int:

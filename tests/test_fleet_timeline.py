@@ -111,7 +111,9 @@ def test_forged_replayed_and_unknown_batches(collector, tmp_path):
     assert len(events) == 1 and events[0]["summary"] == "x", "neither the replay nor the forgery was kept"
     # A machine that lost its cursor sends everything again, in a new batch: still one event each.
     (web.dir / "cursor.json").unlink()
-    assert web.push(now=T0 + timedelta(days=1))["sent"] == 1
+    # Batches are numbered by the sending machine's clock: the resend is later than the first push, whenever
+    # this runs (a fixed date here would fall before the first push once that date had passed).
+    assert web.push(now=datetime.now(timezone.utc) + timedelta(days=1))["sent"] == 1
     assert len(fleet.fleet_events(data=data)) == 1
 
 

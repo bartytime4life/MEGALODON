@@ -150,7 +150,8 @@ def _load(*, ledger=engine.DEFAULT_LEDGER, observations=None, journal=None):
         if record.get('status') == 'undone':
             incident = incident or applied.get(record.get('undo_of'))
             out.append(dict(at=record.get('at'), kind='undo', incident=incident, action=record.get('action'),
-                            target=record.get('target'), undo_of=record.get('undo_of')))
+                            target=record.get('target'), undo_of=record.get('undo_of'),
+                            **({'expired': True} if record.get('reason') == 'expired' else {})))
             continue
         # A journal written before records carried their incident is matched to its decision. A match that two
         # incidents share is left unassigned rather than given to either: it still shows in --entity views.
@@ -264,7 +265,8 @@ def _line(event):
         if event.get('evidence'):
             text += ' -> ' + ', '.join(event['evidence'])
         return text + (f"  [id {event['id']}]" if event.get('id') else '')
-    return f"undone: {event.get('action')} {event.get('target') or ''}".rstrip() + f"  [undo of {event.get('undo_of')}]"
+    what = 'ended on time' if event.get('expired') else 'undone'
+    return f"{what}: {event.get('action')} {event.get('target') or ''}".rstrip() + f"  [undo of {event.get('undo_of')}]"
 
 
 def text(result):
