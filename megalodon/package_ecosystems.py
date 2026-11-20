@@ -56,6 +56,19 @@ NPM_CONFIG_ENV = ('npm_config_userconfig', 'npm_config_globalconfig')
 _ASSIGNMENT = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$')
 _WANTED = {name.lower() for name in (*PIP_ENV, *NPM_ENV, PIP_CONFIG_ENV, *NPM_CONFIG_ENV)}
 
+# Projects and virtual environments have settings of their own, which win over the system's and the account's: a
+# virtual environment's pip.conf, a project's .npmrc, and the index options in a requirements file. They are looked
+# for in each home folder and the folders applications are usually kept in, to a bounded depth and count.
+PROJECT_PLACES = ('/opt', '/srv', '/var/www', '/app')
+MAX_WALK_FOLDERS = 20000
+MAX_WALK_DEPTH = 6
+SKIP_FOLDERS = frozenset(('node_modules', '__pycache__', 'site-packages', 'dist-packages', 'bower_components'))
+KEEP_HIDDEN = frozenset(('.venv', '.virtualenvs'))
+REQUIREMENTS = re.compile(r'(requirements|constraints)[\w.-]*\.(txt|in)')
+# The pip options a requirements file can give, and what each one sets.
+REQUIREMENT_OPTIONS = {'-i': 'index-url', '--index-url': 'index-url', '--extra-index-url': 'extra-index-url',
+                       '--trusted-host': 'trusted-host', '-f': 'find-links', '--find-links': 'find-links'}
+
 
 def _homes(root):
     """(account, home) for root and every folder in /home, inside the root scanned."""
@@ -123,6 +136,89 @@ def _environment(root, read, listing, gaps, home=''):
     return found
 
 
+# ------------------------------------------------------------------ projects and virtual environments
+
+def _projects(root, homes, gaps):
+    """Virtual environments with a pip.conf, folders with a project .npmrc, and requirements files:
+    {'venvs': [(folder, account)], 'npm': [(folder, account)], 'requirements': [(file, account)]}.
+
+    `account` is the account whose home holds it, or None. Symbolic links are not followed, hidden folders other
+    than virtual environments are skipped, and nothing inside a virtual environment or node_modules is read."""
+    found, budget, seen = dict(venvs=[], npm=[], requirements=[]), MAX_WALK_FOLDERS, set()
+    starts = [(home, account, True) for account, home in homes] + [(place, None, False) for place in PROJECT_PLACES]
+    for start, account, is_home in starts:
+        stack = [(start, 0)]
+        while stack:
+            folder, depth = stack.pop()
+            if folder in seen:
+                continue
+            seen.add(folder)
+            if budget <= 0:
+                gaps.append(f'more than {MAX_WALK_FOLDERS} folders under the homes and application folders: '
+                            'projects and virtual environments past them were not looked for')
+                return found
+            budget -= 1
+            try:
+                with os.scandir(os.path.join(root, folder.lstrip('/'))) as listing:
+                    entries = sorted(listing, key=lambda entry: entry.name)
+            except OSError:
+                continue
+            names = {entry.name: entry for entry in entries}
+
+            def is_file(name):
+                entry = names.get(name)
+                try:
+                    return entry is not None and entry.is_file(follow_symlinks=False)
+                except OSError:
+                    return False
+            if is_file('pyvenv.cfg'):
+                if is_file('pip.conf'):
+                    found['venvs'].append((folder, account))
+                continue                        # the environment's own packages: not projects
+            if is_file('.npmrc') and not (is_home and folder == start):    # a home's own .npmrc is the account's
+                found['npm'].append((folder, account))
+            found['requirements'] += [(f'{folder}/{e.name}', account) for e in entries
+                                      if REQUIREMENTS.fullmatch(e.name) and is_file(e.name)]
+            if depth >= MAX_WALK_DEPTH:
+                continue
+            for entry in reversed(entries):
+                name = entry.name
+                if name in SKIP_FOLDERS or (name.startswith('.') and name not in KEEP_HIDDEN):
+                    continue
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append((f'{folder.rstrip("/")}/{name}', depth + 1))
+                except OSError:
+                    continue
+    return found
+
+
+def _requirement_options(read, path, gaps):
+    """{setting: ([values], path)} from the pip options in one requirements file."""
+    found = {}
+    for line in (read(path) or b'').decode('utf-8', 'replace').splitlines():
+        line = line.split(' #', 1)[0].strip()
+        if not line.startswith('-'):
+            continue
+        parts = line.split(None, 1)
+        if parts[0].startswith('--') and '=' in parts[0]:
+            option, value = parts[0].split('=', 1)          # --index-url=https://...
+        else:
+            option, value = parts[0], parts[1] if len(parts) > 1 else ''
+        value = value.strip()
+        name = REQUIREMENT_OPTIONS.get(option)
+        if name is None or not value:
+            continue
+        if '${' in value:
+            gaps.append(f'{option} in {path} is built from an environment variable: its value is not known')
+            continue
+        values = found.setdefault(name, ([], path))[0]
+        values += value.split()
+    if 'index-url' in found:
+        found['index-url'] = (found['index-url'][0][-1:], path)    # the last one wins
+    return found
+
+
 # ------------------------------------------------------------------ pip
 
 def _pip_settings(read, paths, gaps):
@@ -156,7 +252,7 @@ def _with_environment(settings, env, names, split=True):
     return out
 
 
-def _pip(root, read, gaps, weaken, add_source, listing=None):
+def _pip(root, read, gaps, weaken, add_source, listing=None, projects=None):
     listing = listing or (lambda folder, suffixes: [])
     system = [p for p in PIP_SYSTEM if _exists(root, p)]
     system_env = _environment(root, read, listing, gaps)
@@ -166,34 +262,73 @@ def _pip(root, read, gaps, weaken, add_source, listing=None):
     accounts = [(a, files, {k: v for k, v in env.items() if k.startswith('PIP_')}) for a, files, env in accounts]
     system_env = {k: v for k, v in system_env.items() if k.startswith('PIP_')}
     if not system and not system_env and not any(files or env for _a, files, env in accounts) and \
-            not any(_exists(root, p) for p in PIP_PROGRAMS):
+            not any(_exists(root, p) for p in PIP_PROGRAMS) and not (projects or {}).get('venvs') and \
+            not (projects or {}).get('requirements'):
         return
     scopes = [('the system', system, system_env)] + [
         (f'account {a}', system + files, {**system_env, **env}) for a, files, env in accounts if files or env]
     for scope, paths, env in scopes:
-        label = f'pip for {scope}'
-        if PIP_CONFIG_ENV in env:
-            # PIP_CONFIG_FILE names one more file, read after the others.
-            extra, where = env[PIP_CONFIG_ENV]
-            if extra.startswith('/') and _exists(root, extra):
-                paths = paths + [extra]
-            elif extra:
-                gaps.append(f'{PIP_CONFIG_ENV} in {where} names {extra}, which could not be read')
-        settings = _with_environment(_pip_settings(read, paths, gaps), env, PIP_ENV)
-        index, where = settings.get('index-url', ([PYPI], '(default)'))
+        settings = _with_environment(_pip_settings(read, _pip_config_file(root, paths, env, gaps), gaps), env, PIP_ENV)
+        _pip_report(scope, settings, weaken, add_source)
+    # A virtual environment's pip.conf is read after the account's files, and the environment still wins over it.
+    inherited = {account: (files, env) for account, files, env in accounts}
+    for folder, account in (projects or {}).get('venvs', ()):
+        files, env = inherited.get(account, ([], {}))
+        env = {**system_env, **env}
+        own = f'{folder}/pip.conf'
+        settings = _with_environment(_pip_settings(read, _pip_config_file(root, system + files, env, gaps) + [own],
+                                                   gaps), env, PIP_ENV)
+        _pip_report(f'virtual environment {folder}', settings, weaken, add_source, own=own)
+    # A requirements file's options apply to `pip install -r` on it, over every settings file.
+    for path, account in (projects or {}).get('requirements', ()):
+        options = _requirement_options(read, path, gaps)
+        if options:
+            _pip_report(f'requirements {path}', options, weaken, add_source, own=path)
+
+
+def _pip_config_file(root, paths, env, gaps):
+    """The settings files, and the one PIP_CONFIG_FILE names, read after the others."""
+    if PIP_CONFIG_ENV in env:
+        extra, where = env[PIP_CONFIG_ENV]
+        if extra.startswith('/') and _exists(root, extra):
+            return paths + [extra]
+        if extra:
+            gaps.append(f'{PIP_CONFIG_ENV} in {where} names {extra}, which could not be read')
+    return paths
+
+
+def _pip_report(scope, settings, weaken, add_source, own=None):
+    """Record one scope's pip sources and weakened settings. With `own`, only what that file sets: the rest is
+    the account's or the system's, recorded there."""
+    label = f'pip for {scope}'
+
+    def mine(where):
+        return own is None or where == own
+    index, where = settings.get('index-url', ([PYPI], '(default)'))
+    if mine(where):
         add_source('pip', label, (index or [PYPI])[0], 'index-url', TLS_ONLY, where)
-        extras, extras_where = settings.get('extra-index-url', ([], None))
+    extras, extras_where = settings.get('extra-index-url', ([], None))
+    if mine(extras_where):
         for uri in extras:
             add_source('pip', label, uri, 'extra-index-url', TLS_ONLY, extras_where)
             weaken('PACKAGE_INDEX_MIXED', f'pip:{scope}:extra-index-url',
                    f'{label} installs from {uri} as well as {index[0] if index else PYPI}, set in {extras_where}: '
                    f'pip takes whichever index offers the higher version', extras_where, value=uri)
-        for uri in (index or []) + extras:
-            if _plain(uri):
-                weaken('PACKAGE_TRANSPORT_WEAKENED', f'pip:{scope}:plain:{uri}',
-                       f'{label} installs from {uri} over an unencrypted connection: pip packages are not signed, '
-                       f'so nothing checks them', where if uri in (index or []) else extras_where, 'HIGH')
-        hosts, hosts_where = settings.get('trusted-host', ([], None))
+    for uri in (index or []) + extras:
+        here = where if uri in (index or []) else extras_where
+        if _plain(uri) and mine(here):
+            weaken('PACKAGE_TRANSPORT_WEAKENED', f'pip:{scope}:plain:{uri}',
+                   f'{label} installs from {uri} over an unencrypted connection: pip packages are not signed, '
+                   f'so nothing checks them', here, 'HIGH')
+    links, links_where = settings.get('find-links', ([], None))
+    for uri in links if mine(links_where) else ():
+        add_source('pip', label, uri, 'find-links', TLS_ONLY, links_where)
+        if _plain(uri):
+            weaken('PACKAGE_TRANSPORT_WEAKENED', f'pip:{scope}:plain:{uri}',
+                   f'{label} looks for packages at {uri} over an unencrypted connection: pip packages are not '
+                   f'signed, so nothing checks them', links_where, 'HIGH')
+    hosts, hosts_where = settings.get('trusted-host', ([], None))
+    if mine(hosts_where):
         for host in hosts:
             weaken('PACKAGE_TRANSPORT_WEAKENED', f'pip:{scope}:trusted-host:{host}',
                    f'{label} trusts {host} without checking its certificate, set in {hosts_where}: pip packages '
@@ -217,7 +352,7 @@ def _npm_settings(read, paths):
     return found
 
 
-def _npm(root, read, gaps, weaken, add_source, listing=None):
+def _npm(root, read, gaps, weaken, add_source, listing=None, projects=None):
     listing = listing or (lambda folder, suffixes: [])
     system = [p for p in NPM_SYSTEM if _exists(root, p)]
     system_env = {k: v for k, v in _environment(root, read, listing, gaps).items() if k.startswith('npm_')}
@@ -225,37 +360,63 @@ def _npm(root, read, gaps, weaken, add_source, listing=None):
                  {k: v for k, v in _environment(root, read, listing, gaps, home).items() if k.startswith('npm_')})
                 for account, home in _homes(root)]
     if not system and not system_env and not any(files or env for _a, files, env in accounts) and \
-            not any(_exists(root, p) for p in NPM_PROGRAMS):
+            not any(_exists(root, p) for p in NPM_PROGRAMS) and not (projects or {}).get('npm'):
         return
     scopes = [('the system', system, system_env)] + [
         (f'account {a}', system + files, {**system_env, **env}) for a, files, env in accounts if files or env]
     for scope, paths, env in scopes:
-        label = f'npm for {scope}'
-        for variable in NPM_CONFIG_ENV:
-            if variable in env:
-                extra, where = env[variable]
-                if extra.startswith('/') and _exists(root, extra):
-                    paths = paths + [extra]
-                elif extra:
-                    gaps.append(f'{variable} in {where} names {extra}, which could not be read')
-        settings = _with_environment(_npm_settings(read, paths), env, NPM_ENV, split=False)
-        registry, where = settings.get('registry', (NPM_DEFAULT, '(default)'))
-        add_source('npm', label, registry, 'registry', TLS_ONLY, where)
-        registries = [(registry, where)]
-        for name, (uri, path) in sorted(settings.items()):
-            if name.endswith(':registry'):
-                add_source('npm', label, uri, name, TLS_ONLY, path)
-                registries.append((uri, path))
-        for uri, path in registries:
-            if _plain(uri):
-                weaken('PACKAGE_TRANSPORT_WEAKENED', f'npm:{scope}:plain:{uri}',
-                       f'{label} installs from {uri} over an unencrypted connection, set in {path}: npm packages '
-                       f'are not signed, so nothing checks them', path, 'HIGH')
-        strict, path = settings.get('strict-ssl', ('true', None))
-        if _false(strict):
-            weaken('PACKAGE_TRANSPORT_WEAKENED', f'npm:{scope}:strict-ssl',
-                   f'{label} does not check registry certificates (strict-ssl={strict}), set in {path}: npm '
-                   f'packages are not signed, so TLS is their only check', path, 'HIGH')
+        settings = _with_environment(_npm_settings(read, _npm_config_files(root, paths, env, gaps)), env, NPM_ENV,
+                                     split=False)
+        _npm_report(scope, settings, weaken, add_source, gaps)
+    # A project's .npmrc is read after the account's own; the environment still wins over it.
+    inherited = {account: (files, env) for account, files, env in accounts}
+    for folder, account in (projects or {}).get('npm', ()):
+        files, env = inherited.get(account, ([], {}))
+        env = {**system_env, **env}
+        own = f'{folder}/.npmrc'
+        settings = _with_environment(_npm_settings(read, _npm_config_files(root, system + files, env, gaps) + [own]),
+                                     env, NPM_ENV, split=False)
+        _npm_report(f'project {folder}', settings, weaken, add_source, gaps, own=own)
+
+
+def _npm_config_files(root, paths, env, gaps):
+    for variable in NPM_CONFIG_ENV:
+        if variable in env:
+            extra, where = env[variable]
+            if extra.startswith('/') and _exists(root, extra):
+                paths = paths + [extra]
+            elif extra:
+                gaps.append(f'{variable} in {where} names {extra}, which could not be read')
+    return paths
+
+
+def _npm_report(scope, settings, weaken, add_source, gaps, own=None):
+    """Record one scope's npm registries and weakened settings; with `own`, only what that file sets."""
+    label = f'npm for {scope}'
+
+    def mine(where):
+        return own is None or where == own
+    registry, where = settings.get('registry', (NPM_DEFAULT, '(default)'))
+    registries = [(registry, where)] + sorted((uri, path) for name, (uri, path) in settings.items()
+                                              if name.endswith(':registry'))
+    for name, (uri, path) in [('registry', (registry, where))] + sorted(
+            (name, value) for name, value in settings.items() if name.endswith(':registry')):
+        if not mine(path):
+            continue
+        if '${' in uri:
+            gaps.append(f'{name} in {path} is built from an environment variable: its value is not known')
+            continue
+        add_source('npm', label, uri, name, TLS_ONLY, path)
+    for uri, path in registries:
+        if _plain(uri) and mine(path):
+            weaken('PACKAGE_TRANSPORT_WEAKENED', f'npm:{scope}:plain:{uri}',
+                   f'{label} installs from {uri} over an unencrypted connection, set in {path}: npm packages '
+                   f'are not signed, so nothing checks them', path, 'HIGH')
+    strict, path = settings.get('strict-ssl', ('true', None))
+    if _false(strict) and mine(path):
+        weaken('PACKAGE_TRANSPORT_WEAKENED', f'npm:{scope}:strict-ssl',
+               f'{label} does not check registry certificates (strict-ssl={strict}), set in {path}: npm '
+               f'packages are not signed, so TLS is their only check', path, 'HIGH')
 
 
 # ------------------------------------------------------------------ flatpak
@@ -323,8 +484,9 @@ def _snap(root, read, gaps, weaken, listing):
 def collect(root, gaps, *, read, listing, weaken, add_source, keyring):
     """Record the sources and weakened settings of pip, npm, flatpak and snap; returns the system-wide files
     whose write access matters (accounts' own files are theirs to change)."""
-    _pip(root, read, gaps, weaken, add_source, listing)
-    _npm(root, read, gaps, weaken, add_source, listing)
+    projects = _projects(root, _homes(root), gaps)
+    _pip(root, read, gaps, weaken, add_source, listing, projects)
+    _npm(root, read, gaps, weaken, add_source, listing, projects)
     gaps[:] = list(dict.fromkeys(gaps))     # pip and npm read the same login files: each gap once
     _flatpak(root, read, gaps, weaken, add_source, keyring)
     _snap(root, read, gaps, weaken, listing)
