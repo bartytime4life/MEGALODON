@@ -125,14 +125,15 @@ carries out new decisions:
   if the start time and program still match. A process that has exited, or
   whose PID now names another process, is not signalled, and its pause is
   recorded as over.
-* **A notice is queued.** Each pause that ends with its process running again
-  queues a `PAUSE_ENDED` notice (HIGH) for the [alert destinations](off-machine-alerts.md),
+* **Notice submission is attempted.** Each pause that ends with its process running again
+  submits a `PAUSE_ENDED` notice (HIGH) to the [alert destinations](off-machine-alerts.md),
   whatever their minimum severity. It names the process, the pause and the
   incident. A pause whose process has exited, or that another pause still
   holds, sends none. A notice that cannot be sent, because alerts are off or
   the settings cannot be read, never keeps the pause from ending: the run's
-  output says why, with `notified = false`. `notified = true` means the notice
-  was submitted to the alert dispatcher, not that a destination received it.
+  output says why, with `notified = false`. `notified = true` means submission
+  to the alert dispatcher returned; it proves neither queue acceptance nor
+  delivery. A full or closed queue can discard the notice.
   Notification outcome fields are command output, not durable delivery receipts.
 * **A process paused twice stays paused until both end.** When another
   decision paused the same process, for longer or until undone, the pause
