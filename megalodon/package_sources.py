@@ -531,7 +531,8 @@ def _guarded_writable(root, extra):
         targets = [t for t in dict.fromkeys((path, _resolve(real, path))) if t]
         for target in targets:
             current = os.path.normpath(target)
-            while current != '/':
+            # Up to the top: dirname stops changing there, for "/" and for the "//" POSIX keeps.
+            while current not in ('/', '//') and os.path.dirname(current) != current:
                 paths.add(current)
                 current = os.path.dirname(current)
     paths.update(('/etc/apt/sources.list', '/etc/apt/apt.conf', '/etc/apt/trusted.gpg', '/etc/dnf/dnf.conf',
