@@ -42,7 +42,12 @@ information.
 
 To learn whether a port is in use, the test binds it for a moment and
 closes it again: every TCP and UDP port, on IPv4 and IPv6, that no socket
-table lists. A service that starts in that same instant could find its
+table lists. It binds the wildcard address (`0.0.0.0`, and `::` for IPv6
+only), which conflicts with a socket on that port on any of the machine's
+addresses: a backdoor bound to the machine's network address is found, not
+only one on loopback or every interface. The probe is never listened on: a
+TCP connection to it in that instant is refused, and a UDP packet is
+dropped. A service that starts in that same instant could find its
 port briefly taken and fail to start. This is why the response engine
 leaves the port test out unless `rootkit_ports = true`. Run it yourself
 when nothing is starting. Without root, ports below the unprivileged limit
@@ -59,6 +64,13 @@ when nothing is starting. Without root, ports below the unprivileged limit
   from trusted media and inspect the disk offline when it matters.
 * **Root sees everything.** Without root, other accounts' processes are
   probed but not inspected, and protected folders are skipped.
+* **A TCP socket that is bound but neither listening nor connected** holds
+  its port without being in any socket table, so its port is reported too.
+  Programs do this only for a moment, between binding and connecting or
+  listening, and every finding is checked again first. A port that is
+  still reported when the check runs again later deserves a look at what is
+  running. The test does not connect to the port to tell the two apart: that
+  would talk to a real backdoor.
 * **One network namespace.** Ports are compared within the namespace the
   check runs in. A socket in a container's own namespace does not conflict,
   and it is not listed either.
