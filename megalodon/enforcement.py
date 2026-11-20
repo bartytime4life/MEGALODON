@@ -173,8 +173,11 @@ def _start(pid, root='/'):
 class Executor:
     """What each action does to the machine, and how it is undone. Tests replace `run` (commands) only."""
 
-    def __init__(self, *, root='/', run=None, quarantine=None, home=None):
+    def __init__(self, *, root='/', run=None, quarantine=None, home=None, files_root=None):
         self.root, self.quarantine = root, Path(quarantine or DEFAULT_QUARANTINE).expanduser()
+        # Where persistence entries are looked for: the same root, unless a test points it at a machine folder
+        # while processes are still read from the real /proc.
+        self.files_root = files_root or root
         # `~/` in a persistence location is the home of the account that ran the persistence check: the
         # scheduler runs that check and this step as the same account.
         self.home = str(home or Path.home())
@@ -367,7 +370,8 @@ class Executor:
             raise EnforcementError(why)
         if location.startswith('~/'):
             return category, location, os.path.join(self.home, location[2:])
-        return category, location, (location if self.root == '/' else os.path.join(self.root, location[1:]))
+        return category, location, (location if self.files_root == '/' else
+                                    os.path.join(self.files_root, location[1:]))
 
     def disable_persistence(self, target, decision):
         if (decision.get('signal') or {}).get('rule_id') != 'PERSISTENCE_ADDED':
