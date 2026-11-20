@@ -14,6 +14,32 @@ from megalodon import response_engine as re_
 from test_enforcement import child, decide, enable, enforce, memory_signal, p, state_of  # noqa: F401
 
 
+class Sent:
+    """Stands in for the alert destinations: records what would be sent."""
+
+    def __init__(self):
+        self.notices, self.enabled = [], True
+
+    def __call__(self, alerts):
+        assert alerts == "test-alerts", "the configured alert settings are the ones used"
+        return self if self.enabled else None
+
+    def submit(self, notices, *, any_severity=False):
+        self.notices += [(n, any_severity) for n in notices]
+
+
+@pytest.fixture(autouse=True)
+def sent(monkeypatch):
+    """Every test here uses its own alert settings, never the home folder's."""
+    from types import SimpleNamespace
+
+    from megalodon import alerts, config
+    recorder = Sent()
+    monkeypatch.setattr(config, "load_settings", lambda path=None: SimpleNamespace(alerts="test-alerts"))
+    monkeypatch.setattr(alerts, "dispatcher_for", recorder)
+    return recorder
+
+
 def pause_for(p, minutes):
     """The memory playbook, with a pause that ends after `minutes`, pinned again."""
     text = p["policy"].read_text()
@@ -161,3 +187,48 @@ def test_a_dry_run_without_an_enforcement_policy_resumes_nothing(tmp_path, monke
         main(["enforce", "run", "--dry-run", "--policy", str(tmp_path / "missing.toml")])
     assert exit_.value.code == 0
     assert [r["status"] for r in json.loads(capsys.readouterr().out)["expired"]] == ["would_resume"]
+
+
+def test_a_pause_that_ends_is_announced(p, child, sent):
+    pause_for(p, 5)
+    record = paused(p, child)
+    ended = enforce(p, now=en._parse(record["at"]) + timedelta(minutes=6))["expired"]
+    assert ended[0]["notified"] is True
+    [(notice, any_severity)] = sent.notices
+    assert (notice.rule_id, notice.severity, any_severity) == ("PAUSE_ENDED", "HIGH", True), \
+        "sent whatever the destinations' minimum severity"
+    assert record["target"] in notice.message and record["id"] in notice.message
+    assert record["incident"] and record["incident"] in notice.message
+
+
+def test_nothing_is_announced_when_nothing_was_resumed(p, child, sent):
+    pause_for(p, 5)
+    record = paused(p, child)
+    child.kill()
+    child.wait()
+    enforce(p, now=en._parse(record["at"]) + timedelta(minutes=6))
+    assert sent.notices == [], "an exited process does not run again"
+
+
+def test_a_pause_ends_even_when_it_cannot_be_announced(p, child, sent, monkeypatch):
+    pause_for(p, 5)
+    record = paused(p, child)
+    sent.enabled = False                                 # alerts are off in the settings
+    ended = enforce(p, now=en._parse(record["at"]) + timedelta(minutes=6))["expired"]
+    assert (ended[0]["status"], ended[0]["notified"]) == ("undone", False)
+    assert "no alert destinations" in ended[0]["notice"]
+    assert wait_for(child.pid, "SR") in "SR" and en.active(p["journal"]) == []
+
+    from megalodon import config
+    from megalodon.validation import ValidationError
+    monkeypatch.setattr(config, "load_settings", lambda path=None: (_ for _ in ()).throw(ValidationError("bad")))
+    second = paused_again(p, child)
+    ended = enforce(p, now=en._parse(second["at"]) + timedelta(minutes=6))["expired"]
+    assert ended[0]["status"] == "undone" and "bad" in ended[0]["notice"]
+
+
+def paused_again(p, child):
+    decide(p, memory_signal(child, start=None), now=en._now() + timedelta(days=2))
+    result = enforce(p, now=en._now() + timedelta(days=2))
+    assert wait_for(child.pid, "T") == "T"
+    return result["applied"][0]
