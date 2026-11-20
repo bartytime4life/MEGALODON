@@ -18,6 +18,8 @@ it takes to undo it, and can be undone with `megalodon enforce undo ID`:
 
 * suspend_process: SIGSTOP to the one process named by PID and start time,
   checked through a pidfd, so a reused PID is never signalled. Undo: SIGCONT.
+  With the playbook's suspend_minutes, the next run after that time resumes
+  it by itself, with the same checks, even while enforcement is off.
 * block_address: a time-limited element in MEGALODON's own nftables table,
   which expires by itself. Undo: the element is deleted.
 * quarantine_file: the file is moved into the quarantine folder with no
@@ -549,20 +551,63 @@ class _Lock:
 
 def run(*, policy_path=DEFAULT_POLICY, response_policy=engine.DEFAULT_POLICY, ledger=engine.DEFAULT_LEDGER,
         journal=DEFAULT_JOURNAL, state_path=DEFAULT_STATE, now=None, executor=None, dry_run=False, protected=None):
-    """Carry out the allowed decisions recorded since the last run."""
+    """Resume pauses whose time is up, then carry out the allowed decisions recorded since the last run."""
     policy = load_policy(policy_path)
+    now = now or _now()
     if not policy['enabled'] and not dry_run:
+        # Turning enforcement off never leaves a process paused past its time.
         return dict(schema=SCHEMA, action='run', enabled=False, applied=[], refused=[],
+                    expired=expire(journal=journal, executor=executor, now=now),
                     note='Enforcement is off: set enabled = true in the enforcement policy to carry out decisions.')
     arguments = dict(policy=policy, response_policy=response_policy, ledger=ledger, journal=journal,
-                     state_path=state_path, now=now or _now(), executor=executor, dry_run=dry_run,
+                     state_path=state_path, now=now, executor=executor, dry_run=dry_run,
                      protected=protected)
     if dry_run:
-        return _run(**arguments)             # writes nothing, so it needs no lock
+        return dict(_run(**arguments), expired=[dict(r, status='would_resume') for r in due(journal, now)])
     # Refused before anything is created or waited for: a run that is off or in Stage 0 leaves no trace.
     _admit()
     with _Lock(journal):
-        return _run(**arguments)
+        expired = _expire(journal, executor, now)
+        return dict(_run(**arguments), expired=expired)
+
+
+def due(journal=DEFAULT_JOURNAL, now=None):
+    """Paused processes whose suspend_minutes are up."""
+    now = now or _now()
+    return [r for r in active(journal) if r['action'] == 'suspend_process' and r.get('until')
+            and _parse(r['until']) <= now]
+
+
+def expire(*, journal=DEFAULT_JOURNAL, executor=None, now=None):
+    """Resume every pause whose time is up. Reads only, and creates nothing, when none is."""
+    now = now or _now()
+    if not due(journal, now):
+        return []
+    _admit()
+    with _Lock(journal):
+        return _expire(journal, executor, now)
+
+
+def _expire(journal, executor, now):
+    executor = executor or Executor()
+    done = []
+    for record in due(journal, now):
+        base = dict(schema=SCHEMA, id=secrets.token_hex(6), at=_iso(now), action=record['action'],
+                    target=record['target'], undo_of=record['id'], incident=record.get('incident'), reason='expired')
+        try:
+            executor.undo_suspend_process(record)
+            entry = dict(base, status='undone')
+        except EnforcementError as exc:
+            # Exited, or its PID now names another process: there is nothing left to resume, and nothing is
+            # signalled. The pause is over either way.
+            entry = dict(base, status='undone', note=str(exc)[:300])
+        except OSError as exc:
+            # Still paused, and still listed: tried again on the next run.
+            done.append(dict(base, status='failed', reason=f'could not resume it: {exc}'[:300]))
+            continue
+        _journal(journal, [entry])
+        done.append(entry)
+    return done
 
 
 def _admit():
@@ -609,6 +654,8 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
                         playbook=decision.get('playbook'), rule_id=decision['signal']['rule_id'],
                         decided_at=decision['decided_at'], signal_key=decision['signal'].get('key'),
                         incident=(decision.get('incident') or {}).get('id'))
+            if plan['action'] == 'suspend_process' and plan.get('minutes'):
+                base['until'] = _iso(now + timedelta(minutes=int(plan['minutes'])))
             if reason:
                 refused.append(dict(base, status='refused', reason=reason))
                 continue

@@ -395,6 +395,7 @@ class Playbook:
     require_corroboration: bool = False
     sources: frozenset = frozenset()
     categories: frozenset = frozenset()
+    suspend_minutes: int = 0              # 0: a paused process stays paused until it is undone
 
 
 @dataclass(frozen=True)
@@ -428,7 +429,7 @@ def _integer(table, name, default, low, high):
 
 def _playbook(raw, index):
     known = {'name', 'rules', 'min_severity', 'actions', 'block_minutes', 'require_corroboration', 'sources',
-             'categories'}
+             'categories', 'suspend_minutes'}
     if not isinstance(raw, dict) or set(raw) - known:
         raise ResponseError(f'playbook {index} has unsupported settings: {", ".join(sorted(set(raw) - known))}')
     name = raw.get('name')
@@ -454,8 +455,12 @@ def _playbook(raw, index):
     corroboration = raw.get('require_corroboration', False)
     if not isinstance(corroboration, bool):
         raise ResponseError(f'playbook {name} require_corroboration must be true or false')
+    pause = raw.get('suspend_minutes', 0)
+    if isinstance(pause, bool) or not isinstance(pause, int) or not 0 <= pause <= 10080:
+        raise ResponseError(f'playbook {name} suspend_minutes must be 0 (until undone) to 10080 (a week)')
     return Playbook(name, frozenset(rules), severity, tuple(dict.fromkeys(actions)), minutes, corroboration,
-                    frozenset(sources), frozenset(_strings(raw.get('categories', []), f'playbook {name} categories')))
+                    frozenset(sources), frozenset(_strings(raw.get('categories', []), f'playbook {name} categories')),
+                    pause)
 
 
 def _private_file(path, what, limit=MAX_POLICY_BYTES):
@@ -1173,6 +1178,8 @@ def decide(policy, state, signals, now, *, guards=None, observations=None):
                             reversible=ACTIONS[action]['reversible'])
                 if action == 'block_address':
                     plan['minutes'] = min(playbook.block_minutes, policy.max_block_minutes)
+                elif action == 'suspend_process' and playbook.suspend_minutes:
+                    plan['minutes'] = playbook.suspend_minutes     # resumed by enforcement when the time is up
                 reason = None
                 if playbook.require_corroboration and not corroborated and action not in ('collect_evidence', 'notify'):
                     reason = 'needs a second, independent source in the same incident'
