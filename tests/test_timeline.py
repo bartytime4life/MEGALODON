@@ -99,8 +99,11 @@ def test_enforcement_and_undo_join_their_incident(p):
     listed = tl.incidents(**recorded(p))["incidents"]
     assert len(listed) == 1 and listed[0]["actions_applied"] == 2 and listed[0]["undone"] == 1
     assert listed[0]["evidence"] == ["/var/lib/megalodon/evidence/bundle-1"]
-    kinds = [e["kind"] for e in tl.show(listed[0]["incident"], **recorded(p))["events"]]
-    assert kinds == ["finding", "decision", "action", "action", "undo"]
+    events = tl.show(listed[0]["incident"], **recorded(p))["events"]
+    assert [e["kind"] for e in events] == ["finding", "decision", "action", "action", "action", "undo"]
+    actions = [e for e in events if e["kind"] == "action"]
+    assert sum(e["status"] == "pending" for e in actions) == 1
+    assert sum(e["status"] == "applied" for e in actions) == 2
 
 
 def test_older_records_without_observations_or_incident_ids(tmp_path):
