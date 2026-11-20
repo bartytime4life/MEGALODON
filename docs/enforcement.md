@@ -230,10 +230,15 @@ acceptance scope that requires separate approval before execution.
   own processes.
 * **A paused process stays paused** until you undo it or stop it yourself,
   unless its playbook sets `suspend_minutes`.
-* **`~/` is one account's home.** A persistence location under `~/` is in the
+* **Homes are resolved now.** A persistence location under `~/` is in the
   home of the account that ran the persistence check, and enforcement resolves
   it in its own home. The [scheduler](scheduling.md) runs both as the same
-  account. Other accounts' startup files are not reached this way.
+  account. A location in another account's home (`~alice/...`, found when the
+  check runs as root) is resolved through `/etc/passwd` when it is carried
+  out. If the account is gone, or its home is no longer a folder, the action
+  fails and nothing is moved. The path is opened one folder at a time without
+  following links, so a home that is itself a symlink, or an account that
+  replaced `.ssh` with a link, makes it fail rather than reach elsewhere.
 * **A disabled service keeps running** until it is paused or stopped. Its unit
   file is gone, so it does not start again at the next boot.
 * **Quarantine keeps one copy.** The quarantine folder is on the local disk,

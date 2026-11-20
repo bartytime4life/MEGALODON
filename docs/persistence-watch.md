@@ -28,8 +28,11 @@ megalodon persistence accept
 * **`accept`** records the current state as the new baseline once you have
   reviewed the changes, for example after a software update.
 
-Run `check` from cron or a systemd timer. Run it as root to cover every
-account's files, and as each user for their own home folder.
+Run `check` from cron or a systemd timer, or let the
+[scheduler](scheduling.md) do it. Run as root, it covers every account's home
+folder, not only root's: see [every account's home](#every-accounts-home). Run
+as an ordinary user, it covers that user's own home, and lists the other homes
+as a gap.
 
 ```bash
 ( crontab -l 2>/dev/null; echo '23 * * * * $HOME/.local/share/megalodon/current/venv/bin/python -I -m megalodon persistence check --alert >/dev/null' ) | crontab -
@@ -44,7 +47,7 @@ account's files, and as each user for their own home folder.
 | at | `/var/spool/cron/atjobs`, `/var/spool/at` | T1053.002 | MEDIUM |
 | autostart | `/etc/xdg/autostart`, `~/.config/autostart` | T1547.013 | MEDIUM |
 | shell startup | `~/.bashrc`, `~/.profile`, `~/.zshrc` and similar; `/etc/profile`, `/etc/profile.d`, `/etc/bash.bashrc`, `/etc/zsh`, `/etc/environment` | T1546.004 | MEDIUM |
-| ssh | `authorized_keys` (yours and root's), `~/.ssh/rc`, `/etc/ssh/sshd_config` and `sshd_config.d` | T1098.004 | HIGH; CRITICAL for a new key |
+| ssh | `authorized_keys` (yours and root's; as root, every account's), `~/.ssh/rc`, `/etc/ssh/sshd_config` and `sshd_config.d` | T1098.004 | HIGH; CRITICAL for a new key |
 | preload | `/etc/ld.so.preload`, `/etc/ld.so.conf`, `/etc/ld.so.conf.d` | T1574.006 | CRITICAL |
 | sudoers | `/etc/sudoers`, `/etc/sudoers.d` | T1548.003 | HIGH |
 | pam | `/etc/pam.d`, `/etc/security/pam_env.conf` | T1556.003 | HIGH |
@@ -54,6 +57,37 @@ account's files, and as each user for their own home folder.
 | accounts | `/etc/passwd`: new accounts; a new UID 0; a login shell given to a service account | T1136.001 | MEDIUM; HIGH; CRITICAL for UID 0 |
 
 Removals are reported as LOW.
+
+## Every account's home
+
+The `~/` locations above are your own home folder. Run as root, each one is
+also read in every other account's home, as `/etc/passwd` gives it. Each such
+entry is recorded under that account's name: `~alice/.ssh/authorized_keys`,
+`~bob/.config/systemd/user/helper.service`. A key added to another account's
+`authorized_keys`, or a user service dropped in their home, is reported like
+one in root's.
+
+* **Which homes.** Each account whose home is a real folder, once each. If
+  two accounts share a folder, the one with the lower UID names it. Homes of
+  `/`, `/nonexistent`, or folders under `/proc`, `/sys`, `/dev` or `/run`
+  are not homes, and are skipped. So are account names that `useradd` would
+  refuse. Service accounts with a real home, such as `postgres` in
+  `/var/lib/postgresql`, are included: a key added there is just as much a
+  way back in. `baseline` lists the homes it covered under `homes`.
+* **An older baseline.** A baseline taken before this, or taken without
+  root, never read the other homes. Their files are not reported as added.
+  `check` lists them under `newly_watched`: each account, its home, how many
+  entries it has, and the fingerprints of the SSH keys already there. Review
+  those, then run `accept`. Until you do, changes in those homes are not
+  compared.
+* **A new account.** An account created after the baseline is reported as an
+  added account, and the entries in its home as added.
+* **Without root.** Other accounts' homes cannot be read. They are listed as
+  a gap, and what the baseline recorded there is not reported as removed.
+* **Response.** The [response engine](response-engine.md) joins a finding in
+  `~alice/` to alice's other findings, such as her logins. With the
+  `new-persistence-entry` playbook, [enforcement](enforcement.md) can disable
+  an added entry in any account's home, and puts it back on undo.
 
 ## What is recorded
 
