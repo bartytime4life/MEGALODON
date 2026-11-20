@@ -119,6 +119,10 @@ Guards apply whatever the playbooks say:
 * **Addresses.** Only public addresses are blocked. Attackers on the local
   network need switch-level controls. This machine's gateways, DNS servers
   and own addresses, and anything in `never_touch_addresses`, are refused.
+  A finding from another network namespace, such as a container's
+  connection, names its remote address as a `peer`. It links incidents, but
+  it is not blocked, because this machine's blocks do not stop routed
+  traffic.
 * **Programs.** init, systemd, sshd and dbus, and anything in
   `never_touch_programs`, are never suspended. A plan names the processes
   behind the finding (`pid@start:program`; the start time keeps a reused
