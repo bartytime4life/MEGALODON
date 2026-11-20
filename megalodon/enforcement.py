@@ -404,6 +404,14 @@ class Executor:
             raise EnforcementError(why)
         if location.startswith('~/'):
             return category, location, os.path.join(self.home, location[2:])
+        if name := persistence_watch._owner(location):
+            # Another account's home, as /etc/passwd gives it now: an account removed or moved since the check
+            # is not guessed at.
+            account = (persistence_watch._accounts(self.files_root) or {}).get(name)
+            folder = account and persistence_watch.home_folder(account['home'], self.files_root)
+            if not folder:
+                raise EnforcementError(f'account {name} has no home folder to find {location} in')
+            return category, location, os.path.join(folder, location.partition('/')[2])
         return category, location, (location if self.files_root == '/' else
                                     os.path.join(self.files_root, location[1:]))
 
