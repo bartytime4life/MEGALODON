@@ -341,8 +341,11 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--include-private", action="store_true",
                                  help="also learn and watch connections to private (LAN) addresses")
         if name == "allow":
-            command.add_argument("program", help="the program as reported, e.g. /opt/vendor/agent")
+            command.add_argument("program", nargs="?", help="the program as reported, e.g. /opt/vendor/agent")
             command.add_argument("--port", help="also allow this port, written tcp/443 or udp/53")
+            command.add_argument("--destination",
+                                 help="instead, allow a port and network for connections too short to name their "
+                                      "program, written tcp/443@203.0.113.0/24")
         if name == "watch":
             command.add_argument("--interval", type=float, default=1.0, help="seconds between scans (default 1)")
             command.add_argument("--no-names", action="store_true",
@@ -2024,7 +2027,10 @@ def _egress(args: argparse.Namespace) -> int:
         if args.egress_command == "learn":
             result = egress.learn(manifest, seconds=args.minutes * 60, include_private=args.include_private)
         elif args.egress_command == "allow":
-            result = egress.allow(manifest, args.program, args.port)
+            if (args.program is None) == (args.destination is None):
+                print("megalodon: name a program, or a destination with --destination", file=sys.stderr)
+                return 2
+            result = egress.allow(manifest, args.program, args.port, args.destination)
         elif args.egress_command == "watch":
             respond = _answer_at_once(args, "egress")
 

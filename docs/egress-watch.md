@@ -27,7 +27,8 @@ sudo megalodon egress check
   you trust, for long enough to see the programs that connect only now and
   then, such as package updates. It can be run again later to add to the
   baseline. A program running from a temporary folder, a deleted file or
-  memory is never learned as normal.
+  memory is never learned as normal. Connections too short for a scan are
+  learned by their port and network (see [Short connections](#short-connections)).
 * **`watch`** scans the kernel's socket tables every `--interval` seconds
   (default 1) and prints each new finding as a JSON line, at most once an
   hour for the same program and port. It picks up `allow` and `learn`
@@ -50,6 +51,10 @@ sudo megalodon egress check
   response engine runs it on every pass.
 * **`allow PROGRAM [--port tcp/443]`** records a program you reviewed, on
   any port or only on the one given.
+* **`allow --destination tcp/443@203.0.113.0/24`** records a port and network
+  you reviewed, for connections too short to name their program. Start it
+  with `[container] ` or `[namespace] ` for connections in other namespaces.
+  `0.0.0.0/0` allows that port everywhere.
 
 With `--alert`, findings also go to the
 [off-machine alerts](off-machine-alerts.md).
@@ -63,6 +68,7 @@ With `--alert`, findings also go to the
 | `NEW_OUTBOUND_PORT` | MEDIUM | A known program connects out on a port it has not used |
 | `OUTBOUND_TO_WATCHLISTED_NAME` | CRITICAL | Any program, known or not, connects to a name on your watchlist, or a subdomain of one (`watch` only) |
 | `OUTBOUND_TO_GENERATED_NAME` | MEDIUM | A program connects to a name spelled the way generated (DGA) or encoded names are, with at least two spelling signals and not under a cloud provider's generated names (`watch` only) |
+| `BRIEF_OUTBOUND_CONNECTION` | MEDIUM (LOW for a private address) | A connection opened and closed between two scans, to a port and network no learned program uses (`watch` as root only) |
 
 A program is its executable. For a script interpreter or shell, it is the
 executable and the script it runs, so `python3 /opt/app/backup.py` and
@@ -149,6 +155,48 @@ of its processes (`/proc/PID/net`), without entering it or changing anything.
   root. A program run from a temporary folder, a deleted file or memory is
   reported whatever the baseline knows.
 
+## Short connections
+
+A scan reads the socket tables once a second. A connection opened, used and
+closed in between is never in them: a beacon that checks in for a few
+milliseconds, a quick upload, one fetch of a second stage. As root, `watch`
+also listens for the kernel's announcement of each TCP and UDP socket it
+frees. These are the sock_diag destroy groups. The kernel sends each
+announcement as the socket closes, and the watch judges it at once, without
+waiting for the next scan. On this project's test machine, a refused
+connection was reported 13 ms after it was made.
+
+* **What an announcement says.** It gives the addresses and ports and, for
+  TCP, about how many bytes went each way. The kernel counts the opening and
+  closing of the connection as a byte each. It does not say which program or
+  account opened the socket: the kernel leaves both empty, and the program
+  may have exited already. So these findings name the destination and the
+  amount, and their program is `(closed before it was seen)`. They carry
+  `closed: true`, `sent` and `received`.
+* **What is left out.** A connection a scan saw open was already judged with
+  its program, and is not reported again. Left out like a scan's are
+  incoming connections (their port is one listened on), loopback, link-local
+  and multicast, and the LAN unless `learn --include-private` was used.
+* **What is normal.** A port and network that a learned program uses is
+  normal. So is one learned from a short connection during `learn
+  --minutes`, or allowed with `allow --destination`. Ports and networks are
+  kept apart for each program, so the check is whether some program uses
+  both. A network is a /24 for IPv4, a /48 for IPv6.
+* **Names.** DNS answers and TLS server names name these connections too. A
+  watchlisted name is reported as `OUTBOUND_TO_WATCHLISTED_NAME` even
+  without a program, so the response engine still blocks the address.
+* **Containers.** The announcements are per network namespace. For each
+  namespace a scan finds, a short-lived helper process enters it, opens a
+  listening socket there and hands it back. This process never changes
+  namespace. The namespace is checked through the open descriptor, so a
+  reused process number cannot point the helper at another namespace. A
+  namespace that refuses is listed once as a gap and not tried again while
+  it exists. A namespace that is gone is let go. Containers are judged
+  against container programs and `[container] ` destinations only.
+* **Gaps.** Without root nothing is heard, and `watch` says so on standard
+  error once. If more sockets close at once than the 4 MiB buffer holds,
+  some announcements are lost, and the watch says how many bursts were.
+
 ## Response
 
 * **dropped-tool-phoning-home** covers `OUTBOUND_FROM_TEMPORARY`. It plans
@@ -159,15 +207,21 @@ of its processes (`/proc/PID/net`), without entering it or changing anything.
   for 60 minutes and notify you.
 * **new-outbound-program** covers HIGH `NEW_OUTBOUND_PROGRAM`. It plans to
   collect evidence and notify you, because new software does the same.
+* `BRIEF_OUTBOUND_CONNECTION` is MEDIUM and has no playbook of its own. With
+  no process to pause, the response engine links its address to incidents
+  as for other egress findings.
 
 ## Limits
 
 * **Root sees every process.** Without root, connections owned by other
   accounts cannot be matched to a program, and the report counts them under
   `gaps`.
-* **Short connections can be missed.** A connection opened and closed
-  between two scans is not seen. A 1-second scan catches most programs that
-  phone home, which keep a connection or retry.
+* **Short connections have no program.** As root, `watch` hears a
+  connection opened and closed between two scans, but only by its
+  destination: the program and account are unknown. Without root, or with
+  `check` and `learn` without `--minutes`, such connections are not seen at
+  all. Protocols other than TCP and UDP, such as ICMP and raw sockets, are
+  not announced.
 * **Names need `watch` and root.** `check` and `learn` see only addresses.
   A name looked up before the watch started is unknown until it is looked up
   again, or until a program sends its server name.
