@@ -686,34 +686,39 @@ def _record_expiry(journal, entry):
 
 def _expire(journal, executor, now):
     executor = executor or Executor()
-    done = []
+    done, resumed = [], []
     ending = due(journal, now)
     ending_ids = {r['id'] for r in ending}
+    by_target = {}
     for record in ending:
-        base = dict(schema=SCHEMA, id=secrets.token_hex(6), at=_iso(now), action=record['action'],
-                    target=record['target'], undo_of=record['id'], incident=record.get('incident'), reason='expired')
+        by_target.setdefault(record['target'], []).append(record)
+    for target, records in by_target.items():
         # Another decision paused the same process, for longer or until undone: this pause is over, the
         # process stays paused until that one ends too.
         holding = [r['id'] for r in active(journal) if r['action'] == 'suspend_process'
-                   and r['target'] == record['target'] and r['id'] not in ending_ids]
+                   and r['target'] == target and r['id'] not in ending_ids]
+        outcome = dict(status='undone', reason='expired')
         if holding:
-            entry = dict(base, status='undone', note=f'still paused by {", ".join(holding)}')
-            done.append(_record_expiry(journal, entry))
-            continue
-        try:
-            executor.undo_suspend_process(record)
-            entry = dict(base, status='undone')
-        except ProcessIdentityGone as exc:
-            # Exited, or its PID now names another process: there is nothing left to resume, and nothing is
-            # signalled. The pause is over either way.
-            entry = dict(base, status='undone', note=str(exc)[:300])
-        except (EnforcementError, OSError) as exc:
-            # Unknown identity or a failed signal must not retire the recovery obligation. Keep the pause
-            # active and record this failed attempt, so the next run can retry and the failure is auditable.
-            entry = dict(base, status='failed', reason=f'could not resume it: {exc}'[:300])
-        done.append(_record_expiry(journal, entry))
-    resumed = [e for e in done if (e['status'] == 'undone' or e.get('recovery_status') == 'undone')
-               and not e.get('note')]
+            outcome['note'] = f'still paused by {", ".join(holding)}'
+        else:
+            try:
+                # All due holds share one exact process target, so attempt its recovery only once.
+                executor.undo_suspend_process(records[0])
+            except ProcessIdentityGone as exc:
+                # Exited, or its PID now names another process: nothing is left to resume or signal.
+                outcome['note'] = str(exc)[:300]
+            except (EnforcementError, OSError) as exc:
+                # A failed attempt must retain every due hold, so the next run can retry the process.
+                outcome.update(status='failed', reason=f'could not resume it: {exc}'[:300])
+        ended = [dict(schema=SCHEMA, id=secrets.token_hex(6), at=_iso(now), action=record['action'],
+                      target=target, undo_of=record['id'], incident=record.get('incident'), **outcome)
+                 for record in records]
+        ended = [_record_expiry(journal, entry) for entry in ended]
+        done.extend(ended)
+        # A journal failure changes the reported audit status, not a successful signal. Announce that
+        # recovery once for the target while preserving every failed audit result in the output.
+        if outcome['status'] == 'undone' and not outcome.get('note'):
+            resumed.append(ended[0])
     if resumed:
         # A paused process runs again, maybe an intruder's: said at once, not only in the journal. A notice
         # that cannot be sent never keeps a pause from ending.
@@ -845,12 +850,18 @@ def undo(identifier, *, journal=DEFAULT_JOURNAL, executor=None, now=None):
 
 
 def _undo(identifier, *, journal, executor, now):
-    record = next((r for r in active(journal) if r['id'] == identifier), None)
+    pending = active(journal)
+    record = next((r for r in pending if r['id'] == identifier), None)
     if record is None:
         raise EnforcementError(f'no applied, not yet undone action has the ID {identifier}')
     executor = executor or Executor()
-    getattr(executor, 'undo_' + record['action'])(record)
+    holding = [r['id'] for r in pending if record['action'] == r['action'] == 'suspend_process'
+               and r['target'] == record['target'] and r['id'] != identifier]
+    if not holding:
+        getattr(executor, 'undo_' + record['action'])(record)
     done = dict(schema=SCHEMA, id=secrets.token_hex(6), at=_iso(now or _now()), action=record['action'],
                 target=record['target'], status='undone', undo_of=identifier, incident=record.get('incident'))
+    if holding:
+        done['note'] = f'still paused by {", ".join(holding)}'
     _journal(journal, [done])
     return done
