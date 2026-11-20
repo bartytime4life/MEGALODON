@@ -62,6 +62,8 @@ SUPPORTED = ('collect_evidence', 'notify', 'suspend_process', 'block_address', '
              'disable_persistence')
 # Units that fire something on their own: disabling them also stops them, or they fire until the next boot.
 ACTIVATING_UNITS = ('.timer', '.socket', '.path')
+# The system manager's unit folders. /etc/systemd/user holds units for every user's own manager.
+SYSTEM_UNIT_FOLDERS = ('/etc/systemd/system/', '/usr/local/lib/systemd/system/')
 MAX_COPY = 512 * 1024 * 1024
 MAX_APPLIED_KEYS = 50_000
 
@@ -301,11 +303,31 @@ class Executor:
     def undo_quarantine_file(self, record):
         self._put_back(record['target'], record['undo'])
 
-    def _put_back(self, target, undo):
+    @staticmethod
+    def _restored(parent, name, info, undo):
+        """Whether what is at the path is exactly what this undo puts there: put back by an earlier undo."""
+        if undo.get('kind') == 'link':
+            return stat.S_ISLNK(info.st_mode) and os.readlink(name, dir_fd=parent) == undo.get('link_target')
+        if not stat.S_ISREG(info.st_mode) or not undo.get('sha256'):
+            return False
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent)
+        try:
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: os.read(fd, 1 << 20), b''):
+                digest.update(chunk)
+        finally:
+            os.close(fd)
+        return digest.hexdigest() == undo['sha256']
+
+    def _put_back(self, target, undo, *, resume=False):
+        """Put a moved entry back. With `resume`, an entry already put back by an undo that stopped before its
+        last step counts as put back, so that undo can be run again to finish."""
         parent, name = self._folder(target)
         try:
             try:
-                os.stat(name, dir_fd=parent, follow_symlinks=False)
+                info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                if resume and self._restored(parent, name, info, undo):
+                    return
                 kept = f'; the quarantined copy is left at {undo["kept"]}' if undo.get('kept') else ''
                 raise EnforcementError(f'{target} exists again{kept}')
             except FileNotFoundError:
@@ -349,27 +371,42 @@ class Executor:
         if (decision.get('signal') or {}).get('rule_id') != 'PERSISTENCE_ADDED':
             raise EnforcementError(NOT_ADDED)
         category, location, path = self._entry(target)
-        system_unit = category == 'systemd' and not location.startswith('~/')
+        # Only units in the system manager's folders are the system manager's: /etc/systemd/user and the
+        # ~/.config ones belong to each user's manager, which `systemctl` without --user never reaches.
+        system_unit = category == 'systemd' and location.startswith(SYSTEM_UNIT_FOLDERS)
         moved = self._move_aside(path, links=True)
         unit = None
-        if system_unit:
-            # systemd forgets the unit file only when told; a timer, socket or path unit is also stopped, or it
-            # would go on firing until the next boot. A service is left running: pause it with suspend_process,
-            # or stop it once its memory is captured.
-            self.run(['systemctl', 'daemon-reload'])
-            name = os.path.basename(path)
-            if name.endswith(ACTIVATING_UNITS) and '.wants' not in path and '.requires' not in path:
-                active = self.run(['systemctl', 'is-active', '--quiet', name]).returncode == 0
-                if active:
-                    self._command(['systemctl', 'stop', name])
-                unit = dict(name=name, was_active=active)
+        try:
+            if system_unit:
+                # systemd forgets the unit only when told. A timer, socket or path unit is also stopped, whether
+                # its own file or the link that enabled it was the new entry: either way it would go on firing
+                # until the next boot. A service is left running: pause it with suspend_process, or stop it once
+                # its memory is captured.
+                self._command(['systemctl', 'daemon-reload'])
+                name = os.path.basename(path)
+                if name.endswith(ACTIVATING_UNITS):
+                    active = self.run(['systemctl', 'is-active', '--quiet', name]).returncode == 0
+                    if active:
+                        self._command(['systemctl', 'stop', name])
+                    unit = dict(name=name, was_active=active)
+        except (EnforcementError, OSError, subprocess.SubprocessError) as exc:
+            # All or nothing: an entry moved aside with no record of it could never be put back by undo.
+            try:
+                self._put_back(path, moved)
+                if system_unit:
+                    self.run(['systemctl', 'daemon-reload'])
+            except (EnforcementError, OSError, subprocess.SubprocessError) as again:
+                kept = moved.get('kept') or f"a link to {moved.get('link_target')}"
+                raise EnforcementError(f'{exc}; putting {path} back also failed ({again}): it is {kept}') from None
+            raise EnforcementError(f'{exc}; {path} was put back as it was') from None
         return dict(moved, path=path, category=category, unit=unit, system_unit=system_unit)
 
     def undo_disable_persistence(self, record):
         undo = record['undo']
-        self._put_back(undo['path'], undo)
+        # If systemd fails after the entry is back, the undo is not recorded; running it again finishes it.
+        self._put_back(undo['path'], undo, resume=True)
         if undo.get('system_unit'):
-            self.run(['systemctl', 'daemon-reload'])
+            self._command(['systemctl', 'daemon-reload'])
             if (undo.get('unit') or {}).get('was_active'):
                 self._command(['systemctl', 'start', undo['unit']['name']])
 
