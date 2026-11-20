@@ -68,6 +68,7 @@ ACTIVATING_UNITS = ('.timer', '.socket', '.path')
 SYSTEM_UNIT_FOLDERS = ('/etc/systemd/system/', '/usr/local/lib/systemd/system/')
 MAX_COPY = 512 * 1024 * 1024
 MAX_APPLIED_KEYS = 50_000
+MAX_JOURNAL_BYTES = 64 * 1024 * 1024
 
 POLICY_TEXT = '''# MEGALODON enforcement. Off until you turn it on.
 # Each response action listed here is carried out when the response engine decides it (`would_apply`),
@@ -512,14 +513,32 @@ class Executor:
 def _journal(path, records):
     target = Path(path).expanduser()
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    fd = os.open(target, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    encoded = [(json.dumps(record, sort_keys=True, separators=(',', ':')) + '\n').encode() for record in records]
+    fd = os.open(target, os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o600)
     try:
         info = os.fstat(fd)
-        if info.st_uid != os.geteuid() or info.st_mode & 0o077:
-            raise EnforcementError(f'{target} must be a mode-600 file owned by you')
-        for record in records:
-            os.write(fd, (json.dumps(record, sort_keys=True, separators=(',', ':')) + '\n').encode())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise EnforcementError(f'{target} must be a regular mode-600 file owned by you')
+        if info.st_size + sum(map(len, encoded)) > MAX_JOURNAL_BYTES:
+            raise EnforcementError(f'{target} has no journal capacity; no record was appended')
+        if info.st_size and os.pread(fd, 1, info.st_size - 1) != b'\n':
+            # Never concatenate a new intent onto a torn record: it would disappear when the reader skips
+            # that invalid line. Keep the bytes for review and refuse the new append before any new stop.
+            raise EnforcementError(f'{target} ends with an incomplete record; journal repair is required')
+        for data in encoded:
+            remaining = memoryview(data)
+            while remaining:
+                written = os.write(fd, remaining)
+                if written <= 0:
+                    raise OSError(errno.EIO, 'enforcement journal write made no progress')
+                remaining = remaining[written:]
         os.fsync(fd)
+        # The first intent must retain its directory entry as well as its contents before SIGSTOP.
+        parent = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
     finally:
         os.close(fd)
 
@@ -529,7 +548,7 @@ def entries(path=DEFAULT_JOURNAL):
     if not target.exists():
         return []
     out = []
-    for line in engine._private_file(target, 'enforcement journal', 64 * 1024 * 1024).decode().splitlines():
+    for line in engine._private_file(target, 'enforcement journal', MAX_JOURNAL_BYTES).decode().splitlines():
         try:
             out.append(json.loads(line))
         except ValueError:
@@ -633,6 +652,8 @@ def run(*, policy_path=DEFAULT_POLICY, response_policy=engine.DEFAULT_POLICY, le
         expired = _expire(journal, executor, moment)
         # A queued run must see changes made while it waited, including the operator turning enforcement off.
         policy, error, note = read_policy()
+        if any('journal_error' in entry for entry in expired):
+            return stopped('New enforcement refused: recovery journal entries could not be persisted.', error)
         return new_actions(policy, moment) if policy and policy['enabled'] else stopped(note, error)
 
 
@@ -652,6 +673,17 @@ def expire(*, journal=DEFAULT_JOURNAL, executor=None, now=None):
         return _expire(journal, executor, now if now is not None else _now())
 
 
+def _record_expiry(journal, entry):
+    """Report an audit failure without starving recovery attempts for the other due processes."""
+    try:
+        _journal(journal, [entry])
+    except (EnforcementError, OSError) as exc:
+        # A successful resume still happened even if its audit write failed. Keep the two outcomes distinct;
+        # another run may need to retry a hold whose completion could not be persisted.
+        return dict(entry, status='failed', recovery_status=entry['status'], journal_error=str(exc)[:300])
+    return entry
+
+
 def _expire(journal, executor, now):
     executor = executor or Executor()
     done = []
@@ -666,8 +698,7 @@ def _expire(journal, executor, now):
                    and r['target'] == record['target'] and r['id'] not in ending_ids]
         if holding:
             entry = dict(base, status='undone', note=f'still paused by {", ".join(holding)}')
-            _journal(journal, [entry])
-            done.append(entry)
+            done.append(_record_expiry(journal, entry))
             continue
         try:
             executor.undo_suspend_process(record)
@@ -680,9 +711,9 @@ def _expire(journal, executor, now):
             # Unknown identity or a failed signal must not retire the recovery obligation. Keep the pause
             # active and record this failed attempt, so the next run can retry and the failure is auditable.
             entry = dict(base, status='failed', reason=f'could not resume it: {exc}'[:300])
-        _journal(journal, [entry])
-        done.append(entry)
-    resumed = [e for e in done if e['status'] == 'undone' and not e.get('note')]
+        done.append(_record_expiry(journal, entry))
+    resumed = [e for e in done if (e['status'] == 'undone' or e.get('recovery_status') == 'undone')
+               and not e.get('note')]
     if resumed:
         # A paused process runs again, maybe an intruder's: said at once, not only in the journal. A notice
         # that cannot be sent never keeps a pause from ending.
@@ -713,9 +744,18 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
     executor = executor or Executor(quarantine=policy['quarantine'])
     guards = engine.Guards(rules, {}, now, protected=protected)
     applied_keys = set(state.get('applied', []))
+    history = entries(journal)
+    # The journal, unlike the cursor, is written before a suspension can take effect. A restart after the
+    # intent, the stop, or its applied record must never send SIGSTOP for that same decision a second time.
+    for entry in history:
+        if entry.get('action') == 'suspend_process' and entry.get('status') in ('pending', 'applied') \
+                and entry.get('decided_at') is not None and entry.get('signal_key') is not None:
+            applied_keys.add(hashlib.sha256(json.dumps([entry['decided_at'], entry['signal_key'], entry['action'],
+                                                       entry.get('target')]).encode()).hexdigest())
     hour_ago = now - timedelta(hours=1)
-    recent = sum(1 for e in entries(journal) if e.get('status') == 'applied' and e.get('action') not in
-                 ('collect_evidence', 'notify') and _parse(e['at']) >= hour_ago)
+    recent = len({e['id'] for e in history if (e.get('status') == 'applied' or
+                  (e.get('status') == 'pending' and e.get('action') == 'suspend_process'))
+                  and e.get('action') not in ('collect_evidence', 'notify') and _parse(e['at']) >= hour_ago})
     applied, refused, records = [], [], []
     for decision in decisions:
         for plan in decision.get('actions', []):
@@ -750,17 +790,31 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
             if dry_run:
                 applied.append(dict(base, status='would_enforce'))
                 continue
+            suspension = plan['action'] == 'suspend_process'
+            if suspension:
+                if records:
+                    _journal(journal, records)
+                    records.clear()
+                # A pending record means the stop may or may not have happened. It contains everything the
+                # existing identity-checked undo/expiry needs, and remains recoverable on any interruption.
+                _journal(journal, [dict(base, status='pending', reason='suspension outcome not yet recorded')])
+                recent += 1
             applied_keys.add(key)
             try:
                 undo = getattr(executor, plan['action'])(plan.get('target'), decision)
                 record = dict(base, status='applied', undo=undo)
-                if plan['action'] not in ('collect_evidence', 'notify'):
+                if plan['action'] not in ('collect_evidence', 'notify') and not suspension:
                     recent += 1
                 applied.append(record)
             except (EnforcementError, OSError, ValueError) as exc:
                 record = dict(base, status='failed', reason=str(exc)[:500])
                 refused.append(record)
-            records.append(record)
+            if suspension:
+                # Do not wait for another action in this batch. If writing the outcome fails, the durable
+                # pending record remains available to list, undo and timed recovery.
+                _journal(journal, [record])
+            else:
+                records.append(record)
     if records:
         _journal(journal, records)
     if not dry_run:
@@ -772,10 +826,15 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
 
 
 def active(journal=DEFAULT_JOURNAL):
-    """Applied actions that have not been undone."""
+    """Applied actions and uncertain suspension intents that have not been undone."""
     records = entries(journal)
     undone = {r['undo_of'] for r in records if r.get('status') == 'undone'}
-    return [r for r in records if r.get('status') == 'applied' and r['id'] not in undone
+    actions = {}
+    for record in records:
+        if record.get('status') == 'applied' or (record.get('status') == 'pending'
+                                                and record.get('action') == 'suspend_process'):
+            actions[record['id']] = record
+    return [r for r in actions.values() if r['id'] not in undone
             and r['action'] not in ('collect_evidence', 'notify')]
 
 
