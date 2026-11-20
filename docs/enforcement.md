@@ -120,6 +120,13 @@ carries out new decisions:
   if the start time and program still match. A process that has exited, or
   whose PID now names another process, is not signalled, and its pause is
   recorded as over.
+* **You are told.** Each pause that ends with its process running again sends
+  a `PAUSE_ENDED` notice (HIGH) to the [alert destinations](off-machine-alerts.md),
+  whatever their minimum severity. It names the process, the pause and the
+  incident. A pause whose process has exited, or that another pause still
+  holds, sends none. A notice that cannot be sent, because alerts are off or
+  the settings cannot be read, never keeps the pause from ending: the run's
+  output says why, with `notified = false`.
 * **A process paused twice stays paused until both end.** When another
   decision paused the same process, for longer or until undone, the pause
   that ended is recorded as over, with `still paused by ID`, and the process

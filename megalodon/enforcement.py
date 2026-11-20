@@ -173,8 +173,9 @@ def _start(pid, root='/'):
 class Executor:
     """What each action does to the machine, and how it is undone. Tests replace `run` (commands) only."""
 
-    def __init__(self, *, root='/', run=None, quarantine=None, home=None, files_root=None):
+    def __init__(self, *, root='/', run=None, quarantine=None, home=None, files_root=None, settings=None):
         self.root, self.quarantine = root, Path(quarantine or DEFAULT_QUARANTINE).expanduser()
+        self.settings = settings            # alert settings; by default ~/.config/megalodon/settings.toml
         # Where persistence entries are looked for: the same root, unless a test points it at a machine folder
         # while processes are still read from the real /proc.
         self.files_root = files_root or root
@@ -459,6 +460,21 @@ class Executor:
                     continue
         return saved
 
+    def notify_resumed(self, ended):
+        """Tell the alert destinations that paused processes run again: their time was up."""
+        from .alerts import HostNotice, dispatcher_for
+        from .config import load_settings
+        settings = self.settings or load_settings(Path.home() / '.config/megalodon/settings.toml')
+        dispatcher = dispatcher_for(settings.alerts)
+        if dispatcher is None:
+            raise EnforcementError('no alert destinations are configured')
+        dispatcher.submit([HostNotice(
+            'PAUSE_ENDED', 'HIGH', _now(),
+            f"a paused process runs again, its pause over: {e['target']} (pause {e['undo_of']}"
+            + (f", incident {e['incident']}" if e.get('incident') else '') + ')',
+            ('T1489',), 'Enforcement resumed a process its playbook paused for suspend_minutes. If it is an '
+                        'intruder\'s, pause or stop it again now.') for e in ended], any_severity=True)
+
     def notify(self, target, decision, *, settings=None):
         from .alerts import HostNotice, dispatcher_for
         from .config import load_settings
@@ -622,6 +638,18 @@ def _expire(journal, executor, now):
             continue
         _journal(journal, [entry])
         done.append(entry)
+    resumed = [e for e in done if e['status'] == 'undone' and not e.get('note')]
+    if resumed:
+        # A paused process runs again, maybe an intruder's: said at once, not only in the journal. A notice
+        # that cannot be sent never keeps a pause from ending.
+        from .validation import ValidationError
+        try:
+            executor.notify_resumed(resumed)
+            for entry in resumed:
+                entry['notified'] = True
+        except (EnforcementError, ValidationError, OSError, ValueError) as exc:
+            for entry in resumed:
+                entry.update(notified=False, notice=f'no notice sent: {exc}'[:300])
     return done
 
 

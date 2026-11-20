@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+from types import SimpleNamespace
 import subprocess
 import time
 
@@ -70,7 +71,7 @@ class Host:
         self.key = cl.init(state=self.log_state, log=self.log)["key"]
         persistence_watch.baseline(self.persistence, root=str(self.root), home=str(self.home), setuid_dirs=())
         self.executor = Executor(self, files_root=str(self.root), home=self.home, run=Commands(),
-                                 quarantine=self.quarantine)
+                                 quarantine=self.quarantine, settings=SimpleNamespace(alerts=name))
 
     def detect(self, signals, now=None):
         return re_.run(policy_path=self.policy, ledger=self.ledger, state_path=self.state, signals=signals,
@@ -163,8 +164,12 @@ def wait_for(pid, states):
     return state_of(pid)
 
 
-def test_one_attack_across_two_machines_from_detection_to_the_fleet(collector, tmp_path, tool):
+def test_one_attack_across_two_machines_from_detection_to_the_fleet(collector, tmp_path, tool, monkeypatch):
     data, url, _view = collector
+    from megalodon import alerts
+    sent = []
+    monkeypatch.setattr(alerts, "dispatcher_for", lambda machine: SimpleNamespace(
+        submit=lambda notices, any_severity=False: sent.extend((machine, n) for n in notices)))
     process, program = tool
     web, db = Host(tmp_path, url, data, "web-1"), Host(tmp_path, url, data, "db-1")
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -253,7 +258,10 @@ def test_one_attack_across_two_machines_from_detection_to_the_fleet(collector, t
     en.undo(disabled["id"], journal=web.journal, executor=web.executor)
     assert (web.root / "etc/cron.d/updater").read_text() == f"*/5 * * * * root {program}\n"
     resumed = web.enforce(now=now + timedelta(minutes=31))["expired"]
-    assert [(r["status"], r["reason"]) for r in resumed] == [("undone", "expired")]
+    assert [(r["status"], r["reason"], r["notified"]) for r in resumed] == [("undone", "expired", True)]
+    assert [(machine, n.rule_id) for machine, n in sent] == [("web-1", "PAUSE_ENDED")], \
+        "you hear at once that the dropped tool runs again"
+    assert pause["target"] in sent[0][1].message
     assert wait_for(process.pid, "SR") in "SR"
     web.push()
     undos = [e for e in fleet.fleet_events(data=data) if e["kind"] == "undo"]
