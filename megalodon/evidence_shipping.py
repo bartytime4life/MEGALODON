@@ -42,6 +42,7 @@ MAX_LINES = 2000
 MAX_STORED = 64 * 1024 * 1024 * 1024        # per machine, on the collector
 MAX_CONFLICTS = 8 * 1024 * 1024
 MAX_REJECTED = 64 * 1024 * 1024             # refused lines and manifests kept for comparison
+MAX_MANIFEST = 64 * 1024 * 1024             # a manifest sent in pieces, such as a large memory capture's
 EMPTY_SHA256 = hashlib.sha256(b'').hexdigest()
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 _BUNDLE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,200}')
@@ -89,14 +90,15 @@ def _safe_file(name):
 def _read_cursor(path):
     path = Path(path).expanduser()
     if not path.exists():
-        return dict(commands={}, bundles={})
+        return dict(commands={}, bundles={}, manifest_parts={})
     try:
         value = json.loads(command_log._private_read(path, 'evidence push record'))
     except (ValueError, command_log.CommandLogError) as exc:
         raise ShippingError(f'{path}: {exc}') from None
     if type(value) is not dict:
         raise ShippingError(f'{path} has an unsupported format')
-    return dict(commands=dict(value.get('commands') or {}), bundles=dict(value.get('bundles') or {}))
+    return dict(commands=dict(value.get('commands') or {}), bundles=dict(value.get('bundles') or {}),
+                manifest_parts=dict(value.get('manifest_parts') or {}))
 
 
 def _write_private(path, value):
@@ -245,10 +247,33 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
             size += length
         if group:
             items.append(dict(kind='commands', key_id=key_id, lines=group))
+    large = []                          # manifests too large for one request: sent in pieces, before any file
     for name, _folder, raw, _manifest in bundles:
         digest = hashlib.sha256(raw).hexdigest()
         if cursor['bundles'].get(name, {}).get('manifest') != digest:
-            items.append(dict(kind='manifest', bundle=name, sha256=digest, data=_b64(raw)))
+            item = dict(kind='manifest', bundle=name, sha256=digest, data=_b64(raw))
+            if _size(item) <= MAX_BATCH_BYTES:
+                items.append(item)
+            elif len(raw) <= MAX_MANIFEST:
+                large.append((name, raw, digest))
+            else:
+                items.append(item)      # beyond what the collector takes: counted below as too large
+
+    def manifest_parts():
+        for name, raw, digest in reversed(large):
+            state = cursor['manifest_parts'].get(name) or {}
+            offset = state.get('have', 0) if state.get('sha256') == digest else 0
+            while offset < len(raw):
+                piece = raw[offset:offset + CHUNK]
+                yield dict(kind='manifest_part', bundle=name, sha256=digest, size=len(raw), offset=offset,
+                           data=_b64(piece)), len(piece)
+                state = cursor['manifest_parts'].get(name) or {}
+                reached = state.get('have', offset) if state.get('sha256') == digest else offset
+                if cursor['bundles'].get(name, {}).get('manifest') == digest:
+                    break                 # whole, and taken
+                if reached <= offset:
+                    break                 # no progress: the collector takes no more for now
+                offset = reached
 
     def pieces():
         for name, folder, raw, manifest in reversed(bundles):
@@ -302,6 +327,15 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
                 if result.get('ok'):
                     totals['manifests'] += 1
                     cursor['bundles'][item['bundle']] = dict(manifest=item['sha256'], files={}, done=False)
+            elif item['kind'] == 'manifest_part':
+                have = result.get('have')
+                if type(have) is int and have >= 0:
+                    cursor['manifest_parts'][item['bundle']] = dict(sha256=item['sha256'], have=have)
+                if result.get('ok') and have == item['size']:
+                    # The collector has the whole manifest, checked against its digest: its files can follow.
+                    totals['manifests'] += 1
+                    cursor['manifest_parts'].pop(item['bundle'], None)
+                    cursor['bundles'][item['bundle']] = dict(manifest=item['sha256'], files={}, done=False)
             else:
                 record = cursor['bundles'].setdefault(item['bundle'], dict(files={}))
                 have = result.get('have')
@@ -335,6 +369,11 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
     if batch and totals['requests'] < MAX_REQUESTS:
         deliver(batch)
     if not dry_run:
+        # Large manifests next, in pieces: a bundle's files are taken only once its manifest is whole.
+        for item, _length in manifest_parts():
+            if totals['requests'] >= MAX_REQUESTS:
+                break
+            deliver([item])
         # Files the manifest names, once the manifest is there; a bundle is done when every file is.
         for item, length in pieces():
             if totals['requests'] >= MAX_REQUESTS or totals['bytes'] + length > budget:
@@ -351,7 +390,7 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
     return dict(schema=SCHEMA, action='dry_run' if dry_run else 'push', url=settings['url'],
                 command_lines=totals['lines'], manifests=totals['manifests'], file_bytes=totals['bytes'],
                 files_completed=totals['files'], requests=totals['requests'], bundles_incomplete=waiting,
-                too_large=too_large)
+                too_large=too_large, large_manifests=len(large))
 
 
 # ------------------------------------------------------------------ on the collector
@@ -510,9 +549,67 @@ def _keep_rejected(store, path, value, usage):
 
 
 def _take_manifest(store, item, received, usage):
-    name = item.get('bundle')
     try:
         raw = base64.b64decode(str(item.get('data', '')), validate=True)
+    except ValueError:
+        return dict(ok=False, error='not a manifest')
+    return _accept_manifest(store, item.get('bundle'), raw, received, usage)
+
+
+def _take_manifest_part(store, item, received, usage):
+    """One piece of a manifest too large for one request, in order; the whole is taken once it has arrived."""
+    name, digest, size, offset = item.get('bundle'), item.get('sha256'), item.get('size'), item.get('offset')
+    try:
+        data = base64.b64decode(str(item.get('data', '')), validate=True)
+    except ValueError:
+        return dict(ok=False, error='not base64')
+    if not _BUNDLE.fullmatch(str(name)) or type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest) \
+            or type(size) is not int or not 0 < size <= MAX_MANIFEST or type(offset) is not int or offset < 0 \
+            or len(data) > CHUNK or offset + len(data) > size:
+        return dict(ok=False, error='not a piece of a manifest')
+    record = _load(store / 'evidence-state' / f'{name}.json', None)
+    if record and record.get('manifest_sha256') == digest:
+        return dict(ok=True, have=size)             # already whole: sent again after an interrupted push
+    state_path = store / 'evidence-state' / f'{name}.manifest-part.json'
+    partial = store / 'evidence-partial' / name / 'manifest.json'
+    state = _load(state_path, None)
+    if state and (state.get('sha256'), state.get('size')) != (digest, size):
+        # Another manifest for this bundle, begun over the first: start again from nothing.
+        if partial.exists():
+            partial.unlink()
+        state = None
+    have = partial.stat().st_size if state and partial.exists() else 0
+    if offset < have:
+        return dict(ok=True, have=have)
+    if offset > have:
+        return dict(ok=False, have=have, error='pieces arrive in order')
+    if not usage.room(len(data)):
+        return dict(ok=False, have=have, error='the collector holds as much as it keeps for this machine')
+    if state is None:
+        _private_write(state_path, json.dumps(dict(sha256=digest, size=size, started_at=received)).encode())
+    partial.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd = os.open(partial, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    usage.add(len(data))
+    have += len(data)
+    if have < size:
+        return dict(ok=True, have=have)
+    raw = partial.read_bytes()
+    partial.unlink()
+    state_path.unlink()
+    if hashlib.sha256(raw).hexdigest() != digest:
+        return dict(ok=False, have=0, error='the pieces do not make the manifest they were sent as: send it again')
+    answer = _accept_manifest(store, name, raw, received, usage, counted=True)
+    return dict(answer, have=size if answer.get('ok') else 0)
+
+
+def _accept_manifest(store, name, raw, received, usage, *, counted=False):
+    """Hold a whole manifest. `counted`: its bytes were already counted as its pieces arrived."""
+    try:
         manifest = json.loads(raw)
     except ValueError:
         return dict(ok=False, error='not a manifest')
@@ -530,10 +627,11 @@ def _take_manifest(store, item, received, usage):
                   f'bundle {name} was sent again with another manifest; the first one is kept', received)
         _keep_rejected(store, store / 'evidence-rejected' / name / f'manifest-{digest[:16]}.json', raw, usage)
         return dict(ok=False, error='a different manifest for this bundle is already held')
-    if not usage.room(len(raw)):
+    if not counted and not usage.room(len(raw)):
         return dict(ok=False, error='the collector holds as much as it keeps for this machine')
     _private_write(store / 'evidence' / name / 'manifest.json', raw, mode=0o400)
-    usage.add(len(raw))
+    if not counted:
+        usage.add(len(raw))
     _private_write(record_path, json.dumps(dict(manifest_sha256=digest, received_at=received,
                                                 collected_at=manifest.get('collected_at'),
                                                 kind=manifest.get('kind', 'snapshot'),
@@ -636,7 +734,8 @@ def receive(body, *, data, now=None):
         refused = set()                 # logs with a batch not taken in this request
         for item in body['items']:
             kind = item.get('kind') if type(item) is dict else None
-            take = dict(commands=_take_commands, manifest=_take_manifest, chunk=_take_chunk).get(kind)
+            take = dict(commands=_take_commands, manifest=_take_manifest, manifest_part=_take_manifest_part,
+                        chunk=_take_chunk).get(kind)
             if kind == 'commands' and str(item.get('key_id')) in refused:
                 # Taking a later batch past one not taken would open a gap that could never be filled.
                 answers.append(dict(ok=False, error='an earlier batch of this log was not taken'))

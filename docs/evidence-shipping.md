@@ -25,7 +25,8 @@ megalodon fleet evidence web-1 --verify --key-file /media/usb/megalodon-commands
 
 * **`evidence push`** sends what has not been sent yet, most valuable first:
   1. command log lines, exactly as the recorder signed them;
-  2. every bundle's manifest, which holds each file's size and SHA-256;
+  2. every bundle's manifest, which holds each file's size and SHA-256. One too
+     large for a single request is sent in pieces, before any file;
   3. the files the manifests list, in pieces, newest bundle first.
 
   Each request is signed with the machine's heartbeat key, so enrolling the
@@ -120,6 +121,7 @@ Under the collector's data folder, in `machines/NAME/shipped/`:
 | `commands/KEY_ID/commands.jsonl` | The copy of the command log started with that key, rotated past 64 MiB the way the machine rotates it |
 | `commands/KEY_ID/rewritten.jsonl` | Lines that arrived again with other content, for comparison |
 | `evidence/BUNDLE/` | Each bundle: its manifest and the files that have arrived and matched it |
+| `evidence-partial/BUNDLE/` | Files, and manifests sent in pieces, still arriving; each moves to `evidence/` once whole and checked |
 | `evidence-rejected/BUNDLE/` | Manifests and files that did not match what was held, or their manifest |
 | `conflicts.jsonl` | Everything reported above |
 
@@ -138,8 +140,13 @@ Every file is mode 600 or read-only, and every folder 700.
 * **Logs started over.** After `commands init --replace`, the old log is moved
   aside on the machine and its lines not yet sent stay there. The new log is
   copied under its own key.
-* **Very large manifests.** A manifest over about 640 KiB, such as a memory
-  capture listing thousands of regions, is not sent and is counted as
-  `too_large`. The bundle stays on the machine.
+* **Very large manifests.** A manifest too large for one request, such as a
+  memory capture listing thousands of regions, is sent in pieces of up to
+  384 KiB, in order. The collector puts them together and checks the whole
+  against the SHA-256 the pieces were sent with before it holds it. Only
+  then do the bundle's files follow. An interrupted manifest resumes from
+  where the collector stands, and pieces that don't make the manifest they
+  claim are refused and sent again. A manifest over 64 MiB is not sent, and
+  is counted as `too_large`.
 * **One collector.** If it is down, pushes fail and are retried on the next
   run, from where the collector stands.
