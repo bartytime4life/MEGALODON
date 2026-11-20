@@ -93,6 +93,10 @@ is refused, because two would sign different lines with the same key.
 
   Pass the last sequence they saw to `verify --expect-sequence`, and a log
   that ends earlier is reported as cut.
+* **The lines themselves can leave too.** `megalodon evidence push` copies
+  each line to the fleet collector within minutes, and the collector keeps the
+  first copy of each. Deleting or rewriting the log on the machine then loses
+  nothing that already left. See [evidence off the machine](evidence-shipping.md).
 * **Crashes are handled.** Lines reach the disk before the key that comes
   after them is saved. After a crash the recorder carries on from the last
   line it wrote, and never signs two lines with one key.
