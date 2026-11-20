@@ -327,6 +327,9 @@ def _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
                 break
             deliver(batch)
             batch, size = [], 0
+            # Flushing the request can refuse this log after the check above.
+            if item['kind'] == 'commands' and item['key_id'] in blocked:
+                continue
         batch.append(item)
         size += length
     if batch and totals['requests'] < MAX_REQUESTS:

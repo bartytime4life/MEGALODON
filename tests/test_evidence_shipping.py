@@ -384,6 +384,7 @@ def test_the_machine_holds_back_a_log_after_a_refused_batch(collector, tmp_path,
         return dict(items=[dict(ok=not (len(sent) == 1 and index == 0)) for index, _item in enumerate(body["items"])])
     result = web.push(send=answer)
     assert sum(sent) > 1 and result["command_lines"] == 0
+    assert len(sent) == 1, "after a refusal, no later request sends more lines of this log"
     assert json.loads((web.dir / "cursor.json").read_text())["commands"] == {}
 
 
