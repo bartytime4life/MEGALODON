@@ -75,10 +75,15 @@ ACTIONS = {
     'disable_persistence': dict(entity='persistence', effect='Disable this service, job or startup entry without '
                                                              'deleting it', reversible=True),
     'lock_account': dict(entity='account', effect='Lock this account\'s password and logins', reversible=True),
+    # Targets are one plug-in of one USB device ('port#number@identity'), so a device plugged in again, or the
+    # same model in another port, is never cut off by a decision about this one.
+    'block_device': dict(entity='device', effect='Cut this USB device off (deauthorize it): its drivers let go, so '
+                                                 'it can no longer type, store files or carry traffic',
+                         reversible=True),
 }
 # 'peer' links incidents but is never an action target (a finding's other addresses).
 # 'process_id' is 'pid@start:program': the PID with its start time names one process, not a reused PID.
-ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account')
+ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account', 'device')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
@@ -320,8 +325,9 @@ actions = ["collect_evidence", "notify"]
 name = "new-hardware"
 rules = ["NEW_USB_KEYBOARD", "NEW_NETWORK_ADAPTER", "NEW_THUNDERBOLT_DEVICE", "DEVICE_GAINED_FUNCTIONS"]
 min_severity = "HIGH"
-# Only you know whether you plugged it in.
-actions = ["notify"]
+# Only you know whether you plugged it in. A new USB keyboard or network adapter is cut off until you say it is
+# yours (`megalodon enforce undo ID`, then `megalodon devices accept`); a Thunderbolt or built-in adapter is reported.
+actions = ["block_device", "notify"]
 
 [[response.playbook]]
 name = "program-from-memory"
@@ -787,6 +793,18 @@ def persistence_signals(report):
     return signals
 
 
+def device_signals(report):
+    """Device findings. Each plug-in is its own finding: a device unplugged and plugged in again is decided again."""
+    signals = []
+    for f in report.get('findings', []):
+        device = str(f.get('device', ''))
+        plugged = [t for t in f.get('targets', []) if isinstance(t, str)]
+        signals.append(Signal(f"devices:{f['rule_id']}:{device}:{','.join(sorted(plugged))}"[:600], 'devices',
+                              f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
+                              f"{f['rule_id']} {f.get('detail', device)}"[:300], _entities(device=plugged)))
+    return signals
+
+
 def path_signals(report, source, key_field):
     signals = []
     for f in report.get('findings', []):
@@ -939,7 +957,7 @@ def collect(policy, state, now, *, root='/'):
                lambda r: path_signals(r, 'binaries', 'path')),
               ('logwatch_manifest', 'log_integrity', 'LogIntegrityError',
                lambda r: path_signals(r, 'logwatch', 'log')),
-              ('devices_manifest', 'device_watch', 'DeviceError', lambda r: path_signals(r, 'devices', 'device')),
+              ('devices_manifest', 'device_watch', 'DeviceError', device_signals),
               ('webroot_manifest', 'webroot_watch', 'WebrootError', lambda r: path_signals(r, 'webroot', 'path')),
               ('tamper_manifest', 'tamper', 'TamperError', lambda r: path_signals(r, 'tamper', 'subject')),
               ('egress_manifest', 'egress_watch', 'EgressError', lambda r: egress_signals(r)),
@@ -1050,6 +1068,10 @@ class Guards:
                 return 'a system file: reinstall the package or restore it instead'
             if not target.startswith(policy.quarantine_roots):
                 return 'outside quarantine_roots'
+        elif action == 'block_device':
+            from .device_watch import TARGET
+            if not TARGET.fullmatch(target):
+                return 'not one plug-in of one USB device (port, device number and identity)'
         elif action == 'lock_account':
             if target in self.me or target in policy.never_touch_accounts:
                 return 'root, the account running MEGALODON, or listed in never_touch_accounts'

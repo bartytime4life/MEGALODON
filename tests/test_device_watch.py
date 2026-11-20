@@ -137,13 +137,18 @@ def test_findings_reach_the_response_engine(sysfs, tmp_path):
     manifest = tmp_path / "devices.json"
     dw.baseline(manifest, sysfs=str(sysfs))
     usb(sysfs, "1-8", "05ac", "0220", "Injector", ["03/01/01"])
-    signals = re_.path_signals(dw.check(manifest, sysfs=str(sysfs)), "devices", "device")
+    (sysfs / "bus/usb/devices/1-8/devnum").write_text("12\n")
+    signals = re_.device_signals(dw.check(manifest, sysfs=str(sysfs)))
+    assert signals[0].entities["device"] == {"1-8#12@usb:05ac:0220:Injector"}, "one plug-in of one device"
+
     policy = tmp_path / "policy.toml"
     re_.write_default_policy(policy)
     re_.run(policy_path=policy, ledger=tmp_path / "ledger.jsonl", state_path=tmp_path / "state.json",
             signals=signals, protected=set())
     decision = json.loads((tmp_path / "ledger.jsonl").read_text().splitlines()[0])
-    assert decision["playbook"] == "new-hardware" and [a["action"] for a in decision["actions"]] == ["notify"]
+    assert decision["playbook"] == "new-hardware"
+    assert [(a["action"], a["target"]) for a in decision["actions"]] == [
+        ("block_device", "1-8#12@usb:05ac:0220:Injector"), ("notify", None)]
 
 
 def test_cli(sysfs, tmp_path, capsys, monkeypatch):

@@ -44,7 +44,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | timeline-push | every 5 minutes | `timeline push`, to the [fleet collector](fleet.md#incidents-across-machines); sends nothing to a plain heartbeat monitor |
 | evidence-push | every 5 minutes | `evidence push`: command log lines and evidence bundles to the fleet collector ([evidence off the machine](evidence-shipping.md)); sends nothing to a plain heartbeat monitor |
 | logins | every 5 minutes | `logins check --alert` ([login watch](login-watch.md)) |
-| devices | every 5 minutes | `devices check --alert` |
+| devices | always running | `devices watch --alert --respond`: checks as each device is plugged in, and cuts off what the enforcement policy allows ([device watch](device-watch.md#cut-it-off-at-once)). An earlier install's `megalodon-devices.timer` is removed |
 | listeners | every 10 minutes | `listeners check --alert` |
 | persistence | every 15 minutes | `persistence check --alert` |
 | tamper | every 15 minutes | `tamper check --alert`; its baseline is taken after the others and the units |

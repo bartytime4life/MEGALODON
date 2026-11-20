@@ -74,9 +74,11 @@ JOBS = (
     Job('logwatch', 'MEGALODON log integrity check', ('logwatch', 'check', '--alert'), '*:0/15',
         manifest='~/.config/megalodon/log-integrity.json', baseline=('logwatch', 'baseline'), cron='*/15 * * * *',
         interval=900),
-    Job('devices', 'MEGALODON device check', ('devices', 'check', '--alert'), '*:0/5',
-        manifest='~/.config/megalodon/devices.json', baseline=('devices', 'baseline'), cron='*/5 * * * *',
-        interval=300),
+    # Live: a keystroke-injection device types within seconds, so each new device is decided as it is plugged in.
+    # Its enforcement run is a whole run, so it can write what the enforce job writes.
+    Job('devices', 'MEGALODON device watch, answered at once', ('devices', 'watch', '--alert', '--respond'),
+        manifest='~/.config/megalodon/devices.json', baseline=('devices', 'baseline'),
+        writable=('/etc', '-/usr/local/lib/systemd/system')),
     Job('webroot', 'MEGALODON web-root check', ('webroot', 'check', '--alert'), '*:0/15',
         manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline'), cron='*/15 * * * *',
         interval=900),
@@ -250,6 +252,14 @@ def install(*, system=None, only=None, directory=None, launcher=None, runner=Non
     for job in missing:
         if job.name == 'tamper':
             take(job)
+    # A job that now runs all the time leaves no timer of its own from an earlier install to start it again.
+    retired = []
+    for job in jobs:
+        timer = folder / f'{PREFIX}{job.name}.timer'
+        if job.calendar is None and timer.exists() and MARKER in timer.read_text(encoding='utf-8', errors='replace'):
+            runner(system, 'disable', '--now', timer.name)
+            timer.unlink()
+            retired.append(str(timer))
     enabled = [f'{PREFIX}{j.name}.{"timer" if j.calendar else "service"}' for j in jobs]
     results = [runner(system, 'daemon-reload')]
     results.append(runner(system, 'enable', '--now', *enabled))
@@ -258,7 +268,7 @@ def install(*, system=None, only=None, directory=None, launcher=None, runner=Non
     if any(j.name == 'tamper' for j in jobs) and 'tamper' not in taken:
         after.append('run `megalodon tamper accept` so the tamper check records these units')
     return dict(schema='megalodon-schedule-v1', action='install', scope='system' if system else 'user',
-                baselines_taken=taken, written=written, enabled=enabled, next=after,
+                baselines_taken=taken, written=written, retired=retired, enabled=enabled, next=after,
                 ok=not failed, errors=[(r.stderr or '').strip()[:300] for r in failed])
 
 

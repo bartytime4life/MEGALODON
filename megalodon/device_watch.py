@@ -8,6 +8,12 @@ this machine and reports new ones (ATT&CK T1200, T1091, T1052, T1557).
 Read-only; reads only /sys. Identifiers are vendor and product numbers,
 names and serial numbers, which say what a device claims to be: a hostile
 device can claim anything, but it must claim something new.
+
+`watch` hears the kernel's device events as they happen (falling back to
+polling where it cannot), so a new device is checked within moments of being
+plugged in. Each USB finding names its `targets`: the port, the device number
+the kernel gave this plug-in, and the identity, so a response can cut off that
+one device and no other (`block_device` in enforcement).
 """
 from __future__ import annotations
 
@@ -15,7 +21,11 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
+import select
+import socket
 import stat
+import struct
 import tempfile
 import time
 
@@ -44,6 +54,15 @@ RULES = {
 }
 
 
+# One plug-in of one USB device: its port, the device number the kernel gave it, and what it says it is. A device
+# unplugged and plugged in again gets a new number, like a process that restarts gets a new start time.
+TARGET = re.compile(r'([0-9]{1,3}-[0-9]{1,3}(?:\.[0-9]{1,3}){0,6})#([0-9]{1,5})@(usb:[0-9a-f]{4}:[0-9a-f]{4}:.{1,400})', re.S)
+# Key codes (linux/input-event-codes.h) a keyboard can type: a device with all of them is a keyboard.
+KEYBOARD_KEYS = (28, 30, 44)            # Enter, A, Z
+EVENT_SUBSYSTEMS = (b'usb', b'net', b'block', b'thunderbolt')
+NETLINK_KOBJECT_UEVENT = 15
+
+
 class DeviceError(ValueError):
     pass
 
@@ -60,6 +79,35 @@ def _text(path, limit=256):
         return ''
 
 
+def usb_device(sysfs, port, entries=None):
+    """(key, device number, interfaces, fields) of the USB device on `port`, or None when no device is there."""
+    base = Path(sysfs, 'bus/usb/devices')
+    folder = base / port
+    vendor = _text(folder / 'idVendor')
+    if not vendor or ':' in port:       # interfaces are 1-2:1.0; devices have idVendor
+        return None
+    if entries is None:
+        try:
+            entries = sorted(os.listdir(base))
+        except OSError:
+            entries = []
+    interfaces = []
+    for item in entries:
+        if item.startswith(port + ':'):
+            interface = base / item
+            interfaces.append('/'.join((_text(interface / 'bInterfaceClass'),
+                                        _text(interface / 'bInterfaceSubClass'),
+                                        _text(interface / 'bInterfaceProtocol'))))
+    product = _text(folder / 'idProduct')
+    serial = _text(folder / 'serial')
+    label = ' '.join(p for p in (_text(folder / 'manufacturer'), _text(folder / 'product')) if p)
+    # A device is known by what it says it is, not by the port it is plugged into.
+    key = f'usb:{vendor}:{product}:{serial or label or "-"}'
+    fields = dict(kind='usb', vendor=vendor, product=product, serial=serial, name=label,
+                  device_class=_text(folder / 'bDeviceClass'))
+    return key, _text(folder / 'devnum'), sorted(interfaces), fields
+
+
 def _usb(sysfs):
     devices, base = {}, Path(sysfs, 'bus/usb/devices')
     try:
@@ -67,27 +115,55 @@ def _usb(sysfs):
     except OSError:
         return devices
     for name in entries[:MAX_DEVICES]:
-        folder = base / name
-        vendor = _text(folder / 'idVendor')
-        if not vendor or ':' in name:       # interfaces are 1-2:1.0; devices have idVendor
+        found = usb_device(sysfs, name, entries)
+        if found is None:
             continue
-        interfaces = []
-        for item in sorted(entries):
-            if item.startswith(name + ':'):
-                interface = base / item
-                interfaces.append('/'.join((_text(interface / 'bInterfaceClass'),
-                                            _text(interface / 'bInterfaceSubClass'),
-                                            _text(interface / 'bInterfaceProtocol'))))
-        product = _text(folder / 'idProduct')
-        serial = _text(folder / 'serial')
-        label = ' '.join(p for p in (_text(folder / 'manufacturer'), _text(folder / 'product')) if p)
-        # A device is known by what it says it is, not by the port it is plugged into.
-        key = f'usb:{vendor}:{product}:{serial or label or "-"}'
-        entry = devices.setdefault(key, dict(kind='usb', vendor=vendor, product=product, serial=serial, name=label,
-                                             device_class=_text(folder / 'bDeviceClass'), ports=[], interfaces=[]))
+        key, number, interfaces, fields = found
+        entry = devices.setdefault(key, dict(fields, ports=[], interfaces=[], numbers={}))
         entry['ports'] = sorted(set(entry['ports']) | {name})
         entry['interfaces'] = sorted(set(entry['interfaces']) | set(interfaces))
+        if number:
+            entry.setdefault('numbers', {})[name] = number
     return devices
+
+
+def targets(key, entry):
+    """Each plug-in of a USB device, as `port#number@key`: what block_device acts on."""
+    return [f'{port}#{number}@{key}' for port, number in sorted((entry.get('numbers') or {}).items())
+            if number.isdigit() and TARGET.fullmatch(f'{port}#{number}@{key}')]
+
+
+def _key_bits(text):
+    """The key codes set in an input device's capabilities/key bitmap (words of the kernel's long, highest first)."""
+    width = struct.calcsize('l') * 8
+    bits = 0
+    for position, word in enumerate(reversed(text.split())):
+        try:
+            bits |= int(word, 16) << (position * width)
+        except ValueError:
+            return 0
+    return bits
+
+
+def keyboards(sysfs, *, besides=None):
+    """Input devices that can type (Enter, A, Z), other than those of the USB device on port `besides`."""
+    base = Path(sysfs, 'class/input')
+    skip = os.path.join(os.path.realpath(Path(sysfs, 'bus/usb/devices', besides)), '') if besides else None
+    found = []
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        return found
+    for name in names[:MAX_DEVICES]:
+        if not name.startswith('input'):
+            continue
+        folder = base / name
+        if skip and os.path.join(os.path.realpath(folder), '').startswith(skip):
+            continue
+        bits = _key_bits(_text(folder / 'capabilities/key', 4096))
+        if all(bits >> code & 1 for code in KEYBOARD_KEYS):
+            found.append(_text(folder / 'name') or name)
+    return found
 
 
 def _network(sysfs):
@@ -223,8 +299,11 @@ def _keyboard(entry):
 
 def _finding(rule, key, entry, detail):
     severity, techniques, summary = RULES[rule]
-    return dict(rule_id=rule, severity=severity, techniques=techniques, device=key, detail=detail, summary=summary,
-                entry=entry)
+    found = dict(rule_id=rule, severity=severity, techniques=techniques, device=key, detail=detail, summary=summary,
+                 entry=entry)
+    if entry.get('kind') == 'usb':
+        found['targets'] = targets(key, entry)
+    return found
 
 
 def _describe(entry):
@@ -281,17 +360,76 @@ def accept(manifest=DEFAULT_MANIFEST, **options):
     return dict(baseline(manifest, replace=True, **options), action='accept')
 
 
-def watch(manifest=DEFAULT_MANIFEST, emit=print, *, interval=2.0, stop=None, **options):
-    """Check every interval; each new finding is emitted once (until it is accepted)."""
+def uevents():
+    """A socket that hears the kernel's device events, or None where this machine or sandbox does not allow one."""
+    try:
+        sock = socket.socket(socket.AF_NETLINK, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC, NETLINK_KOBJECT_UEVENT)
+    except (AttributeError, OSError):
+        return None
+    try:
+        sock.bind((0, 1))
+        sock.setblocking(False)
+    except OSError:
+        sock.close()
+        return None
+    return sock
+
+
+def _relevant(message):
+    """A kernel event about a device this watch cares about being added, bound or changed."""
+    fields = dict(part.split(b'=', 1) for part in message.split(b'\0')[1:] if b'=' in part)
+    return fields.get(b'ACTION') in (b'add', b'bind', b'change') and fields.get(b'SUBSYSTEM') in EVENT_SUBSYSTEMS
+
+
+def _drain(events):
+    relevant = False
+    while True:
+        try:
+            message = events.recv(65536)
+        except (BlockingIOError, InterruptedError):
+            return relevant
+        except OSError:
+            return relevant
+        if not message:
+            return relevant
+        relevant = relevant or _relevant(message)
+
+
+def watch(manifest=DEFAULT_MANIFEST, emit=print, *, interval=2.0, stop=None, events=None, settle=0.05, **options):
+    """Check at once on each device event (with `events`), and every interval regardless.
+
+    Each finding is emitted once per plug-in: a device unplugged and plugged in again is emitted again.
+    """
     reported = set()
     while stop is None or not stop.is_set():
         report = check(manifest, **options)
         for found in report['findings']:
-            mark = (found['rule_id'], found['device'], tuple(found['entry'].get('interfaces', [])))
+            mark = (found['rule_id'], found['device'], tuple(found['entry'].get('interfaces', [])),
+                    tuple(found.get('targets', ())))
             if mark not in reported:
                 reported.add(mark)
                 emit(found)
-        if stop is not None:
-            stop.wait(interval)
-        else:
-            time.sleep(interval)
+        if events is None:
+            if stop is not None:
+                stop.wait(interval)
+            else:
+                time.sleep(interval)
+            continue
+        deadline = time.monotonic() + interval
+        while stop is None or not stop.is_set():
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            ready, _, _ = select.select([events], [], [], min(left, 0.5))
+            if ready and _drain(events):
+                # A device's interfaces arrive as events of their own just after it: wait for them, briefly.
+                time.sleep(settle)
+                _drain(events)
+                break
+
+
+def respond(finding, responder):
+    """Decide one finding at once, and carry out what enforcement allows (a `respond_now.Responder`)."""
+    from . import response_engine
+    signals = response_engine.device_signals(dict(checked_at=_now(), findings=[finding]))
+    return responder.answer(finding['rule_id'], signals)

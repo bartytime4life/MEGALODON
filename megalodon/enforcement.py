@@ -62,7 +62,7 @@ DEFAULT_JOURNAL = '~/.local/state/megalodon/enforced.jsonl'
 DEFAULT_STATE = '~/.local/state/megalodon/enforce-state.json'
 DEFAULT_QUARANTINE = '~/.local/share/megalodon/quarantine'
 SUPPORTED = ('collect_evidence', 'notify', 'suspend_process', 'block_address', 'quarantine_file', 'lock_account',
-             'disable_persistence')
+             'disable_persistence', 'block_device')
 # Units that fire something on their own: disabling them also stops them, or they fire until the next boot.
 ACTIVATING_UNITS = ('.timer', '.socket', '.path')
 # The system manager's unit folders. /etc/systemd/user holds units for every user's own manager.
@@ -92,6 +92,10 @@ quarantine_folder = "{quarantine}"
 
 class EnforcementError(ValueError):
     pass
+
+
+class DeviceGone(EnforcementError):
+    """The USB device decided on is unplugged, or another device is in its port."""
 
 
 class ProcessIdentityGone(EnforcementError):
@@ -195,8 +199,9 @@ def _start(pid, root='/'):
 class Executor:
     """What each action does to the machine, and how it is undone. Tests replace `run` (commands) only."""
 
-    def __init__(self, *, root='/', run=None, quarantine=None, home=None, files_root=None, settings=None):
+    def __init__(self, *, root='/', run=None, quarantine=None, home=None, files_root=None, settings=None, sysfs=None):
         self.root, self.quarantine = root, Path(quarantine or DEFAULT_QUARANTINE).expanduser()
+        self.sysfs = sysfs or os.path.join(root, 'sys')
         self.settings = settings            # alert settings; by default ~/.config/megalodon/settings.toml
         # Where persistence entries are looked for: the same root, unless a test points it at a machine folder
         # while processes are still read from the real /proc.
@@ -457,6 +462,48 @@ class Executor:
             self._command(['systemctl', 'daemon-reload'])
             if (undo.get('unit') or {}).get('was_active'):
                 self._command(['systemctl', 'start', undo['unit']['name']])
+
+    # --- devices
+    def _plugged(self, target):
+        """(port, interfaces) of the USB device a target names, checked to be that same plug-in now."""
+        from . import device_watch
+        match = device_watch.TARGET.fullmatch(target or '')
+        if not match:
+            raise EnforcementError('only one plug-in of one USB device (port, device number and identity) is cut off')
+        port, number, key = match.groups()
+        found = device_watch.usb_device(self.sysfs, port)
+        if found is None:
+            raise DeviceGone(f'no USB device is on port {port} now')
+        now_key, now_number, interfaces, _ = found
+        # Unplugged and plugged in again, or another device in that port: not the one decided on.
+        if (now_key, now_number) != (key, number):
+            raise DeviceGone(f'the device on port {port} is no longer the one decided on')
+        return port, interfaces
+
+    def _authorize(self, port, value):
+        path = os.path.join(self.sysfs, 'bus/usb/devices', port, 'authorized')
+        fd = os.open(path, os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            os.write(fd, value)
+        finally:
+            os.close(fd)
+
+    def block_device(self, target, decision):
+        from . import device_watch
+        port, interfaces = self._plugged(target)
+        if device_watch._keyboard(dict(interfaces=interfaces)) and not device_watch.keyboards(self.sysfs, besides=port):
+            # A new keyboard with no other keyboard left could be the one you have just plugged in to work with.
+            raise EnforcementError('it is the only keyboard attached: cutting it off could lock you out')
+        self._authorize(port, b'0')
+        return dict(port=port, interfaces=interfaces)
+
+    def undo_block_device(self, record):
+        try:
+            port, _ = self._plugged(record['target'])
+        except DeviceGone:
+            # Unplugged since: plugged in again, it is a new plug-in and the kernel lets it work by default.
+            return
+        self._authorize(port, b'1')
 
     # --- accounts
     def _shadow(self, user):
