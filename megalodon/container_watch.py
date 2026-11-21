@@ -347,12 +347,25 @@ def _open_sockets(root):
 
 
 def _group_members(root):
-    found = {}
+    """({group: members}, {group: accounts whose primary group it is}) for the root-equivalent groups.
+
+    /etc/group lists only the extra members. An account whose own group (the group ID in /etc/passwd) is docker has
+    the group's access too, without being listed there."""
+    found, ids = {}, {}
     for line in (_text(Path(root, 'etc/group')) or '').splitlines():
         fields = line.split(':')
         if len(fields) >= 4 and fields[0] in ROOT_GROUPS:
             found[fields[0]] = sorted(m for m in fields[3].split(',') if m)
-    return found
+            ids[fields[2]] = fields[0]
+    primary = {}
+    for line in (_text(Path(root, 'etc/passwd')) or '').splitlines():
+        fields = line.split(':')
+        if len(fields) >= 4 and fields[0] and fields[3] in ids:
+            primary.setdefault(ids[fields[3]], []).append(fields[0])
+    for group, accounts in primary.items():
+        found[group] = sorted(set(found[group]) | set(accounts))
+        primary[group] = sorted(set(accounts))
+    return found, primary
 
 
 def snapshot(*, root='/', api=None, settle=None):
@@ -431,8 +444,9 @@ def snapshot(*, root='/', api=None, settle=None):
         if 'privileged' in entry['risks']:
             entry['risks'] = {r for r in entry['risks'] if not r.startswith('cap:') and r != 'seccomp_off'}
         entry['risks'] = sorted(entry['risks'])
+    members, primary = _group_members(root)
     return dict(containers=containers, escaped=escaped, hooks=hooks(root), api_listeners=_api_listeners(root),
-                open_sockets=_open_sockets(root), groups=_group_members(root), gaps=gaps)
+                open_sockets=_open_sockets(root), groups=members, primary_groups=primary, gaps=gaps)
 
 
 # ------------------------------------------------------------------ baseline and check
@@ -517,9 +531,16 @@ def compare(old, new, *, root='/'):
             findings.append(_finding(rule, f'container:{key}:{risk}', f'{_label(key, entry)}: {what}',
                                      container=key, evidence=dict(processes=entry['processes'][:1])))
     for group, members in sorted(new['groups'].items()):
+        primary = set(new.get('primary_groups', {}).get(group, []))
         for member in sorted(set(members) - set(old.get('groups', {}).get(group, []))):
-            findings.append(_finding('RUNTIME_GROUP_MEMBER_ADDED', f'account:{member}',
-                                     f'{member} joined the {group} group', account=member, group=group))
+            if member not in primary:
+                detail = f'{member} joined the {group} group'
+            elif 'primary_groups' in old:
+                detail = f'{member} now has the {group} group as its own (primary) group'
+            else:       # a baseline from before primary groups were read
+                detail = f'{member} has the {group} group as its own (primary) group (first checked now)'
+            findings.append(_finding('RUNTIME_GROUP_MEMBER_ADDED', f'account:{member}', detail, account=member,
+                                     group=group))
     findings.sort(key=lambda f: (RANK.index(f['severity']), f['subject']))
     added = sorted(set(new['containers']) - set(old['containers']))
     removed = sorted(set(old['containers']) - set(new['containers']))
@@ -529,7 +550,7 @@ def compare(old, new, *, root='/'):
 def _recorded(state):
     return dict(containers={k: dict(runtime=v['runtime'], name=v['name'], image=v['image'], risks=v['risks'])
                             for k, v in state['containers'].items()},
-                hooks=state['hooks'], groups=state['groups'])
+                hooks=state['hooks'], groups=state['groups'], primary_groups=state.get('primary_groups', {}))
 
 
 def _summary(state):
