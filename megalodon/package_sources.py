@@ -122,6 +122,10 @@ RULES = {
     'PACKAGE_TRANSPORT_WEAKENED': ('MEDIUM', ['T1557'],
                                    'The connection to a source is not verified. Signatures still protect packages, '
                                    'but a keys or lists download is open to whoever is in the middle.'),
+    'PACKAGE_LOCKFILE_FOREIGN_HOST': ('MEDIUM', ['T1195.002'],
+                                      'A lockfile downloads packages from a host none of its project\'s registries '
+                                      'names. npm ci fetches each package from the URL in the lockfile, so an edited '
+                                      'lockfile installs code from anywhere.'),
     'WEAK_SIGNING_KEY': ('MEDIUM', ['T1553'], 'A trusted signing key is too short or uses an old algorithm.'),
 }
 
