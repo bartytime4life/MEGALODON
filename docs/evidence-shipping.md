@@ -148,5 +148,8 @@ Every file is mode 600 or read-only, and every folder 700.
   where the collector stands, and pieces that don't make the manifest they
   claim are refused and sent again. A manifest over 64 MiB is not sent, and
   is counted as `too_large`.
-* **One collector.** If it is down, pushes fail and are retried on the next
-  run, from where the collector stands.
+* **Each collector on its own.** A push to a collector that is down fails and
+  is retried on the next run, from where that collector stands. With
+  [more than one collector](fleet.md#a-second-collector), each has its own
+  push record, so the others are not held back. Collectors do not copy
+  bundles to each other.
