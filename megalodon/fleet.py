@@ -293,8 +293,28 @@ def _parse(text):
         return None
 
 
+# Program and file paths that link incidents on different machines: a dropped tool's own place. Ordinary paths, such
+# as /usr/bin/curl or /etc/passwd, are on every machine and would join unrelated incidents.
+DROPPED = ('/tmp/', '/var/tmp/', '/dev/shm/', '/memfd:')
+
+
+def _link_key(key):
+    """The key that joins this entity across machines ('address:...', 'name:...', 'file:...'), or None."""
+    kind, _, value = key.partition(':')
+    if kind == 'address' or (kind == 'name' and value):
+        return key
+    if kind in ('process', 'file'):
+        path = value[:-len(' (deleted)')] if value.endswith(' (deleted)') else value
+        if any(path.startswith(prefix) and path[len(prefix):].strip('/') for prefix in DROPPED):
+            return f'file:{path}'               # a program and a file at the same place are the same thing
+    return None
+
+
 def fleet_groups(*, data=DEFAULT_DATA):
-    """{fleet incident ID: events}: each machine's incidents, joined across machines by a shared address."""
+    """{fleet incident ID: events}: each machine's incidents, joined across machines by what they share.
+
+    They are joined by an address, a watchlisted or generated-looking domain name, or a program or file in a
+    temporary folder or memory, seen by two machines within a day."""
     from .timeline import _entity_keys
     every = fleet_events(data=data)
     # A machine merges two of its incidents after it sent their events: the merge joins them here too.
@@ -320,9 +340,8 @@ def fleet_groups(*, data=DEFAULT_DATA):
     by_address = {}
     for event in every:
         find(node(event))
-        for key in _entity_keys(event.get('entities')):
-            if key.startswith('address:'):
-                by_address.setdefault(key, []).append((_parse(event.get('at')), node(event)))
+        for key in {_link_key(k) for k in _entity_keys(event.get('entities'))} - {None}:
+            by_address.setdefault(key, []).append((_parse(event.get('at')), node(event)))
     window = timedelta(hours=LINK_HOURS)
     linked = {}
     for key, sightings in by_address.items():
@@ -333,7 +352,9 @@ def fleet_groups(*, data=DEFAULT_DATA):
             for other in recent:
                 if other[0] != item[0]:
                     union(item, other)
-                    linked.setdefault(frozenset((item, other)), set()).add(key.partition(':')[2])
+                    # Addresses are listed bare, as before; other links say what they are.
+                    linked.setdefault(frozenset((item, other)), set()).add(
+                        key.partition(':')[2] if key.startswith('address:') else key)
             recent.pop(item, None)
             recent[item] = moment
     groups = {}

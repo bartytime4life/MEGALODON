@@ -35,8 +35,9 @@ megalodon timeline show 3f9c2a --format html --output incident.html
 * **`show ID`** tells one incident, from first finding to last action. The
   start of an ID is enough. An incident that the engine later merged into
   another opens the one it became part of.
-* **`show --entity KIND:VALUE`** follows one address, process, file, port or
-  account across every incident that involved it. A peer address counts as
+* **`show --entity KIND:VALUE`** follows one address, process, file, port,
+  account or domain name (`name:`, for watchlisted and generated-looking
+  names) across every incident that involved it. A peer address counts as
   the address it is.
 * **`--format`** is `text` (the default), `json`, or, for `show`, `html`. The
   HTML page is static: it has no scripts and loads nothing from elsewhere.

@@ -202,6 +202,10 @@ connection was reported 13 ms after it was made.
 * **dropped-tool-phoning-home** covers `OUTBOUND_FROM_TEMPORARY`. It plans
   to collect evidence, suspend that process (by PID and start time), block
   the address for 60 minutes and notify you.
+* **Names link incidents.** A watchlisted or generated-looking name is kept as
+  a `name` entity, in lower case without a final dot. It joins this machine's
+  incidents that reached it, and other machines' on the
+  [fleet collector](fleet.md#incidents-across-machines).
 * **watchlisted-name** covers `OUTBOUND_TO_WATCHLISTED_NAME`, like a dropped
   tool. It plans to collect evidence, suspend that process, block the address
   for 60 minutes and notify you.

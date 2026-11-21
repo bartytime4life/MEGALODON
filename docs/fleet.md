@@ -168,11 +168,27 @@ is kept.
 
 Each machine's [incident timeline](incident-timeline.md) can be sent to the
 collector. The collector joins incidents on different machines when they share
-an address: the same outside address seen by two machines within a day, or one
-machine reaching another. Every incident on each machine that saw the address
-in that day is joined, not only the most recent one. An attacker moving
-between machines, or working through several, then shows up as one fleet
-incident.
+something only an intruder's activity would, seen by two machines within a
+day:
+- **an address:** the same outside address, or one machine reaching another;
+- **a domain name that is itself the finding:** one on your watchlist, or one
+  spelled the way generated names are (`OUTBOUND_TO_WATCHLISTED_NAME` and
+  `OUTBOUND_TO_GENERATED_NAME`). Case and a final dot do not matter. This
+  joins machines that reached the same server at different addresses;
+- **a dropped tool's place:** a program or file in `/tmp`, `/var/tmp`,
+  `/dev/shm` or memory (`/memfd:`) at the same path. A program on one machine
+  and a file on another at that path count as the same thing, and so does a
+  deleted one.
+
+Every incident on each machine that saw it in that day is joined, not only the
+most recent one. An attacker moving between machines, or working through
+several, then shows up as one fleet incident. `linked_by` lists what joined
+it. Addresses are listed bare, and other links say what they are, such as
+`name:c2.example` or `file:/tmp/.cache/kworker`.
+
+Names a new program reaches, and paths and accounts every machine has (such as
+`/usr/bin/curl`, `/etc/passwd` or `root`), never join machines. Neither do
+ports, devices or services.
 
 On each machine:
 
@@ -238,9 +254,12 @@ megalodon fleet timeline --entity address:203.0.113.9
   `detail` setting decides whether addresses and messages are included.
 * **No user accounts.** The view is shown to the collector machine itself and
   to nobody else. Anyone who can log in there can see it.
-* **Joined by address only.** Machines' incidents are joined by an address
-  they share within a day. The same file path or account name on two machines
-  is not taken to be the same thing.
+* **Joined by addresses, finding names and dropped tools only.** Only these
+  join machines, as described above. An ordinary path or account name on two
+  machines is not taken to be the same thing, and neither is a USB device: one
+  without a serial number is named by its model, which identical devices
+  share. A tool dropped at a different path on each machine is not joined by
+  its path. File contents are not compared.
 * **Timelines are only as recent as the last push.** With the scheduler, that
   is at most five minutes old. The collector keeps about 16 MiB of events per
   machine: the current file and the one before it.
