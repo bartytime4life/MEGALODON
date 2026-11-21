@@ -197,10 +197,19 @@ def push(*, config=None, cursor_path=DEFAULT_CURSOR, log=command_log.DEFAULT_LOG
     from . import tamper
     settings = tamper._read(config or tamper.DEFAULT_HEARTBEAT, tamper.HEARTBEAT_SCHEMA + '-config',
                             'heartbeat configuration')
-    settings = dict(settings, url=_events_url(settings, url))
     send = send or globals()['send']
-    with _PushLock(cursor_path):
-        return _push(settings, send, cursor_path, log, evidence_root, now, budget, dry_run)
+    urls = tamper.destinations(settings)
+
+    def one(settings, cursor):
+        with _PushLock(cursor):
+            return _push(settings, send, cursor, log, evidence_root, now, budget, dry_run)
+    if url is not None or len(urls) == 1:
+        return one(dict(settings, url=_events_url(settings, url)), cursor_path)
+    # Each collector keeps its own copies: each is sent what it lacks, from its own push record, within its own
+    # budget, so one that is down catches up later without holding the others back.
+    results = tamper.each_destination(urls, lambda each, cursor: one(dict(settings, url=_events_url(dict(url=each))),
+                                                                     cursor), cursor_path)
+    return dict(schema=SCHEMA, action='dry_run' if dry_run else 'push', collectors=results)
 
 
 class _PushLock:

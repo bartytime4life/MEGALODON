@@ -386,20 +386,93 @@ def accept(manifest=DEFAULT_MANIFEST, **options):
 
 # ------------------------------------------------------------------ heartbeat
 
-def init_heartbeat(url, config=DEFAULT_HEARTBEAT, *, replace=False):
-    """Record where heartbeats go and a new signing key; the key is printed once for the receiver."""
+MAX_COLLECTORS = 8
+
+
+def _checked(url):
     from .alerts import AlertConfigError, check_url
     try:
         check_url(url, 'heartbeat')
     except AlertConfigError as exc:
         raise TamperError(str(exc)) from None
+    return url
+
+
+def init_heartbeat(url, config=DEFAULT_HEARTBEAT, *, replace=False):
+    """Record where heartbeats go and a new signing key; the key is printed once for the receiver.
+
+    `url` is one destination or a list of them: every collector gets the same heartbeat, signed with the same key,
+    so each can check it independently and an intruder has to silence all of them."""
+    urls = list(dict.fromkeys([url] if isinstance(url, str) else url))
+    if not urls or len(urls) > MAX_COLLECTORS:
+        raise TamperError(f'give between 1 and {MAX_COLLECTORS} heartbeat destinations')
+    for each in urls:
+        _checked(each)
     path = Path(config).expanduser()
     if path.exists() and not replace:
         raise TamperError(f'{path} exists; pass --replace to set a new destination and key')
     key = secrets.token_hex(32)
-    _write(path, dict(schema=HEARTBEAT_SCHEMA + '-config', url=url, key=key, sensor=socket.gethostname()[:253]))
-    return dict(config=str(path), url=url, key=key,
-                note='Give this key to the machine that runs `megalodon heartbeat monitor`; it is not shown again.')
+    _write(path, dict(schema=HEARTBEAT_SCHEMA + '-config', url=urls[0], urls=urls, key=key,
+                      sensor=socket.gethostname()[:253]))
+    return dict(config=str(path), url=urls[0], urls=urls, key=key,
+                note='Give this key to every machine that receives these heartbeats (`megalodon fleet enroll '
+                     '--key-file`, or `megalodon heartbeat monitor`); it is not shown again.')
+
+
+def destinations(settings):
+    """Every heartbeat destination, the first one first."""
+    urls = settings.get('urls')
+    if isinstance(urls, list) and urls and all(isinstance(u, str) and u for u in urls) and urls[0] == settings['url']:
+        return list(dict.fromkeys(urls))
+    return [settings['url']]
+
+
+def change_destinations(config=DEFAULT_HEARTBEAT, *, add=None, remove=None):
+    """Add or remove a heartbeat destination, keeping the key, so the same key enrolls this machine anywhere."""
+    path = Path(config).expanduser()
+    settings = _read(path, HEARTBEAT_SCHEMA + '-config', 'heartbeat configuration')
+    urls = destinations(settings)
+    if add is not None:
+        if add in urls:
+            raise TamperError(f'{add} is already a heartbeat destination')
+        if len(urls) >= MAX_COLLECTORS:
+            raise TamperError(f'at most {MAX_COLLECTORS} heartbeat destinations')
+        urls.append(_checked(add))
+    if remove is not None:
+        if remove not in urls:
+            raise TamperError(f'{remove} is not a heartbeat destination')
+        if remove == urls[0]:
+            # The first destination's push records are the default files: changing it means starting them over.
+            raise TamperError('the first destination cannot be removed; run `heartbeat init --replace` to start over '
+                              'with new destinations and a new key')
+        urls.remove(remove)
+    _write(path, dict(settings, url=urls[0], urls=urls))
+    return dict(config=str(path), urls=urls)
+
+
+def cursor_for(cursor_path, index, url):
+    """The push record for one destination: the given file for the first, one named after the URL for others."""
+    if index == 0:
+        return cursor_path
+    path = Path(cursor_path).expanduser()
+    return path.with_name(f'{path.stem}-{hashlib.sha256(url.encode()).hexdigest()[:12]}{path.suffix}')
+
+
+def each_destination(urls, run, cursor_path):
+    """Run `run(url, cursor)` for each destination. A failure at one is recorded, and the rest still run."""
+    import urllib.error
+    results = []
+    for index, url in enumerate(urls):
+        try:
+            result = dict(run(url, cursor_for(cursor_path, index, url)), destination=url)
+        except urllib.error.HTTPError as exc:
+            result = dict(destination=url, sent=0, **(
+                dict(note='takes none (HTTP 404): not a fleet collector') if exc.code == 404
+                else dict(error=f'refused: HTTP {exc.code}')))
+        except (OSError, ValueError) as exc:
+            result = dict(destination=url, sent=0, error=str(exc)[:300])
+        results.append(result)
+    return results
 
 
 def _sign(key, body):

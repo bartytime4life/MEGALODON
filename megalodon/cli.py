@@ -603,8 +603,14 @@ def build_parser() -> argparse.ArgumentParser:
         "heartbeat", help="send a signed heartbeat off the machine, and check received ones for silence or forgery")
     heartbeat_sub = heartbeat.add_subparsers(dest="heartbeat_command", required=True)
     command = heartbeat_sub.add_parser("init", help="record the heartbeat destination and a new signing key")
-    command.add_argument("--url", required=True, help="where heartbeats are posted (https, or http to a private address)")
+    command.add_argument("--url", required=True, action="append",
+                         help="where heartbeats are posted (https, or http to a private address); give it again for "
+                              "a second collector, which gets the same heartbeats, timelines and evidence")
     command.add_argument("--replace", action="store_true", help="set a new destination and key")
+    for name, text in (("add-url", "add a heartbeat destination, keeping the key (e.g. a second collector)"),
+                       ("remove-url", "remove a heartbeat destination other than the first")):
+        command = heartbeat_sub.add_parser(name, help=text)
+        command.add_argument("url", help="the destination, as given to `heartbeat init`")
     command = heartbeat_sub.add_parser("send", help="post one signed heartbeat (exit 1 if it could not be delivered)")
     command.add_argument("--print", action="store_true", dest="print_only",
                          help="print the heartbeat instead of posting it")
@@ -2270,7 +2276,7 @@ def _timeline(args: argparse.Namespace) -> int:
             print(f"megalodon: {exc}", file=sys.stderr)
             return 2
         print(json.dumps(result, indent=2, sort_keys=True))
-        return 0
+        return 2 if any("error" in r for r in result.get("collectors", ())) else 0
     try:
         if args.timeline_command == "list":
             result = tl.incidents(hours=args.hours, **paths)
@@ -2584,19 +2590,33 @@ def _heartbeat(args: argparse.Namespace) -> int:
             result = tamper.init_heartbeat(args.url, replace=args.replace)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 0
+        if args.heartbeat_command in ("add-url", "remove-url"):
+            result = tamper.change_destinations(**{"add" if args.heartbeat_command == "add-url" else "remove": args.url})
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0
         if args.heartbeat_command == "send":
             settings, body = tamper.heartbeat()
             if args.print_only:
                 print(json.dumps(body, sort_keys=True))
                 return 0
-            try:
-                status = tamper.send(settings, body)
-            except (urllib.error.URLError, OSError) as exc:
-                print(f"megalodon: heartbeat {body['sequence']} was not delivered: {exc}", file=sys.stderr)
-                return 1
-            print(json.dumps(dict(sequence=body["sequence"], status=status, findings=len(body["findings"])),
-                             sort_keys=True))
-            return 0 if 200 <= status < 300 else 1
+            # The same signed heartbeat goes to every destination; one that cannot be reached does not stop the rest.
+            delivered = []
+            for url in tamper.destinations(settings):
+                try:
+                    delivered.append(dict(destination=url, status=tamper.send(dict(settings, url=url), body)))
+                except (urllib.error.URLError, OSError) as exc:
+                    print(f"megalodon: heartbeat {body['sequence']} was not delivered to {url}: {exc}",
+                          file=sys.stderr)
+                    delivered.append(dict(destination=url, error=str(exc)[:300]))
+            result = dict(sequence=body["sequence"], findings=len(body["findings"]))
+            if len(delivered) == 1:
+                if "error" in delivered[0]:
+                    return 1
+                result["status"] = delivered[0]["status"]
+            else:
+                result["destinations"] = delivered
+            print(json.dumps(result, sort_keys=True))
+            return 0 if all(200 <= d.get("status", 0) < 300 for d in delivered) else 1
         key = read_secret(str(args.key_file))
         if args.input:
             with open(args.input, encoding="utf-8", errors="replace") as stream:
@@ -2919,7 +2939,7 @@ def _evidence(args: argparse.Namespace) -> int:
             print(f"megalodon: {exc}", file=sys.stderr)
             return 2
         print(json.dumps(result, indent=2, sort_keys=True))
-        return 0
+        return 2 if any("error" in r for r in result.get("collectors", ())) else 0
     try:
         if args.evidence_command == "verify":
             result = evidence.verify(args.bundle, expected=args.expected)
