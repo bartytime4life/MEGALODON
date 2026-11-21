@@ -84,7 +84,9 @@ ACTIONS = {
 # 'peer' links incidents but is never an action target (a finding's other addresses).
 # 'process_id' is 'pid@start:program': the PID with its start time names one process, not a reused PID.
 ENTITY_KINDS = ('address', 'peer', 'process', 'process_id', 'file', 'port', 'persistence', 'account', 'device',
-                'namespace_address')
+                'namespace_address', 'name')
+# Egress rules whose domain name is the finding itself: it is kept as a `name` entity, which links incidents.
+NAME_RULES = ('OUTBOUND_TO_WATCHLISTED_NAME', 'OUTBOUND_TO_GENERATED_NAME')
 # An address seen from another network namespace (a container): 'ADDRESS@net:[ID]'. It is blocked in that
 # namespace only, since this machine's own blocks do not stop traffic routed for the container.
 NAMESPACE_ADDRESS = re.compile(r'([0-9A-Fa-f:.]{2,45})@(net:\[[0-9]{1,20}\])')
@@ -727,10 +729,11 @@ def egress_signals(report):
         # that namespace instead.
         remote = (dict(peer=[f.get('address')], namespace_address=_inside(f.get('address'), f.get('namespace')))
                   if f.get('namespace') else dict(address=[f.get('address')]))
+        named = [str(f['name']).lower().rstrip('.')] if f['rule_id'] in NAME_RULES and f.get('name') else []
         signals.append(Signal(f"egress:{f['rule_id']}:{f.get('program')}:{where}:{f.get('address')}", 'egress',
                               f['rule_id'], _severity(f.get('severity')), report.get('checked_at', ''),
                               f.get('detail', ''), _entities(process=[program], process_id=ids,
-                                                             port=[where], **remote)))
+                                                             port=[where], name=named, **remote)))
     return signals
 
 
