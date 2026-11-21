@@ -77,7 +77,11 @@ megalodon heartbeat send
 * **`init`** records the destination and a new random signing key in
   `~/.config/megalodon/heartbeat.json` (mode 600). It prints the key once:
   store it on the machine that checks the heartbeats. The URL must be
-  `https`, or `http` to a private or loopback address.
+  `https`, or `http` to a private or loopback address. Give `--url` up to 8
+  times to send each heartbeat to more than one place, for example a fleet
+  collector and a dead-man's-switch service. `heartbeat add-url URL` and
+  `heartbeat remove-url URL` change the list later and keep the key. The
+  first destination cannot be removed: `init --replace` starts over.
 * **`send`** posts one JSON heartbeat:
   - the sensor name and an increasing sequence number;
   - the time;
@@ -85,8 +89,11 @@ megalodon heartbeat send
   - the local check's current findings;
   - an HMAC-SHA256 signature over all of it.
 
-  It exits 1 if the heartbeat could not be delivered. `--print` prints the
-  heartbeat instead.
+  It exits 1 if the heartbeat could not be delivered. With more than one
+  destination, the same signed heartbeat goes to each. One that cannot be
+  reached is listed under `destinations` with its error and does not stop
+  the rest, but `send` still exits 1. `--print` prints the heartbeat
+  instead.
 
 `megalodon schedule install` sends one every 5 minutes and runs the tamper
 check every 15, once both are set up.

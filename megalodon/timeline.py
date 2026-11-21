@@ -427,11 +427,26 @@ def pending(cursor, *, ledger=engine.DEFAULT_LEDGER, journal=None):
 
 def push(*, config=None, cursor_path=DEFAULT_CURSOR, ledger=engine.DEFAULT_LEDGER, journal=None, url=None,
          send=None, now=None, dry_run=False):
-    """Send events not yet sent to the fleet collector, signed with this machine's heartbeat key."""
+    """Send events not yet sent to the fleet collector, signed with this machine's heartbeat key.
+
+    With more than one heartbeat destination, each collector is sent what it has not had yet, from its own push
+    record, and a collector that is down catches up later without holding the others back."""
     from . import tamper
     settings = tamper._read(config or tamper.DEFAULT_HEARTBEAT, tamper.HEARTBEAT_SCHEMA + '-config',
                             'heartbeat configuration')
-    settings = dict(settings, url=_events_url(settings, url))
+    urls = tamper.destinations(settings)
+    options = dict(ledger=ledger, journal=journal, send=send, now=now, dry_run=dry_run)
+    if url is not None or len(urls) == 1:
+        return _push_one(dict(settings, url=_events_url(settings, url)), cursor_path, **options)
+    results = tamper.each_destination(
+        urls, lambda each, cursor: _push_one(dict(settings, url=_events_url(dict(url=each))), cursor, **options),
+        cursor_path)
+    return dict(schema=SCHEMA, action='dry_run' if dry_run else 'push', sent=sum(r.get('sent', 0) for r in results),
+                collectors=results)
+
+
+def _push_one(settings, cursor_path, *, ledger, journal, send, now, dry_run):
+    from . import tamper
     cursor = _cursor(cursor_path)
     queue = pending(cursor, ledger=ledger, journal=journal)
     sent, batches, skipped = 0, 0, 0

@@ -55,6 +55,45 @@ TLS proxy.
 
 Nothing is sent to the machines: the collector only listens.
 
+## A second collector
+
+One collector is one machine an intruder has to silence. A machine can report
+to two or more, each kept on its own and checking for itself. A collector that
+misses a heartbeat reports the gap even if the other got it.
+
+* **Each machine names every collector.** Either give `--url` once per
+  collector at `heartbeat init`, or add one later and keep the key:
+
+  ```bash
+  megalodon heartbeat add-url https://collector-2:8650/heartbeat
+  ```
+* **Each collector enrolls the machine with the same key file.**
+
+  ```bash
+  megalodon fleet enroll web-1 --key-file web-1-heartbeat.key
+  ```
+
+  Each collector prints its own alert token. Add a second webhook alert
+  destination with that collector's `/alert` URL and token, so alerts reach
+  both too.
+* **Heartbeats** go to every collector, the same signed body to each.
+* **Timelines and evidence go to each collector separately.** `timeline push`
+  and `evidence push` keep a separate push record for each collector. They
+  send each one what it does not have yet, and evidence within its own
+  budget. The first collector uses the usual record file. Each added one
+  uses the same name with part of its URL's SHA-256 added. So a collector
+  that was down, or added later, catches up from where it stands, and the
+  others are not sent anything twice.
+* **The results list each collector.** `heartbeat send`, `timeline push` and
+  `evidence push` list each collector with its result. One that could not be
+  reached or refused is listed with its error, and the command exits
+  non-zero while still sending to the rest. A destination that is only a
+  heartbeat monitor and answers 404 is listed with a note, not an error.
+
+The collectors do not talk to each other. Each holds what the machines sent
+it, and `fleet status`, `fleet timeline` and `fleet evidence` on each show its
+own view.
+
 ## What the collector checks
 
 * **Heartbeats** must name an enrolled machine, or they are refused (403).
@@ -188,9 +227,13 @@ megalodon fleet timeline --entity address:203.0.113.9
 
 ## Limits
 
-* **One collector.** It is not replicated; if it is down, heartbeats are
-  missed and show as gaps later. Alerts the machines could not deliver are
-  retried by each machine's own alert queue, within its limits.
+* **Collectors are not replicated.** With one collector, if it is down,
+  heartbeats are missed and show as gaps later. A second collector
+  ([above](#a-second-collector)) keeps its own copy. Collectors never
+  merge or compare what they hold: compare `fleet status` on each. Alerts
+  the machines could not deliver are retried by each machine's own alert
+  queue, within its limits. Heartbeats are not retried, so a collector that
+  was down shows the gap.
 * **Alert content is what each machine chose to send.** The destination's
   `detail` setting decides whether addresses and messages are included.
 * **No user accounts.** The view is shown to the collector machine itself and
