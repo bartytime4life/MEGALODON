@@ -246,3 +246,35 @@ def test_findings_become_shadow_decisions_and_the_cli(root, tmp_path, capsys, mo
     assert exit_.value.code == 1
     assert {f["rule_id"] for f in json.loads(capsys.readouterr().out)["findings"]} == {
         "CONTAINER_ESCAPE", "CONTAINER_PRIVILEGED"}
+
+
+def test_an_account_whose_own_group_is_docker_is_a_member(root, tmp_path):
+    manifest = tmp_path / "containers.json"
+    (root / "etc/passwd").write_text("root:x:0:0::/root:/bin/bash\nalice:x:1000:1000::/home/alice:/bin/bash\n"
+                                     "svc:x:998:998::/srv:/usr/sbin/nologin\n")
+    (root / "etc/group").write_text("root:x:0:\ndocker:x:999:alice\nsvc:x:998:\n")
+    cw.baseline(manifest, root=str(root), api=API)
+    assert json.loads(manifest.read_text())["primary_groups"] == {}
+    # Not listed in /etc/group at all: its own group in /etc/passwd is docker's.
+    (root / "etc/passwd").write_text("root:x:0:0::/root:/bin/bash\nalice:x:1000:1000::/home/alice:/bin/bash\n"
+                                     "svc:x:998:999::/srv:/usr/sbin/nologin\n")
+    report = cw.check(manifest, api=API)
+    (finding,) = [f for f in report["findings"] if f["rule_id"] == "RUNTIME_GROUP_MEMBER_ADDED"]
+    assert (finding["subject"], finding["group"]) == ("account:svc", "docker")
+    assert finding["detail"] == "svc now has the docker group as its own (primary) group"
+    cw.accept(manifest, api=API)
+    assert json.loads(manifest.read_text())["groups"]["docker"] == ["alice", "svc"]
+    assert [f for f in cw.check(manifest, api=API)["findings"] if f["rule_id"] == "RUNTIME_GROUP_MEMBER_ADDED"] == []
+
+
+def test_a_baseline_from_before_says_the_primary_group_is_first_checked_now(root, tmp_path):
+    manifest = tmp_path / "containers.json"
+    (root / "etc/passwd").write_text("root:x:0:0::/root:/bin/bash\nbuild:x:997:999::/srv:/bin/sh\n")
+    (root / "etc/group").write_text("root:x:0:\ndocker:x:999:\n")
+    cw.baseline(manifest, root=str(root), api=API)
+    old = json.loads(manifest.read_text())
+    old["groups"]["docker"] = []                       # as recorded before primary groups were read
+    del old["primary_groups"]
+    manifest.write_text(json.dumps(old))
+    (finding,) = [f for f in cw.check(manifest, api=API)["findings"] if f["rule_id"] == "RUNTIME_GROUP_MEMBER_ADDED"]
+    assert finding["detail"] == "build has the docker group as its own (primary) group (first checked now)"

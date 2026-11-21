@@ -28,7 +28,9 @@ sudo megalodon containers accept
   `~/.config/megalodon/containers.json` (mode 600):
   - every running container, with what it shares with the host;
   - the kernel hooks that escapes overwrite;
-  - the members of root-equivalent groups.
+  - the members of root-equivalent groups: those listed in `/etc/group`,
+    and the accounts whose own (primary) group in `/etc/passwd` is one of
+    them, which have its access without being listed.
 
   An escape, an open runtime API or socket, or a hook that already runs a
   program from outside the system folders is reported at once.
@@ -90,7 +92,7 @@ are named by their ID. Nothing is started, stopped, entered or changed.
 | `CONTAINER_DANGEROUS_CAPABILITY` | HIGH | A container holds `SYS_ADMIN`, `SYS_PTRACE`, `SYS_MODULE`, `SYS_RAWIO`, `DAC_READ_SEARCH`, `MAC_ADMIN`, `MAC_OVERRIDE` or `BPF` |
 | `CONTAINER_HOST_PID` | HIGH | A container shares the host's process namespace |
 | `ESCAPE_HOOK_CHANGED` | HIGH | One of those hooks changed to another program in the system folders |
-| `RUNTIME_GROUP_MEMBER_ADDED` | HIGH | An account joined `docker`, `lxd`, `incus-admin` or `microk8s`, each as good as root |
+| `RUNTIME_GROUP_MEMBER_ADDED` | HIGH | An account joined `docker`, `lxd`, `incus-admin` or `microk8s`, each as good as root, or now has one as its own (primary) group. Against a baseline from before primary groups were read, such an account is reported once, as first checked now. |
 | `CONTAINER_HOST_NETWORK` | MEDIUM | A container shares the host's network namespace |
 | `CONTAINER_UNCONFINED` | MEDIUM | A container runs with seccomp off |
 
@@ -125,5 +127,6 @@ reported.
   check. Run them on the host instead.
 * **Without the Docker socket,** containers are named by ID. A container
   recreated with a new ID is compared as a new container.
-* **Primary group membership** in `docker` (a user whose own group is
-  `docker`) is not read. Only the listed members are.
+* **Local accounts and groups only.** Members are read from `/etc/group` and
+  `/etc/passwd`. Accounts and groups from a directory service (LDAP, SSSD)
+  are not read.
