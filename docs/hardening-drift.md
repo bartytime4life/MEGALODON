@@ -61,8 +61,26 @@ on every pass.
   listed as a gap. It stops after two million files or
   two minutes and reports a gap if it did.
 * **Root's command search path:**
-  - **The search path.** It is read from the system default, `/etc/environment`,
-    `ENV_SUPATH` in `/etc/login.defs`, and sudo's `secure_path`.
+  - **The search path.** It is read wherever something that runs as root
+    gets one, and each finding says where:
+    - **Logins and sudo:** the system default, `/etc/environment`,
+      `ENV_SUPATH` in `/etc/login.defs`, and sudo's `secure_path`.
+    - **Root's own shell files:** `~/.profile`, `~/.bash_profile`,
+      `~/.bash_login`, `~/.bashrc`, `~/.zshenv`, `~/.zprofile` and `~/.zshrc`.
+      `$HOME` and `~` are `/root`, and `$PATH` is the path already read. A
+      part built from any other variable or a command is not known, and is
+      left out.
+    - **cron:** `PATH=` in `/etc/crontab`, `/etc/cron.d` and root's own
+      crontab.
+    - **Services:**
+      - systemd's `DefaultEnvironment`, which every service gets.
+      - The `PATH` each service that runs as root sets itself in
+        `Environment=`, or in a file its `EnvironmentFile=` names. Unit files
+        are read where systemd reads them, `/etc` first, and their drop-ins
+        in order. A service with `User=` another account, or `DynamicUser=`,
+        does not run as root and is skipped.
+      - In a unit file, `%h` is `/root`. A part with any other specifier, or
+        with one in an environment file, is left out.
   - **Folders.** Each folder on the path, and every folder above it, is checked
     for whether an account other than root can write to it. A folder that is a
     symlink is checked both ways: up from its own path, and up from where it
@@ -92,8 +110,11 @@ administrator's to put back.
 
 * **Live values only.** Settings changed at runtime and changed back between
   checks are not seen.
-* **Root's search path only.** Other accounts' paths, and paths set in
-  individual services, are not read.
+* **Root's search paths only.** Other accounts' paths, and those of
+  services that run as another account, are not read: a folder an account
+  can write to on its own path gives it nothing it does not have. A path set
+  at run time, by a script that a service or job starts, is not seen
+  either.
 * **One search per run.** The capability search runs every check, at the
   scheduler's low CPU and I/O priority. A machine with many millions of files
   is searched only in part, and the report says so.

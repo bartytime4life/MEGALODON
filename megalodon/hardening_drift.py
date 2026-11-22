@@ -21,6 +21,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import stat
 import struct
 import tempfile
@@ -190,6 +191,139 @@ def _paths(root):
             match = re.match(r'\s*Defaults\s+secure_path\s*=\s*"?([^"\n]*)"?', line)
             if match:
                 found.append((f'{name} secure_path', match.group(1)))
+    found += _shell_paths(read)
+    found += _cron_paths(root, read)
+    found += _service_paths(root, read)
+    return found
+
+
+ROOT_SHELL_FILES = ('/root/.profile', '/root/.bash_profile', '/root/.bash_login', '/root/.bashrc', '/root/.zshenv',
+                    '/root/.zprofile', '/root/.zshrc')
+_SHELL_PATH = re.compile(r'^\s*(?:export\s+)?PATH=(.*)$')
+UNIT_FOLDERS = ('/etc/systemd/system', '/run/systemd/system', '/usr/local/lib/systemd/system', '/usr/lib/systemd/system',
+                '/lib/systemd/system')
+MAX_UNITS = 4096
+
+
+def _shell_paths(read):
+    """PATH as root's own login and shell files set it. `$HOME` and `~` are /root, and `$PATH` is the path it
+    extends, already read. A part built from any other variable or a command is unknown and left out."""
+    found = []
+    for name in ROOT_SHELL_FILES:
+        for line in read(name).splitlines():
+            match = _SHELL_PATH.match(line.split(' #', 1)[0].strip().rstrip(';'))
+            if not match:
+                continue
+            value = match.group(1).strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+                value = value[1:-1]
+            parts = []
+            for part in value.split(':'):
+                part = re.sub(r'^~(?=/|$)', '/root', part.replace('${HOME}', '/root').replace('$HOME', '/root'))
+                if '$' in part or '`' in part:
+                    continue            # $PATH is the path already read; any other variable is unknown
+                parts.append(part)
+            if parts:
+                found.append((f'{name} PATH', ':'.join(parts)))
+    return found
+
+
+def _cron_paths(root, read):
+    """PATH set in the system crontab, /etc/cron.d and root's own crontab, for the jobs there."""
+    files = ['/etc/crontab', '/var/spool/cron/crontabs/root', '/var/spool/cron/root']
+    try:
+        files += sorted('/etc/cron.d/' + n for n in os.listdir(Path(root, 'etc/cron.d'))
+                        if not n.startswith('.'))[:256]
+    except OSError:
+        pass
+    found = []
+    for name in files:
+        for line in read(name).splitlines():
+            match = re.match(r'\s*PATH\s*=\s*(.*)$', line)
+            if match:
+                found.append((f'{name} PATH', match.group(1).strip().strip('"\'')))
+    return found
+
+
+def _assignments(text):
+    """The VAR=value pairs on one systemd Environment= line, quoted or not."""
+    try:
+        words = shlex.split(text, posix=True)
+    except ValueError:
+        return []
+    return [word.split('=', 1) for word in words if '=' in word]
+
+
+def _service_paths(root, read):
+    """PATH for every service: systemd's default environment, and the PATH each service that runs as root sets
+    itself, in its unit file, its drop-ins or an environment file they name."""
+    found = []
+    defaults = ['/etc/systemd/system.conf']
+    try:
+        defaults += sorted('/etc/systemd/system.conf.d/' + n for n in os.listdir(Path(root, 'etc/systemd/system.conf.d'))
+                           if n.endswith('.conf'))
+    except OSError:
+        pass
+    for name in defaults:
+        for line in read(name).splitlines():
+            match = re.match(r'\s*DefaultEnvironment\s*=\s*(.*)$', line)
+            for key, value in _assignments(match.group(1)) if match else ():
+                if key == 'PATH':
+                    found.append((f'{name} DefaultEnvironment', value))
+    units = {}                      # name: its file, from the folder that takes precedence
+    drop_ins = {}                   # name: {drop-in file name: path}, the first folder's copy winning
+    for folder in UNIT_FOLDERS:
+        try:
+            names = sorted(os.listdir(Path(root, folder.lstrip('/'))))
+        except OSError:
+            continue
+        for name in names:
+            if name.endswith('.service') and name not in units:
+                units[name] = f'{folder}/{name}'
+            elif name.endswith('.service.d'):
+                try:
+                    confs = sorted(n for n in os.listdir(Path(root, folder.lstrip('/'), name)) if n.endswith('.conf'))
+                except OSError:
+                    continue
+                for conf in confs:
+                    drop_ins.setdefault(name[:-2], {}).setdefault(conf, f'{folder}/{name}/{conf}')
+    for name in sorted(units)[:MAX_UNITS]:
+        files = [units[name]] + [path for _conf, path in sorted(drop_ins.get(name, {}).items())]
+        user, path, where, in_unit = None, None, None, True
+        for file in files:
+            section = None
+            for line in read(file).splitlines():
+                line = line.strip()
+                if line.startswith('['):
+                    section = line
+                    continue
+                if section != '[Service]' or '=' not in line or line.startswith(('#', ';')):
+                    continue
+                key, _, value = (part.strip() for part in line.partition('='))
+                if key == 'User':
+                    user = value or None
+                elif key == 'DynamicUser' and value.lower() in ('yes', 'true', '1', 'on'):
+                    user = 'dynamic'
+                elif key == 'Environment':
+                    if not value:
+                        path = None                                   # an empty assignment resets the list
+                    for env_key, env_value in _assignments(value):
+                        if env_key == 'PATH':
+                            path, where, in_unit = env_value, f'{file} Environment', True
+                elif key == 'EnvironmentFile' and value:
+                    env_file = value.lstrip('-')
+                    if env_file.startswith('/'):
+                        for env_line in read(env_file).splitlines():
+                            match = re.match(r'\s*(?:export\s+)?PATH\s*=\s*(.*)$', env_line)
+                            if match:
+                                path, where, in_unit = match.group(1).strip().strip('"\''), \
+                                    f'{env_file} (EnvironmentFile of {name})', False
+        if path is None or user not in (None, 'root', '0'):
+            continue                # the default path, or a service that does not run as root
+        # In a unit file, %h is the home of the account the service runs as: root's. A part with any other
+        # specifier, or with one in an environment file, is not known for certain and is left out.
+        parts = [part.replace('%h', '/root') if in_unit else part for part in path.split(':')]
+        found.append((f'{name}: {where}', ':'.join(part for part in parts if '%' not in part)))
     return found
 
 
