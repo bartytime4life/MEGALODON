@@ -44,8 +44,8 @@ megalodon webroot accept
   dropped, used and removed between two checks. That includes a script in a
   folder moved out of the web roots, and a rename within them keeps the
   time the script first appeared. It looks at every file once when it
-  starts; when the kernel drops file events under load, it watches every
-  folder again and looks at every file. An `accept` made while it runs is
+  starts and every 15 minutes; when the kernel drops file events under
+  load, it watches every folder again and looks at every file. An `accept` made while it runs is
   picked up.
 * **`accept`** records the current scripts once you have reviewed them, for
   example after a deployment or a CMS update.
@@ -108,8 +108,10 @@ elsewhere are left to you, since deployments add and change them.
   tools also match.
 * **Between checks.** `check` does not see a script dropped and deleted
   between two runs; `watch` does. `watch` keeps the hash and the shapes it
-  found, not a copy of the file. It watches at most 65,536 folders and
-  warns past that; run `check` for the rest. A shell's commands are also seen, if a
+  found, not a copy of the file. It also looks at every file every 15
+  minutes, as `check` from a timer would, so a link's target outside the
+  web roots, whose changes make no event, and folders past its limit of
+  65,536 are still covered. A shell's commands are also seen, if a
   service runs them, by the [process ancestry watch](process-ancestry.md).
 * **Code in a database** (stored templates, plugin code kept in SQL) is not
   read.

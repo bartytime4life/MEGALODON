@@ -266,3 +266,47 @@ def test_a_folder_renamed_and_its_script_deleted_at_once(site, tmp_path):  # noq
             ("WEB_SCRIPT_DROPPED_AND_REMOVED", str(site / "html/tools/a.php"))]
     finally:
         watcher.close()
+
+
+def test_a_full_look_every_so_often_catches_what_no_event_shows(site, tmp_path):  # noqa: F811
+    # A page that is a link to a file outside the web roots: a change to that file makes no event here.
+    outside = tmp_path / "shared/header.php"
+    outside.parent.mkdir()
+    outside.write_text("<?php echo 'header';\n")
+    os.symlink(outside, site / "html/header.php")
+    manifest = tmp_path / "webroot.json"
+    ww.baseline(manifest, web_roots=[str(site)])
+    clock, found, seen = Clock(), [], []
+
+    class Script:
+        """No file events at all; each read moves time on, and the first one changes the outside file."""
+        def __init__(self):
+            self.reads = 0
+
+        def add(self, path):
+            return True
+
+        def events(self, timeout):
+            self.reads += 1
+            seen.append(len(found))
+            if self.reads == 1:
+                outside.write_text(SHELL_CALL)
+                clock.now += ww.RESCAN_SECONDS - 1           # not yet time for a full look
+            else:
+                clock.now += 2
+            return []
+
+        def close(self):
+            pass
+
+    class Turns:
+        def __init__(self, turns):
+            self.turns = turns
+
+        def is_set(self):
+            self.turns -= 1
+            return self.turns < 0
+    watcher = ww.Watcher(manifest, found.append, notify=Script(), clock=clock)
+    watcher.run(Turns(3))
+    assert seen[:2] == [0, 0], "no event, and not yet time for a full look"
+    assert rules(found) == [("WEB_LINK_CHANGED", "header.php"), ("WEB_SHELL_PATTERN", "header.php")]

@@ -45,6 +45,9 @@ MAX_PATTERN_READ = 2 * 1024 * 1024
 # A script that appeared while watching and is deleted within this long was dropped, used and removed.
 DROP_WINDOW = 3600.0
 MAX_WATCHED_FOLDERS = 65536
+# A full look this often, as `check` from a timer did: a link's target outside the web roots, and folders past the
+# watch limit, change without any event here.
+RESCAN_SECONDS = 900.0
 MAX_REMEMBERED = 65536
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 
@@ -431,7 +434,7 @@ class Watcher:
                                                                                  self.roots)]
             if self.watched >= self.max_folders:
                 self.warn(f'more than {self.max_folders} folders under the web roots: the rest are not watched '
-                          'as files are written; run `megalodon webroot check` to cover them')
+                          'as files are written; the full look every 15 minutes still covers them')
                 return found
             if self.notify.add(folder):
                 self.watched += 1
@@ -571,10 +574,14 @@ class Watcher:
     def run(self, stop, *, poll=0.5):
         try:
             self.rescan()
+            due = self.clock() + RESCAN_SECONDS
             while not stop.is_set():
                 stamp = self._stamp()
                 if stamp != self.loaded:             # `accept` changed the baseline while watching
                     self.baseline, self.loaded, self.reported = _read(self.manifest), stamp, {}
+                if self.clock() >= due:
+                    self.rescan()
+                    due = self.clock() + RESCAN_SECONDS
                 self.handle(self.notify.events(poll))
         finally:
             self.close()
