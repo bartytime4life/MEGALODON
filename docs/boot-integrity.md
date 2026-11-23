@@ -25,6 +25,12 @@ sudo megalodon boot accept
   - the SHA-256 of every file under `/boot`: kernels, initramfs images,
     GRUB and its configuration, and the EFI system partition when it is
     mounted at `/boot/efi`;
+  - the EFI system partition wherever else it is mounted. That includes
+    `/efi`, where systemd-boot mounts it, read by name. It also includes any
+    other FAT mount whose partition udev records with the EFI system
+    partition's type (`ID_PART_ENTRY_TYPE`
+    `c12a7328-f81f-11d2-ba4b-00a0c93ec93b`). A FAT USB stick is not that
+    partition, and is not read. Bootkits plant their loaders here;
   - `/etc/default/grub`, `/etc/grub.d`, `/etc/kernel` and the initramfs-tools,
     dracut and mkinitcpio configuration;
   - the running kernel's command line, Secure Boot, kernel lockdown,
@@ -84,7 +90,10 @@ be repaired from inside it.
 * **Package activity explains changes broadly.** A change made during the
   same half hour as an update is counted as explained. Review `explained`
   after updates, and run `accept` when the update is complete.
-* **The EFI system partition** is checked only where it is mounted under
-  `/boot`.
+* **The EFI system partition must be mounted.** It is read wherever it is
+  mounted. On a machine booted with UEFI where it is not mounted at all, the
+  report lists a gap: MEGALODON does not mount it, since that would change
+  the machine. Without udev's records, as in some containers, only
+  `/boot/efi` and `/efi` are read.
 * **Containers and virtual machines booted directly** have no `/boot`. The
   report says so, and checks only the kernel's state.
