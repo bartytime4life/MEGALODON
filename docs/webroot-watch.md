@@ -41,9 +41,12 @@ megalodon webroot accept
   with `--alert` as well. A script that appeared while it watched and is
   deleted, or moved out of the web roots, within an hour is reported as
   `WEB_SCRIPT_DROPPED_AND_REMOVED`, with the hash it had: a web shell
-  dropped, used and removed between two checks. It looks at every file once
-  when it starts, and again whenever the kernel drops file events under
-  load. An `accept` made while it runs is picked up.
+  dropped, used and removed between two checks. That includes a script in a
+  folder moved out of the web roots, and a rename within them keeps the
+  time the script first appeared. It looks at every file once when it
+  starts; when the kernel drops file events under load, it watches every
+  folder again and looks at every file. An `accept` made while it runs is
+  picked up.
 * **`accept`** records the current scripts once you have reviewed them, for
   example after a deployment or a CMS update.
 
