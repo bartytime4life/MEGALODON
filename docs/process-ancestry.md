@@ -87,6 +87,11 @@ counts the same way.
   these without pausing anything.
 - **Naming:** the finding names the application by runtime and script, such
   as `python3.12 /usr/local/bin/gunicorn` or `java -jar /opt/app/app.jar`.
+  A relative script or archive is resolved against the application's
+  working directory, so `node server.js` in `/srv/a` and in `/srv/b` are
+  two applications. When that directory cannot be read (another account's
+  process, without root), it stays `./server.js`. The same command started
+  by two applications is reported for each, once every five minutes.
 - **Timing:** a process that is not listening yet is looked at again after
   30 seconds, so a server that opens its port after starting is still
   recognized.

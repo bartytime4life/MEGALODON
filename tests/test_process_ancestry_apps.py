@@ -137,3 +137,49 @@ def test_a_live_python_server_starting_a_shell_is_caught(tmp_path):
 def test_only_runtimes_become_application_services(root):  # noqa: F811
     listening(root, 60, 600)                             # sshd listens too, and a login shell is its job
     assert 61 not in findings(root)
+
+
+def in_folder(root, pid, folder):
+    (root / "proc" / str(pid) / "cwd").symlink_to(folder)
+
+
+def test_relative_scripts_and_archives_are_named_from_the_application_s_folder(root, tmp_path):  # noqa: F811
+    allow = tmp_path / "allow.json"
+    for pid, folder in ((170, "/srv/a"), (180, "/srv/b")):
+        proc(root, pid, 1, "/usr/bin/node", ["node", "server.js"])
+        in_folder(root, pid, folder)
+        listening(root, pid, pid * 10)
+        proc(root, pid + 1, pid, "/usr/bin/curl", ["curl", "-s", "http://example.test/"])
+    proc(root, 190, 1, "/usr/lib/jvm/java-21/bin/java", ["java", "-jar", "build/app.jar"])
+    in_folder(root, 190, "/opt/app")
+    listening(root, 190, 1900)
+    proc(root, 191, 190, "/usr/bin/dash", ["sh", "-c", "id"])
+    found = findings(root)
+    assert [found[p]["evidence"]["service"]["allow_as"] for p in (171, 181, 191)] == [
+        "/usr/bin/node /srv/a/server.js", "/usr/bin/node /srv/b/server.js",
+        "/usr/lib/jvm/java-21/bin/java -jar /opt/app/build/app.jar"]
+    anc.allow(allow, "/usr/bin/node /srv/a/server.js", "/usr/bin/curl")
+    assert [f["evidence"]["pid"] for f in anc.check(str(root), allow_path=allow, now=NOW)["findings"]
+            if f["evidence"]["program"] == "/usr/bin/curl"] == [181], "the same script name in another folder"
+
+
+def test_one_application_s_routine_command_does_not_quiet_another_s(root):  # noqa: F811
+    from test_process_ancestry import Events
+    for pid, script in ((200, "/srv/a/server.js"), (210, "/srv/b/app.js")):
+        proc(root, pid, 1, "/usr/bin/node", ["node", script])
+        listening(root, pid, pid * 10)
+        proc(root, pid + 1, pid, "/usr/bin/id", ["id"])
+    found = []
+    watcher = anc.Watcher(found.append, root=root, source=Events([]))
+    for pid in (201, 211, 201):
+        watcher.handle("exec", pid, 0)
+    assert [f["evidence"]["pid"] for f in found] == [201, 211], "the same command in each, once per cooldown"
+
+
+def test_a_forked_child_is_remembered_with_its_parent_s_folder(root):  # noqa: F811
+    from test_process_ancestry import Events
+    proc(root, 220, 1, "/usr/bin/python3.12", ["python3", "serve.py"])
+    in_folder(root, 220, "/srv/c")
+    watcher = anc.Watcher(lambda f: None, root=root, source=Events([]))
+    watcher.handle("fork", 221, 220)                     # it runs its parent's program, and is gone before it is read
+    assert (watcher.cache[221].argv, watcher.cache[221].cwd) == (["python3", "serve.py"], "/srv/c")
