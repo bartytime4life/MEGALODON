@@ -38,7 +38,8 @@ def test_the_sticky_bit_protects_only_root_s_own_folder_in_root_s_own_folder(mon
     monkeypatch.setattr(hd, "TRUSTED_UID", 0)
     sticky = SimpleNamespace(st_mode=stat.S_IFDIR | 0o1777, st_uid=0)
     owned = {"root-owned": 0, "another-owner": 1234}
-    monkeypatch.setattr(hd.os, "lstat", lambda path: SimpleNamespace(st_uid=owned[os.path.basename(str(path))]))
+    monkeypatch.setattr(hd.os, "lstat", lambda path: SimpleNamespace(st_uid=owned[os.path.basename(str(path))],
+                                                                     st_mode=stat.S_IFDIR | 0o755))
     assert hd._sticky_protects(sticky, tmp_path / "root-owned")
     assert not hd._sticky_protects(sticky, tmp_path / "another-owner"), "its owner can move it"
     assert not hd._sticky_protects(SimpleNamespace(st_mode=stat.S_IFDIR | 0o1777, st_uid=1234),
@@ -46,3 +47,17 @@ def test_the_sticky_bit_protects_only_root_s_own_folder_in_root_s_own_folder(mon
     assert not hd._sticky_protects(SimpleNamespace(st_mode=stat.S_IFDIR | 0o777, st_uid=0),
                                    tmp_path / "root-owned"), "without the sticky bit anyone can rename"
     assert not hd._sticky_protects(sticky, None), "the path folder itself"
+
+
+def test_a_link_below_a_sticky_folder_is_not_protected(root, tmp_path):  # noqa: F811
+    # /tmp/root-link -> user-link -> ../safe: the second link's owner can repoint it, whoever owns the first.
+    manifest = tmp_path / "hardening.json"
+    (root / "safe/bin").mkdir(parents=True)
+    (root / "tmp").mkdir()
+    os.symlink("../safe", root / "tmp/user-link")
+    os.symlink("user-link", root / "tmp/root-link")
+    (root / "etc/environment").write_text('PATH="/usr/bin:/tmp/root-link/bin"\n')
+    hd.baseline(manifest, root=str(root), review=reviewer(GOOD), budget=30)
+    os.chmod(root / "tmp", 0o1777)
+    assert rules(hd.check(manifest, review=reviewer(GOOD), budget=30)) == [
+        ("CRITICAL", "PATH_FOLDER_WRITABLE", "file:/tmp")]

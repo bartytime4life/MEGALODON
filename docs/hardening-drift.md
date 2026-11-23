@@ -88,11 +88,12 @@ on every pass.
     there, root runs.
   - **Sticky folders above the path.** A folder above a path folder, such as
     `/var/tmp`, is not reported in one case. It must have the sticky bit and
-    be owned by root, and the folder below it on the way down must exist and
-    be owned by root. Then no other account can rename or remove that folder
-    to swap in its own. If the folder below does not exist yet, or another
-    account owns it, the sticky folder is reported, because a folder can be
-    created or moved there. A sticky folder that is itself on the path is
+    be owned by root, and the folder below it on the way down must exist, be
+    owned by root and be a real folder, not a link. Then no other account can
+    rename or remove that folder to swap in its own. Otherwise the sticky
+    folder is reported. A folder that does not exist yet can be created
+    there, one another account owns can be moved, and a link may lead
+    through links another account owns and can repoint. A sticky folder that is itself on the path is
     always reported: anyone can still add a program to it.
   - **Programs.** So is each program in those folders.
   - **Relative entries.** An empty or relative entry (`.`) makes root run

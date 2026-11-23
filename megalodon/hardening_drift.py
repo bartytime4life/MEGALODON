@@ -365,14 +365,17 @@ def _sticky_protects(info, child):
     """Whether a writable folder's sticky bit keeps others from swapping the folder below it on the way to a path
     entry. With the sticky bit, only an entry's owner, the folder's owner or root can rename or remove the entry, so
     a root-owned folder in a root-owned sticky folder stays put. If the folder below does not exist yet, anyone who
-    can write here can create it, and if another account owns it, that account can move it."""
+    can write here can create it, if another account owns it, that account can move it, and if it is a link, the
+    links it leads through may not be root's."""
     if not info.st_mode & stat.S_ISVTX or info.st_uid != TRUSTED_UID or child is None:
         return False
     try:
         below = os.lstat(child)
     except OSError:
         return False
-    return below.st_uid == TRUSTED_UID
+    # A link below only names somewhere else: the chain it leads through, which may run through links another
+    # account owns, is not protected by this folder's sticky bit.
+    return below.st_uid == TRUSTED_UID and not stat.S_ISLNK(below.st_mode)
 
 
 def _who(info):
