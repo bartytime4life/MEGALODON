@@ -319,7 +319,8 @@ def _unix_listeners(table):
                 except ValueError:
                     continue
                 path = fields[7]
-                if not path.startswith('/') or path.startswith('/run/user/') or '/pymp-' in path:
+                # An abstract name starts with @; a filesystem one may be relative (`--bind unix:app.sock`).
+                if path.startswith('@') or path.startswith('/run/user/') or '/pymp-' in path:
                     continue
                 found.add(fields[6])
     except OSError:
