@@ -111,6 +111,7 @@ class Proc:
     uid: int | None
     start: int | None
     argv: list = field(default_factory=list)
+    cwd: str = ''
 
 
 def read_proc(base, pid):
@@ -141,7 +142,11 @@ def read_proc(base, pid):
         argv = [part.decode('utf-8', 'replace') for part in raw.split(b'\0') if part]
     except OSError:
         argv = []
-    return Proc(pid, ppid, path, comm, uid, start, argv)
+    try:
+        cwd = os.readlink(proc / 'cwd')
+    except OSError:
+        cwd = ''
+    return Proc(pid, ppid, path, comm, uid, start, argv, cwd)
 
 
 def _allowed_helper(argv):
@@ -214,14 +219,22 @@ def _runtime(proc):
 def service_label(proc, category):
     """How a service is named and allowed: its program, or for an application its runtime and what it runs
     (`/usr/bin/python3 /usr/local/bin/gunicorn`, `/usr/bin/java -jar /opt/app.jar`), so allowing one Python
-    application does not allow them all."""
+    application does not allow them all. A relative script or archive is resolved against the application's working
+    directory, so `node server.js` in /srv/a and in /srv/b are two applications, and the directory is part of the
+    name, so two gunicorn applications are too."""
     if category != 'application':
         return proc.path
     from .egress_watch import script
-    found = script(dict(path=proc.path, argv=proc.argv, cwd=None))
+    found = script(dict(path=proc.path, argv=proc.argv, cwd=proc.cwd or None))
     if found is None and '-jar' in proc.argv[:-1]:
-        found = f"-jar {proc.argv[proc.argv.index('-jar') + 1]}"
-    return f'{proc.path} {found}' if found else proc.path
+        archive = proc.argv[proc.argv.index('-jar') + 1]
+        if not archive.startswith('/'):
+            archive = os.path.normpath(os.path.join(proc.cwd, archive)) if proc.cwd else f'./{archive}'
+        found = f"-jar {archive}"
+    label = f'{proc.path} {found}' if found else proc.path
+    # A launcher (gunicorn, uvicorn, `-m flask`) is the same file for every application it runs: the folder each runs
+    # in tells them apart.
+    return f'{label} in {proc.cwd}' if proc.cwd else label
 
 
 class Listeners:
@@ -513,7 +526,7 @@ class Watcher:
                 self._remember(self.cache, parent, live)
             if known is not None:
                 self._remember(self.cache, pid, Proc(pid, parent, known.path, known.comm, known.uid, None,
-                                                     list(known.argv)))
+                                                     list(known.argv), known.cwd))
             return None
         self.stats['started'] += 1
         proc = read_proc(self.base, pid)
@@ -526,7 +539,10 @@ class Watcher:
         found = self.judge.judge(proc, chain, _now())
         if not found:
             return None
-        key = (found['evidence']['service']['program'], proc.path, tuple(proc.argv))
+        service = found['evidence']['service']
+        # An application is its runtime and what it runs: one Python application's routine commands do not quiet
+        # the same command in another.
+        key = (service.get('allow_as', service['program']), proc.path, tuple(proc.argv))
         now = self.clock()
         if now - self.last.get(key, -1e18) < COOLDOWN_SECONDS:
             return None
