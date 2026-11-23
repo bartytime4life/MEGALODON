@@ -68,9 +68,10 @@ JOBS = (
     Job('logins', 'MEGALODON login check', ('logins', 'check', '--alert'), '*:0/5',
         manifest='~/.config/megalodon/logins.json', baseline=('logins', 'learn'), cron='*/5 * * * *',
         interval=300),
-    Job('listeners', 'MEGALODON listener check', ('listeners', 'check', '--alert'), '*:0/10',
-        manifest='~/.config/megalodon/listeners.json', baseline=('listeners', 'baseline'), cron='*/10 * * * *',
-        interval=600),
+    # Live: every 10 seconds, each change once while it lasts, and as root the listeners that open and close in
+    # between, as a bind shell that takes one connection does.
+    Job('listeners', 'MEGALODON listener watch', ('listeners', 'watch', '--alert'),
+        manifest='~/.config/megalodon/listeners.json', baseline=('listeners', 'baseline')),
     Job('logwatch', 'MEGALODON log integrity check', ('logwatch', 'check', '--alert'), '*:0/15',
         manifest='~/.config/megalodon/log-integrity.json', baseline=('logwatch', 'baseline'), cron='*/15 * * * *',
         interval=900),
