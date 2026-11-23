@@ -247,14 +247,18 @@ def build_parser() -> argparse.ArgumentParser:
     listeners_sub = listeners.add_subparsers(dest="listeners_command", required=True)
     for name, text in (("baseline", "record every listening port, where it is reachable and which program owns it"),
                        ("check", "report new listeners, ports taken over by another program and wider exposure"),
+                       ("watch", "check every few seconds and report each change once, and, as root, listeners that "
+                                 "opened and closed in between, as JSON lines"),
                        ("accept", "after review, record the current listeners as the new baseline")):
         command = listeners_sub.add_parser(name, help=text)
         command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/listeners.json)")
         if name == "baseline":
             command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
-        if name == "check":
+        if name == "watch":
+            command.add_argument("--interval", type=float, default=10.0, help="seconds between checks (default 10)")
+        if name in ("check", "watch"):
             command.add_argument("--alert", action="store_true",
-                                 help="also send a summary to the [alerts] destinations in the settings file")
+                                 help="also send findings to the [alerts] destinations in the settings file")
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
@@ -1785,6 +1789,8 @@ def _listeners(args: argparse.Namespace) -> int:
     from .validation import ValidationError
 
     manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    if args.listeners_command == "watch":
+        return _listeners_watch(args, manifest)
     try:
         if args.listeners_command == "baseline":
             result = watch.baseline(manifest, replace=args.replace)
@@ -1816,6 +1822,47 @@ def _listeners(args: argparse.Namespace) -> int:
                 tuple(sorted({t for f in findings for t in f['techniques']}))[:8],
                 "A program started listening for connections, took over a port, or became reachable more widely.")])
     return 1 if findings else 0
+
+
+def _listeners_watch(args: argparse.Namespace, manifest: Path) -> int:
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from . import listener_watch as watch
+    from .validation import ValidationError
+
+    dispatcher = None
+    if args.alert:
+        from .alerts import dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def emit(found):
+        print(json.dumps(found, sort_keys=True), flush=True)
+        if dispatcher is not None:
+            from .alerts import HostNotice
+            programs = ", ".join(p["path"] for p in found["programs"][:2]) or "program unknown"
+            dispatcher.submit([HostNotice(
+                found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                f"{found['rule_id']} {found['listener']} ({programs})", tuple(found["techniques"])[:8],
+                "A program started listening for connections, took over a port, or became reachable more widely.")])
+    if args.interval <= 0:
+        print("megalodon: --interval must be more than 0", file=sys.stderr)
+        return 2
+    try:
+        watcher = watch.Watcher(manifest, emit, interval=args.interval)
+    except (watch.ListenerError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    try:
+        watcher.run(Event())
+    except KeyboardInterrupt:
+        pass
+    return 0
 
 
 RESPOND_HELP = ("decide each finding at once with the response engine, and carry out what the enforcement policy "
