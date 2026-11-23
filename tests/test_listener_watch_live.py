@@ -141,7 +141,7 @@ def test_a_real_listener_opened_and_closed_between_checks_is_heard(tmp_path):
     try:
         watch.poll()
         server = socket.socket()
-        server.bind(("0.0.0.0", 0))
+        server.bind(("127.0.0.1", 0))
         server.listen(1)
         port = server.getsockname()[1]
         server.close()
