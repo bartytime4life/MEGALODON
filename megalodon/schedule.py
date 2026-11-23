@@ -74,7 +74,9 @@ JOBS = (
     Job('listeners', 'MEGALODON listener watch', ('listeners', 'watch', '--alert'),
         manifest='~/.config/megalodon/listeners.json', baseline=('listeners', 'baseline'),
         cron='*/10 * * * *', cron_command=('listeners', 'check', '--alert')),
-    Job('logwatch', 'MEGALODON log integrity check', ('logwatch', 'check', '--alert'), '*:0/15',
+    # Each run records the logs without a finding, so the next one covers what was written in between, and
+    # rotated copies that logrotate later deletes are not reported.
+    Job('logwatch', 'MEGALODON log integrity check', ('logwatch', 'check', '--alert', '--advance'), '*:0/15',
         manifest='~/.config/megalodon/log-integrity.json', baseline=('logwatch', 'baseline'), cron='*/15 * * * *',
         interval=900),
     # Live: a keystroke-injection device types within seconds, so each new device is decided as it is plugged in.

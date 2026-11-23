@@ -3,7 +3,8 @@
 Logs are the record of what happened, so an intruder's last step is often to
 erase them (ATT&CK T1070.002, Clear Linux or Mac System Logs). ``megalodon
 logwatch baseline`` records each log file's identity: inode, size, owner,
-mode and a digest of its first 4 KiB, which stays fixed while a log only grows.
+mode, a digest of its first 4 KiB and digests of its whole recorded content in
+up to 128 pieces, all of which stay fixed while a log only grows.
 ``megalodon logwatch check`` compares the logs with that record:
 
 ``LOG_DELETED`` (HIGH)
@@ -11,17 +12,18 @@ mode and a digest of its first 4 KiB, which stays fixed while a log only grows.
 ``LOG_TRUNCATED`` (HIGH)
     The same file got smaller, and no rotated copy holds its earlier content.
 ``LOG_REWRITTEN`` (HIGH)
-    The same file kept or grew its size, but its beginning changed. Logs only append.
+    The same file kept or grew its size, but content it already had changed,
+    such as one line removed from the middle. Logs only append.
 ``LOG_REPLACED`` (MEDIUM)
     A different file now has the log's name, and no rotated copy explains it.
 ``LOG_PERMISSIONS`` (MEDIUM)
     The log became writable by others, or changed owner.
 
 Normal rotation stays quiet. When a sibling such as ``auth.log.1`` (or a
-compressed ``.1.gz``) starts with the recorded content, or is the recorded
-file itself, the change is reported as ``rotated``, not as a finding. The
-baseline is refreshed by ``accept``. Only metadata and digests are stored,
-never log content.
+compressed ``.1.gz``) holds the whole recorded content unchanged, the change
+is reported as ``rotated``, not as a finding. The baseline is refreshed by
+``accept``, or by ``check --advance`` for every log without a finding. Only
+metadata and digests are stored, never log content.
 """
 from __future__ import annotations
 
@@ -38,6 +40,8 @@ import tempfile
 SCHEMA = 'megalodon-log-integrity-v1'
 REPORT_SCHEMA = 'megalodon-log-integrity-check-v1'
 HEAD_BYTES = 4096
+PIECE_BYTES = 1 << 20  # The smallest piece; a log over 128 MiB gets larger ones.
+MAX_PIECES = 128
 DEFAULT_MANIFEST = '~/.config/megalodon/log-integrity.json'
 MAX_LOGS = 2000
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
@@ -80,7 +84,57 @@ def _head(path):
     return hashlib.sha256(data).hexdigest(), len(data)
 
 
-def _identity(path):
+def _piece_size(size):
+    pieces = -(-size // PIECE_BYTES)
+    return PIECE_BYTES * max(1, -(-pieces // MAX_PIECES))
+
+
+def _open(path):
+    """A stream of the content, compressed rotations read transparently."""
+    if path.endswith('.gz'):
+        return gzip.open(path, 'rb')
+    return os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC), 'rb')
+
+
+def _pieces(stream, size, piece):
+    """Digests of the first ``size`` bytes in ``piece``-byte parts; None when there are fewer bytes."""
+    digests, left = [], size
+    while left:
+        want, digest = min(piece, left), hashlib.sha256()
+        while want:
+            data = stream.read(min(want, 1 << 20))
+            if not data:
+                return None
+            digest.update(data)
+            want -= len(data)
+            left -= len(data)
+        digests.append(digest.hexdigest())
+    return digests
+
+
+def _first_change(path, recorded):
+    """Where the recorded content first differs in ``path``: None if it is all there, unchanged.
+
+    The offset is the start of the first piece that changed. A file holding less
+    than the recorded size, or that cannot be read, changed at its end at the latest."""
+    piece, expected, size = recorded.get('piece_bytes'), recorded.get('pieces'), recorded.get('size')
+    if not (type(piece) is int and piece > 0 and type(size) is int and size >= 0 and type(expected) is list
+            and len(expected) == -(-size // piece)):
+        return 0  # A damaged record matches nothing.
+    try:
+        with _open(path) as stream:
+            found = _pieces(stream, size, piece)
+    except (OSError, EOFError, gzip.BadGzipFile):
+        found = None
+    if found == expected:
+        return None
+    for index, digest in enumerate(found or ()):
+        if digest != expected[index]:
+            return index * piece
+    return len(found or ()) * piece
+
+
+def _identity(path, tries=3):
     try:
         info = os.lstat(path)
     except FileNotFoundError:
@@ -92,8 +146,20 @@ def _identity(path):
     head = _head(path)
     if head is None:
         return 'unreadable'
-    return dict(kind='file', inode=info.st_ino, device=info.st_dev, size=info.st_size, uid=info.st_uid,
-                mode=oct(stat.S_IMODE(info.st_mode)), head=head[0], head_bytes=head[1])
+    found = dict(kind='file', inode=info.st_ino, device=info.st_dev, size=info.st_size, uid=info.st_uid,
+                 mode=oct(stat.S_IMODE(info.st_mode)), head=head[0], head_bytes=head[1])
+    if os.path.basename(path) not in IN_PLACE:
+        # Only the bytes present when the size was read: the log may grow meanwhile.
+        piece = _piece_size(info.st_size)
+        try:
+            with _open(path) as stream:
+                pieces = _pieces(stream, info.st_size, piece)
+        except OSError:
+            return 'unreadable'
+        if pieces is None:  # Cut short while being read: record what it is now.
+            return _identity(path, tries - 1) if tries > 1 else 'unreadable'
+        found.update(piece_bytes=piece, pieces=pieces)
+    return found
 
 
 def _expand(pattern, root):
@@ -144,7 +210,7 @@ def _shrunk_rotation(path, recorded):
         except OSError:
             continue
         if (info.st_dev, info.st_ino) == (recorded.get('device'), recorded.get('inode')):
-            return os.path.basename(candidate), info.st_size
+            return os.path.basename(candidate), info.st_size, candidate
     return None
 
 
@@ -152,6 +218,8 @@ def _holds(path, info, recorded):
     length, size = recorded.get('head_bytes', 0), recorded.get('size', 0)
     if not path.endswith('.gz') and info.st_size < size:
         return False
+    if 'pieces' in recorded:  # A copy edited before or after rotation no longer explains the change.
+        return _first_change(path, recorded) is None
     try:
         if path.endswith('.gz'):
             with gzip.open(path, 'rb') as stream:
@@ -179,6 +247,16 @@ def _prefix_digest(path, length):
     return hashlib.sha256(data).hexdigest()
 
 
+def _rewritten(path, recorded):
+    """Where content the log already had changed, or None. A baseline from before
+    whole-content digests compares the first bytes only."""
+    if 'pieces' in recorded:
+        return _first_change(path, recorded)
+    if recorded['head_bytes'] and _prefix_digest(path, recorded['head_bytes']) != recorded['head']:
+        return 0
+    return None
+
+
 def compare(old, new, *, root='/'):
     findings, rotated = [], []
     for name, before in sorted(old['logs'].items()):
@@ -193,7 +271,10 @@ def compare(old, new, *, root='/'):
         def lost(rule, detail):
             """No rotated copy holds the recorded content: say whether the rotated file was cut."""
             shrunk = _shrunk_rotation(path, before)
-            if shrunk:
+            if shrunk and shrunk[1] >= before['size']:  # Not cut short: what it held was changed.
+                finding('LOG_REWRITTEN', dict(previous_size=before['size'], rotated_to=shrunk[0], size=shrunk[1],
+                                              changed_from_byte=_rewritten(shrunk[2], before)))
+            elif shrunk:
                 finding('LOG_TRUNCATED', dict(previous_size=before['size'], rotated_to=shrunk[0], size=shrunk[1]))
             else:
                 finding(rule, detail)
@@ -216,15 +297,15 @@ def compare(old, new, *, root='/'):
                 lost('LOG_REPLACED', dict(previous_size=before['size'], size=after['size']))
             else:
                 finding('LOG_TRUNCATED', dict(previous_size=before['size'], size=after['size']))
-        elif (os.path.basename(name) not in IN_PLACE and before['head_bytes']
-              and _prefix_digest(path, before['head_bytes']) != before['head']):
+        elif os.path.basename(name) not in IN_PLACE and (changed := _rewritten(path, before)) is not None:
             # copytruncate keeps the inode; the log may have grown back past
             # its recorded size before this check.
             sibling = _rotated(path, before)
             if sibling:
                 rotated.append(dict(log=name, rotated_to=sibling))
             else:
-                finding('LOG_REWRITTEN', dict(previous_size=before['size'], size=after['size']))
+                finding('LOG_REWRITTEN', dict(previous_size=before['size'], size=after['size'],
+                                              changed_from_byte=changed))
         writable = int(after['mode'], 8) & 0o002 and not int(before['mode'], 8) & 0o002
         if writable or after['uid'] != before['uid']:
             finding('LOG_PERMISSIONS', {k: [before[k], after[k]] for k in ('mode', 'uid') if before[k] != after[k]})
@@ -283,14 +364,26 @@ def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, **options):
                 gaps=state['gaps'])
 
 
-def check(manifest=DEFAULT_MANIFEST, **options):
+def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
+    """Compare the logs with the baseline. With ``advance``, every log without a
+    finding is then recorded as it is now, so the next check covers what was
+    written since, and rotation does not pile up. A log with a finding keeps its
+    old record, and is reported again until ``accept``."""
     old = _read(manifest)
     new = snapshot(**options)
     findings, rotated = compare(old, new, root=options.get('root', '/'))
-    return dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
-                baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
-                rotated=rotated, new_logs=sorted(set(new['logs']) - set(old['logs'])), gaps=new['gaps'],
-                note='Run accept after reviewing, and after rotation, so the next check compares with today.')
+    report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
+                  baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
+                  rotated=rotated, new_logs=sorted(set(new['logs']) - set(old['logs'])), gaps=new['gaps'],
+                  note='Run accept after reviewing, and after rotation, so the next check compares with today.')
+    if advance:
+        kept = {item['log'] for item in findings}
+        logs = {name: value for name, value in new['logs'].items() if name not in kept}
+        logs.update({name: old['logs'][name] for name in kept})
+        _write(manifest, dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs, gaps=new['gaps']))
+        report.update(advanced=sorted(set(logs) - kept),
+                      note='Logs without a finding were recorded as they are now. Run accept after reviewing.')
+    return report
 
 
 def accept(manifest=DEFAULT_MANIFEST, **options):
