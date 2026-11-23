@@ -97,4 +97,9 @@ separate operator actions.
 * **After installing more units,** run `megalodon tamper accept` so the tamper
   check records them. `install` says so when it applies.
 * **Without systemd,** `install` refuses. Add the crontab lines that `plan`
-  prints instead.
+  prints instead. A live watch cannot run from cron, so its line runs the
+  matching one-shot check instead: `devices`, `ancestry`, `credentials` and
+  `egress` every 5 minutes, `listeners` every 10 and `webroot` every 15.
+  These see what is there when they run, not what came and went between
+  runs. `ransomware` and the command log (`commands`) have no check, so
+  they have no line.

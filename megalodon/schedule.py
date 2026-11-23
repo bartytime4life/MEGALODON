@@ -81,7 +81,8 @@ JOBS = (
     # Its enforcement run is a whole run, so it can write what the enforce job writes.
     Job('devices', 'MEGALODON device watch, answered at once', ('devices', 'watch', '--alert', '--respond'),
         manifest='~/.config/megalodon/devices.json', baseline=('devices', 'baseline'),
-        writable=('/etc', '-/usr/local/lib/systemd/system')),
+        writable=('/etc', '-/usr/local/lib/systemd/system'),
+        cron='*/5 * * * *', cron_command=('devices', 'check', '--alert')),
     # Live: a web shell dropped, used and deleted between two 15-minute checks is seen as it is written.
     Job('webroot', 'MEGALODON web-root watch', ('webroot', 'watch', '--alert'),
         manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline'),
@@ -115,13 +116,15 @@ JOBS = (
     # The live watches answer each finding as it is seen; their enforcement run is a whole run, so they can
     # write what the enforce job writes.
     Job('ancestry', 'MEGALODON process ancestry watch, answered at once', ('ancestry', 'watch', '--alert', '--respond'),
-        root_only=True, writable=('/etc', '-/usr/local/lib/systemd/system')),
+        root_only=True, writable=('/etc', '-/usr/local/lib/systemd/system'),
+        cron='*/5 * * * *', cron_command=('ancestry', 'check', '--alert')),
     # Every started program, in a signed log; its first key is printed once by init and kept off the machine.
     Job('commands', 'MEGALODON command log', ('commands', 'record'), root_only=True,
         manifest='~/.local/state/megalodon/commands-state.json',
         setup='megalodon commands init --key-file /path/to/move/off/this/machine'),
     Job('credentials', 'MEGALODON credential access watch, answered at once',
-        ('credentials', 'watch', '--alert', '--respond'), writable=('/etc', '-/usr/local/lib/systemd/system')),
+        ('credentials', 'watch', '--alert', '--respond'), writable=('/etc', '-/usr/local/lib/systemd/system'),
+        cron='*/5 * * * *', cron_command=('credentials', 'check', '--alert')),
     # Encryption is decided and enforced as it is seen, not on the next timer; enforcement may disable a
     # persistence entry decided earlier in the same pass, so the same folders as the enforce job are writable.
     Job('ransomware', 'MEGALODON ransomware watch, answered at once', ('ransomware', 'watch', '--respond'),
@@ -129,7 +132,8 @@ JOBS = (
         writable=('/etc', '-/usr/local/lib/systemd/system')),
     Job('egress', 'MEGALODON outgoing-program watch, answered at once', ('egress', 'watch', '--alert', '--respond'),
         manifest='~/.config/megalodon/egress.json', setup='megalodon egress learn --minutes 60',
-        writable=('/etc', '-/usr/local/lib/systemd/system')),
+        writable=('/etc', '-/usr/local/lib/systemd/system'),
+        cron='*/5 * * * *', cron_command=('egress', 'check', '--alert')),
 )
 
 

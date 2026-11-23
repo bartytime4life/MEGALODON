@@ -121,3 +121,18 @@ def test_cli_needs_yes_and_reports_failures(home, tmp_path, capsys, monkeypatch)
     assert code("schedule", "install", "--user", "--yes", "--unit-dir", str(tmp_path / "u"), "--only", "rootkit") == 1
     assert json.loads(capsys.readouterr().out)["errors"] == ["no bus", "no bus"]
     assert code("schedule", "plan", "--only", "nothing") == 2
+
+
+@pytest.mark.parametrize("name, cron", [("devices", "*/5 * * * *"), ("ancestry", "*/5 * * * *"),
+                                        ("credentials", "*/5 * * * *"), ("egress", "*/5 * * * *"),
+                                        ("listeners", "*/10 * * * *"), ("webroot", "*/15 * * * *")])
+def test_without_systemd_each_live_watch_with_a_check_runs_it_from_crontab(tmp_path, name, cron):
+    rows = {r["job"]: r for r in sc.plan(system=True, directory=tmp_path / "units", launcher=["/x/megalodon"])["jobs"]}
+    job = next(j for j in sc.JOBS if j.name == name)
+    assert job.calendar is None and job.command[1] == "watch", "with systemd, the watch runs all the time"
+    assert rows[name]["cron"] == f"{cron} /x/megalodon {name} check --alert"
+
+
+def test_a_watch_with_no_check_has_no_crontab_line(tmp_path):
+    rows = {r["job"]: r for r in sc.plan(system=True, directory=tmp_path / "units", launcher=["m"])["jobs"]}
+    assert rows["ransomware"]["cron"] is None and rows["commands"]["cron"] is None, "no one-shot check to run instead"
