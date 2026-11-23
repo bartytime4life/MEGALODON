@@ -43,6 +43,15 @@ def test_an_application_on_a_unix_socket_starting_a_shell_is_found(root):  # noq
         "SERVICE_SPAWNED_SHELL", "MEDIUM", "application")
 
 
+def test_a_socket_bound_by_a_relative_name_counts(root):  # noqa: F811
+    # `gunicorn --bind unix:app.sock` run in /srv/app: the kernel keeps the name as it was given.
+    proc(root, 80, 1, "/usr/bin/python3.12", ["/usr/bin/python3", "/usr/local/bin/gunicorn", "--bind",
+                                               "unix:app.sock", "app:app"])
+    unix(root, 80, [(800, "00010000", "0001", "app.sock")], holds=(800,))
+    proc(root, 81, 80, "/usr/bin/dash", ["sh", "-c", "id"])
+    assert found(root)[81]["rule_id"] == "SERVICE_SPAWNED_SHELL"
+
+
 def test_unix_sockets_that_are_not_a_service_s_stay_quiet(root):  # noqa: F811
     cases = {
         100: (1000, "00010000", "0001", "@abstract-ipc"),                  # abstract: no file anyone connects to
@@ -88,7 +97,7 @@ def test_a_live_unix_socket_server_starting_a_shell_is_caught(tmp_path):
         "subprocess.run(['/bin/sh', '-c', 'sleep 0.6; /usr/bin/id >/dev/null; sleep 0.6'])\n")
 
     def run():
-        child = subprocess.Popen([sys.executable, "-c", server, str(tmp_path / "app.sock")])
+        child = subprocess.Popen([sys.executable, "-c", server, "app.sock"], cwd=tmp_path)    # bound by a relative name
         child.wait(10)
         return child.pid
     mine, mode = watch(run)
