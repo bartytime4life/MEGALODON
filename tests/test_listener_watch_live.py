@@ -133,15 +133,34 @@ def test_the_watch_command_needs_a_baseline(tmp_path, capsys):
     assert stopped.value.code == 2 and "listeners baseline" in capsys.readouterr().err
 
 
+def outbound_address():
+    """This machine's own address toward other machines: a UDP socket's connect sends nothing, it only picks the
+    route. None without one."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("192.0.2.1", 9))                  # TEST-NET-1, never contacted
+        found = probe.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        probe.close()
+    return None if ipaddress.ip_address(found).is_loopback else found
+
+
 @root_only
 def test_a_real_listener_opened_and_closed_between_checks_is_heard(tmp_path):
+    # Bound to this machine's own address: the watch leaves loopback-only listeners out, and binding every
+    # interface is not needed to be reachable.
+    address = outbound_address()
+    if address is None:
+        pytest.skip("no route to other machines, so no address they reach")
     manifest = tmp_path / "listeners.json"
     lw.baseline(manifest)
     watch = lw.Watcher(manifest, lambda f: None, warn=lambda t: None)
     try:
         watch.poll()
         server = socket.socket()
-        server.bind(("127.0.0.1", 0))
+        server.bind((address, 0))
         server.listen(1)
         port = server.getsockname()[1]
         server.close()
