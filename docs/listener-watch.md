@@ -14,6 +14,10 @@ megalodon listeners check
 ```
 
 ```bash
+megalodon listeners watch
+```
+
+```bash
 megalodon listeners accept
 ```
 
@@ -25,6 +29,13 @@ megalodon listeners accept
   summary also goes to the [off-machine alerts](off-machine-alerts.md)
   configured in the settings file. Listeners that stopped are listed under
   `closed` and are not findings.
+* **`watch`** checks every `--interval` seconds (default 10) and prints each
+  change as a JSON line, once while it lasts and again if it comes back or
+  becomes reachable more widely. Coverage gaps, such as owners it cannot
+  see without root, are told once on standard error. As
+  root it also hears listeners that opened and closed between two checks
+  (see below). With `--alert`, each finding also goes to the off-machine
+  alerts. An `accept` made while it runs is picked up at the next check.
 * **`accept`** records the current listeners as the new baseline once you
   have reviewed the changes, for example after installing a service.
 
@@ -44,8 +55,20 @@ Adjust the program path to where MEGALODON is installed for root.
 | `NEW_LISTENER` | HIGH, MEDIUM or LOW | A port that was not listening at the baseline | T1571, plus T1059 for a shell or relay tool |
 | `LISTENER_PROGRAM_CHANGED` | MEDIUM, or HIGH | A known port is now served by a different program | T1543 |
 | `LISTENER_EXPOSED` | MEDIUM, or HIGH | A known port became reachable more widely: from loopback to a network address, to every interface, or on another address or address family (such as IPv6) that it did not listen on before | T1133 |
+| `LISTENER_OPENED_AND_CLOSED` | MEDIUM | `watch`, as root: a TCP port reachable from other machines opened and closed between two checks, as a bind shell that takes one connection does | T1571 |
 
 The ATT&CK mappings are the closest fit; none of these is proof of an attack.
+
+**Listeners between checks.** As root, `watch` hears every TCP socket the
+kernel closes, in this network namespace and every other one a check has
+read, the way the [egress watch](egress-watch.md) hears short connections. A
+socket that closed without a peer, on an address other machines reach, is a
+listener, most likely; one the baseline records or a check of this watch has
+already seen is left out, and so is one on loopback only. The kernel's
+announcement names no program, so the finding has none. Each port is
+reported at most once every five minutes, and at most 30 an hour in all,
+since an FTP server opens and closes a passive data port for every transfer.
+Past that, they are counted and a warning says so.
 
 **Severity follows the owner and the reach.** A finding is HIGH when the
 program that owns the port is:
@@ -97,8 +120,11 @@ traffic are never read or stored. Nothing is stopped, closed or changed.
 * **UDP services only.** An unconnected UDP socket on a port in the kernel's
   outgoing range (`ip_local_port_range`, usually 32768 to 60999) is treated
   as a client and skipped. A UDP backdoor on such a port is missed.
-* **Changes between checks.** A listener that opens and closes between two
-  checks is not seen. The
+* **Changes between checks.** `check` misses a listener that opens and
+  closes between two runs. `watch`, as root, hears TCP ones as they close,
+  but without their program, and not UDP sockets or loopback-only
+  listeners. A TCP socket that was only bound to a port, never listening,
+  looks the same when it closes. The
   [programs on the network](host-security.md#programs-on-the-network) review
   shows live sockets, including reverse-shell shapes.
 * **Desktops change often.** Browsers, chat apps and development tools open

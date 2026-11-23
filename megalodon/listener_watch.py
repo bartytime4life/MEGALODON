@@ -13,6 +13,10 @@ port, with the addresses it is reachable on and the programs that own it.
   program, as when a service binary is swapped.
 * ``LISTENER_EXPOSED``: a known port became reachable more widely, for
   example from loopback only to every interface.
+* ``LISTENER_OPENED_AND_CLOSED`` (``watch``, as root): a port reachable from
+  other machines that opened and closed between two checks, as a bind shell
+  that takes one connection does. The kernel announces the socket as it
+  closes, without its program.
 
 Only metadata is kept: protocol, port, local addresses, and each owner's
 executable path and process name. Command lines, process IDs and traffic are
@@ -27,15 +31,19 @@ the same key. The containers that hold it now are listed under ``where``.
 """
 from __future__ import annotations
 
+from collections import OrderedDict, deque
 from datetime import datetime, timezone
 import ipaddress
 import json
 import os
 from pathlib import Path
+import select
 import stat
+import sys
 import tempfile
+import time
 
-from . import net_namespaces
+from . import closed_connections, net_namespaces
 from .process_network import (TABLES, TCP_LISTEN, TEMPORARY, _endpoint, _loopback, _program_kind,
                               _read_table, _short, _shown)
 
@@ -58,9 +66,16 @@ TECHNIQUES = {
     'NEW_LISTENER': 'T1571',
     'LISTENER_PROGRAM_CHANGED': 'T1543',
     'LISTENER_EXPOSED': 'T1133',
+    'LISTENER_OPENED_AND_CLOSED': 'T1571',
 }
 SHELL_TECHNIQUE = 'T1059'
 DEFAULT_EPHEMERAL = (32768, 60999)
+WATCH_INTERVAL = 10.0
+# One brief listener is reported at most once in this many seconds, and at most this many an hour in all: an FTP server's
+# passive data ports open and close all day.
+CLOSED_COOLDOWN_SECONDS = 300.0
+MAX_CLOSED_PER_HOUR = 30
+MAX_SEEN = 65536
 
 
 class ListenerError(ValueError):
@@ -425,3 +440,167 @@ def check(manifest=DEFAULT_MANIFEST, **options):
 def accept(manifest=DEFAULT_MANIFEST, **options):
     _read(manifest)  # Only an existing, private baseline can be replaced.
     return dict(baseline(manifest, replace=True, **options), action='accept')
+
+
+def closed_listener(closed, space=None, container=None):
+    """(key, address shown) for a TCP socket the kernel announced closing with no remote end, on an address other
+    machines reach: a listener, most likely. None for anything else.
+
+    The kernel gives the closed state for every socket, so a listener is told by having had no peer; a socket that was
+    only bound to a port is too, and is rare."""
+    if closed.get('protocol') != 'tcp' or not closed.get('local_port'):
+        return None
+    if not closed['address'].is_unspecified or _loopback(closed['local']):      # a peer, or loopback only
+        return None
+    kind = None if space is None else ('container' if container else 'namespace')
+    port = closed['local_port']
+    return (f'{kind}/tcp:{port}' if kind else f'tcp:{port}'), _shown(closed['local'], port)
+
+
+class Watcher:
+    """``listeners watch``: compare with the baseline every `interval` seconds and report each change once while it
+    lasts, and, as root, hear listeners that opened and closed between two checks."""
+
+    def __init__(self, manifest=DEFAULT_MANIFEST, emit=print, *, root='/', interval=WATCH_INTERVAL,
+                 clock=time.monotonic, closings='auto', warn=None, all_namespaces=None):
+        self.manifest, self.emit, self.root, self.interval, self.clock = manifest, emit, root, interval, clock
+        self.all_namespaces = all_namespaces
+        self.baseline, self.loaded = _read(manifest), self._stamp()
+        if closings == 'auto':
+            closings = closed_connections.Closings(root) if root == '/' else None
+        self.closings = closings
+        self.warn = warn or (lambda text: print(f'megalodon: {text}', file=sys.stderr, flush=True))
+        self.reported, self.seen, self.spaces = set(), OrderedDict(), {}
+        self.last_closed, self.recent, self.warned, self.missed, self.capped_at = {}, deque(), set(), 0, None
+        self.stats = dict(polls=0, findings=0, closed=0, brief=0, capped=0)
+        self._tell()
+
+    def _stamp(self):
+        try:
+            info = os.stat(Path(self.manifest).expanduser())
+            return (info.st_mtime_ns, info.st_size, info.st_ino)
+        except OSError:
+            return None
+
+    def _tell(self):
+        if self.closings is None:
+            return
+        for gap in sorted(self.closings.gaps - self.warned):
+            self.warned.add(gap)
+            self.warn(gap)
+        if self.closings.missed > self.missed:
+            self.warn(f'{self.closings.missed - self.missed} bursts of closed sockets came faster than they could be '
+                      'read: some brief listeners were missed')
+            self.missed = self.closings.missed
+
+    def _send(self, found):
+        self.stats['findings'] += 1
+        found = dict(found, detected_at=_now())
+        self.emit(found)
+        return found
+
+    def _known(self, key):
+        """Whether `key` is a listener the baseline records, or one a check of this watch has already seen."""
+        if key in self.seen:
+            return True
+        if _kind(key) and self.baseline.get('all_namespaces') is not True:
+            return True              # the baseline never read other namespaces: nothing to compare with
+        return key in self.baseline.get('listeners', {})
+
+    def hear(self):
+        """Report the listeners heard closing since the last call that no check saw and the baseline does not know."""
+        if self.closings is None:
+            return []
+        out, now = [], self.clock()
+        for space, closed in self.closings.drain():
+            self.stats['closed'] += 1
+            found = closed_listener(closed, space, self.spaces.get(space))
+            if found is None:
+                continue
+            key, shown = found
+            if self._known(key) or now - self.last_closed.get(key, -1e18) < CLOSED_COOLDOWN_SECONDS:
+                continue
+            while self.recent and now - self.recent[0] >= 3600:
+                self.recent.popleft()
+            if len(self.recent) >= MAX_CLOSED_PER_HOUR:
+                self.stats['capped'] += 1
+                if self.capped_at is None or now - self.capped_at >= 3600:
+                    self.capped_at = now
+                    self.warn(f'more than {MAX_CLOSED_PER_HOUR} brief listeners in an hour: the rest are counted, '
+                              'not reported, until the hour has passed')
+                continue
+            self.recent.append(now)
+            self.last_closed[key] = now
+            self.stats['brief'] += 1
+            where = [self.spaces.get(space) or space] if space is not None else []
+            finding = _finding('LISTENER_OPENED_AND_CLOSED', key, dict(
+                protocol='tcp', port=closed['local_port'],
+                scope='all' if closed['local'].is_unspecified else 'specific', addresses=[shown], programs=[],
+                where=where), 'MEDIUM', dict(reasons=[
+                    f'a TCP socket on {shown} closed without a peer, between two checks: most likely a listener',
+                    'the kernel announces a closing socket without its program']))
+            out.append(self._send(finding))
+        if len(self.last_closed) > MAX_SEEN:
+            self.last_closed.clear()
+        self._tell()
+        return out
+
+    def poll(self):
+        self.stats['polls'] += 1
+        stamp = self._stamp()
+        if stamp != self.loaded:                  # `accept` changed the baseline while watching
+            self.baseline, self.loaded = _read(self.manifest), stamp
+        out = self.hear()                        # before the check, while the last one's listeners are known
+        new = snapshot(root=self.root, all_namespaces=self.all_namespaces)
+        for key in new['listeners']:
+            self.seen[key] = True
+            self.seen.move_to_end(key)
+        while len(self.seen) > MAX_SEEN:
+            self.seen.popitem(last=False)
+        for gap in new['gaps']:
+            if gap not in self.warned:               # a check that cannot see everything says so, once
+                if len(self.warned) >= MAX_SEEN:
+                    self.warned.clear()
+                self.warned.add(gap)
+                self.warn(gap)
+        findings, _closed = compare(self.baseline, new)
+        current = set()
+        for found in findings:
+            # What makes it this finding: its programs and the addresses it listens on, from which its reach and
+            # severity follow. Wider reach of a change already reported is reported again.
+            mark = (found['rule_id'], found['listener'], tuple(sorted(p['path'] for p in found['programs'])),
+                    tuple(found['addresses']))
+            current.add(mark)
+            if mark not in self.reported:         # reported once while it lasts, and again if it comes back
+                out.append(self._send(found))
+        self.reported = current
+        if self.closings is not None and new.get('all_namespaces'):
+            spaces, _gaps = net_namespaces.namespaces(self.root)
+            self.spaces = {space['id']: space.get('container') for space in spaces if not space.get('own')}
+            self.closings.subscribe(spaces)
+            self._tell()
+        return out
+
+    def run(self, stop):
+        """Check every `interval` seconds, and report each brief listener as soon as it is heard closing."""
+        try:
+            due = self.clock()
+            while not stop.is_set():
+                if self.clock() >= due:
+                    self.poll()
+                    due = self.clock() + self.interval
+                wait = max(0.0, min(due - self.clock(), 1.0))
+                listening = self.closings.filenos() if self.closings is not None else []
+                if not listening:
+                    stop.wait(wait)
+                    continue
+                try:
+                    ready, _, _ = select.select(listening, [], [], wait)
+                except (OSError, ValueError):
+                    stop.wait(wait)
+                    continue
+                if ready:
+                    self.hear()
+        finally:
+            if self.closings is not None:
+                self.closings.close()
