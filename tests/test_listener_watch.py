@@ -261,30 +261,28 @@ def test_an_outgoing_range_udp_port_counts_when_its_owner_is_a_sign(tmp_path):
 @linux
 def test_a_real_dropped_program_holding_an_outgoing_range_udp_port_is_found(tmp_path):
     low, high = lw._ephemeral("/")
+    # Port 0: the kernel picks a free port from its outgoing range, whatever that range is here.
     holder = (
-        "import socket, sys, time\n"
-        "for port in range(int(sys.argv[1]), int(sys.argv[2])):\n"
-        "    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
-        "    try:\n"
-        "        s.bind(('127.0.0.1', port))\n"
-        "        break\n"
-        "    except OSError:\n"
-        "        s.close()\n"
+        "import socket, time\n"
+        "s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
+        "s.bind(('127.0.0.1', 0))\n"
         "print(s.getsockname()[1], flush=True)\n"
         "time.sleep(30)\n")
     dropped = tmp_path / "updater"                       # a copy of the interpreter, run from a temporary folder
     shutil.copy2(os.path.realpath(sys.executable), dropped)
     if not str(dropped).startswith(("/tmp/", "/var/tmp/", "/dev/shm/")):
         pytest.skip("the test folder is not a temporary folder here")
-    held = {}
-    for name, program in (("plain", sys.executable), ("dropped", str(dropped))):
-        child = subprocess.Popen([program, "-c", holder, str(low + 4000), str(high)], stdout=subprocess.PIPE,
-                                 text=True, env=dict(os.environ, PYTHONHOME=sys.base_prefix))   # its library
-        held[name] = (child, int(child.stdout.readline()))
+    held, children = {}, []
     try:
+        for name, program in (("plain", sys.executable), ("dropped", str(dropped))):
+            child = subprocess.Popen([program, "-c", holder], stdout=subprocess.PIPE,
+                                     text=True, env=dict(os.environ, PYTHONHOME=sys.base_prefix))   # its library
+            children.append(child)
+            held[name] = (child, int(child.stdout.readline()))
+            assert low <= held[name][1] <= high, "a port the kernel picked is in its outgoing range"
         listeners = lw.snapshot(all_namespaces=False)["listeners"]
     finally:
-        for child, _port in held.values():
+        for child in children:
             child.kill()
             child.wait()
     assert f"udp:{held['plain'][1]}" not in listeners, "an ordinary program's outgoing-range UDP socket is a client"
