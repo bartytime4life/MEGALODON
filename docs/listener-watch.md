@@ -30,7 +30,9 @@ megalodon listeners accept
   configured in the settings file. Listeners that stopped are listed under
   `closed` and are not findings.
 * **`watch`** checks every `--interval` seconds (default 10) and prints each
-  change as a JSON line, once while it lasts and again if it comes back. As
+  change as a JSON line, once while it lasts and again if it comes back or
+  becomes reachable more widely. Coverage gaps, such as owners it cannot
+  see without root, are told once on standard error. As
   root it also hears listeners that opened and closed between two checks
   (see below). With `--alert`, each finding also goes to the off-machine
   alerts. An `accept` made while it runs is picked up at the next check.

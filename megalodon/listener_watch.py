@@ -557,10 +557,19 @@ class Watcher:
             self.seen.move_to_end(key)
         while len(self.seen) > MAX_SEEN:
             self.seen.popitem(last=False)
+        for gap in new['gaps']:
+            if gap not in self.warned:               # a check that cannot see everything says so, once
+                if len(self.warned) >= MAX_SEEN:
+                    self.warned.clear()
+                self.warned.add(gap)
+                self.warn(gap)
         findings, _closed = compare(self.baseline, new)
         current = set()
         for found in findings:
-            mark = (found['rule_id'], found['listener'], tuple(sorted(p['path'] for p in found['programs'])))
+            # What makes it this finding: its programs and the addresses it listens on, from which its reach and
+            # severity follow. Wider reach of a change already reported is reported again.
+            mark = (found['rule_id'], found['listener'], tuple(sorted(p['path'] for p in found['programs'])),
+                    tuple(found['addresses']))
             current.add(mark)
             if mark not in self.reported:         # reported once while it lasts, and again if it comes back
                 out.append(self._send(found))

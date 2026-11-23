@@ -154,3 +154,29 @@ def test_a_real_listener_opened_and_closed_between_checks_is_heard(tmp_path):
         print(json.dumps(heard[0]))
     finally:
         watch.closings.close()
+
+
+def test_wider_reach_of_a_change_already_reported_is_reported_again(tmp_path):
+    watch, _found = watcher(tmp_path)
+    local = fake_proc(tmp_path / "local", BASE_SOCKETS + [("tcp", "127.0.0.1", 4444, "0A", 900)],
+                      {**BASE_PROCESSES, 900: ("/usr/bin/python3", "python3", [900])})
+    wide = fake_proc(tmp_path / "wide", BASE_SOCKETS + [("tcp", "0.0.0.0", 4444, "0A", 900)],
+                     {**BASE_PROCESSES, 900: ("/usr/bin/python3", "python3", [900])})
+    watch.root = local
+    assert [(f["listener"], f["severity"]) for f in watch.poll()] == [("tcp:4444", "LOW")]
+    watch.root = wide
+    assert [(f["listener"], f["severity"], f["scope"]) for f in watch.poll()] == [("tcp:4444", "MEDIUM", "all")], \
+        "the same program on the same port, now reachable from other machines"
+    assert watch.poll() == []
+
+
+def test_coverage_gaps_are_told_once(tmp_path):
+    warned = []
+    watch, _found = watcher(tmp_path, warned=warned)
+    ownerless = fake_proc(tmp_path / "ownerless", BASE_SOCKETS + [("tcp", "0.0.0.0", 8443, "0A", 900)],
+                          BASE_PROCESSES)                   # nobody readable holds it
+    watch.root = ownerless
+    watch.poll()
+    watch.poll()
+    gaps = [w for w in warned if "no visible program owns" in w]
+    assert len(gaps) == 1 and "tcp:8443" in gaps[0]
