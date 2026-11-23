@@ -317,6 +317,8 @@ def build_parser() -> argparse.ArgumentParser:
                                     "already there"),
                        ("check", "report new and changed scripts, hidden code and web-shell shapes (exit 1 on "
                                  "findings)"),
+                       ("watch", "look at each file as it is written, and report scripts dropped and soon deleted, "
+                                 "as JSON lines (Linux)"),
                        ("accept", "after review, record the current scripts as the new baseline")):
         command = webroot_sub.add_parser(name, help=text)
         command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/webroot.json)")
@@ -325,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
                                   "or the baseline's roots)")
         if name == "baseline":
             command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
-        if name == "check":
+        if name in ("check", "watch"):
             command.add_argument("--alert", action="store_true",
                                  help="also send a summary to the [alerts] destinations in the settings file")
             command.add_argument("--config", type=Path,
@@ -2024,6 +2026,8 @@ def _webroot(args: argparse.Namespace) -> int:
     from .validation import ValidationError
 
     manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    if args.webroot_command == "watch":
+        return _webroot_watch(args, manifest)
     try:
         if args.webroot_command == "baseline":
             result = watch.baseline(manifest, replace=args.replace, web_roots=args.roots)
@@ -2051,6 +2055,42 @@ def _webroot(args: argparse.Namespace) -> int:
                                           "A server-side script was added, changed or hidden under a web root.")])
     # A baseline that finds a web shell already in place still records it, and says so with exit 1.
     return 1 if findings else 0
+
+
+def _webroot_watch(args: argparse.Namespace, manifest: Path) -> int:
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from . import webroot_watch as watch
+    from .ransomware_watch import WatchError
+    from .validation import ValidationError
+
+    dispatcher = None
+    if args.alert:
+        from .alerts import dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+
+    def emit(found):
+        print(json.dumps(found, sort_keys=True), flush=True)
+        if dispatcher is not None:
+            from .alerts import HostNotice
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["detail"], tuple(found["techniques"]), found["summary"])])
+    try:
+        watcher = watch.Watcher(manifest, emit, web_roots=args.roots)
+    except (watch.WebrootError, WatchError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    try:
+        watcher.run(Event())
+    except KeyboardInterrupt:
+        pass
+    return 0
 
 
 def _egress(args: argparse.Namespace) -> int:

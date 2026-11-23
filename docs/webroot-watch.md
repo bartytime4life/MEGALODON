@@ -19,6 +19,10 @@ megalodon webroot check
 ```
 
 ```bash
+megalodon webroot watch
+```
+
+```bash
 megalodon webroot accept
 ```
 
@@ -31,6 +35,15 @@ megalodon webroot accept
 * **`check`** reports new and changed scripts, most severe first. It exits 1
   on findings and 2 on an error. Removed scripts are listed under `removed`
   and are not findings.
+* **`watch`** (Linux) looks at each file as it is written or moved in,
+  through inotify, instead of every 15 minutes. It compares each one with
+  the baseline as `check` does and prints each finding once as a JSON line,
+  with `--alert` as well. A script that appeared while it watched and is
+  deleted, or moved out of the web roots, within an hour is reported as
+  `WEB_SCRIPT_DROPPED_AND_REMOVED`, with the hash it had: a web shell
+  dropped, used and removed between two checks. It looks at every file once
+  when it starts, and again whenever the kernel drops file events under
+  load. An `accept` made while it runs is picked up.
 * **`accept`** records the current scripts once you have reviewed them, for
   example after a deployment or a CMS update.
 
@@ -51,6 +64,7 @@ read. With `--alert`, a summary also goes to the
 | `WEB_SCRIPT_CHANGED` | MEDIUM | A script's contents changed |
 | `WEB_LINK_ADDED` | MEDIUM | A new symbolic link under a web root |
 | `WEB_LINK_CHANGED` | MEDIUM | A link now leads elsewhere, or the file it leads to changed |
+| `WEB_SCRIPT_DROPPED_AND_REMOVED` | HIGH | `watch`: a script that appeared while watching was deleted, or moved out of the web roots, within an hour (also T1070.004) |
 
 Symbolic links are recorded with their targets. A link to a file has that
 file's contents hashed and checked for web-shell shapes, wherever it is. A
@@ -89,9 +103,11 @@ elsewhere are left to you, since deployments add and change them.
 * **Shapes, not proof.** An attacker can write a web shell that matches none
   of the shapes; it is still reported as new or changed. Some legitimate
   tools also match.
-* **Between checks.** A script dropped and deleted between two checks is not
-  seen. Its commands are, if a service runs them, by the
-  [process ancestry watch](process-ancestry.md).
+* **Between checks.** `check` does not see a script dropped and deleted
+  between two runs; `watch` does. `watch` keeps the hash and the shapes it
+  found, not a copy of the file. It watches at most 65,536 folders; past
+  that, `check` still covers them. A shell's commands are also seen, if a
+  service runs them, by the [process ancestry watch](process-ancestry.md).
 * **Code in a database** (stored templates, plugin code kept in SQL) is not
   read.
 * **Files over 16 MiB** and unreadable scripts are compared by size and
