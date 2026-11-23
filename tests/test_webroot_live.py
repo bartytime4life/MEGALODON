@@ -249,3 +249,20 @@ def test_a_script_replaced_by_a_link_to_the_same_contents_is_reported(site, tmp_
             "the link now leads elsewhere"
     finally:
         watcher.close()
+
+
+@linux
+def test_a_folder_renamed_and_its_script_deleted_at_once(site, tmp_path):  # noqa: F811
+    watcher, _found, _ = watching(site, tmp_path)
+    try:
+        (site / "html/kit").mkdir()
+        settle(watcher)
+        (site / "html/kit/a.php").write_text("<?php echo 9;\n")
+        settle(watcher)
+        os.rename(site / "html/kit", site / "html/tools")
+        (site / "html/tools/a.php").unlink()       # in the same batch: the kernel names the folder's old path
+        gone = settle(watcher)
+        assert [(f["rule_id"], f["path"]) for f in gone] == [
+            ("WEB_SCRIPT_DROPPED_AND_REMOVED", str(site / "html/tools/a.php"))]
+    finally:
+        watcher.close()

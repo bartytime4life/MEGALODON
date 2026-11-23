@@ -515,7 +515,7 @@ class Watcher:
     def handle(self, events):
         from .ransomware_watch import (IN_CLOSE_WRITE, IN_CREATE, IN_DELETE, IN_ISDIR, IN_MOVED_FROM, IN_MOVED_TO,
                                        IN_Q_OVERFLOW)
-        out, overflowed = [], False
+        out, overflowed, renamed = [], False, []
         for mask, cookie, folder, name in events:
             self.stats['events'] += 1
             if mask & IN_Q_OVERFLOW:
@@ -524,6 +524,11 @@ class Watcher:
             if folder is None or not name:
                 continue
             path = os.path.join(folder, name)
+            # The kernel's events were all named when they were read: one after a folder's rename in the same
+            # batch still names its old path.
+            for old, new in renamed:
+                if path.startswith(old + '/'):
+                    path = new + path[len(old):]
             if mask & IN_ISDIR:
                 if mask & IN_MOVED_FROM:
                     self.folders_moving[cookie] = path
@@ -532,6 +537,7 @@ class Watcher:
                     old = self.folders_moving.pop(cookie, None)
                     if old is not None:
                         self._folder_renamed(old, path)
+                        renamed.append((old.rstrip('/'), path.rstrip('/')))
                 if mask & (IN_CREATE | IN_MOVED_TO) and not _skipped(os.path.join(path, 'x'), self.roots):
                     for inside in self._watch_tree(path):  # a folder moved in may already hold a script
                         out += self.look(inside)
