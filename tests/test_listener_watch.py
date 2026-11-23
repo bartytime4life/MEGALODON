@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import socket
 import stat
+import shutil
+import subprocess
 import sys
 
 import pytest
@@ -236,3 +238,53 @@ def test_a_truncated_address_list_is_not_proof_of_new_reach(tmp_path, monkeypatc
                                          if k != "addresses_complete"}}}
     legacy["listeners"]["tcp:8080"]["addresses"] = [f"10.0.0.{i}:8080" for i in range(10, 26)]
     assert lw.compare(legacy, grown)[0] == [], "a 16-address legacy baseline may have been truncated"
+
+
+def test_an_outgoing_range_udp_port_counts_when_its_owner_is_a_sign(tmp_path):
+    # 45000 is in the outgoing range: a client's port, unless a shell, a relay tool or a dropped program holds it.
+    owners = {
+        900: ("/tmp/.x/udpd", "udpd", [900], 45100),                   # run from a temporary folder
+        910: ("/usr/bin/dash", "sh", [910], 45200),                    # a shell
+        920: ("/usr/bin/socat", "socat", [920], 45300),                # a relay tool
+        930: ("/usr/lib/firefox/firefox", "firefox", [930], 45400),    # an ordinary client
+    }
+    sockets = [("udp", "0.0.0.0", port, "07", pid) for pid, (_e, _c, _i, port) in owners.items()]
+    sockets.append(("udp", "0.0.0.0", 45500, "07", 940))               # nobody readable holds it
+    new = state(tmp_path, "udp", sockets, {pid: owner[:3] for pid, owner in owners.items()})
+    old = state(tmp_path, "base")
+    found = {f["listener"]: f for f in lw.compare(old, new)[0]}
+    assert set(found) == {"udp:45100", "udp:45200", "udp:45300"}
+    assert {f["severity"] for f in found.values()} == {"HIGH"}
+    assert "udp:45000" not in new["listeners"], "avahi's own outgoing-range socket is still a client"
+
+
+@linux
+def test_a_real_dropped_program_holding_an_outgoing_range_udp_port_is_found(tmp_path):
+    low, high = lw._ephemeral("/")
+    # Port 0: the kernel picks a free port from its outgoing range, whatever that range is here.
+    holder = (
+        "import socket, time\n"
+        "s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
+        "s.bind(('127.0.0.1', 0))\n"
+        "print(s.getsockname()[1], flush=True)\n"
+        "time.sleep(30)\n")
+    dropped = tmp_path / "updater"                       # a copy of the interpreter, run from a temporary folder
+    shutil.copy2(os.path.realpath(sys.executable), dropped)
+    if not str(dropped).startswith(("/tmp/", "/var/tmp/", "/dev/shm/")):
+        pytest.skip("the test folder is not a temporary folder here")
+    held, children = {}, []
+    try:
+        for name, program in (("plain", sys.executable), ("dropped", str(dropped))):
+            child = subprocess.Popen([program, "-c", holder], stdout=subprocess.PIPE,
+                                     text=True, env=dict(os.environ, PYTHONHOME=sys.base_prefix))   # its library
+            children.append(child)
+            held[name] = (child, int(child.stdout.readline()))
+            assert low <= held[name][1] <= high, "a port the kernel picked is in its outgoing range"
+        listeners = lw.snapshot(all_namespaces=False)["listeners"]
+    finally:
+        for child in children:
+            child.kill()
+            child.wait()
+    assert f"udp:{held['plain'][1]}" not in listeners, "an ordinary program's outgoing-range UDP socket is a client"
+    found = listeners[f"udp:{held['dropped'][1]}"]
+    assert [p["path"] for p in found["programs"]] == [str(dropped)] and "temporary" in found["programs"][0]["flags"]

@@ -98,10 +98,11 @@ def _ephemeral(root):
     return DEFAULT_EPHEMERAL
 
 
-def _listening(root, net='proc/net'):
+def _listening(root, net='proc/net', clients=None):
     """{inode: (protocol, address, port)} for listening TCP sockets and bound UDP service ports, plus gaps.
 
-    `net` is one namespace's table folder: `proc/net` for this one, `proc/PID/net` for the one PID is in.
+    `net` is one namespace's table folder: `proc/net` for this one, `proc/PID/net` for the one PID is in. With
+    `clients`, the unconnected UDP sockets left out as clients are put there, so their owners can be looked at.
     """
     low, high = _ephemeral(root)
     found, gaps = {}, []
@@ -128,8 +129,13 @@ def _listening(root, net='proc/net'):
             if protocol == 'tcp':
                 if fields[3] != TCP_LISTEN:
                     continue
-            elif not (remote[1] == 0 and remote[0].is_unspecified) or low <= local[1] <= high:
-                # An unconnected UDP socket on an outgoing-range port is a client, not a service.
+            elif not (remote[1] == 0 and remote[0].is_unspecified):
+                continue
+            elif low <= local[1] <= high:
+                # An unconnected UDP socket on an outgoing-range port is a client, not a service, unless its owner
+                # says otherwise (see snapshot).
+                if clients is not None:
+                    clients[int(fields[9])] = (protocol, local[0], local[1])
                 continue
             found[int(fields[9])] = (protocol, local[0], local[1])
     return found, gaps
@@ -222,16 +228,23 @@ def snapshot(*, root='/', all_namespaces=None):
     """Listeners in this network namespace and, with `all_namespaces` (the default for root), in every other one."""
     all_namespaces = os.geteuid() == 0 if all_namespaces is None else all_namespaces
     spaces, gaps = net_namespaces.namespaces(root) if all_namespaces else ([dict(own=True, net='proc/net')], [])
-    sockets, where = {}, {}
+    sockets, where, clients = {}, {}, {}
     for space in spaces:
-        found, more = _listening(root, space['net'])
+        maybe = {}
+        found, more = _listening(root, space['net'], maybe)
         gaps += more
-        for inode, socket in found.items():
-            if inode not in sockets:
-                sockets[inode] = socket
-                if not space.get('own'):
-                    where[inode] = space
-    owners, owner_gaps = _owners(root, set(sockets))
+        for table, into in ((found, sockets), (maybe, clients)):
+            for inode, socket in table.items():
+                if inode not in sockets and inode not in clients:
+                    into[inode] = socket
+                    if not space.get('own'):
+                        where[inode] = space
+    owners, owner_gaps = _owners(root, set(sockets) | set(clients))
+    # A UDP socket on an outgoing-range port is a client, unless a shell, a relay tool or a program run from a
+    # temporary folder, memory or a deleted file holds it: then it is a backdoor's port like any other.
+    for inode, socket in clients.items():
+        if inode in owners and _suspicious(list(owners[inode].values()))[0]:
+            sockets[inode] = socket
     grouped: dict[str, dict] = {}
     for inode, (protocol, address, port) in sockets.items():
         space = where.get(inode)

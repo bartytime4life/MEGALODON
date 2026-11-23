@@ -119,7 +119,11 @@ traffic are never read or stored. Nothing is stopped, closed or changed.
   container's own listener is seen.
 * **UDP services only.** An unconnected UDP socket on a port in the kernel's
   outgoing range (`ip_local_port_range`, usually 32768 to 60999) is treated
-  as a client and skipped. A UDP backdoor on such a port is missed.
+  as a client and skipped, unless a shell, a relay tool such as `nc` or
+  `socat`, or a program run from a temporary folder, from memory or from a
+  deleted file holds it: then it is reported like any other port. A UDP
+  backdoor on such a port that runs as an ordinary installed program, or
+  whose owner cannot be seen without root, is missed.
 * **Changes between checks.** `check` misses a listener that opens and
   closes between two runs. `watch`, as root, hears TCP ones as they close,
   but without their program, and not UDP sockets or loopback-only
