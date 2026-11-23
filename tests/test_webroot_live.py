@@ -198,3 +198,54 @@ def test_the_watch_command_needs_a_baseline(tmp_path, capsys):
     with pytest.raises(SystemExit) as stopped:
         cli.main(["webroot", "watch", "--manifest", str(tmp_path / "none.json")])
     assert stopped.value.code == 2 and "webroot baseline" in capsys.readouterr().err
+
+
+@linux
+def test_a_folder_moved_out_or_renamed_takes_its_new_scripts_with_it(site, tmp_path):  # noqa: F811
+    watcher, _found, _ = watching(site, tmp_path)
+    try:
+        (site / "html/kit").mkdir()
+        settle(watcher)
+        (site / "html/kit/a.php").write_text("<?php echo 7;\n")
+        assert rules(settle(watcher)) == [("WEB_SCRIPT_ADDED", "a.php")]
+        os.rename(site / "html/kit", site / "html/tools")          # renamed within the root: nothing new
+        assert settle(watcher) == []
+        os.rename(site / "html/tools", tmp_path / "away")          # moved out: one event for the folder
+        assert rules(settle(watcher)) == [("WEB_SCRIPT_DROPPED_AND_REMOVED", "a.php")]
+    finally:
+        watcher.close()
+
+
+@linux
+def test_folders_made_while_events_were_lost_are_watched_again(site, tmp_path):  # noqa: F811
+    from megalodon.ransomware_watch import IN_Q_OVERFLOW
+    watcher, _found, warned = watching(site, tmp_path)
+    try:
+        (site / "html/late").mkdir()
+        watcher.notify.events(0.5)                                   # its creation, lost
+        watcher.handle([(IN_Q_OVERFLOW, 0, None, "")])
+        (site / "html/late/x.php").write_text("<?php echo 8;\n")
+        assert rules(settle(watcher)) == [("WEB_SCRIPT_ADDED", "x.php")]
+    finally:
+        watcher.close()
+
+
+@linux
+def test_a_script_replaced_by_a_link_to_the_same_contents_is_reported(site, tmp_path):  # noqa: F811
+    watcher, _found, _ = watching(site, tmp_path)
+    try:
+        watcher.rescan()                                           # remembers index.php as it is
+        page = site / "html/index.php"
+        same = tmp_path / "same.php"
+        same.write_bytes(page.read_bytes())
+        os.symlink(same, site / "html/.swap")
+        os.replace(site / "html/.swap", page)                      # moved over the page in one step
+        assert rules(settle(watcher)) == [("WEB_SCRIPT_REPLACED_BY_LINK", "index.php")]
+        other = tmp_path / "other.php"
+        other.write_bytes(page.read_bytes())                       # identical contents, another file
+        os.symlink(other, site / "html/.swap")
+        os.replace(site / "html/.swap", page)
+        assert rules(settle(watcher)) == [("WEB_SCRIPT_REPLACED_BY_LINK", "index.php")], \
+            "the link now leads elsewhere"
+    finally:
+        watcher.close()

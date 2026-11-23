@@ -410,7 +410,7 @@ class Watcher:
             from .ransomware_watch import _Inotify
             notify = _Inotify()
         self.notify, self.max_folders = notify, max_folders
-        self.reported, self.appeared, self.moving = {}, OrderedDict(), {}
+        self.reported, self.appeared, self.moving, self.folders_moving = {}, OrderedDict(), {}, {}
         self.watched, self.overflows = 0, 0
         self.stats = dict(events=0, findings=0, dropped=0)
         for root in self.roots:
@@ -449,7 +449,8 @@ class Watcher:
         entry = examine(path)              # skipped folders are never watched, so no event comes from them
         if entry is None:
             return []
-        mark = entry.get('sha256') or (entry.get('size'), entry.get('mtime_ns'), entry.get('target'))
+        # Its kind and link target too: a script replaced by a link to the same contents is a change.
+        mark = (entry['kind'], entry.get('target'), entry.get('sha256') or (entry.get('size'), entry.get('mtime_ns')))
         if self.reported.get(path) == mark:
             return []
         self.reported[path] = mark
@@ -482,6 +483,28 @@ class Watcher:
         found['techniques'] = ['T1505.003', 'T1070.004']
         return [self._send(found)]
 
+    def _under(self, folder):
+        prefix = folder.rstrip('/') + '/'
+        return [path for path in list(self.appeared) if path.startswith(prefix)]
+
+    def _folder_renamed(self, old, new):
+        """A folder renamed within the web roots: its scripts keep when they first appeared."""
+        for path in self._under(old):
+            moved = new.rstrip('/') + path[len(old.rstrip('/')):]
+            self.appeared[moved] = self.appeared.pop(path)
+            if path in self.reported:
+                self.reported[moved] = self.reported.pop(path)
+
+    def _folder_gone(self, folder):
+        """A folder moved out of the web roots: the kernel sends one event for it, none for what it holds."""
+        out = []
+        for path in self._under(folder):
+            out += self.gone(path)
+        prefix = folder.rstrip('/') + '/'
+        for path in [p for p in self.reported if p.startswith(prefix)]:
+            del self.reported[path]
+        return out
+
     def rescan(self):
         """Look at every file now: at the start, and after the kernel dropped events."""
         out = []
@@ -502,6 +525,13 @@ class Watcher:
                 continue
             path = os.path.join(folder, name)
             if mask & IN_ISDIR:
+                if mask & IN_MOVED_FROM:
+                    self.folders_moving[cookie] = path
+                    continue
+                if mask & IN_MOVED_TO:
+                    old = self.folders_moving.pop(cookie, None)
+                    if old is not None:
+                        self._folder_renamed(old, path)
                 if mask & (IN_CREATE | IN_MOVED_TO) and not _skipped(os.path.join(path, 'x'), self.roots):
                     for inside in self._watch_tree(path):  # a folder moved in may already hold a script
                         out += self.look(inside)
@@ -521,9 +551,14 @@ class Watcher:
         # A move whose other half never came in this batch left the web roots.
         for cookie in list(self.moving):
             out += self.gone(self.moving.pop(cookie))
+        for cookie in list(self.folders_moving):
+            out += self._folder_gone(self.folders_moving.pop(cookie))
         if overflowed:
             self.overflows += 1
-            self.warn('the kernel dropped file events under load; every file is looked at again')
+            self.warn('the kernel dropped file events under load; every folder is watched and every file looked '
+                      'at again')
+            for root in self.roots:                  # a folder made while events were lost has no watch yet
+                self._watch_tree(root)
             out += self.rescan()
         return out
 
