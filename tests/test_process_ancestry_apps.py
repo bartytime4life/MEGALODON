@@ -156,9 +156,9 @@ def test_relative_scripts_and_archives_are_named_from_the_application_s_folder(r
     proc(root, 191, 190, "/usr/bin/dash", ["sh", "-c", "id"])
     found = findings(root)
     assert [found[p]["evidence"]["service"]["allow_as"] for p in (171, 181, 191)] == [
-        "/usr/bin/node /srv/a/server.js", "/usr/bin/node /srv/b/server.js",
-        "/usr/lib/jvm/java-21/bin/java -jar /opt/app/build/app.jar"]
-    anc.allow(allow, "/usr/bin/node /srv/a/server.js", "/usr/bin/curl")
+        "/usr/bin/node /srv/a/server.js in /srv/a", "/usr/bin/node /srv/b/server.js in /srv/b",
+        "/usr/lib/jvm/java-21/bin/java -jar /opt/app/build/app.jar in /opt/app"]
+    anc.allow(allow, "/usr/bin/node /srv/a/server.js in /srv/a", "/usr/bin/curl")
     assert [f["evidence"]["pid"] for f in anc.check(str(root), allow_path=allow, now=NOW)["findings"]
             if f["evidence"]["program"] == "/usr/bin/curl"] == [181], "the same script name in another folder"
 
@@ -183,3 +183,23 @@ def test_a_forked_child_is_remembered_with_its_parent_s_folder(root):  # noqa: F
     watcher = anc.Watcher(lambda f: None, root=root, source=Events([]))
     watcher.handle("fork", 221, 220)                     # it runs its parent's program, and is gone before it is read
     assert (watcher.cache[221].argv, watcher.cache[221].cwd) == (["python3", "serve.py"], "/srv/c")
+
+
+def test_applications_run_by_one_launcher_are_told_apart_by_their_folder(root, tmp_path):  # noqa: F811
+    from test_process_ancestry import Events
+    allow = tmp_path / "allow.json"
+    for pid, folder in ((230, "/srv/a"), (240, "/srv/b")):
+        proc(root, pid, 1, "/usr/bin/python3.12", ["/usr/bin/python3", "/usr/local/bin/gunicorn", "app:app"])
+        in_folder(root, pid, folder)
+        listening(root, pid, pid * 10)
+        proc(root, pid + 1, pid, "/usr/bin/id", ["id"])
+    found = findings(root)
+    assert found[231]["evidence"]["service"]["allow_as"] == "/usr/bin/python3.12 /usr/local/bin/gunicorn in /srv/a"
+    assert found[231]["message"].startswith("application service python3.12 /usr/local/bin/gunicorn in /srv/a (pid 230)")
+    anc.allow(allow, "/usr/bin/python3.12 /usr/local/bin/gunicorn in /srv/a", "/usr/bin/id")
+    assert [f["evidence"]["pid"] for f in anc.check(str(root), allow_path=allow, now=NOW)["findings"]] == [241]
+    seen = []
+    watcher = anc.Watcher(seen.append, root=root, source=Events([]))
+    for pid in (231, 241):
+        watcher.handle("exec", pid, 0)
+    assert [f["evidence"]["pid"] for f in seen] == [231, 241], "one launcher, two applications, two cooldowns"

@@ -220,7 +220,8 @@ def service_label(proc, category):
     """How a service is named and allowed: its program, or for an application its runtime and what it runs
     (`/usr/bin/python3 /usr/local/bin/gunicorn`, `/usr/bin/java -jar /opt/app.jar`), so allowing one Python
     application does not allow them all. A relative script or archive is resolved against the application's working
-    directory, so `node server.js` in /srv/a and in /srv/b are two applications."""
+    directory, so `node server.js` in /srv/a and in /srv/b are two applications, and the directory is part of the
+    name, so two gunicorn applications are too."""
     if category != 'application':
         return proc.path
     from .egress_watch import script
@@ -230,7 +231,10 @@ def service_label(proc, category):
         if not archive.startswith('/'):
             archive = os.path.normpath(os.path.join(proc.cwd, archive)) if proc.cwd else f'./{archive}'
         found = f"-jar {archive}"
-    return f'{proc.path} {found}' if found else proc.path
+    label = f'{proc.path} {found}' if found else proc.path
+    # A launcher (gunicorn, uvicorn, `-m flask`) is the same file for every application it runs: the folder each runs
+    # in tells them apart.
+    return f'{label} in {proc.cwd}' if proc.cwd else label
 
 
 class Listeners:

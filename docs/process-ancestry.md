@@ -44,11 +44,11 @@ megalodon ancestry check
 
   The allow list is `~/.config/megalodon/ancestry-allow.json` (mode 600).
   An application service is named the way its finding's
-  `service.allow_as` gives it: its runtime and what it runs. So allowing one
-  Python application does not allow every one:
+  `service.allow_as` gives it: its runtime, what it runs and the folder it
+  runs in. So allowing one Python application does not allow every one:
 
   ```bash
-  megalodon ancestry allow "/usr/bin/python3.12 /srv/app/manage.py" /usr/bin/dash
+  megalodon ancestry allow "/usr/bin/python3.12 /srv/app/manage.py in /srv/app" /usr/bin/dash
   ```
 
 With `--alert`, findings also go to the
@@ -87,10 +87,12 @@ counts the same way.
   these without pausing anything.
 - **Naming:** the finding names the application by runtime and script, such
   as `python3.12 /usr/local/bin/gunicorn` or `java -jar /opt/app/app.jar`.
-  A relative script or archive is resolved against the application's
-  working directory, so `node server.js` in `/srv/a` and in `/srv/b` are
-  two applications. When that directory cannot be read (another account's
-  process, without root), it stays `./server.js`. The same command started
+  The application's working directory is part of the name (`... gunicorn
+  in /srv/a`), so two applications run by one launcher, such as gunicorn
+  in `/srv/a` and in `/srv/b`, are two applications, and a relative script
+  or archive is resolved against it. When that directory cannot be read
+  (another account's process, without root), the name has no folder and a
+  relative script stays `./server.js`. The same command started
   by two applications is reported for each, once every five minutes.
 - **Timing:** a process that is not listening yet is looked at again after
   30 seconds, so a server that opens its port after starting is still
