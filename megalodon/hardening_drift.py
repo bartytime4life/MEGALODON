@@ -361,6 +361,20 @@ def _writable_by_others(info):
         bool(info.st_mode & 0o020 and info.st_gid != TRUSTED_GID)
 
 
+def _sticky_protects(info, child):
+    """Whether a writable folder's sticky bit keeps others from swapping the folder below it on the way to a path
+    entry. With the sticky bit, only an entry's owner, the folder's owner or root can rename or remove the entry, so
+    a root-owned folder in a root-owned sticky folder stays put. If the folder below does not exist yet, anyone who
+    can write here can create it, and if another account owns it, that account can move it."""
+    if not info.st_mode & stat.S_ISVTX or info.st_uid != TRUSTED_UID or child is None:
+        return False
+    try:
+        below = os.lstat(child)
+    except OSError:
+        return False
+    return below.st_uid == TRUSTED_UID
+
+
 def _who(info):
     if info.st_mode & 0o002:
         return 'everyone'
@@ -384,16 +398,20 @@ def search_path(root='/'):
         # The folder and every one above it: whoever can rename a parent can swap the folder. A folder that is a
         # symlink is walked twice: up from its own path, and up from where it leads.
         for start in dict.fromkeys(p for p in (folder, _resolve(real, folder)) if p):
-            current = start
+            current, child = start, None
             while True:
                 try:
                     info = os.stat(Path(real, current.lstrip('/')), follow_symlinks=True)
                 except OSError:
                     info = None
-                if info is not None and stat.S_ISDIR(info.st_mode) and _writable_by_others(info):
+                # The path entry itself is reported whenever another account can write to it: anyone who can add a
+                # file there can add a program. A folder above it only matters if the way down can be swapped.
+                if info is not None and stat.S_ISDIR(info.st_mode) and _writable_by_others(info) and \
+                        not _sticky_protects(info, child):
                     folders.setdefault(current, dict(on_path=folder, set_in=where, writable_by=_who(info)))
                 if current == '/':
                     break
+                child = Path(real, current.lstrip('/'))
                 current = os.path.dirname(current)
         try:
             names = sorted(os.listdir(Path(real, folder.lstrip('/'))))[:8192]
