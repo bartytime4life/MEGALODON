@@ -377,6 +377,7 @@ actions = ["collect_evidence", "disable_persistence", "notify"]
 [[response.playbook]]
 name = "trojaned-program-or-wiped-log"
 rules = ["PACKAGE_MISMATCH", "PACKAGE_RECORD_CHANGED", "LOG_DELETED", "LOG_TRUNCATED", "LOG_REWRITTEN",
+         "JOURNAL_FILE_DELETED", "JOURNAL_ENTRIES_REMOVED", "JOURNAL_ARCHIVE_CHANGED",
          "CANARY_MODIFIED", "CANARY_REMOVED", "CANARY_READ"]
 min_severity = "HIGH"
 actions = ["collect_evidence", "notify"]
