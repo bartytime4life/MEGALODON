@@ -80,9 +80,9 @@ JOBS = (
     Job('devices', 'MEGALODON device watch, answered at once', ('devices', 'watch', '--alert', '--respond'),
         manifest='~/.config/megalodon/devices.json', baseline=('devices', 'baseline'),
         writable=('/etc', '-/usr/local/lib/systemd/system')),
-    Job('webroot', 'MEGALODON web-root check', ('webroot', 'check', '--alert'), '*:0/15',
-        manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline'), cron='*/15 * * * *',
-        interval=900),
+    # Live: a web shell dropped, used and deleted between two 15-minute checks is seen as it is written.
+    Job('webroot', 'MEGALODON web-root watch', ('webroot', 'watch', '--alert'),
+        manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline')),
     Job('binaries', 'MEGALODON program integrity check', ('binaries', 'check', '--alert'), '*-*-* 03:17:00',
         manifest='~/.config/megalodon/binaries.json', baseline=('binaries', 'baseline'), cron='17 3 * * *',
         interval=86400),

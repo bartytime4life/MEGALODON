@@ -49,7 +49,7 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | persistence | every 15 minutes | `persistence check --alert` |
 | tamper | every 15 minutes | `tamper check --alert`; its baseline is taken after the others and the units |
 | logwatch | every 15 minutes | `logwatch check --alert` |
-| webroot | every 15 minutes | `webroot check --alert` |
+| webroot | always running | `webroot watch --alert`: each file judged as it is written, and a script dropped and soon deleted reported ([web-root watch](webroot-watch.md)). An earlier install's `megalodon-webroot.timer` is removed |
 | ebpf | every 15 minutes (root) | `ebpf check --alert` ([eBPF watch](ebpf-watch.md)) |
 | hardening | hourly | `hardening check --alert` ([hardening drift](hardening-drift.md)) |
 | packages | hourly | `packages check --alert` ([package sources](package-sources.md)) |

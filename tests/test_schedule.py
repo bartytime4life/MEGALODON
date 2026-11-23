@@ -48,34 +48,34 @@ def test_the_plan_lists_jobs_missing_baselines_and_cron_lines(home, tmp_path):
 
 def test_install_refuses_missing_baselines_then_writes_and_enables(home, tmp_path):
     folder, systemctl = tmp_path / "units", Systemctl()
-    with pytest.raises(sc.ScheduleError, match="missing baselines for webroot"):
-        sc.install(system=False, only=["webroot"], directory=folder, launcher=["m"], runner=systemctl)
+    with pytest.raises(sc.ScheduleError, match="missing baselines for persistence"):
+        sc.install(system=False, only=["persistence"], directory=folder, launcher=["m"], runner=systemctl)
     assert systemctl.calls == [] and not folder.exists()
-    baselines(home, "webroot.json")
-    result = sc.install(system=False, only=["webroot", "rootkit"], directory=folder, launcher=["/x/megalodon"],
+    baselines(home, "persistence.json")
+    result = sc.install(system=False, only=["persistence", "rootkit"], directory=folder, launcher=["/x/megalodon"],
                         runner=systemctl)
-    assert result["ok"] and result["enabled"] == ["megalodon-webroot.timer", "megalodon-rootkit.timer"]
+    assert result["ok"] and result["enabled"] == ["megalodon-persistence.timer", "megalodon-rootkit.timer"]
     assert systemctl.calls == [(False, ("daemon-reload",)),
-                               (False, ("enable", "--now", "megalodon-webroot.timer", "megalodon-rootkit.timer"))]
-    service = (folder / "megalodon-webroot.service").read_text()
-    assert sc.MARKER in service and "ExecStart=/x/megalodon webroot check --alert" in service
+                               (False, ("enable", "--now", "megalodon-persistence.timer", "megalodon-rootkit.timer"))]
+    service = (folder / "megalodon-persistence.service").read_text()
+    assert sc.MARKER in service and "ExecStart=/x/megalodon persistence check --alert" in service
     assert "SuccessExitStatus=1" in service and "NoNewPrivileges=yes" in service
-    assert "OnCalendar=*:0/15" in (folder / "megalodon-webroot.timer").read_text()
+    assert "OnCalendar=*:0/15" in (folder / "megalodon-persistence.timer").read_text()
 
 
-def test_the_listener_watch_runs_all_the_time_and_replaces_the_old_timer(home, tmp_path):
-    job = next(j for j in sc.JOBS if j.name == "listeners")
-    assert job.calendar is None and job.command == ("listeners", "watch", "--alert")
+@pytest.mark.parametrize("name, every", [("listeners", "*:0/10"), ("webroot", "*:0/15")])
+def test_the_live_watches_run_all_the_time_and_replace_their_old_timers(home, tmp_path, name, every):
+    job = next(j for j in sc.JOBS if j.name == name)
+    assert job.calendar is None and job.command == (name, "watch", "--alert")
     folder, systemctl = tmp_path / "units", Systemctl()
     folder.mkdir()
-    (folder / "megalodon-listeners.timer").write_text(sc.MARKER + "\n[Timer]\nOnCalendar=*:0/10\n")
-    baselines(home, "listeners.json")
-    result = sc.install(system=False, only=["listeners"], directory=folder, launcher=["/x/megalodon"],
-                        runner=systemctl)
-    assert result["retired"] == [str(folder / "megalodon-listeners.timer")]
-    assert not (folder / "megalodon-listeners.timer").exists() and result["enabled"] == ["megalodon-listeners.service"]
-    service = (folder / "megalodon-listeners.service").read_text()
-    assert "ExecStart=/x/megalodon listeners watch --alert" in service and "Restart=on-failure" in service
+    (folder / f"megalodon-{name}.timer").write_text(sc.MARKER + f"\n[Timer]\nOnCalendar={every}\n")
+    baselines(home, f"{name}.json")
+    result = sc.install(system=False, only=[name], directory=folder, launcher=["/x/megalodon"], runner=systemctl)
+    assert result["retired"] == [str(folder / f"megalodon-{name}.timer")]
+    assert not (folder / f"megalodon-{name}.timer").exists() and result["enabled"] == [f"megalodon-{name}.service"]
+    service = (folder / f"megalodon-{name}.service").read_text()
+    assert f"ExecStart=/x/megalodon {name} watch --alert" in service and "Restart=on-failure" in service
 
 
 def test_a_unit_that_is_not_ours_is_never_overwritten_or_removed(home, tmp_path):
@@ -85,12 +85,13 @@ def test_a_unit_that_is_not_ours_is_never_overwritten_or_removed(home, tmp_path)
     with pytest.raises(sc.ScheduleError, match="not MEGALODON's"):
         sc.install(system=False, only=["rootkit"], directory=folder, launcher=["m"], runner=Systemctl())
     (folder / "megalodon-other.service").write_text("[Service]\nExecStart=/bin/true\n")
-    baselines(home, "webroot.json")
-    sc.install(system=False, only=["webroot"], directory=folder, launcher=["m"], runner=Systemctl())
+    baselines(home, "persistence.json")
+    sc.install(system=False, only=["persistence"], directory=folder, launcher=["m"], runner=Systemctl())
     systemctl = Systemctl()
     result = sc.remove(system=False, directory=folder, runner=systemctl)
-    assert sorted(Path(p).name for p in result["removed"]) == ["megalodon-webroot.service", "megalodon-webroot.timer"]
-    assert systemctl.calls[0] == (False, ("disable", "--now", "megalodon-webroot.timer"))
+    assert sorted(Path(p).name for p in result["removed"]) == ["megalodon-persistence.service",
+                                                              "megalodon-persistence.timer"]
+    assert systemctl.calls[0] == (False, ("disable", "--now", "megalodon-persistence.timer"))
     assert sorted(p.name for p in folder.iterdir()) == ["megalodon-other.service", "megalodon-rootkit.service"]
 
 
