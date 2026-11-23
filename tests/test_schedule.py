@@ -63,8 +63,9 @@ def test_install_refuses_missing_baselines_then_writes_and_enables(home, tmp_pat
     assert "OnCalendar=*:0/15" in (folder / "megalodon-persistence.timer").read_text()
 
 
-@pytest.mark.parametrize("name, every", [("listeners", "*:0/10"), ("webroot", "*:0/15")])
-def test_the_live_watches_run_all_the_time_and_replace_their_old_timers(home, tmp_path, name, every):
+@pytest.mark.parametrize("name, every, cron", [("listeners", "*:0/10", "*/10 * * * *"),
+                                               ("webroot", "*:0/15", "*/15 * * * *")])
+def test_the_live_watches_run_all_the_time_and_replace_their_old_timers(home, tmp_path, name, every, cron):
     job = next(j for j in sc.JOBS if j.name == name)
     assert job.calendar is None and job.command == (name, "watch", "--alert")
     folder, systemctl = tmp_path / "units", Systemctl()
@@ -76,6 +77,9 @@ def test_the_live_watches_run_all_the_time_and_replace_their_old_timers(home, tm
     assert not (folder / f"megalodon-{name}.timer").exists() and result["enabled"] == [f"megalodon-{name}.service"]
     service = (folder / f"megalodon-{name}.service").read_text()
     assert f"ExecStart=/x/megalodon {name} watch --alert" in service and "Restart=on-failure" in service
+    # Without systemd there is no service to keep running: the crontab line runs the check, as before.
+    row = next(r for r in sc.plan(system=False, only=[name], directory=folder, launcher=["/x/megalodon"])["jobs"])
+    assert row["cron"] == f"{cron} /x/megalodon {name} check --alert"
 
 
 def test_a_unit_that_is_not_ours_is_never_overwritten_or_removed(home, tmp_path):
