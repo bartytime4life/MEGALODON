@@ -45,11 +45,11 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | evidence-push | every 5 minutes | `evidence push`: command log lines and evidence bundles to the fleet collector ([evidence off the machine](evidence-shipping.md)); sends nothing to a plain heartbeat monitor |
 | logins | every 5 minutes | `logins check --alert` ([login watch](login-watch.md)) |
 | devices | always running | `devices watch --alert --respond`: checks as each device is plugged in, and cuts off what the enforcement policy allows ([device watch](device-watch.md#cut-it-off-at-once)). An earlier install's `megalodon-devices.timer` is removed |
-| listeners | always running | `listeners watch --alert`: each listener change once while it lasts, and as root the ports that open and close between checks ([listener watch](listener-watch.md)). An earlier install's `megalodon-listeners.timer` is removed |
+| listeners | always running | `listeners watch --alert`: each listener change once while it lasts, and as root the ports that open and close between checks ([listener watch](listener-watch.md)). An earlier install's `megalodon-listeners.timer` is removed. Without systemd, the crontab line runs `listeners check --alert` every 10 minutes instead |
 | persistence | every 15 minutes | `persistence check --alert` |
 | tamper | every 15 minutes | `tamper check --alert`; its baseline is taken after the others and the units |
 | logwatch | every 15 minutes | `logwatch check --alert` |
-| webroot | every 15 minutes | `webroot check --alert` |
+| webroot | always running | `webroot watch --alert`: each file judged as it is written, and a script dropped and soon deleted reported ([web-root watch](webroot-watch.md)). An earlier install's `megalodon-webroot.timer` is removed. Without systemd, the crontab line runs `webroot check --alert` every 15 minutes instead |
 | ebpf | every 15 minutes (root) | `ebpf check --alert` ([eBPF watch](ebpf-watch.md)) |
 | hardening | hourly | `hardening check --alert` ([hardening drift](hardening-drift.md)) |
 | packages | hourly | `packages check --alert` ([package sources](package-sources.md)) |

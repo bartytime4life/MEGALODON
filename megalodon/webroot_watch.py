@@ -431,7 +431,7 @@ class Watcher:
                                                                                  self.roots)]
             if self.watched >= self.max_folders:
                 self.warn(f'more than {self.max_folders} folders under the web roots: the rest are not watched '
-                          'as files are written; the scheduled check still covers them')
+                          'as files are written; run `megalodon webroot check` to cover them')
                 return found
             if self.notify.add(folder):
                 self.watched += 1

@@ -33,6 +33,7 @@ class Job:
     baseline: tuple | None = None         # how to take it
     root_only: bool = False
     cron: str | None = None
+    cron_command: tuple | None = None     # for a live watch: the check crontab runs instead, without systemd
     interval: int | None = None           # seconds between runs, for the tamper check's overdue test
     setup: str | None = None              # what to run when there is no baseline command
     writable: tuple = ()                  # folders the job changes, writable inside ProtectSystem=full
@@ -71,7 +72,8 @@ JOBS = (
     # Live: every 10 seconds, each change once while it lasts, and as root the listeners that open and close in
     # between, as a bind shell that takes one connection does.
     Job('listeners', 'MEGALODON listener watch', ('listeners', 'watch', '--alert'),
-        manifest='~/.config/megalodon/listeners.json', baseline=('listeners', 'baseline')),
+        manifest='~/.config/megalodon/listeners.json', baseline=('listeners', 'baseline'),
+        cron='*/10 * * * *', cron_command=('listeners', 'check', '--alert')),
     Job('logwatch', 'MEGALODON log integrity check', ('logwatch', 'check', '--alert'), '*:0/15',
         manifest='~/.config/megalodon/log-integrity.json', baseline=('logwatch', 'baseline'), cron='*/15 * * * *',
         interval=900),
@@ -80,9 +82,10 @@ JOBS = (
     Job('devices', 'MEGALODON device watch, answered at once', ('devices', 'watch', '--alert', '--respond'),
         manifest='~/.config/megalodon/devices.json', baseline=('devices', 'baseline'),
         writable=('/etc', '-/usr/local/lib/systemd/system')),
-    Job('webroot', 'MEGALODON web-root check', ('webroot', 'check', '--alert'), '*:0/15',
-        manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline'), cron='*/15 * * * *',
-        interval=900),
+    # Live: a web shell dropped, used and deleted between two 15-minute checks is seen as it is written.
+    Job('webroot', 'MEGALODON web-root watch', ('webroot', 'watch', '--alert'),
+        manifest='~/.config/megalodon/webroot.json', baseline=('webroot', 'baseline'),
+        cron='*/15 * * * *', cron_command=('webroot', 'check', '--alert')),
     Job('binaries', 'MEGALODON program integrity check', ('binaries', 'check', '--alert'), '*-*-* 03:17:00',
         manifest='~/.config/megalodon/binaries.json', baseline=('binaries', 'baseline'), cron='17 3 * * *',
         interval=86400),
@@ -151,8 +154,8 @@ def has_systemd():
     return os.path.isdir('/run/systemd/system')
 
 
-def _exec(job, launcher):
-    return ' '.join(shlex.quote(part) for part in [*launcher, *job.command])
+def _exec(job, launcher, command=None):
+    return ' '.join(shlex.quote(part) for part in [*launcher, *(command or job.command)])
 
 
 def units(job, launcher, system):
@@ -203,7 +206,7 @@ def plan(*, system=None, only=None, directory=None, launcher=None):
                          every=job.calendar or 'always running', units=sorted(units(job, launcher, system)),
                          baseline=None if ready else (' '.join([*launcher, *job.baseline]) if job.baseline
                                                       else job.setup),
-                         cron=f'{job.cron} {_exec(job, launcher)}' if job.cron else None))
+                         cron=f'{job.cron} {_exec(job, launcher, job.cron_command)}' if job.cron else None))
     return dict(schema='megalodon-schedule-plan-v1', scope='system' if system else 'user', unit_dir=str(folder),
                 systemd=has_systemd(), jobs=rows, skipped=skipped,
                 note=('Nothing was written. Take the missing baselines on a system you trust, then run '

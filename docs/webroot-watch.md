@@ -108,8 +108,8 @@ elsewhere are left to you, since deployments add and change them.
   tools also match.
 * **Between checks.** `check` does not see a script dropped and deleted
   between two runs; `watch` does. `watch` keeps the hash and the shapes it
-  found, not a copy of the file. It watches at most 65,536 folders; past
-  that, `check` still covers them. A shell's commands are also seen, if a
+  found, not a copy of the file. It watches at most 65,536 folders and
+  warns past that; run `check` for the rest. A shell's commands are also seen, if a
   service runs them, by the [process ancestry watch](process-ancestry.md).
 * **Code in a database** (stored templates, plugin code kept in SQL) is not
   read.
