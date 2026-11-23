@@ -76,8 +76,9 @@ Pure-FTPd and Samba.
 but an interpreter or the JVM running the application itself. Examples are
 gunicorn and uvicorn under `python3`, `node server.js`, `java -jar app.jar`
 and a Jupyter server. Such a process counts as an application service while
-it holds a listening TCP socket. A gunicorn worker counts too, because it
-inherits its master's socket. The socket is matched in the process's own
+it holds a listening socket: TCP, or a Unix socket with a path, as gunicorn
+and uvicorn use behind nginx (`--bind unix:/run/gunicorn.sock`). A gunicorn
+worker counts too, because it inherits its master's socket. The socket is matched in the process's own
 network namespace, through `/proc/PID/net`, so an application in a container
 counts the same way.
 - **Runtimes:** Python, Perl, Ruby, PHP, Lua, Tcl, PowerShell, Node, Deno,
@@ -119,7 +120,13 @@ line (up to 512 bytes), the service and the chain of parents.
   Node's cluster workers. An application service's child that runs the same
   interpreter or JVM is not reported. Its shells and tools are.
 * **Interpreters that are not serving:** a script with no listening socket,
-  or one whose namespace has a listener another process holds.
+  or one whose namespace has a listener another process holds. Unix sockets
+  that are not a service's do not count: abstract ones, those under
+  `/run/user/` (a person's desktop session) and multiprocessing's own under
+  `/tmp/pymp-*`.
+* **Process managers and daemons whose job is starting programs:**
+  supervisord, circusd, fail2ban-server (its ban actions), the Salt daemons
+  and PM2's daemon. An application they run is still checked as itself.
 
 ## Limits
 
@@ -132,9 +139,11 @@ line (up to 512 bytes), the service and the chain of parents.
   is not seen here. The [web-root watch](webroot-watch.md) looks at the
   files themselves.
 * **Applications are known by their listening socket.** An application run
-  by an interpreter counts only while it holds a listening TCP socket. One
-  that only listens on UDP or a Unix socket, or that is handed connections
-  by another process, is not recognized. A shell it starts in the 30 seconds
+  by an interpreter counts only while it holds a listening TCP socket or a
+  Unix socket with a path. One that only listens on UDP or an abstract Unix
+  socket, or that is handed connections by another process, is not
+  recognized. Other interpreter-run daemons that start commands over a
+  control socket, beyond the ones above, are reported until allowed. A shell it starts in the 30 seconds
   after it was last seen not listening is missed too, since that answer is
   kept for 30 seconds. The same interpreter started by an application, as in
   `python3 -c 'import pty; ...'`, is not reported, but the shell it then

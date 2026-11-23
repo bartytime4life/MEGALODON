@@ -48,6 +48,14 @@ _PHP_FPM = re.compile(r'php-fpm[0-9.]*')
 # node server.js, java -jar). Such a process counts as a service while it holds a listening TCP socket.
 RUNTIMES = frozenset({'java'})
 MAX_FDS = 4096
+MAX_UNIX_SOCKETS = 65536
+# Daemons run by an interpreter whose job is to start programs, over a control socket: a process manager starting what
+# it manages, fail2ban running its ban actions, Salt running commands. What they start is not an exploited application.
+PROCESS_MANAGERS = frozenset({'supervisord', 'circusd', 'fail2ban-server', 'salt-minion', 'salt-master', 'salt-syndic',
+                              'salt-proxy'})
+PROCESS_MANAGER_SCRIPTS = ('/pm2/lib/Daemon.js',)
+UNIX_LISTENING = 0x10000                      # __SO_ACCEPTCON in /proc/net/unix Flags
+UNIX_STREAM_TYPES = frozenset({'0001', '0005'})   # SOCK_STREAM, SOCK_SEQPACKET
 QUIET_SECONDS = 30.0              # how long "not listening" is remembered: a server opens its port after it starts
 # Programs an intruder runs first: transfer and relay tools, and quick system reconnaissance.
 TOOLS = {'nc', 'ncat', 'netcat', 'nc.openbsd', 'nc.traditional', 'socat', 'curl', 'wget', 'telnet', 'tftp', 'ftp',
@@ -216,6 +224,12 @@ def _runtime(proc):
     return _program_kind(proc.path, proc.comm) == 'interpreter' or name in RUNTIMES or proc.comm in RUNTIMES
 
 
+def _process_manager(proc):
+    from .egress_watch import script
+    found = script(dict(path=proc.path, argv=proc.argv, cwd=None)) or ''
+    return found.rsplit('/', 1)[-1] in PROCESS_MANAGERS or found.endswith(PROCESS_MANAGER_SCRIPTS)
+
+
 def service_label(proc, category):
     """How a service is named and allowed: its program, or for an application its runtime and what it runs
     (`/usr/bin/python3 /usr/local/bin/gunicorn`, `/usr/bin/java -jar /opt/app.jar`), so allowing one Python
@@ -238,7 +252,9 @@ def service_label(proc, category):
 
 
 class Listeners:
-    """Whether a process holds a listening TCP socket, read from its own network namespace's tables."""
+    """Whether a process holds a listening socket, read from its own network namespace's tables: TCP, or a Unix
+    socket with a path, as gunicorn and uvicorn use behind nginx. Sockets that are not a service's are left out: abstract
+    ones, those under /run/user (a person's desktop session) and multiprocessing's own (/tmp/pymp-*)."""
 
     def __init__(self, base, clock=time.monotonic):
         self.base, self.clock, self.seen = Path(base), clock, OrderedDict()
@@ -266,6 +282,7 @@ class Listeners:
                 fields = line.split()
                 if len(fields) > 9 and fields[3] == '0A':
                     listening.add(fields[9])
+        listening |= _unix_listeners(here / 'net' / 'unix')
         if not listening:
             return False
         try:
@@ -284,6 +301,32 @@ class Listeners:
         return False
 
 
+def _unix_listeners(table):
+    """Inodes of listening Unix stream sockets bound to a service-like path."""
+    found = set()
+    try:
+        with open(table, encoding='utf-8', errors='replace') as handle:
+            next(handle, None)
+            for number, line in enumerate(handle):
+                if number >= MAX_UNIX_SOCKETS:
+                    break
+                fields = line.rstrip('\n').split(None, 7)
+                if len(fields) < 8 or fields[4] not in UNIX_STREAM_TYPES:
+                    continue
+                try:
+                    if not int(fields[3], 16) & UNIX_LISTENING:
+                        continue
+                except ValueError:
+                    continue
+                path = fields[7]
+                if not path.startswith('/') or path.startswith('/run/user/') or '/pymp-' in path:
+                    continue
+                found.add(fields[6])
+    except OSError:
+        pass
+    return found
+
+
 class Judge:
     """Decides, for one started program, whether a service ancestor makes it a finding."""
 
@@ -297,7 +340,8 @@ class Judge:
             return None
         service = next(((a, c) for a in ancestors if (c := service_category(a.path, a.comm))), None)
         if service is None and self.listens is not None:
-            service = next(((a, 'application') for a in ancestors if _runtime(a) and self.listens(a)), None)
+            service = next(((a, 'application') for a in ancestors
+                            if _runtime(a) and not _process_manager(a) and self.listens(a)), None)
         if service is None:
             return None
         parent, category = service
