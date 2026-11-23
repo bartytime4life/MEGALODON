@@ -8,10 +8,16 @@ looks inside each new, changed or baselined file for well-known web-shell
 shapes: a command or `eval` call fed straight from request input, or
 obfuscated `eval`.
 
+`megalodon webroot watch` looks at each file as it is written, through Linux
+inotify, instead of every 15 minutes: a web shell dropped, used and deleted
+between two checks is seen, and its deletion soon after it appeared is
+reported as WEB_SCRIPT_DROPPED_AND_REMOVED.
+
 Read-only; only code files are recorded and hashed.
 """
 from __future__ import annotations
 
+from collections import OrderedDict
 from datetime import datetime, timezone
 import glob
 import hashlib
@@ -20,7 +26,9 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
 import tempfile
+import time
 
 SCHEMA = 'megalodon-webroot-watch-v1'
 REPORT_SCHEMA = 'megalodon-webroot-report-v1'
@@ -34,6 +42,10 @@ MAX_DEPTH = 32
 SNIFF_BYTES = 4096
 MAX_HASH = 16 * 1024 * 1024
 MAX_PATTERN_READ = 2 * 1024 * 1024
+# A script that appeared while watching and is deleted within this long was dropped, used and removed.
+DROP_WINDOW = 3600.0
+MAX_WATCHED_FOLDERS = 65536
+MAX_REMEMBERED = 65536
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 
 SCRIPT_SUFFIXES = {'.php', '.phtml', '.php3', '.php4', '.php5', '.php7', '.php8', '.phps', '.pht', '.phar', '.inc',
@@ -78,6 +90,8 @@ RULES = {
     'WEB_LINK_CHANGED': ('MEDIUM', 'A link under a web root now leads elsewhere, or its target changed.'),
     'WEB_SCRIPT_ADDED': ('HIGH', 'A new server-side script under a web root. Deployments add these; so do intruders.'),
     'WEB_SCRIPT_CHANGED': ('MEDIUM', 'A server-side script changed. Updates do this; so does an injected backdoor.'),
+    'WEB_SCRIPT_DROPPED_AND_REMOVED': ('HIGH', 'A server-side script that appeared under a web root was deleted soon '
+                                               'after: a web shell dropped, used and removed, which no check finds.'),
 }
 
 
@@ -161,6 +175,38 @@ def _link(path):
     return entry
 
 
+def examine(path, info=None):
+    """What a web root's file is, as the baseline records it: a script, code hidden in a served file, or a link
+    (with its target's contents). None for anything else, or a file that is gone."""
+    if info is None:
+        try:
+            info = os.lstat(path)
+        except OSError:
+            return None
+    if stat.S_ISLNK(info.st_mode):
+        # A web server that follows links serves whatever the link points to: record the target, and the contents
+        # when it is a file, instead of skipping it.
+        return _link(path)
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        if os.path.splitext(path)[1].lower() in SCRIPT_SUFFIXES:
+            return dict(kind='script', size=info.st_size, sha256=None, mtime_ns=info.st_mtime_ns,
+                        mode=oct(stat.S_IMODE(info.st_mode)), uid=info.st_uid, indicators=[], unreadable=True)
+        return None
+    try:
+        kind = _classify(path, _read_head(fd))
+        if kind is None:
+            return None
+        digest, indicators = _hash_and_match(fd, info.st_size)
+    finally:
+        os.close(fd)
+    return dict(kind=kind, size=info.st_size, sha256=digest, mtime_ns=info.st_mtime_ns,
+                mode=oct(stat.S_IMODE(info.st_mode)), uid=info.st_uid, indicators=indicators)
+
+
 def snapshot(web_roots=None):
     files, gaps, walked = {}, [], 0
     chosen = roots(web_roots)
@@ -188,32 +234,9 @@ def snapshot(web_roots=None):
                         if entry.name not in SKIP_FOLDERS and depth < MAX_DEPTH:
                             stack.append((entry.path, depth + 1))
                         continue
-                    if stat.S_ISLNK(info.st_mode):
-                        # A web server that follows links serves whatever the link points to: record the target,
-                        # and the contents when it is a file, instead of skipping it.
-                        files[entry.path] = _link(entry.path)
-                        continue
-                    if not stat.S_ISREG(info.st_mode):
-                        continue
-                    try:
-                        fd = os.open(entry.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
-                    except OSError:
-                        if os.path.splitext(entry.name)[1].lower() in SCRIPT_SUFFIXES:
-                            files[entry.path] = dict(kind='script', size=info.st_size, sha256=None,
-                                                     mtime_ns=info.st_mtime_ns,
-                                                     mode=oct(stat.S_IMODE(info.st_mode)), uid=info.st_uid,
-                                                     indicators=[], unreadable=True)
-                        continue
-                    try:
-                        kind = _classify(entry.path, _read_head(fd))
-                        if kind is None:
-                            continue
-                        digest, indicators = _hash_and_match(fd, info.st_size)
-                    finally:
-                        os.close(fd)
-                    files[entry.path] = dict(kind=kind, size=info.st_size, sha256=digest, mtime_ns=info.st_mtime_ns,
-                                             mode=oct(stat.S_IMODE(info.st_mode)), uid=info.st_uid,
-                                             indicators=indicators)
+                    found = examine(entry.path, info)
+                    if found is not None:
+                        files[entry.path] = found
             if walked > MAX_WALK or len(files) >= MAX_FILES:
                 gaps.append('the scan reached its limit; later files were not recorded')
                 break
@@ -360,3 +383,162 @@ def check(manifest=DEFAULT_MANIFEST, *, web_roots=None):
 def accept(manifest=DEFAULT_MANIFEST, *, web_roots=None):
     old = _read(manifest)
     return dict(baseline(manifest, replace=True, web_roots=web_roots or old.get('roots') or None), action='accept')
+
+
+def _skipped(path, root_list):
+    """Whether `path` is in a folder the snapshot does not walk (.git, node_modules...), or too deep."""
+    root = next((r for r in root_list if path.startswith(r.rstrip('/') + '/')), None)
+    if root is None:
+        return True
+    parts = path[len(root):].strip('/').split('/')[:-1]
+    return len(parts) > MAX_DEPTH or any(part in SKIP_FOLDERS for part in parts)
+
+
+class Watcher:
+    """``webroot watch``: look at each file under the web roots as it is written, compared with the baseline, and
+    report a script that appeared and was deleted soon after."""
+
+    def __init__(self, manifest=DEFAULT_MANIFEST, emit=print, *, web_roots=None, clock=time.monotonic, warn=None,
+                 notify=None, max_folders=MAX_WATCHED_FOLDERS):
+        self.manifest, self.emit, self.clock = manifest, emit, clock
+        self.warn = warn or (lambda text: print(f'megalodon: {text}', file=sys.stderr, flush=True))
+        self.baseline, self.loaded = _read(manifest), self._stamp()
+        self.roots = roots(web_roots or self.baseline.get('roots') or None)
+        if not self.roots:
+            raise WebrootError("no web root folder exists; pass --root for this server's document roots")
+        if notify is None:
+            from .ransomware_watch import _Inotify
+            notify = _Inotify()
+        self.notify, self.max_folders = notify, max_folders
+        self.reported, self.appeared, self.moving = {}, OrderedDict(), {}
+        self.watched, self.overflows = 0, 0
+        self.stats = dict(events=0, findings=0, dropped=0)
+        for root in self.roots:
+            self._watch_tree(root)
+
+    def _stamp(self):
+        try:
+            info = os.stat(Path(self.manifest).expanduser())
+            return (info.st_mtime_ns, info.st_size, info.st_ino)
+        except OSError:
+            return None
+
+    def _watch_tree(self, top):
+        """Watch `top` and the folders under it the snapshot walks; return the files found there."""
+        found = []
+        for folder, dirs, names in os.walk(top, followlinks=False):
+            dirs[:] = [d for d in dirs if d not in SKIP_FOLDERS and not _skipped(os.path.join(folder, d, 'x'),
+                                                                                 self.roots)]
+            if self.watched >= self.max_folders:
+                self.warn(f'more than {self.max_folders} folders under the web roots: the rest are not watched '
+                          'as files are written; the scheduled check still covers them')
+                return found
+            if self.notify.add(folder):
+                self.watched += 1
+            found += [os.path.join(folder, name) for name in names]
+        return found
+
+    def _send(self, found):
+        found = dict(found, detected_at=_now(), live=True)
+        self.stats['findings'] += 1
+        self.emit(found)
+        return found
+
+    def look(self, path):
+        """Judge one file as it is now against the baseline; report what changed, once for each content."""
+        entry = examine(path)              # skipped folders are never watched, so no event comes from them
+        if entry is None:
+            return []
+        mark = entry.get('sha256') or (entry.get('size'), entry.get('mtime_ns'), entry.get('target'))
+        if self.reported.get(path) == mark:
+            return []
+        self.reported[path] = mark
+        if len(self.reported) > MAX_REMEMBERED:
+            self.reported.clear()
+        before = self.baseline['files'].get(path)
+        findings, _removed = compare({path: before} if before is not None else {}, {path: entry}, self.roots)
+        if findings and before is None and entry['kind'] != 'link':
+            # When it first appeared, under this name or the one it was renamed from.
+            when = self.appeared[path][0] if path in self.appeared else self.clock()
+            self.appeared[path] = (when, entry)
+            self.appeared.move_to_end(path)
+            while len(self.appeared) > MAX_REMEMBERED:
+                self.appeared.popitem(last=False)
+        return [self._send(found) for found in findings]
+
+    def gone(self, path):
+        """A file under a web root was deleted or moved out of it."""
+        self.reported.pop(path, None)
+        item = self.appeared.pop(path, None)
+        if item is None:
+            return []
+        when, entry = item
+        age = self.clock() - when
+        if age > DROP_WINDOW:
+            return []
+        self.stats['dropped'] += 1
+        found = _finding('WEB_SCRIPT_DROPPED_AND_REMOVED', path, entry,
+                         f'{path} appeared under a web root and was deleted {age:.0f} s later')
+        found['techniques'] = ['T1505.003', 'T1070.004']
+        return [self._send(found)]
+
+    def rescan(self):
+        """Look at every file now: at the start, and after the kernel dropped events."""
+        out = []
+        for path in sorted(snapshot(self.roots)['files']):
+            out += self.look(path)
+        return out
+
+    def handle(self, events):
+        from .ransomware_watch import (IN_CLOSE_WRITE, IN_CREATE, IN_DELETE, IN_ISDIR, IN_MOVED_FROM, IN_MOVED_TO,
+                                       IN_Q_OVERFLOW)
+        out, overflowed = [], False
+        for mask, cookie, folder, name in events:
+            self.stats['events'] += 1
+            if mask & IN_Q_OVERFLOW:
+                overflowed = True
+                continue
+            if folder is None or not name:
+                continue
+            path = os.path.join(folder, name)
+            if mask & IN_ISDIR:
+                if mask & (IN_CREATE | IN_MOVED_TO) and not _skipped(os.path.join(path, 'x'), self.roots):
+                    for inside in self._watch_tree(path):  # a folder moved in may already hold a script
+                        out += self.look(inside)
+                continue
+            if mask & IN_MOVED_FROM:
+                self.moving[cookie] = path
+            elif mask & IN_DELETE:
+                out += self.gone(path)
+            elif mask & IN_MOVED_TO:
+                old = self.moving.pop(cookie, None)
+                if old is not None and old in self.appeared:     # renamed within the web roots
+                    self.appeared[path] = self.appeared.pop(old)
+                    self.reported.pop(old, None)
+                out += self.look(path)
+            elif mask & IN_CLOSE_WRITE or (mask & IN_CREATE and os.path.islink(path)):
+                out += self.look(path)
+        # A move whose other half never came in this batch left the web roots.
+        for cookie in list(self.moving):
+            out += self.gone(self.moving.pop(cookie))
+        if overflowed:
+            self.overflows += 1
+            self.warn('the kernel dropped file events under load; every file is looked at again')
+            out += self.rescan()
+        return out
+
+    def run(self, stop, *, poll=0.5):
+        try:
+            self.rescan()
+            while not stop.is_set():
+                stamp = self._stamp()
+                if stamp != self.loaded:             # `accept` changed the baseline while watching
+                    self.baseline, self.loaded, self.reported = _read(self.manifest), stamp, {}
+                self.handle(self.notify.events(poll))
+        finally:
+            self.close()
+
+    def close(self):
+        if self.notify is not None:
+            self.notify.close()
+            self.notify = None
