@@ -40,6 +40,9 @@ FOLDERS = ('/boot', '/efi', '/etc/grub.d', '/etc/kernel', '/etc/initramfs-tools'
 # The EFI system partition's GPT partition type, as udev records it for each partition (ID_PART_ENTRY_TYPE).
 ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
 MAX_MOUNTS = 4096
+FAT = ('vfat', 'msdos', 'fat')
+# Where an EFI system partition is conventionally mounted.
+ESP_PLACES = ('/boot/efi', '/efi', '/boot')
 FILES = ('/etc/default/grub', '/etc/dracut.conf', '/etc/mkinitcpio.conf')
 PACKAGE_LOGS = ('/var/log/dpkg.log', '/var/log/dnf.rpm.log', '/var/log/pacman.log', '/var/log/yum.log')
 EXPLAIN_BEFORE = timedelta(minutes=30)
@@ -167,19 +170,20 @@ def _unescape(text):
     return re.sub(r'\\([0-7]{3})', lambda m: chr(int(m.group(1), 8)), text)
 
 
-def esp_mounts(root='/'):
-    """Where the EFI system partition is mounted, wherever that is: every FAT mount whose partition udev records with
-    the EFI system partition's type."""
-    found = []
+def fat_mounts(root='/'):
+    """Every FAT mount point in the mount table, or None when the table cannot be read."""
     try:
         lines = Path(_under(root, '/proc/self/mounts')).read_text('utf-8', 'replace').splitlines()[:MAX_MOUNTS]
     except OSError:
-        return found
-    for line in lines:
-        fields = line.split()
-        if len(fields) < 3 or fields[2] not in ('vfat', 'msdos', 'fat'):
-            continue
-        where = _unescape(fields[1])
+        return None
+    return [_unescape(f[1]) for f in (line.split() for line in lines) if len(f) >= 3 and f[2] in FAT]
+
+
+def esp_mounts(root='/', mounts=None):
+    """Where the EFI system partition is mounted, wherever that is: every FAT mount whose partition udev records with
+    the EFI system partition's type."""
+    found = []
+    for where in (fat_mounts(root) if mounts is None else mounts) or ():
         try:
             device = os.stat(_under(root, where)).st_dev
         except OSError:
@@ -190,11 +194,21 @@ def esp_mounts(root='/'):
     return sorted(set(found))
 
 
+def _esp_covered(mounts, files):
+    """Whether the bootloaders are read although udev names no partition: a FAT file system is mounted where the
+    partition goes, or, with no mount table to read, loaders are found there. A folder by that name on the root file
+    system is not the partition."""
+    if mounts is not None:
+        return any(m in ESP_PLACES for m in mounts)
+    return any(k.lower().endswith('.efi') and k.startswith(('/boot/efi/', '/efi/')) for k in files)
+
+
 def snapshot(*, root='/'):
     files, gaps, seen = {}, [], 0
     real_root = os.path.realpath(root)
     candidates = [_under(real_root, f) for f in FILES]
-    esp = esp_mounts(real_root)
+    mounts = fat_mounts(real_root)
+    esp = esp_mounts(real_root, mounts)
     # The partition, wherever it is mounted, unless it is already inside a folder read anyway.
     extra = [m for m in esp if not any(m == f or m.startswith(f.rstrip('/') + '/') for f in FOLDERS)]
     for folder in (*FOLDERS, *extra):
@@ -227,8 +241,7 @@ def snapshot(*, root='/'):
     if not os.path.isdir(_under(real_root, '/boot')) or not any(k.startswith('/boot/') for k in files):
         gaps.append('there are no boot files in /boot here (a container or a machine booted another way)')
     kernel = kernel_state(real_root)
-    if kernel.get('efi') and not esp and not os.path.isdir(_under(real_root, '/boot/efi/EFI')) \
-            and not os.path.isdir(_under(real_root, '/efi/EFI')):
+    if kernel.get('efi') and not esp and not _esp_covered(mounts, files):
         gaps.append('this machine booted with UEFI, but its EFI system partition is not mounted: the bootloaders on '
                     'it are not checked (mount it, for example at /efi or /boot/efi)')
     return dict(files=files, kernel=kernel, gaps=gaps, esp=esp)

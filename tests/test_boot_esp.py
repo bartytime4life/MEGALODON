@@ -83,3 +83,23 @@ def test_a_uefi_machine_with_its_partition_unmounted_is_a_gap(root):  # noqa: F8
     assert len(gap) == 1
     shutil.rmtree(root / "sys/firmware/efi")                # a machine booted by BIOS has no such partition
     assert not [g for g in bi.snapshot(root=str(root))["gaps"] if "EFI system partition" in g]
+
+
+def test_a_folder_on_the_root_file_system_is_not_a_mounted_partition(root):  # noqa: F811
+    # The partition unmounted: what is left at /boot/efi is the root file system's own folder, empty or stale.
+    (root / "proc/self").mkdir(parents=True)
+    (root / "proc/self/mounts").write_text("/dev/sda2 / ext4 rw,relatime 0 0\n")
+    unmounted = "EFI system partition is not mounted"
+    assert [g for g in bi.snapshot(root=str(root))["gaps"] if unmounted in g], "stale loaders under /boot/efi"
+    shutil.rmtree(root / "boot/efi/EFI")
+    (root / "boot/efi/EFI").mkdir()
+    (root / "efi/EFI").mkdir(parents=True)
+    assert [g for g in bi.snapshot(root=str(root))["gaps"] if unmounted in g], "empty folders"
+
+
+def test_a_fat_mount_where_the_partition_goes_is_enough_without_udev(root):  # noqa: F811
+    (root / "proc/self").mkdir(parents=True)
+    (root / "proc/self/mounts").write_text("/dev/sda2 / ext4 rw 0 0\n/dev/sda1 /boot/efi vfat rw,fmask=0077 0 0\n")
+    snapshot = bi.snapshot(root=str(root))                 # no /run/udev here, as in many containers
+    assert snapshot["esp"] == [] and not [g for g in snapshot["gaps"] if "EFI system partition" in g]
+    assert "/boot/efi/EFI/debian/grubx64.efi" in snapshot["files"]
