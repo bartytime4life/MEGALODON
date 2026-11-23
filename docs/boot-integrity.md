@@ -93,7 +93,9 @@ be repaired from inside it.
 * **The EFI system partition must be mounted.** It is read wherever it is
   mounted. On a machine booted with UEFI where it is not mounted at all, the
   report lists a gap: MEGALODON does not mount it, since that would change
-  the machine. Without udev's records, as in some containers, only
-  `/boot/efi` and `/efi` are read.
+  the machine. A `/boot/efi` or `/efi` folder left on the root file system
+  does not count: the gap is lifted only by a FAT file system mounted there.
+  Without udev's records, as in some containers, only `/boot/efi` and `/efi`
+  are read.
 * **Containers and virtual machines booted directly** have no `/boot`. The
   report says so, and checks only the kernel's state.
