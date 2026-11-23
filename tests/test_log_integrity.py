@@ -161,3 +161,196 @@ def test_copytruncate_then_regrowth_past_the_recorded_size_is_rotation(logs):
     os.truncate(folder / "auth.log.1", 1000)
     found, _ = rules(manifest, options)
     assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}, "a cut-down copy no longer explains the change"
+
+
+def big_log(folder, lines=60000):
+    """A log of several 1 MiB pieces, recorded as the baseline's only log."""
+    text = "".join(f"Nov 18 08:{i // 3600 % 60:02d}:{i % 60:02d} host sshd[{i}]: session entry {i:06d}\n"
+                   for i in range(lines))
+    (folder / "auth.log").write_text(text, encoding="utf-8")
+    return text
+
+
+def test_one_line_removed_from_the_middle_of_a_growing_log_is_found(logs):
+    folder, options, manifest = logs
+    text = big_log(folder)
+    li.accept(manifest, **options)
+    record = json.loads(manifest.read_text())["logs"]["/var/log/auth.log"]
+    assert record["piece_bytes"] == 1 << 20 and len(record["pieces"]) == 4
+    removed = "host sshd[50000]: session entry 050000\n"
+    at = text.index(removed)
+    assert 3 << 20 > at > 2 << 20
+    start = text.rindex("\n", 0, at) + 1
+    edited = text[:start] + text[at + len(removed):]  # The whole line, timestamp and all.
+    assert len(edited) < len(text)
+    with open(folder / "auth.log", "w", encoding="utf-8") as out:
+        out.write(edited + "Nov 18 09:00:00 host sshd[1]: later entry\n" * 2000)  # It kept growing.
+    assert (folder / "auth.log").stat().st_size > len(text)
+    found, report = rules(manifest, options)
+    assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}
+    assert report["findings"][0]["detail"]["changed_from_byte"] == 2 << 20, "the piece that changed is named"
+
+
+@pytest.mark.parametrize("style", ["rename", "gzip"])
+def test_a_log_edited_and_then_rotated_is_not_a_rotation(logs, style):
+    folder, options, manifest = logs
+    log = folder / "auth.log"
+    log.write_text(LINES.replace("entry 120\n", "entry 121\n"), encoding="utf-8")  # Same size, one record changed.
+    if style == "rename":
+        log.rename(folder / "auth.log.1")
+        log.write_text("Nov 18 09:00:00 host service[1]: new file\n", encoding="utf-8")
+    else:
+        with open(log, "rb") as source, gzip.open(folder / "auth.log.1.gz", "wb") as target:
+            shutil.copyfileobj(source, target)
+        log.unlink()
+    found, report = rules(manifest, options)
+    assert report["rotated"] == []
+    if style == "rename":
+        assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}
+        assert report["findings"][0]["detail"]["rotated_to"] == "auth.log.1"
+    else:
+        assert found == {("LOG_DELETED", "/var/log/auth.log")}
+
+
+def test_advance_follows_rotation_and_covers_what_was_written_since(logs):
+    folder, options, manifest = logs
+    log = folder / "auth.log"
+    log.rename(folder / "auth.log.1")
+    log.write_text("Nov 18 09:00:00 host service[1]: new file\n" * 50, encoding="utf-8")
+    report = li.check(manifest, advance=True, **options)
+    assert report["findings"] == [] and report["rotated"][0]["rotated_to"] == "auth.log.1"
+    assert "/var/log/auth.log" in report["advanced"]
+    (folder / "auth.log.1").unlink()  # logrotate deletes its oldest copy.
+    assert rules(manifest, options)[0] == set(), "the deleted copy was already let go"
+    with open(log, "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:05:00 host sshd[2]: written after the baseline\n")
+    li.check(manifest, advance=True, **options)
+    log.write_text("Nov 18 09:00:00 host service[1]: new file\n" * 50
+                   + "Nov 18 09:06:00 host sshd[3]: an unrelated, later and longer entry\n", encoding="utf-8")
+    found, _ = rules(manifest, options)
+    assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}, "a line written after the baseline was removed"
+
+
+def test_advance_keeps_the_record_of_a_log_with_a_finding(logs):
+    folder, options, manifest = logs
+    os.truncate(folder / "auth.log", 100)
+    with open(folder / "syslog", "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:00:00 host service[1]: later entry\n")
+    first = li.check(manifest, advance=True, **options)
+    assert {f["rule_id"] for f in first["findings"]} == {"LOG_TRUNCATED"}
+    assert "/var/log/auth.log" not in first["advanced"] and "/var/log/syslog" in first["advanced"]
+    stored = json.loads(manifest.read_text())["logs"]
+    assert stored["/var/log/auth.log"]["size"] == len(LINES)
+    assert stored["/var/log/syslog"]["size"] > len(LINES)
+    again = li.check(manifest, advance=True, **options)
+    assert {(f["rule_id"], f["log"]) for f in again["findings"]} == {("LOG_TRUNCATED", "/var/log/auth.log")}
+    assert manifest.stat().st_mode & 0o777 == 0o600
+
+
+def test_without_advance_check_writes_nothing(logs):
+    folder, options, manifest = logs
+    before = manifest.read_bytes()
+    with open(folder / "syslog", "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:00:00 host service[1]: later entry\n")
+    assert "advanced" not in li.check(manifest, **options)
+    assert manifest.read_bytes() == before
+
+
+def test_an_unreadable_log_is_reported_and_keeps_its_record_when_advancing(logs, monkeypatch):
+    folder, options, manifest = logs
+    real = li._identity
+    monkeypatch.setattr(li, "_identity", lambda path, tries=3: "unreadable" if path.endswith("syslog")
+                        else real(path, tries))
+    report = li.check(manifest, advance=True, **options)
+    monkeypatch.setattr(li, "_identity", real)
+    assert "/var/log/syslog" in report["gaps"] and "/var/log/syslog" not in report["advanced"]
+    assert "/var/log/syslog" in json.loads(manifest.read_text())["logs"]
+
+
+def test_a_baseline_from_before_whole_content_digests_still_works(logs):
+    folder, options, manifest = logs
+    old = json.loads(manifest.read_text())
+    for record in old["logs"].values():
+        record.pop("pieces", None), record.pop("piece_bytes", None)
+    manifest.write_text(json.dumps(old))
+    log = folder / "auth.log"
+    log.write_text(LINES.replace("entry 120\n", "entry 121\n"), encoding="utf-8")
+    assert rules(manifest, options)[0] == set(), "only the first bytes were recorded"
+    data = bytearray(log.read_bytes())
+    data[16:22] = b"XXXXXX"
+    log.write_bytes(bytes(data))
+    found, report = rules(manifest, options)
+    assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}
+    assert report["findings"][0]["detail"]["changed_from_byte"] == 0
+
+
+def test_pieces_grow_so_a_large_log_keeps_a_small_record():
+    assert li._piece_size(0) == li._piece_size(5) == 1 << 20
+    assert li._piece_size(128 << 20) == 1 << 20
+    assert li._piece_size((128 << 20) + 1) == 2 << 20
+    for size in (1, 200 << 20, 5 << 30):
+        assert -(-size // li._piece_size(size)) <= li.MAX_PIECES
+
+
+def test_in_place_logs_get_no_content_digests(logs):
+    _, _, manifest = logs
+    stored = json.loads(manifest.read_text())["logs"]
+    assert "pieces" not in stored["/var/log/lastlog"] and "pieces" in stored["/var/log/wtmp"]
+
+
+def test_a_log_cut_short_while_it_is_read_is_read_again(logs, monkeypatch):
+    folder, _, _ = logs
+    real, calls = li._pieces, []
+
+    def short_once(stream, size, piece):
+        calls.append(size)
+        return None if len(calls) == 1 else real(stream, size, piece)
+    monkeypatch.setattr(li, "_pieces", short_once)
+    found = li._identity(str(folder / "auth.log"))
+    assert len(calls) == 2 and found["pieces"] == real(open(folder / "auth.log", "rb"), len(LINES), 1 << 20)
+    monkeypatch.setattr(li, "_pieces", lambda *a: None)
+    assert li._identity(str(folder / "auth.log")) == "unreadable"
+
+
+def test_cli_advance_and_the_schedule_uses_it(logs, monkeypatch, capsys):
+    folder, options, manifest = logs
+    real_check = li.check
+    monkeypatch.setattr(li, "check", lambda m, **kw: real_check(m, **{**kw, **options}))
+    from megalodon.cli import main
+    with open(folder / "syslog", "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:00:00 host service[1]: later entry\n")
+    with pytest.raises(SystemExit) as exit_:
+        main(["logwatch", "check", "--advance", "--manifest", str(manifest)])
+    assert exit_.value.code == 0 and "/var/log/syslog" in json.loads(capsys.readouterr().out)["advanced"]
+    assert json.loads(manifest.read_text())["logs"]["/var/log/syslog"]["size"] > len(LINES)
+    from megalodon import schedule
+    job = next(job for job in schedule.JOBS if job.name == "logwatch")
+    assert job.command == ("logwatch", "check", "--alert", "--advance")
+
+
+@pytest.mark.parametrize("damage", [dict(piece_bytes=0), dict(piece_bytes="1"), dict(pieces=[]), dict(pieces="x"),
+                                    dict(size=-1)])
+def test_a_damaged_record_is_reported_not_looped_on(logs, damage):
+    folder, options, manifest = logs
+    stored = json.loads(manifest.read_text())
+    stored["logs"]["/var/log/auth.log"].update(damage)
+    manifest.write_text(json.dumps(stored))
+    found, report = rules(manifest, options)
+    assert ("LOG_REWRITTEN", "/var/log/auth.log") in found or ("LOG_TRUNCATED", "/var/log/auth.log") in found
+
+
+def test_an_unreadable_log_explained_by_a_rotated_copy_keeps_its_record(logs, monkeypatch):
+    folder, options, manifest = logs
+    shutil.copy(folder / "auth.log", folder / "auth.log.1")  # A copy that holds the recorded content.
+    real = li._identity
+    monkeypatch.setattr(li, "_identity", lambda path, tries=3: "unreadable" if path.endswith("/auth.log")
+                        else real(path, tries))
+    report = li.check(manifest, advance=True, **options)
+    assert report["findings"] == [] and "/var/log/auth.log" in report["gaps"]
+    assert "/var/log/auth.log" not in report["advanced"]
+    monkeypatch.setattr(li, "_identity", real)
+    assert "/var/log/auth.log" in json.loads(manifest.read_text())["logs"], "the record is kept to compare later"
+    (folder / "auth.log").write_text(LINES.replace("entry 120\n", "entry 121\n"), encoding="utf-8")
+    (folder / "auth.log.1").unlink()
+    found, _ = rules(manifest, options)
+    assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}, "an edit made while it was unreadable is found"

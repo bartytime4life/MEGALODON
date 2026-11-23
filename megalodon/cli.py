@@ -225,6 +225,9 @@ def build_parser() -> argparse.ArgumentParser:
                                  help="also send a summary to the [alerts] destinations in the settings file")
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
+            command.add_argument("--advance", action="store_true",
+                                 help="afterwards record every log without a finding as it is now, so the next "
+                                      "check covers what was written since and rotation needs no accept")
 
     persist = sub.add_parser(
         "persistence", help="baseline and check where attackers hide to survive reboots (exit 1 on changes)")
@@ -1704,7 +1707,7 @@ def _logwatch(args: argparse.Namespace) -> int:
         elif args.logwatch_command == "accept":
             result = log_integrity.accept(manifest)
         else:
-            result = log_integrity.check(manifest)
+            result = log_integrity.check(manifest, advance=args.advance)
     except (log_integrity.LogIntegrityError, OSError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
