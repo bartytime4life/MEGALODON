@@ -377,7 +377,9 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
                   rotated=rotated, new_logs=sorted(set(new['logs']) - set(old['logs'])), gaps=new['gaps'],
                   note='Run accept after reviewing, and after rotation, so the next check compares with today.')
     if advance:
-        kept = {item['log'] for item in findings}
+        # A log with a finding, or one that cannot be read now (even if a rotated copy explains it), keeps its
+        # record, to be compared again until it is accepted or read.
+        kept = {item['log'] for item in findings} | {name for name in new['gaps'] if name in old['logs']}
         logs = {name: value for name, value in new['logs'].items() if name not in kept}
         logs.update({name: old['logs'][name] for name in kept})
         _write(manifest, dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs, gaps=new['gaps']))

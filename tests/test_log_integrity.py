@@ -337,3 +337,20 @@ def test_a_damaged_record_is_reported_not_looped_on(logs, damage):
     manifest.write_text(json.dumps(stored))
     found, report = rules(manifest, options)
     assert ("LOG_REWRITTEN", "/var/log/auth.log") in found or ("LOG_TRUNCATED", "/var/log/auth.log") in found
+
+
+def test_an_unreadable_log_explained_by_a_rotated_copy_keeps_its_record(logs, monkeypatch):
+    folder, options, manifest = logs
+    shutil.copy(folder / "auth.log", folder / "auth.log.1")  # A copy that holds the recorded content.
+    real = li._identity
+    monkeypatch.setattr(li, "_identity", lambda path, tries=3: "unreadable" if path.endswith("/auth.log")
+                        else real(path, tries))
+    report = li.check(manifest, advance=True, **options)
+    assert report["findings"] == [] and "/var/log/auth.log" in report["gaps"]
+    assert "/var/log/auth.log" not in report["advanced"]
+    monkeypatch.setattr(li, "_identity", real)
+    assert "/var/log/auth.log" in json.loads(manifest.read_text())["logs"], "the record is kept to compare later"
+    (folder / "auth.log").write_text(LINES.replace("entry 120\n", "entry 121\n"), encoding="utf-8")
+    (folder / "auth.log.1").unlink()
+    found, _ = rules(manifest, options)
+    assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}, "an edit made while it was unreadable is found"

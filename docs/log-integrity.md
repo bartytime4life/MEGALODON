@@ -73,7 +73,8 @@ With `--advance`, each log without a finding is recorded as it is after the
 check. The next check then covers everything written up to this one, and a
 rotation is followed instead of piling up. A log with a finding keeps its old
 record, so it is reported at every check until you review it and run
-`accept`. A log that cannot be read keeps its record too.
+`accept`. A log that cannot be read keeps its record too, even when a rotated
+copy explains its absence, and is compared again once it can be read.
 
 ## What is stored
 
