@@ -44,6 +44,11 @@ SERVICES = {
     'file sharing': {'vsftpd', 'proftpd', 'pure-ftpd', 'smbd'},
 }
 _PHP_FPM = re.compile(r'php-fpm[0-9.]*')
+# Application servers are often an interpreter or the JVM running the application itself (gunicorn, uvicorn,
+# node server.js, java -jar). Such a process counts as a service while it holds a listening TCP socket.
+RUNTIMES = frozenset({'java'})
+MAX_FDS = 4096
+QUIET_SECONDS = 30.0              # how long "not listening" is remembered: a server opens its port after it starts
 # Programs an intruder runs first: transfer and relay tools, and quick system reconnaissance.
 TOOLS = {'nc', 'ncat', 'netcat', 'nc.openbsd', 'nc.traditional', 'socat', 'curl', 'wget', 'telnet', 'tftp', 'ftp',
          'nmap', 'masscan', 'ssh', 'scp', 'sftp', 'openssl', 'base64', 'xxd'}
@@ -181,7 +186,8 @@ def _load_allow(path):
 
 
 def allow(path, service, program):
-    """Record that SERVICE may start PROGRAM (both executable paths). Owner-only."""
+    """Record that SERVICE may start PROGRAM (both executable paths; an application service is named as its
+    finding's `allow_as` gives it, its runtime and what it runs). Owner-only."""
     for value in (service, program):
         if not value.startswith('/'):
             raise AncestryError('service and program must be absolute executable paths')
@@ -198,21 +204,94 @@ def allow(path, service, program):
     return len(entries)
 
 
+def _runtime(proc):
+    """Whether this process is an interpreter or the JVM, which run applications as themselves."""
+    from .process_network import _program_kind
+    name = proc.path.rsplit('/', 1)[-1]
+    return _program_kind(proc.path, proc.comm) == 'interpreter' or name in RUNTIMES or proc.comm in RUNTIMES
+
+
+def service_label(proc, category):
+    """How a service is named and allowed: its program, or for an application its runtime and what it runs
+    (`/usr/bin/python3 /usr/local/bin/gunicorn`, `/usr/bin/java -jar /opt/app.jar`), so allowing one Python
+    application does not allow them all."""
+    if category != 'application':
+        return proc.path
+    from .egress_watch import script
+    found = script(dict(path=proc.path, argv=proc.argv, cwd=None))
+    if found is None and '-jar' in proc.argv[:-1]:
+        found = f"-jar {proc.argv[proc.argv.index('-jar') + 1]}"
+    return f'{proc.path} {found}' if found else proc.path
+
+
+class Listeners:
+    """Whether a process holds a listening TCP socket, read from its own network namespace's tables."""
+
+    def __init__(self, base, clock=time.monotonic):
+        self.base, self.clock, self.seen = Path(base), clock, OrderedDict()
+
+    def __call__(self, proc):
+        key = (proc.pid, proc.start)
+        known = self.seen.get(key)
+        if known is not None and (known[0] or self.clock() - known[1] < QUIET_SECONDS):
+            return known[0]
+        result = self._listens(proc.pid)
+        self.seen[key] = (result, self.clock())
+        self.seen.move_to_end(key)
+        while len(self.seen) > MAX_TRACKED:
+            self.seen.popitem(last=False)
+        return result
+
+    def _listens(self, pid):
+        here, listening = self.base / str(pid), set()
+        for name in ('tcp', 'tcp6'):
+            try:
+                lines = (here / 'net' / name).read_text('ascii', 'replace').splitlines()[1:]
+            except OSError:
+                continue
+            for line in lines:
+                fields = line.split()
+                if len(fields) > 9 and fields[3] == '0A':
+                    listening.add(fields[9])
+        if not listening:
+            return False
+        try:
+            with os.scandir(here / 'fd') as descriptors:
+                for number, fd in enumerate(descriptors):
+                    if number >= MAX_FDS:
+                        break
+                    try:
+                        target = os.readlink(fd.path)
+                    except OSError:
+                        continue
+                    if target.startswith('socket:[') and target[8:-1] in listening:
+                        return True
+        except OSError:
+            pass
+        return False
+
+
 class Judge:
     """Decides, for one started program, whether a service ancestor makes it a finding."""
 
-    def __init__(self, allowed=frozenset()):
+    def __init__(self, allowed=frozenset(), listens=None):
         self.allowed = set(allowed)
+        self.listens = listens
 
     def judge(self, proc, ancestors, now):
         kind = program_kind(proc.path, proc.comm)
         if kind is None:
             return None
         service = next(((a, c) for a in ancestors if (c := service_category(a.path, a.comm))), None)
+        if service is None and self.listens is not None:
+            service = next(((a, 'application') for a in ancestors if _runtime(a) and self.listens(a)), None)
         if service is None:
             return None
         parent, category = service
-        if (parent.path, proc.path) in self.allowed:
+        if category == 'application' and proc.path == parent.path:
+            return None              # the runtime starting itself again: Python's multiprocessing, Node's cluster
+        label = service_label(parent, category)
+        if (label, proc.path) in self.allowed:
             return None
         direct = ancestors[0] if ancestors else None
         if kind == 'shell' and _allowed_helper(proc.argv):
@@ -220,12 +299,14 @@ class Judge:
         if kind in ('shell', 'interpreter') and direct is parent and category == 'web' and _cgi_script(proc.argv):
             return None
         rule = 'SERVICE_SPAWNED_SHELL' if kind in ('shell', 'interpreter') else 'SERVICE_SPAWNED_TOOL'
-        severity = 'HIGH' if category in ('web', 'database') else 'MEDIUM'
+        severity = 'HIGH' if category in ('web', 'database') else 'MEDIUM'      # applications: MEDIUM
         attack = ['T1505.003'] if category == 'web' else []
         attack += {'shell': ['T1059.004'], 'interpreter': ['T1059'], 'tool': ['T1105'],
                    'recon': ['T1082', 'T1033']}[kind]
         name = proc.path.rsplit('/', 1)[-1] or proc.comm
         service_name = parent.path.rsplit('/', 1)[-1] or parent.comm
+        if category == 'application' and label != parent.path:
+            service_name = f"{service_name} {label[len(parent.path) + 1:]}"
         return dict(
             schema=SCHEMA, rule_id=rule, severity=severity, detected_at=now, attack=attack,
             message=f'{category} service {service_name} (pid {parent.pid}) started {kind} {name} (pid {proc.pid})',
@@ -233,7 +314,8 @@ class Judge:
             evidence=dict(
                 program=proc.path, kind=kind, pid=proc.pid, start=proc.start, uid=proc.uid,
                 argv=[a[:MAX_ARGV_BYTES] for a in proc.argv][:16],
-                service=dict(program=parent.path, category=category, pid=parent.pid, start=parent.start),
+                service=dict(program=parent.path, category=category, pid=parent.pid, start=parent.start,
+                             **(dict(allow_as=label) if category == 'application' else {})),
                 chain=[a.path or a.comm for a in ancestors[:MAX_DEPTH]],
                 # The shape `megalodon respond ingest` reads: processes with their identity.
                 processes=[dict(program=proc.path, pid=proc.pid, start=proc.start)]))
@@ -265,7 +347,7 @@ def _ancestors(base, proc, cache, parent_of, forked=lambda pid: False):
 def check(root='/', *, allow_path=None, now=None):
     """Findings for the processes running now."""
     base = Path(root, 'proc')
-    judge = Judge(_load_allow(allow_path))
+    judge = Judge(_load_allow(allow_path), listens=Listeners(base))
     now = now or _now()
     findings, gaps, reviewed = [], [], 0
     try:
@@ -391,7 +473,7 @@ class Poller:
 class Watcher:
     def __init__(self, emit, *, root='/', allow_path=None, source=None, interval=0.25, clock=time.monotonic):
         self.base = Path(root, 'proc')
-        self.judge = Judge(_load_allow(allow_path))
+        self.judge = Judge(_load_allow(allow_path), listens=Listeners(self.base, clock))
         self.emit, self.clock = emit, clock
         self.parents: OrderedDict = OrderedDict()   # child -> parent, from fork events
         self.cache: OrderedDict = OrderedDict()     # pid -> Proc, for ancestors that exit quickly

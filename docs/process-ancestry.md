@@ -43,6 +43,13 @@ megalodon ancestry check
   ```
 
   The allow list is `~/.config/megalodon/ancestry-allow.json` (mode 600).
+  An application service is named the way its finding's
+  `service.allow_as` gives it: its runtime and what it runs. So allowing one
+  Python application does not allow every one:
+
+  ```bash
+  megalodon ancestry allow "/usr/bin/python3.12 /srv/app/manage.py" /usr/bin/dash
+  ```
 
 With `--alert`, findings also go to the
 [off-machine alerts](off-machine-alerts.md).
@@ -51,7 +58,7 @@ With `--alert`, findings also go to the
 
 | Rule | Severity | When |
 | --- | --- | --- |
-| `SERVICE_SPAWNED_SHELL` | HIGH for web servers and databases, MEDIUM for mail and file-sharing servers | A service started a shell or script interpreter |
+| `SERVICE_SPAWNED_SHELL` | HIGH for web servers and databases, MEDIUM for mail and file-sharing servers and applications | A service started a shell or script interpreter |
 | `SERVICE_SPAWNED_TOOL` | as above | A service started a transfer, relay or reconnaissance tool: `curl`, `wget`, `nc`, `socat`, `ssh`, `openssl`, `base64`, `id`, `whoami`, `uname`, `netstat` and similar |
 
 A service counts as the starter when it is anywhere among the program's
@@ -64,6 +71,25 @@ Services: `nginx`, `apache2`/`httpd`, `lighttpd`, `caddy`, `php-fpm`,
 `uwsgi`, MySQL/MariaDB, PostgreSQL, MongoDB, Redis/Valkey, Memcached,
 ClickHouse, InfluxDB, Exim, Postfix, Dovecot, OpenSMTPD, vsftpd, ProFTPD,
 Pure-FTPd and Samba.
+
+**Applications.** Many web applications are not a separate server program,
+but an interpreter or the JVM running the application itself. Examples are
+gunicorn and uvicorn under `python3`, `node server.js`, `java -jar app.jar`
+and a Jupyter server. Such a process counts as an application service while
+it holds a listening TCP socket. A gunicorn worker counts too, because it
+inherits its master's socket. The socket is matched in the process's own
+network namespace, through `/proc/PID/net`, so an application in a container
+counts the same way.
+- **Runtimes:** Python, Perl, Ruby, PHP, Lua, Tcl, PowerShell, Node, Deno,
+  Bun and Java.
+- **Severity:** MEDIUM. Development servers and notebooks start shells for
+  their own work, so the response playbook, which acts on HIGH, records
+  these without pausing anything.
+- **Naming:** the finding names the application by runtime and script, such
+  as `python3.12 /usr/local/bin/gunicorn` or `java -jar /opt/app/app.jar`.
+- **Timing:** a process that is not listening yet is looked at again after
+  30 seconds, so a server that opens its port after starting is still
+  recognized.
 
 Each finding names the program, its process ID with start time, its command
 line (up to 512 bytes), the service and the chain of parents.
@@ -80,7 +106,13 @@ line (up to 512 bytes), the service and the chain of parents.
   starts with a CGI path.
 * **Pairs in the allow list.**
 * **Your own shells.** A shell under `sshd` or a terminal is not under a
-  service.
+  service. `sshd` listens, but it is not an interpreter, so it is never an
+  application service.
+* **A runtime starting itself again,** such as Python's multiprocessing or
+  Node's cluster workers. An application service's child that runs the same
+  interpreter or JVM is not reported. Its shells and tools are.
+* **Interpreters that are not serving:** a script with no listening socket,
+  or one whose namespace has a listener another process holds.
 
 ## Limits
 
@@ -92,8 +124,13 @@ line (up to 512 bytes), the service and the chain of parents.
   reads files or opens sockets from inside PHP, without running a command,
   is not seen here. The [web-root watch](webroot-watch.md) looks at the
   files themselves.
-* **Services are known by their program name.** A web application run by a
-  general interpreter (`python3 app.py`, `node server.js`, `java -jar`) is
-  not recognized as a service.
+* **Applications are known by their listening socket.** An application run
+  by an interpreter counts only while it holds a listening TCP socket. One
+  that only listens on UDP or a Unix socket, or that is handed connections
+  by another process, is not recognized. A shell it starts in the 30 seconds
+  after it was last seen not listening is missed too, since that answer is
+  kept for 30 seconds. The same interpreter started by an application, as in
+  `python3 -c 'import pty; ...'`, is not reported, but the shell it then
+  starts is.
 * **The kernel can drop events under heavy load.** The watch counts this as
   `lost` in the statistics it prints when it stops.
