@@ -7,7 +7,8 @@ Canaries catch reads of decoys; this watches the real files.
 
 As root, the kernel's file-access notifications (fanotify) name the process
 behind every open, and the kernel's process events remember programs that exit
-at once. Without root, opens are seen through inotify and matched to a process
+at once; with an exec trace (:mod:`megalodon.exec_trace`, eBPF), so are those
+gone within microseconds. Without root, opens are seen through inotify and matched to a process
 only while it still holds the file. Each kind of file has its expected readers
 (`ssh` for keys, the browser for its own stores, `sudo` for /etc/shadow), and
 only when installed in a system folder; anything else is a finding.
@@ -285,7 +286,7 @@ class Judge:
                     program=identity, category=category, path=path, detail=detail, summary=summary,
                     files=files or [path],
                     evidence=dict(processes=[dict(program=info['path'], pid=pid, start=info['start'])],
-                                  argv=info['argv'][:8]))
+                                  argv=info['argv'][:8], **({'traced': info['traced']} if info.get('traced') else {})))
 
 
 # ------------------------------------------------------------------ one look: credentials held open now
@@ -457,7 +458,7 @@ def _link(path):
 
 class Watcher:
     def __init__(self, emit, *, home_dirs=None, allow_path=DEFAULT_ALLOW, source=None, processes=None,
-                 clock=time.monotonic):
+                 clock=time.monotonic, trace=None):
         self.home_dirs = home_dirs
         self.watched = patterns(home_dirs if home_dirs is not None else homes())
         self.files, self.folders = targets(self.watched)
@@ -465,15 +466,22 @@ class Watcher:
         self.judge = Judge(_load_allow(allow_path))
         self.emit, self.clock = emit, clock
         self.cache: OrderedDict = OrderedDict()
-        self.stats = dict(opens=0, findings=0, unattributed=0, lost=0)
+        self.stats = dict(opens=0, findings=0, unattributed=0, lost=0, named_after_exit=0)
         if source is None:
             try:
                 source = Fanotify(self.files, self.folders)
             except OSError:
                 source = Inotify(self.files, self.folders)
         self.source = source
-        # Process events name readers that already exited; only fanotify reports who opened a file.
-        if processes is None and getattr(source, 'mode', '') == 'file-access notifications':
+        # An exec trace (exec_trace.ExecTrace) remembers every program as the kernel starts it, and every forked
+        # process as its parent, so a reader gone within microseconds is still named. Only fanotify reports who
+        # opened a file, so it is used only with fanotify.
+        self.trace = trace if getattr(source, 'mode', '') == 'file-access notifications' else None
+        if trace is not None and self.trace is None:
+            trace.close()
+        # Otherwise the kernel's process events name readers that already exited, unless they exit within
+        # microseconds of starting.
+        if processes is None and self.trace is None and getattr(source, 'mode', '') == 'file-access notifications':
             try:
                 from .process_ancestry import ProcEvents
                 processes = ProcEvents()
@@ -497,10 +505,34 @@ class Watcher:
     def _remember(self, pid):
         info = _proc_info(Path('/proc', str(pid)))
         if info is not None:
-            self.cache[pid] = info
-            self.cache.move_to_end(pid)
-            while len(self.cache) > MAX_TRACKED:
-                self.cache.popitem(last=False)
+            self._keep(pid, info)
+
+    def _keep(self, pid, info):
+        self.cache[pid] = info
+        self.cache.move_to_end(pid)
+        while len(self.cache) > MAX_TRACKED:
+            self.cache.popitem(last=False)
+
+    def _traced(self):
+        """Remember each program the exec trace saw start: as /proc shows it if it still runs, else as the
+        kernel described it. A forked process is remembered as its parent's program."""
+        from .exec_trace import info as traced_info
+        for record in self.trace.drain():
+            pid = record['pid']
+            if record['kind'] == 'fork':
+                parent = self.cache.get(record['parent'])
+                if parent is None:
+                    parent = _proc_info(Path('/proc', str(record['parent'])))
+                    if parent is None:
+                        continue
+                    self._keep(record['parent'], parent)
+                self._keep(pid, dict(parent, start=record['start'], traced=dict(parent=record['parent'],
+                                                                                forked=True)))
+                continue
+            live = _proc_info(Path('/proc', str(pid)))
+            found = live if live is not None and live['start'] == record['start'] else traced_info(record)
+            if found is not None:
+                self._keep(pid, found)
 
     def handle(self, pid, path):
         if pid == 'lost':
@@ -517,10 +549,13 @@ class Watcher:
         out = []
         for one in pids:
             # Live if it is still running; otherwise as it was when it started (from the process events).
-            info = _proc_info(Path('/proc', str(one))) or self.cache.get(one)
+            info = _proc_info(Path('/proc', str(one)))
             if info is None:
-                self.stats['unattributed'] += 1
-                continue
+                info = self.cache.get(one)
+                if info is None:
+                    self.stats['unattributed'] += 1
+                    continue
+                self.stats['named_after_exit'] += 1
             for found in self.judge.judge(one, info, shown, category, self.clock()):
                 self.stats['findings'] += 1
                 out.append(found)
@@ -531,8 +566,8 @@ class Watcher:
         while not stop.is_set():
             if self.clock() - self.refreshed >= REFRESH_SECONDS:
                 self.refresh()
-            ready, _, _ = select.select([self.source.fileno()] + ([self.processes.sock] if self.processes else []),
-                                        [], [], timeout)
+            ready, _, _ = select.select([self.source.fileno()] + ([self.processes.sock] if self.processes else [])
+                                        + ([self.trace.fileno()] if self.trace else []), [], [], timeout)
             if self.processes is not None:
                 # Programs that start are remembered at once, so a reader that exits before its open event is
                 # handled is still named. Every queued process event is read before the opens.
@@ -543,11 +578,16 @@ class Watcher:
                     for kind, pid, _parent in batch:
                         if kind == 'exec':
                             self._remember(pid)
-            if self.source.fileno() in ready:
-                for pid, path in self.source.read():
-                    self.handle(pid, path)
+            opens = self.source.read() if self.source.fileno() in ready else []
+            if self.trace is not None:
+                # Read after the opens: a program's exec is in the trace before it can open anything.
+                self._traced()
+            for pid, path in opens:
+                self.handle(pid, path)
 
     def close(self):
         self.source.close()
         if self.processes is not None:
             self.processes.close()
+        if self.trace is not None:
+            self.trace.close()
