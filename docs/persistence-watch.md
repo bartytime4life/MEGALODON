@@ -75,15 +75,16 @@ unit's or autostart file's `Exec` lines, a crontab's commands, a udev rule's
 `RUN`, and every line of a script, an at job, a shell startup file or
 `~/.ssh/rc`. Comments and settings are skipped. A program counts as run when it
 starts a command (after `;`, `&&`, `|`, `$(`), when it is handed to a shell or
-interpreter as a script (also on its input, `sh < file`), or when it is run
-from a `sh -c "..."` string. A file a command writes to or reads from
+interpreter as a script (also on its input, `sh < file`; option arguments
+such as `-o errexit` are skipped), or when it is run from a `sh -c "..."`
+string (also combined options such as `-ec` or `-lc`). A file a command writes to or reads from
 (`> /tmp/log`, `< /tmp/input`) is not a program it runs.
 
 | Sign | Severity | What it means |
 | --- | --- | --- |
 | `runs_from_temporary` | HIGH | A program is run from `/tmp`, `/var/tmp` or `/dev/shm`, or the entry is a link into one |
 | `runs_from_hidden_folder` | HIGH | A program is run from a hidden folder in a system location, such as `/var/lib/.cache/agent` |
-| `download_into_shell` | HIGH | A download (`curl`, `wget`...) is piped into a shell or interpreter, or substituted where its output is run: as the command, by `eval`, by `sh -c`, or through `source <(...)` or `sh <(...)`. A download stored in a variable or passed as an argument is not |
+| `download_into_shell` | HIGH | A download (`curl`, `wget`...) is piped into a shell or interpreter, or substituted where its output is run: as the command (also behind `nohup`, `env`, `sudo` or `VAR=value`), by `eval`, by `sh -c` or `sh -ec`, or through `source <(...)` or `sh <(...)`. A download stored in a variable or passed as an argument is not |
 | `decoded_into_shell` | HIGH | `base64 -d` (or base32) output is piped into a shell |
 | `shell_network_redirect` | CRITICAL | A shell opens a network connection through `/dev/tcp` or `/dev/udp` |
 | `preload_library` | CRITICAL | `/etc/ld.so.preload` lists a library: every program loads it |
