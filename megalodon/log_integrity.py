@@ -37,6 +37,8 @@ from pathlib import Path
 import stat
 import tempfile
 
+from . import journal_integrity
+
 SCHEMA = 'megalodon-log-integrity-v1'
 REPORT_SCHEMA = 'megalodon-log-integrity-check-v1'
 HEAD_BYTES = 4096
@@ -354,14 +356,24 @@ def _read(path):
     return value
 
 
-def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, **options):
+def _journals(options, previous=None):
+    return journal_integrity.snapshot(root=options.get('root', '/'), previous=previous)
+
+
+def _journal_summary(state):
+    return dict(files=sorted(record['path'] for record in state['files'].values()), gaps=state['gaps'],
+                corrupt=state['corrupt'])
+
+
+def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, previous=None, **options):
     path = Path(manifest).expanduser()
     if path.exists() and not replace:
         raise LogIntegrityError(f'{path} exists; use accept to record the reviewed state')
     state = snapshot(**options)
-    _write(path, dict(schema=SCHEMA, recorded_at=_now(), **state))
+    journals = _journals(options, (previous or {}).get('journals'))
+    _write(path, dict(schema=SCHEMA, recorded_at=_now(), journals=journals, **state))
     return dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), logs=sorted(state['logs']),
-                gaps=state['gaps'])
+                gaps=state['gaps'], journals=_journal_summary(journals))
 
 
 def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
@@ -372,22 +384,34 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
     old = _read(manifest)
     new = snapshot(**options)
     findings, rotated = compare(old, new, root=options.get('root', '/'))
+    old_journals = old.get('journals') or {}
+    journals = _journals(options, old_journals)
+    journal_findings, explained = journal_integrity.compare(old_journals, journals)
+    findings = sorted(findings + journal_findings, key=lambda item: (-RANK[item['severity']], item['log']))
     report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
                   baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
                   rotated=rotated, new_logs=sorted(set(new['logs']) - set(old['logs'])), gaps=new['gaps'],
+                  journals=dict(_journal_summary(journals), explained=explained,
+                                recorded='journals' in old),
                   note='Run accept after reviewing, and after rotation, so the next check compares with today.')
     if advance:
         # A log with a finding, or one that cannot be read now (even if a rotated copy explains it), keeps its
         # record, to be compared again until it is accepted or read.
         kept = {item['log'] for item in findings} | {name for name in new['gaps'] if name in old['logs']}
         logs = {name: value for name, value in new['logs'].items() if name not in kept}
-        logs.update({name: old['logs'][name] for name in kept})
-        _write(manifest, dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs, gaps=new['gaps']))
+        logs.update({name: old['logs'][name] for name in kept if name in old['logs']})
+        # Journal files are kept by file ID, the same way: one with a finding, or unreadable now.
+        held = {item['journal_file_id'] for item in journal_findings} | {
+            file_id for file_id, record in old_journals.get('files', {}).items() if record['path'] in journals['gaps']}
+        files = {file_id: record for file_id, record in journals['files'].items() if file_id not in held}
+        files.update({file_id: old_journals['files'][file_id] for file_id in held})
+        _write(manifest, dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs, gaps=new['gaps'],
+                              journals=dict(journals, files=files)))
         report.update(advanced=sorted(set(logs) - kept),
                       note='Logs without a finding were recorded as they are now. Run accept after reviewing.')
     return report
 
 
 def accept(manifest=DEFAULT_MANIFEST, **options):
-    _read(manifest)
-    return dict(baseline(manifest, replace=True, **options), action='accept')
+    old = _read(manifest)
+    return dict(baseline(manifest, replace=True, previous=old, **options), action='accept')

@@ -2,7 +2,8 @@
 
 Logs are the record of what happened. Wiping them is a common way to cover
 tracks (ATT&CK T1070.002). `megalodon logwatch` notices when a system log is
-deleted, cut short, swapped for another file or rewritten.
+deleted, cut short, swapped for another file or rewritten, and when systemd
+journal files are deleted, cut back or edited.
 
 ```bash
 megalodon logwatch baseline
@@ -50,6 +51,32 @@ Watched logs, where present: `auth.log`, `secure`, `syslog`, `messages`,
 `btmp`, `lastlog`, `faillog`, `dpkg.log`, `apt/history.log`, `yum.log`,
 `dnf.log`, `cron` and `cron.log`. Logs the current user cannot read are
 listed as gaps.
+
+## The systemd journal
+
+The same commands cover the systemd journal's files in `/var/log/journal`
+and `/run/log/journal`. Each file's header
+([format](https://systemd.io/JOURNAL_FILE_FORMAT/)) names the file, the
+sequence its entries are numbered in, the first and last entry numbers and
+the number of entries. Within a file those only grow, and an archived file is
+never written again.
+
+| Finding | Severity | Meaning |
+| --- | --- | --- |
+| `JOURNAL_FILE_DELETED` | HIGH | A recorded journal file is gone, and not as journald's vacuuming deletes them: archived files only, oldest first in their folder (by entry number within a sequence, by time across sequences). The file journald writes to is never vacuumed |
+| `JOURNAL_ENTRIES_REMOVED` | HIGH | The same file holds fewer entries, its first entry number changed or its last one went back, or it is shorter than its header says |
+| `JOURNAL_ARCHIVE_CHANGED` | HIGH | An archived (or `~` corrupt) file's content changed |
+
+Files are followed by their file ID, so rotation to an `@` name is not a
+change. These stay quiet, and are listed under `journals.explained`:
+vacuuming, an empty file removed at rotation, and an in-memory journal
+flushed to disk or cleared at boot. Files journald renamed with `~` after
+finding them damaged are listed under `journals.corrupt`. Journal files that
+cannot be read are listed under `journals.gaps` and keep their record.
+
+The baseline stores each file's header fields and a SHA-256 digest of each
+archived file, never journal content. A baseline made before journal support
+records the journal at the next `accept` or check with `--advance`.
 
 ## Rotation stays quiet
 
@@ -99,9 +126,14 @@ A baseline made before the content digests compares only the first 4 KiB.
   compared.
 * **Each check reads the logs in full.** That takes a moment for logs of
   hundreds of megabytes; the schedule runs it at low CPU and I/O priority.
-* **The systemd journal is not covered.** It rewrites its own header and
-  rotates under new names. Use `journalctl --verify`, with forward-secure
-  sealing (`journalctl --setup-keys`) for tamper evidence.
+* **Edits inside the journal file being written** that keep its entry count
+  and numbers are not seen: that file changes all the time, so it is not
+  hashed. Only once it is archived is its content fixed. Forward-secure
+  sealing (`journalctl --setup-keys`, verified with the key kept off the
+  machine) covers entries as they are written.
+* **An archived journal is read again only when its size or change times
+  change.** Writing to a file sets its change time, which cannot be set back
+  without changing the system clock.
 * **Without `--advance`, rotations add up.** Several rotations between
   checks may leave the recorded copy past `.1`. Siblings up to 64 per log are
   compared, but run `accept` after rotation to keep reports clean.
