@@ -589,6 +589,10 @@ def build_parser() -> argparse.ArgumentParser:
                              help="reviewed readers (default ~/.config/megalodon/credential-allow.json)")
         if name == "watch":
             command.add_argument("--respond", action="store_true", help=RESPOND_HELP)
+            command.add_argument("--trace-execs", action="store_true",
+                                 help="as root, load a small eBPF program that remembers every program as it "
+                                      "starts, so a reader gone within microseconds is still named; it is "
+                                      "removed when the watch stops")
         if name == "allow":
             command.add_argument("program", help="the program as reported, e.g. /usr/bin/rsync")
             command.add_argument("--category", default="any",
@@ -2605,7 +2609,19 @@ def _credentials(args: argparse.Namespace) -> int:
             print(json.dumps(found, sort_keys=True), flush=True)
             respond(found)
             notify(found)
-        watcher = credentials.Watcher(emit, allow_path=allow_file)
+        trace = None
+        if args.trace_execs:
+            from .connect_trace import TraceError
+            from .exec_trace import ExecTrace
+            try:
+                trace = ExecTrace()
+            except TraceError as exc:
+                print(f"megalodon: exec tracing unavailable: {exc.strerror or exc}; a reader that exits at "
+                      "once may go unnamed", file=sys.stderr)
+        watcher = credentials.Watcher(emit, allow_path=allow_file, trace=trace)
+        if trace is not None:
+            print("megalodon: exec tracing " + ("on: readers that exit at once are named" if watcher.trace else
+                                                "off: it needs file-access notifications"), file=sys.stderr)
     except (credentials.CredentialError, OSError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
