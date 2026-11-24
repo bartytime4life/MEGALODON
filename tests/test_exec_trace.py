@@ -260,16 +260,65 @@ def test_a_script_is_named_with_the_traced_working_folder(home):
         ('CREDENTIAL_READ_BY_DROPPED_TOOL', '/usr/bin/python3 /tmp/.x/steal.py')]
 
 
-def test_a_running_process_is_read_from_proc(home):
+def test_the_kernel_record_is_the_identity(home, monkeypatch):
     me = os.getpid()
     live = _proc_info(Path('/proc', str(me)))
-    w, _, _, _ = watcher(home, [gone_exec('/elsewhere/x', pid=me, start=live['start'])])
+    same = dict(kind='exec', pid=me, parent=77, uid=0, gid=0, comm='python', start=live['start'],
+                path=live['path'], deleted=False, argv=live['argv'], cwd='/at/exec')
+    proc = dict(live, deleted=True, cwd='/usr/bin')
+    monkeypatch.setattr(cw, '_proc_info', lambda path: proc if path.name == str(me) else None)
+    w, _, _, _ = watcher(home, [same])
     w._traced()
-    assert w.cache[me] == live, 'the same process, still running: /proc is read'
-    # The same pid with another start time is another process that has gone: the trace's description is kept.
-    w.trace.records = [gone_exec('/elsewhere/x', pid=me, start=live['start'] + 1)]
+    # As the kernel saw it at exec; /proc adds only that the same file was deleted since.
+    assert (w.cache[me]['path'], w.cache[me]['argv'], w.cache[me]['cwd']) == (live['path'], live['argv'], '/at/exec')
+    assert w.cache[me]['deleted'] is True
+    # /proc does not complete what the kernel saw in part: it may show a program run since.
+    w.trace.records = [dict(same, path='…/' + os.path.basename(live['path']), cwd=None)]
     w._traced()
-    assert w.cache[me]['path'] == '/elsewhere/x' and w.cache[me]['traced']['parent'] == 77
+    assert w.cache[me]['path'] == '…/' + os.path.basename(live['path']) and w.cache[me]['cwd'] is None
+    # Another file, or another process with this ID (another start time): nothing is taken from /proc.
+    for other in (dict(same, path='/tmp/.x/agent'), dict(same, start=live['start'] + 1)):
+        w.trace.records = [other]
+        w._traced()
+        assert (w.cache[me]['path'], w.cache[me]['deleted']) == (other['path'], False)
+    # No path from the kernel: /proc, unless the process runs another program later in this batch.
+    w.trace.records = [dict(same, path=None)]
+    w._traced()
+    assert w.cache.pop(me) == proc
+    w.trace.records = [dict(same, path=None), dict(same, path='/tmp/.x/agent')]
+    seen = []
+    keep = w._keep
+    monkeypatch.setattr(w, '_keep', lambda pid, info: (seen.append(info['path']), keep(pid, info)))
+    w._traced()
+    assert seen == ['/tmp/.x/agent']
+    w.close()
+
+
+def test_a_reader_forked_before_its_parent_runs_an_expected_reader_is_still_named(home, monkeypatch):
+    # /tmp/.x/reader forks a reader, then runs curl (an expected reader of cloud tokens) before the trace is
+    # read: /proc shows curl for the parent, with the same start time. The child is the reader's.
+    parent, child = GONE, GONE + 1
+    curl = dict(path='/usr/bin/curl', deleted=False, argv=['curl', 'http://127.0.0.1/'], start=555, cwd='/')
+    monkeypatch.setattr(cw, '_proc_info', lambda proc: curl if proc.name == str(parent) else None)
+    w, found, _, _ = watcher(home, [gone_exec('/tmp/.x/reader', pid=parent, start=555),
+                                    dict(kind='fork', pid=child, parent=parent, start=556),
+                                    gone_exec('/usr/bin/curl', pid=parent, start=555,
+                                              argv=['curl', 'http://127.0.0.1/'], cwd='/')])
+    w._traced()
+    w.handle(child, str(home / '.aws/credentials'))
+    w.close()
+    assert [(f['rule_id'], f['program']) for f in found] == [('CREDENTIAL_READ_BY_DROPPED_TOOL', '/tmp/.x/reader')]
+
+
+def test_a_parent_from_before_the_trace_that_runs_another_program_is_not_read(home, monkeypatch):
+    # Its program at the fork is unknown: /proc shows the one it ran later in the batch.
+    old = 3_999_000
+    monkeypatch.setattr(cw, '_proc_info', lambda proc: dict(path='/usr/bin/curl', deleted=False, argv=['curl'],
+                                                            start=1, cwd='/') if proc.name == str(old) else None)
+    w, _, _, _ = watcher(home, [dict(kind='fork', pid=GONE, parent=old, start=2),
+                                gone_exec('/usr/bin/curl', pid=old, start=1, argv=['curl'], cwd='/')])
+    w._traced()
+    assert GONE not in w.cache
     w.close()
 
 

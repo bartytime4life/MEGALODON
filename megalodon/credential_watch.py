@@ -514,14 +514,22 @@ class Watcher:
             self.cache.popitem(last=False)
 
     def _traced(self):
-        """Remember each program the exec trace saw start: as /proc shows it if it still runs, else as the
-        kernel described it. A forked process is remembered as its parent's program."""
+        """Remember each program the exec trace saw start, as the kernel described it then. /proc is read later,
+        when the process may run another program (a parent that forked a reader can exec again before the trace
+        is read), so it adds only whether the same file was deleted since, which can only make a finding more
+        severe. A forked process is remembered as its parent's program at the fork."""
         from .exec_trace import info as traced_info
-        for record in self.trace.drain():
+        records = self.trace.drain()
+        # Where a process runs another program later in this batch, /proc already shows that one.
+        last_exec = {record['pid']: index for index, record in enumerate(records) if record['kind'] == 'exec'}
+        for index, record in enumerate(records):
             pid = record['pid']
             if record['kind'] == 'fork':
                 parent = self.cache.get(record['parent'])
                 if parent is None:
+                    # A parent from before the trace: /proc, unless it has run another program since the fork.
+                    if last_exec.get(record['parent'], -1) > index:
+                        continue
                     parent = _proc_info(Path('/proc', str(record['parent'])))
                     if parent is None:
                         continue
@@ -529,8 +537,16 @@ class Watcher:
                 self._keep(pid, dict(parent, start=record['start'], traced=dict(parent=record['parent'],
                                                                                 forked=True)))
                 continue
+            traced = traced_info(record)
             live = _proc_info(Path('/proc', str(pid)))
-            found = live if live is not None and live['start'] == record['start'] else traced_info(record)
+            if live is not None and live['start'] != record['start']:
+                live = None                 # Another process with this ID.
+            if traced is None:
+                # No path from the kernel: /proc, unless the process runs another program later in this batch.
+                found = live if last_exec[pid] == index else None
+            else:
+                found = dict(traced, deleted=traced['deleted'] or bool(
+                    live is not None and live['path'] == traced['path'] and live['deleted']))
             if found is not None:
                 self._keep(pid, found)
 

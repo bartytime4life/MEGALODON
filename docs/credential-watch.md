@@ -78,9 +78,15 @@ small reader started at once from a hidden temporary folder were all
   mount each is on. The other, on `sched_process_fork`, records each new
   process and its parent, so a worker that forks without exec is named as
   its parent's program. New threads are skipped in the kernel.
-* **Used only when needed.** A process still running is read from `/proc`,
-  as before; the kernel's record is used once it is gone. The start time
-  tells a reused process ID apart. A finding named this way has
+* **Which record.** A process still running when its open is handled is
+  read from `/proc`, as before. Once it is gone, the kernel's record of its
+  exec is used as it is. By the time the trace is read, the process may run
+  another program: a parent that forked a reader can run an expected reader
+  such as `curl` straight after. So `/proc` adds only whether the same file
+  was deleted since. A reused process ID is told apart by its start time,
+  and a parent from before the watch is read from `/proc` once, unless it
+  runs another program later in the same batch of records. A finding named
+  this way has
   `evidence.traced` (the parent's process ID, the user ID and the command
   name, or `forked` and the parent for a forked worker). The statistics the
   watch prints when it stops count these as `named_after_exit`.
