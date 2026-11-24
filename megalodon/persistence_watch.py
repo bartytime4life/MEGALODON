@@ -104,7 +104,6 @@ class PersistenceError(ValueError):
 
 TEMPORARY_FOLDERS = ('/tmp/', '/var/tmp/', '/dev/shm/')
 SYSTEM_PREFIXES = ('/usr/', '/var/', '/etc/', '/opt/', '/lib', '/bin/', '/sbin/', '/srv/', '/boot/')
-INTERPRETERS = re.compile(r'(?:ba|da|z|k|mk|a)?sh|busybox|python[0-9.]*|perl[0-9.]*|ruby[0-9.]*|php[0-9.]*|node|lua')
 LAUNCHERS = frozenset({'sudo', 'nohup', 'setsid', 'exec', 'env', 'nice', 'ionice', 'command', 'builtin', 'time',
                        'chrt', 'taskset', 'stdbuf', 'flock'})
 FETCHERS = r'(?:curl|wget|fetch|lwp-download|aria2c)'
@@ -113,9 +112,28 @@ SHELL = rf'(?:sudo\s+)?{SHELL_NAME}\b'
 SUBSTITUTED = rf'(?:\$\(|`)\s*{FETCHERS}\b'
 # Options that take the command to run, alone or combined with others: -c, -ec, -lc.
 COMMAND_OPTION = r'-[A-Za-z]*c[A-Za-z]*'
-# Shell and interpreter options followed by their own argument: bash -o errexit, -O extglob, --rcfile FILE;
-# python -W ignore, -X dev; perl -I dir.
-OPTIONS_WITH_ARGUMENT = frozenset({'-o', '+o', '-O', '+O', '--rcfile', '--init-file', '-W', '-X', '-I'})
+# Each kind of interpreter's options: those that take code rather than a script (a shell's -c, also combined as
+# -ec or -lc; python -c and -m; perl, ruby and node -e), and those followed by their own argument. Options are
+# read only up to the script: python -I takes no argument where ruby -I does, and bash -e is errexit where
+# perl -e is code.
+INTERPRETER_KINDS = (
+    ('shell', re.compile(r'(?:ba|da|z|k|mk|a)?sh|busybox')),
+    ('python', re.compile(r'python[0-9.]*')),
+    ('perl', re.compile(r'perl[0-9.]*')),
+    ('ruby', re.compile(r'ruby[0-9.]*')),
+    ('php', re.compile(r'php[0-9.]*')),
+    ('node', re.compile(r'node|nodejs')),
+    ('lua', re.compile(r'lua[0-9.]*')),
+)
+INTERPRETER_OPTIONS = {
+    'shell': (COMMAND_OPTION, frozenset({'-o', '+o', '-O', '+O', '--rcfile', '--init-file'})),
+    'python': (r'-[A-Za-z]*[cm]', frozenset({'-W', '-X', '-Q'})),
+    'perl': (r'-[A-Za-z]*[eE]', frozenset({'-I', '-M', '-m'})),
+    'ruby': (r'-[A-Za-z]*e', frozenset({'-I', '-r', '-C', '-E'})),
+    'php': (r'-r', frozenset({'-c', '-d', '-z'})),
+    'node': (r'-e|-p|--eval|--print', frozenset({'-r', '--require', '--import', '--loader'})),
+    'lua': (r'-e', frozenset({'-l'})),
+}
 # What can stand before a command's own word: launchers (nohup, env, sudo...) and VAR=value assignments.
 PREFIXES = r'(?:(?:sudo|nohup|setsid|exec|env|nice|ionice|command|time|stdbuf|[A-Za-z_][A-Za-z0-9_]*=\S*)\s+)*'
 PATTERNS = (
@@ -206,24 +224,41 @@ def _segment_words(words, depth, inputs=()):
     if not words:
         return
     yield words[0]
-    if INTERPRETERS.fullmatch(os.path.basename(words[0])):
-        rest = words[1:]
-        command = next((i for i, word in enumerate(rest) if re.fullmatch(COMMAND_OPTION, word)), None)
-        if command is not None and command + 1 < len(rest) and depth < 2:
-            yield from _run_words(rest[command + 1], depth + 1)
-        elif '-e' not in rest:
-            scripts, skip = [], False
-            for word in rest:
-                if skip:
-                    skip = False  # The argument of an option, not a script.
-                elif word in OPTIONS_WITH_ARGUMENT:
-                    skip = True
-                elif not word.startswith(('-', '+')):
-                    scripts.append(word)
-            if scripts:
-                yield scripts[0]
-            elif inputs:
-                yield inputs[0]  # sh < /tmp/script
+    kind = _interpreter(os.path.basename(words[0]))
+    if kind:
+        yield from _script_words(kind, words[1:], depth, inputs)
+
+
+def _interpreter(name):
+    for kind, pattern in INTERPRETER_KINDS:
+        if pattern.fullmatch(name):
+            return kind
+    return None
+
+
+def _script_words(kind, rest, depth, inputs):
+    """What a shell or interpreter runs, read from its own options up to the script operand: what follows the
+    script is the script's own arguments, whatever it looks like."""
+    code_options, with_argument = INTERPRETER_OPTIONS[kind]
+    skip = False
+    for index, word in enumerate(rest):
+        if skip:
+            skip = False  # The argument of an option, not a script.
+        elif re.fullmatch(code_options, word):
+            # -c (or -ec, -lc) for a shell: its argument is a command line. -e for perl, -m for python: code or
+            # a module, not a file.
+            if kind == 'shell' and index + 1 < len(rest) and depth < 2:
+                yield from _run_words(rest[index + 1], depth + 1)
+            return
+        elif word in with_argument:
+            skip = True
+        elif word.startswith('-') or (kind == 'shell' and word.startswith('+')):
+            continue
+        else:
+            yield word  # The script; everything after it is its own arguments.
+            return
+    if inputs:
+        yield inputs[0]  # sh < /tmp/script
 
 
 def _signs(text, category, path):

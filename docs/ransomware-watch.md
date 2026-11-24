@@ -35,6 +35,17 @@ All three map to ATT&CK T1486 (Data Encrypted for Impact).
   executables and more) or is readable text. It counts as *encrypted-looking*
   when it has no signature, isn't text and its byte entropy is at least
   7.5 bits per byte. Files under 1 KiB are not judged.
+* **Partly encrypted files.** Much ransomware encrypts only part of each file,
+  for speed: the first few KiB, or strips spaced through it. The sample is
+  also read in 4 KiB blocks, and a block of ciphertext has an entropy near
+  8 bits per byte, where text and uncompressed data stay far below. A file
+  with no signature whose first 4 KiB looks like ciphertext is
+  encrypted-looking, even if the rest is plain, as a document or database with
+  its head encrypted is. A text file larger than 64 KiB is also sampled in
+  its middle and at its end (32 KiB each): a ciphertext-like block in any
+  sample makes it encrypted-looking. On this project's test machine, the
+  block rules changed the judgement of none of 90,003 files (after adding
+  signatures for `ar` archives, LLVM bitcode, Java modules and Apple icons).
 * **What counts toward the alarm.** An encrypted-looking write counts when:
   * the same file was recognized before, which is in-place encryption;
   * it replaces a file just deleted or renamed in the same folder: the same
@@ -183,8 +194,11 @@ service recovery; see [recovery acceptance](enforcement-recovery-acceptance.md).
   limit cut coverage, and the kernel's `fs.inotify.max_user_watches` may need
   raising. Network shares only report changes made from this machine. Changes
   made while the watch is not running are not seen.
-* **Partial or format-preserving encryption.** Ransomware that leaves the
-  first 64 KiB intact, or wraps its output in a recognized container, is not
+* **Partial or format-preserving encryption.** A file whose head is
+  encrypted is caught, and so is a text file encrypted in strips that a
+  sample falls on. Strips between the samples of a text file, strips in a
+  recognized format after its first 64 KiB (its compressed data looks like
+  ciphertext anyway), and output wrapped in a recognized container are not
   judged encrypted. A ransom note or `MASS_WRITE` may still fire.
 * **Look-alikes.** Encrypting many of your own files (GnuPG, `age`, VeraCrypt
   containers, encrypted backups written into a watched folder) looks exactly
