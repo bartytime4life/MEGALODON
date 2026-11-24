@@ -220,8 +220,8 @@ program's path.
   Moving out (connected, or failed) comes once the local port is chosen: it
   records the addresses, ports and network namespace. The watch reads the
   process from `/proc` as soon as its connect is reported, while it normally
-  still runs, and matches each closing by namespace, both addresses and both
-  ports. A connection that fails has no local port by then; its closing
+  still runs, and matches each closing by its whole identity: namespace,
+  protocol, and both addresses and ports. A connection that fails has no local port by then; its closing
   is matched by its other addresses and ports.
 * **Gone already.** If the process exited before it could be read, the
   kernel's record of its executable's path is used. The kernel gives the
@@ -231,8 +231,9 @@ program's path.
   program as a scan would, and a shell or interpreter copied into a
   temporary folder is named too: running from there is the finding. An
   installed interpreter, whose script is unknown, or a path the kernel saw
-  only in part (`…/.x/agent`: deeper than six names, or on a mount of
-  another mount namespace, such as a container's), cannot be: the finding
+  only in part (`…/.x/agent`: deeper than six names, a name of 63 bytes or
+  more that may have been cut short, or on a mount of another mount
+  namespace, such as a container's), cannot be: the finding
   stays `BRIEF_OUTBOUND_CONNECTION`, with `evidence.traced` as a lead.
 * **What it changes.** This is the one part of MEGALODON that changes the
   running kernel. The program only reads; nothing on disk is changed, and it
