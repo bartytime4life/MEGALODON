@@ -59,7 +59,7 @@ BPF_PROG_TYPE_RAW_TRACEPOINT = 17
 BPF_PSEUDO_MAP_FD = 1
 # Helpers
 GET_CURRENT_PID_TGID, GET_CURRENT_UID_GID, GET_CURRENT_COMM, GET_CURRENT_TASK = 14, 15, 16, 35
-PROBE_READ_KERNEL, PROBE_READ_KERNEL_STR, RINGBUF_RESERVE, RINGBUF_SUBMIT = 113, 115, 131, 132
+PROBE_READ_USER, PROBE_READ_KERNEL, PROBE_READ_KERNEL_STR, RINGBUF_RESERVE, RINGBUF_SUBMIT = 112, 113, 115, 131, 132
 # The executable's last path components, read in the kernel: kept for a process gone before it can be read.
 EXE_LEVELS, EXE_NAME = 6, 64
 # Ring buffer record header bits
@@ -206,6 +206,54 @@ def jump_if_not(reg, imm, off):
     return _insn(0x55, reg, off=off, imm=imm)
 
 
+def jump_if_at_most(reg, imm, off):
+    """Jump ``off`` instructions ahead when ``reg`` <= ``imm``, unsigned."""
+    return _insn(0xB5, reg, off=off, imm=imm)
+
+
+def sub_reg(dst, src):
+    return _insn(0x1F, dst, src)
+
+
+def deref(reg, offset):
+    """reg = *(u64 *)(reg + offset), read through the stack. Clobbers r0 to r5."""
+    return [mov_reg(3, reg), add_imm(3, offset), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
+            call(PROBE_READ_KERNEL), load_dw(reg, 10, -8)]
+
+
+def read_into(event, dst_off, size, src_reg):
+    """probe_read_kernel(event + dst_off, size, src_reg), ``event`` being the register holding the record."""
+    return [mov_reg(1, event), add_imm(1, dst_off), mov_imm(2, size), mov_reg(3, src_reg), call(PROBE_READ_KERNEL)]
+
+
+def read_mount(event, dst_off, reg, to_mount, mount_id):
+    """The ID of the mount at ``reg + to_mount`` (a struct path's mnt: a struct vfsmount inside a struct mount),
+    written as 4 bytes at ``event + dst_off``. Clobbers r0 to r5."""
+    return [mov_reg(3, reg), add_imm(3, to_mount), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
+            call(PROBE_READ_KERNEL), load_dw(3, 10, -8), add_imm(3, mount_id),
+            mov_reg(1, event), add_imm(1, dst_off), mov_imm(2, 4), call(PROBE_READ_KERNEL)]
+
+
+def walk_names(event, dst_off, reg, name, parent, levels=EXE_LEVELS):
+    """Starting from the dentry in ``reg``, write it and ``levels`` - 1 of its parents' names, EXE_NAME bytes
+    each, from ``event + dst_off``. A read that fails leaves zeros, and the names after it empty."""
+    out = []
+    for level in range(levels):
+        out += [mov_reg(3, reg), add_imm(3, name), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
+                call(PROBE_READ_KERNEL), load_dw(3, 10, -8),
+                mov_reg(1, event), add_imm(1, dst_off + level * EXE_NAME), mov_imm(2, EXE_NAME),
+                call(PROBE_READ_KERNEL_STR)]
+        if level < levels - 1:
+            out += deref(reg, parent)
+    return out
+
+
+def names_at(data, offset, levels=EXE_LEVELS):
+    """The names :func:`walk_names` wrote from ``offset``."""
+    return [bytes(data[offset + i * EXE_NAME:offset + (i + 1) * EXE_NAME]).split(b'\0', 1)[0]
+            .decode('utf-8', 'replace') for i in range(levels)]
+
+
 def _count(items):
     return sum(len(item) // 8 for item in items)
 
@@ -216,12 +264,8 @@ def program(ring_fd, sock_bytes, real_parent, tgid, net=None, exe=None):
     is the chain of offsets from the task to its executable's dentry, then a dentry's name and parent."""
     event = EVENT_SOCK + sock_bytes + (EXE_LEVELS * EXE_NAME if exe else 0)
 
-    def deref(reg, offset):              # reg = *(u64 *)(reg + offset), through the stack
-        return [mov_reg(3, reg), add_imm(3, offset), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
-                call(PROBE_READ_KERNEL), load_dw(reg, 10, -8)]
-
-    def read(dst_off, size, src_reg):     # probe_read_kernel(event + dst_off, size, src_reg)
-        return [mov_reg(1, 8), add_imm(1, dst_off), mov_imm(2, size), mov_reg(3, src_reg), call(PROBE_READ_KERNEL)]
+    def read(dst_off, size, src_reg):
+        return read_into(8, dst_off, size, src_reg)
 
     fill = [
         mov_reg(8, 0),                      # r8 = event
@@ -245,19 +289,9 @@ def program(ring_fd, sock_bytes, real_parent, tgid, net=None, exe=None):
         # kernel thread has no mm) leaves zeros, and the names after it empty.
         to_mm, to_file, to_dentry, name, parent, to_mount, mount_id = exe
         fill += [call(GET_CURRENT_TASK), mov_reg(9, 0), *deref(9, to_mm), *deref(9, to_file),
-                 # The mount the file is on: file->f_path.mnt is a struct vfsmount inside a struct mount, whose
-                 # ID maps it to its mount point (/proc/self/mountinfo).
-                 mov_reg(3, 9), add_imm(3, to_mount), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
-                 call(PROBE_READ_KERNEL), load_dw(3, 10, -8), add_imm(3, mount_id),
-                 mov_reg(1, 8), add_imm(1, EVENT_MOUNT), mov_imm(2, 4), call(PROBE_READ_KERNEL),
-                 *deref(9, to_dentry)]
-        for level in range(EXE_LEVELS):
-            fill += [mov_reg(3, 9), add_imm(3, name), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
-                     call(PROBE_READ_KERNEL), load_dw(3, 10, -8),
-                     mov_reg(1, 8), add_imm(1, EVENT_SOCK + sock_bytes + level * EXE_NAME), mov_imm(2, EXE_NAME),
-                     call(PROBE_READ_KERNEL_STR)]
-            if level < EXE_LEVELS - 1:
-                fill += deref(9, parent)
+                 # The mount the file is on, whose ID maps it to its mount point (/proc/self/mountinfo).
+                 *read_mount(8, EVENT_MOUNT, 9, to_mount, mount_id),
+                 *deref(9, to_dentry), *walk_names(8, EVENT_SOCK + sock_bytes, 9, name, parent)]
     fill += [mov_reg(1, 8), mov_imm(2, 0), call(RINGBUF_SUBMIT)]
     reserve = [load_map(1, ring_fd), mov_imm(2, event), mov_imm(3, 0), call(RINGBUF_RESERVE)]
     done = [mov_imm(0, 0), exit_()]
@@ -292,6 +326,81 @@ def _bpf(command, attr):
 
 def _address(data):
     return ctypes.addressof(data) if not isinstance(data, int) else data
+
+
+def attach(code, name, tracepoint):
+    """Load ``code`` as a raw tracepoint program called ``name`` (up to 15 bytes) and attach it to
+    ``tracepoint``: [program fd, link fd]. Closing both removes it."""
+    insns = ctypes.create_string_buffer(code, len(code))
+    # The kernel lets only GPL-compatible programs call the helpers used here; the in-kernel programs are
+    # dual-licensed, as the kernel's own BPF tools are.
+    license_ = ctypes.create_string_buffer(LICENSE)
+    log = ctypes.create_string_buffer(65536)
+    attr = bytearray(128)
+    struct.pack_into('<IIQQIIQ', attr, 0, BPF_PROG_TYPE_RAW_TRACEPOINT, len(code) // 8, _address(insns),
+                     _address(license_), 1, len(log), _address(log))
+    attr[48:64] = name.encode('ascii')[:15].ljust(16, b'\0')
+    try:
+        prog = _bpf(BPF_PROG_LOAD, attr)
+    except TraceError as exc:
+        detail = log.value.decode('ascii', 'replace').strip().splitlines()[-3:]
+        raise TraceError(exc.errno, f'the kernel refused the program: {exc.strerror}; '
+                                    f'{" / ".join(detail)}') from None
+    try:
+        point = ctypes.create_string_buffer(tracepoint)
+        return [prog, _bpf(BPF_RAW_TRACEPOINT_OPEN, struct.pack('<QI', _address(point), prog))]
+    except BaseException:
+        os.close(prog)
+        raise
+
+
+class Ring:
+    """A BPF ring buffer map, read with ``mmap``: the records the programs submit, oldest first."""
+
+    def __init__(self, size=RING_BYTES):
+        self.size = size
+        self.fd = _bpf(BPF_MAP_CREATE, struct.pack('<IIIII', BPF_MAP_TYPE_RINGBUF, 0, 0, size, 0))
+        self.consumer = self.producer = self.poller = None
+        try:
+            self.page = mmap.PAGESIZE
+            self.consumer = mmap.mmap(self.fd, self.page, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE,
+                                      offset=0)
+            self.producer = mmap.mmap(self.fd, self.page + 2 * size, mmap.MAP_SHARED, mmap.PROT_READ,
+                                      offset=self.page)
+            self.poller = select.epoll()
+            self.poller.register(self.fd, select.EPOLLIN)
+        except BaseException:
+            self.close()
+            raise
+
+    def wait(self, seconds):
+        return bool(self.poller.poll(seconds))
+
+    def records(self, limit=MAX_EVENTS_PER_DRAIN):
+        records = []
+        consumer, = struct.unpack_from('<Q', self.consumer, 0)
+        producer, = struct.unpack_from('<Q', self.producer, 0)
+        while consumer < producer and len(records) < limit:
+            start = self.page + consumer % self.size
+            header, = struct.unpack_from('<I', self.producer, start)
+            if header & RINGBUF_BUSY:
+                break
+            length = header & ~(RINGBUF_BUSY | RINGBUF_DISCARD)
+            if not header & RINGBUF_DISCARD:
+                records.append(self.producer[start + RINGBUF_HEADER:start + RINGBUF_HEADER + length])
+            consumer += (length + RINGBUF_HEADER + 7) // 8 * 8
+        struct.pack_into('<Q', self.consumer, 0, consumer)
+        return records
+
+    def close(self):
+        for name in ('consumer', 'producer', 'poller'):
+            item = getattr(self, name, None)
+            if item is not None:
+                item.close()
+                setattr(self, name, None)
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
 
 
 def _net_offsets(btf):
@@ -383,62 +492,26 @@ class ConnectTrace:
         except OSError as exc:
             raise TraceError(exc.errno or errno.ENOENT, f'kernel type information: {exc}') from None
         self.sock_bytes = (max(self.layout.values()) + 16 + 7) // 8 * 8
-        ring = _bpf(BPF_MAP_CREATE, struct.pack('<IIIII', BPF_MAP_TYPE_RINGBUF, 0, 0, RING_BYTES, 0))
-        self.fds.append(ring)
+        self.ring = Ring()
         try:
-            code = program(ring, self.sock_bytes, task['real_parent'], task['tgid'], self.net, self.exe_chain)
-            insns = ctypes.create_string_buffer(code, len(code))
-            # The kernel lets only GPL-compatible programs call the helpers it uses; the in-kernel program is
-            # dual-licensed, as the kernel's own BPF tools are.
-            license_ = ctypes.create_string_buffer(LICENSE)
-            log = ctypes.create_string_buffer(65536)
-            attr = bytearray(128)
-            struct.pack_into('<IIQQIIQ', attr, 0, BPF_PROG_TYPE_RAW_TRACEPOINT, len(code) // 8, _address(insns),
-                             _address(license_), 1, len(log), _address(log))
-            attr[48:64] = b'megalodon_conn\0\0'
-            try:
-                prog = _bpf(BPF_PROG_LOAD, attr)
-            except TraceError as exc:
-                detail = log.value.decode('ascii', 'replace').strip().splitlines()[-3:]
-                raise TraceError(exc.errno, f'the kernel refused the program: {exc.strerror}; '
-                                            f'{" / ".join(detail)}') from None
-            self.fds.append(prog)
-            name = ctypes.create_string_buffer(TRACEPOINT)
-            self.fds.append(_bpf(BPF_RAW_TRACEPOINT_OPEN, struct.pack('<QI', _address(name), prog)))
-            page = mmap.PAGESIZE
-            self.consumer = mmap.mmap(ring, page, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=0)
-            self.producer = mmap.mmap(ring, page + 2 * RING_BYTES, mmap.MAP_SHARED, mmap.PROT_READ, offset=page)
-            self.page, self.ring = page, ring
-            self.poller = select.epoll()
-            self.poller.register(ring, select.EPOLLIN)
+            code = program(self.ring.fd, self.sock_bytes, task['real_parent'], task['tgid'], self.net,
+                           self.exe_chain)
+            self.fds += attach(code, 'megalodon_conn', TRACEPOINT)
         except BaseException:
             self.close()
             raise
 
     def fileno(self):
-        return self.ring
+        return self.ring.fd
 
     def wait(self, seconds):
         """Wait up to ``seconds`` for the program to report something; True if it has."""
-        return bool(self.poller.poll(seconds))
+        return self.ring.wait(seconds)
 
     def drain(self):
         """Every connection whose local port was chosen since the last call, oldest first, each with the
         program that made it when its connect was seen."""
-        records = []
-        consumer, = struct.unpack_from('<Q', self.consumer, 0)
-        producer, = struct.unpack_from('<Q', self.producer, 0)
-        while consumer < producer and len(records) < MAX_EVENTS_PER_DRAIN:
-            start = self.page + consumer % RING_BYTES
-            header, = struct.unpack_from('<I', self.producer, start)
-            if header & RINGBUF_BUSY:
-                break
-            length = header & ~(RINGBUF_BUSY | RINGBUF_DISCARD)
-            if not header & RINGBUF_DISCARD:
-                records.append(self.producer[start + RINGBUF_HEADER:start + RINGBUF_HEADER + length])
-            consumer += (length + RINGBUF_HEADER + 7) // 8 * 8
-        struct.pack_into('<Q', self.consumer, 0, consumer)
-        return self.join(records)
+        return self.join(self.ring.records())
 
     def join(self, records):
         """Pair each socket's connect (process side) with its leaving SYN_SENT (addresses side)."""
@@ -490,9 +563,7 @@ class ConnectTrace:
             return None
         names, mount = [], None
         if self.exe_chain:
-            base = EVENT_SOCK + self.sock_bytes
-            names = [bytes(data[base + i * EXE_NAME:base + (i + 1) * EXE_NAME]).split(b'\0', 1)[0]
-                     .decode('utf-8', 'replace') for i in range(EXE_LEVELS)]
+            names = names_at(data, EVENT_SOCK + self.sock_bytes)
             mount_id, = struct.unpack_from('<I', data, EVENT_MOUNT)
             mount = self.mount(mount_id)
         return dict(exe_tail=_tail(names, mount), pid=pid_tgid >> 32, uid=uid_gid & 0xFFFFFFFF, gid=uid_gid >> 32, comm=comm, parent=parent,
@@ -510,13 +581,12 @@ class ConnectTrace:
         return known.get(mount_id)
 
     def close(self):
-        for name in ('consumer', 'producer', 'poller'):
-            item = getattr(self, name, None)
-            if item is not None:
-                item.close()
-                setattr(self, name, None)
-        while self.fds:
+        while self.fds:                       # The program and its link first, then the ring they write to.
             os.close(self.fds.pop())
+        ring = getattr(self, 'ring', None)
+        if ring is not None:
+            ring.close()
+            self.ring = None
 
     def __enter__(self):
         return self
