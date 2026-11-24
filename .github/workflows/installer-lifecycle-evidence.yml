@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -m 700 "$RUNNER_TEMP/maxminddb-runtime"
-          grep -E '^maxminddb==3\.2\.0 --hash=sha256:[0-9a-f]{64}$' \
+          grep -E '^maxminddb==3\.3\.0 --hash=sha256:[0-9a-f]{64}$' \
             constraints/installer-linux-cp312.txt > "$RUNNER_TEMP/maxminddb-requirements.txt"
           python -I -m pip install --no-index --find-links "$RUNNER_TEMP/installer-wheels" \
             --require-hashes --only-binary=:all: --no-deps \
