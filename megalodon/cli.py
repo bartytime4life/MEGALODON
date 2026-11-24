@@ -531,13 +531,18 @@ def build_parser() -> argparse.ArgumentParser:
     containers_sub = containers.add_subparsers(dest="containers_command", required=True)
     for name, text in (("baseline", "record the running containers, the escape hooks and the container exposures"),
                        ("check", "report escapes and containers that became riskier (exit 1 on findings)"),
-                       ("accept", "after review, record the current containers")):
+                       ("accept", "after review, record the current containers"),
+                       ("watch", "as root, load a small eBPF program and report each program started in the "
+                                 "host's mount namespace from a container, as it starts, as JSON lines")):
         command = containers_sub.add_parser(name, help=text)
-        command.add_argument("--manifest", type=Path,
-                             help="baseline file (default ~/.config/megalodon/containers.json)")
+        if name != "watch":
+            command.add_argument("--manifest", type=Path,
+                                 help="baseline file (default ~/.config/megalodon/containers.json)")
         if name == "baseline":
             command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
-        if name == "check":
+        if name == "watch":
+            command.add_argument("--respond", action="store_true", help=RESPOND_HELP)
+        if name in ("check", "watch"):
             command.add_argument("--alert", action="store_true",
                                  help="also send findings to the [alerts] destinations in the settings file")
             command.add_argument("--config", type=Path,
@@ -2467,6 +2472,8 @@ def _containers(args: argparse.Namespace) -> int:
     from . import container_watch as cw
     from .validation import ValidationError
 
+    if args.containers_command == "watch":
+        return _containers_watch(args, cw)
     manifest = args.manifest or Path(cw.DEFAULT_MANIFEST).expanduser()
     try:
         if args.containers_command == "baseline":
@@ -2495,6 +2502,59 @@ def _containers(args: argparse.Namespace) -> int:
                                           tuple(sorted({t for f in findings for t in f["techniques"]})),
                                           "A container escaped or gained a way out to the host.")])
     return 1 if findings else 0
+
+
+def _containers_watch(args, cw) -> int:
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from .connect_trace import TraceError
+    from .exec_trace import ExecTrace
+    from .validation import ValidationError
+
+    dispatcher = None
+    if args.alert:
+        from .alerts import dispatcher_for
+        try:
+            dispatcher = dispatcher_for(load_settings(
+                args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
+        except (ValidationError, OSError) as exc:
+            print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
+            return 2
+    respond = _answer_at_once(args, "containers")
+
+    def emit(found):
+        print(json.dumps(found, sort_keys=True), flush=True)
+        respond(found)
+        if dispatcher is not None:
+            from .alerts import HostNotice
+            dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
+                                          found["detail"], tuple(found["techniques"]), found["summary"])])
+    try:
+        trace = ExecTrace()
+    except TraceError as exc:
+        print(f"megalodon: exec tracing unavailable: {exc.strerror or exc}; `megalodon containers check` still "
+              "reports escapes that last more than a second", file=sys.stderr)
+        return 2
+    try:
+        watcher = cw.EscapeWatch(emit, trace)
+    except (cw.ContainerError, OSError) as exc:
+        trace.close()
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(f"megalodon: watching for container escapes as programs start (the host's mount namespace is "
+          f"{watcher.host_from}'s)" + ("; findings are decided at once" if args.respond else ""),
+          file=sys.stderr, flush=True)
+    stop = Event()
+    try:
+        watcher.run(stop)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        watcher.close()
+        print(f"megalodon: {json.dumps(watcher.stats, sort_keys=True)}", file=sys.stderr)
+    return 0
 
 
 def _boot(args: argparse.Namespace) -> int:

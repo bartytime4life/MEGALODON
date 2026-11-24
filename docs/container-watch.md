@@ -78,6 +78,51 @@ When the Docker (or Podman) socket can be read, container names and images
 are asked of it with a read-only `GET /containers/json`. Otherwise containers
 are named by their ID. Nothing is started, stopped, entered or changed.
 
+## Escapes as they start: `containers watch`
+
+```bash
+sudo megalodon containers watch
+```
+
+`check` looks every 15 minutes, and an escape that is over within a second,
+such as one command run in the host's namespace, is gone by then. `watch`
+loads two small eBPF programs, the [exec trace](credential-watch.md#naming-readers-gone-at-once-watch---trace-execs),
+and reports each program the kernel starts in the host's mount namespace
+from a container's control group, as `CONTAINER_ESCAPE` (CRITICAL), one JSON
+line each, however soon it exits. On this machine, a throwaway runc
+container sharing the host's process table, with `SYS_ADMIN`, joined the
+host's mount namespace and ran `/usr/bin/true` there. `check` missed it,
+since it was gone within a second; `watch` reported it.
+
+* **How.** At each exec, the kernel records the new program's mount
+  namespace, its executable's device and inode, and its control groups'
+  path names: the unified hierarchy's and the memory controller's, which
+  holds containers on cgroup v1. Containers are named from those paths as
+  `check` names them. The host's mount namespace is process 1's, or the
+  watch's own where process 1's cannot be read.
+* **Runtimes are told apart by their files, not their names.** An installed
+  runtime helper (`runc`, `crun`, `conmon`, a containerd shim and the
+  others `check` knows) is not an escape, by device and inode. Nor is the
+  step where runc runs itself again to set a container up: an exec whose
+  parent runs the installed runc, of a sealed copy with the same inode
+  number, or, before runc 1.2, of its deleted in-memory copy
+  (`runc_cloned`). With cgroup v2, `runc exec` starts that step inside the
+  container's control group already. Anything else a runtime starts in the
+  host's namespace is an escape: `nsenter` run by `docker exec` is too. The
+  helper files are read again before an escape is reported, so an upgraded
+  runtime is still known.
+* **Once an hour.** The same program from the same container is reported
+  once an hour; the statistics printed when the watch stops count the rest.
+* **Response.** With `--respond`, each finding is decided at once by the
+  **container-escape** playbook, as the pass would decide it, and the same
+  process is decided only once. With `--alert`, findings also go to the
+  off-machine alerts.
+* **What it changes.** As with the exec trace, the programs only read; they
+  are removed when the watch stops. It needs root, a kernel with BTF and
+  BPF ring buffers (Linux 5.8 or later), on x86-64 or arm64. Where they
+  cannot be loaded, the watch says so and exits 2: `check` still runs. The
+  [scheduler](scheduling.md) does not start it.
+
 ## What is reported
 
 | Rule | Severity | When |
@@ -117,8 +162,11 @@ reported.
 * **Root is needed** to read other processes' namespaces. Without it, the
   check reports how many container processes it could not inspect.
 * **An escape that finishes within a second** (one command run in the
-  host's namespace) may be gone before the second look. The hook, mount or
-  socket it used is still reported.
+  host's namespace) may be gone before `check`'s second look; `watch`
+  reports it as it starts. The hook, mount or socket it used is still
+  reported. `watch` sees programs started: a process that joins the host's
+  namespace and works there without starting another program is seen only
+  by `check`, if it lasts.
 * **An escape that stays in the container's mount namespace** but writes to
   the host through a mounted folder, a socket or a hook is not caught as an
   escape. The exposure that made it possible is reported instead.

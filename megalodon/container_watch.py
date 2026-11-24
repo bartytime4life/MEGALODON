@@ -586,3 +586,127 @@ def accept(manifest=DEFAULT_MANIFEST, *, root=None, api=None, settle=None):
     old = _read(manifest)
     return dict(baseline(manifest, replace=True, root=root or old.get('root', '/'), api=api, settle=settle),
                 action='accept')
+
+
+# ------------------------------------------------------------------ live: escapes as they start
+
+COOLDOWN_SECONDS = 3600         # The same program from the same container is reported once an hour.
+MAX_TRACKED = 65536
+
+
+def _namespace_number(link):
+    found = re.fullmatch(r'mnt:\[(\d+)\]', link or '')
+    return int(found.group(1)) if found else None
+
+
+def host_mount_namespace(root='/'):
+    """(the host's mount namespace number, where it was read): process 1's, or this process's own where process
+    1 cannot be read (this process then has to run on the host itself). (None, None) when neither can be."""
+    for source in ('1', 'self'):
+        number = _namespace_number(_link(Path(root, 'proc', source, 'ns/mnt')))
+        if number is not None:
+            return number, ('process 1' if source == '1' else 'this process')
+    return None, None
+
+
+def _helper_files(root='/'):
+    """{(device, inode): path} of the installed runtime helpers."""
+    found = {}
+    for path in RUNTIME_HELPERS:
+        try:
+            info = os.stat(Path(root, path.lstrip('/')))
+        except OSError:
+            continue
+        found[(info.st_dev, info.st_ino)] = path
+    return found
+
+
+class EscapeWatch:
+    """Report each program started in the host's mount namespace from a container's control group, as the kernel
+    starts it (an :class:`exec_trace.ExecTrace`), so an escape that finishes within a second is reported too."""
+
+    def __init__(self, emit, trace, *, root='/', api=None, clock=time.monotonic):
+        self.emit, self.trace, self.root, self.clock = emit, trace, root, clock
+        self.host_mnt, self.host_from = host_mount_namespace(root)
+        if self.host_mnt is None:
+            raise ContainerError('the host\'s mount namespace cannot be read' + _why())
+        self.helpers = _helper_files(root)
+        self.names = _names(root, api)
+        self.exes = {}                  # pid -> the executable of its last exec, by (device, inode)
+        self.last = {}
+        self.stats = dict(execs=0, escapes=0, repeats=0, runtime_steps=0)
+
+    def _parent_helper(self, pid):
+        """(device, inode) of the installed runtime helper the process ``pid`` runs, or None."""
+        exe = self.exes.get(pid)
+        if exe is None:
+            try:
+                info = os.stat(Path(self.root, 'proc', str(pid), 'exe'))
+            except OSError:
+                return None
+            exe = (info.st_dev, info.st_ino)
+        return exe if exe in self.helpers else None
+
+    def _runtime_step(self, record):
+        """A runtime's own setup step: an installed runtime helper (by device and inode) running itself again
+        from a sealed copy, as runc's init does (the same inode number on a private mount, or, before runc 1.2,
+        a deleted in-memory copy named runc_cloned). It may already be in the container's control group."""
+        if record['exe_file'] in self.helpers:
+            return True
+        helper = self._parent_helper(record['parent'])
+        if helper is None:
+            return False
+        sealed = record['exe_file'] is not None and record['exe_file'][1] == helper[1]
+        cloned = record['deleted'] and record['path'].startswith('/memfd:runc_cloned')
+        return sealed or cloned
+
+    def handle(self, record):
+        if record.get('kind') != 'exec':
+            return []
+        self.stats['execs'] += 1
+        pid = record['pid']
+        if record.get('exe_file') is not None:
+            self.exes[pid] = record['exe_file']
+            if len(self.exes) > MAX_TRACKED:
+                self.exes.pop(next(iter(self.exes)))
+        if record.get('mnt_ns') != self.host_mnt:
+            return []
+        owner = container_of(record.get('cgroup'))
+        if owner is None:
+            return []
+        if not self._runtime_step(record):
+            self.helpers = _helper_files(self.root)      # A runtime upgraded since: its new files.
+        if self._runtime_step(record):
+            self.stats['runtime_steps'] += 1
+            return []
+        runtime, ident = owner
+        name, image = self.names.get(ident, ('', ''))
+        container = f'{runtime}:{ident}'
+        program = record['path'] or record['comm']
+        mark, now = (container, program), self.clock()
+        if now - self.last.get(mark, -1e18) < COOLDOWN_SECONDS:
+            self.stats['repeats'] += 1
+            return []
+        self.last[mark] = now
+        if len(self.last) > MAX_TRACKED:
+            self.last.clear()
+        self.stats['escapes'] += 1
+        label = f"{container} ({name}{', ' + image if image else ''})" if name else container
+        found = _finding('CONTAINER_ESCAPE', f'process:{pid}',
+                         f"{program} (pid {pid}) started in {label}'s control group in the host's mount namespace",
+                         container=container, detected_at=_now(),
+                         evidence=dict(processes=[dict(pid=pid, start=record['start'], program=program)],
+                                       argv=record['argv'][:8],
+                                       traced=dict(parent=record['parent'], uid=record['uid'],
+                                                   comm=record['comm'])))
+        self.emit(found)
+        return [found]
+
+    def run(self, stop, timeout=0.5):
+        while not stop.is_set():
+            self.trace.wait(timeout)
+            for record in self.trace.drain():
+                self.handle(record)
+
+    def close(self):
+        self.trace.close()
