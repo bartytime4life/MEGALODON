@@ -293,7 +293,79 @@ def test_journal_findings_go_to_the_wiped_log_playbook():
 def test_an_empty_journal_does_not_hide_vacuuming(machine):
     root, folder, manifest = machine
     journal(folder / "user-1001.journal", head=0, tail=250, entries=0)  # Created, nothing written to it yet.
+    journal(folder / "system@0-0.journal~", head=0, tail=0, entries=0)  # An empty file set aside as damaged.
     li.check(manifest, root=str(root), advance=True)
     next(folder.glob(f"system@*-{1:016x}-*.journal")).unlink()
     found, report = check(manifest, root)
     assert found == set() and report["journals"]["explained"][0]["reason"] == "vacuumed (oldest first)"
+
+
+def test_an_older_active_journal_does_not_block_vacuuming_archives(tmp_path):
+    root = tmp_path / "root"
+    folder = root / "var/log/journal" / MACHINE
+    journal(folder / "user-1000.journal", head=1, tail=40, entries=5)  # Active since the sequence began.
+    archive(folder, 10, 20)
+    archive(folder, 21, 30)
+    journal(folder / "system.journal", head=31, tail=40)
+    manifest = tmp_path / "logs.json"
+    li.baseline(manifest, root=str(root))
+    next(folder.glob(f"system@*-{10:016x}-*.journal")).unlink()  # Vacuuming acts on archived files only.
+    found, report = check(manifest, root)
+    assert found == set() and report["journals"]["explained"][0]["reason"] == "vacuumed (oldest first)"
+    next(folder.glob(f"system@*-{21:016x}-*.journal")).unlink()  # The last archive; only active files are left.
+    assert check(manifest, root)[0] == set()
+
+
+def test_a_journal_that_grows_while_it_is_read_is_not_cut(machine, monkeypatch):
+    root, folder, manifest = machine
+    path = folder / "system.journal"
+    real_lstat = os.lstat
+
+    def lstat_then_grow(target, *args, **kwargs):
+        info = real_lstat(target, *args, **kwargs)
+        if str(target) == str(path):  # journald extends the file and its arena just after the size was read.
+            data = bytearray(path.read_bytes())
+            struct.pack_into("<Q", data, 96, 8192)
+            path.write_bytes(bytes(data) + bytes(8192 + HEADER - len(data)))
+        return info
+    monkeypatch.setattr(os, "lstat", lstat_then_grow)
+    found, _ = check(manifest, root)
+    assert found == set(), "the size is read after the header, from the same open file"
+
+
+def test_a_flush_must_cover_the_entries_of_the_lost_runtime_journal(tmp_path):
+    root = tmp_path / "root"
+    run = root / "run/log/journal" / MACHINE
+    journal(run / "system.journal", head=1, tail=30)
+    boot = root / "proc/sys/kernel/random/boot_id"
+    boot.parent.mkdir(parents=True)
+    boot.write_text("boot-one\n")
+    manifest = tmp_path / "logs.json"
+    li.baseline(manifest, root=str(root))
+    (run / "system.journal").unlink()
+    persistent = root / "var/log/journal" / MACHINE
+    journal(persistent / "system.journal", head=100, tail=200)
+    assert check(manifest, root)[0] == {("JOURNAL_FILE_DELETED", "system.journal")}, "none of 1-30 is there"
+    archive(persistent, 1, 12)
+    journal(persistent / "user-1000.journal", head=20, tail=99, entries=10)
+    assert check(manifest, root)[0] == {("JOURNAL_FILE_DELETED", "system.journal")}, "13-19 are nowhere"
+    archive(persistent, 13, 19)
+    found, report = check(manifest, root)
+    assert found == set() and report["journals"]["explained"][0]["reason"] == "flushed to the persistent journal"
+
+
+def test_vacuuming_that_takes_the_newest_records_is_reported(machine):
+    root, folder, manifest = machine
+    # journalctl --vacuum-time=2d rotates the active files first, then deletes only archives older than that:
+    # the oldest go, and the files just rotated stay.
+    next(folder.glob(f"system@*-{1:016x}-*.journal")).unlink()
+    assert check(manifest, root)[0] == set()
+    # A vacuum that also deletes what was being written at the last check removes the newest records: log wiping.
+    rotated = folder / f"system@{SEQUENCE.hex()}-{201:016x}-0.journal"
+    (folder / "system.journal").rename(rotated)
+    data = bytearray(rotated.read_bytes())
+    data[16] = ji.STATE_ARCHIVED
+    rotated.write_bytes(bytes(data))
+    journal(folder / "system.journal", head=251, tail=252)
+    rotated.unlink()
+    assert ("JOURNAL_FILE_DELETED", "system.journal") in check(manifest, root)[0]
