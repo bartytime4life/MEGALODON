@@ -42,6 +42,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import stat
 import tempfile
 
@@ -93,6 +94,135 @@ RANK = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2, 'CRITICAL': 3}
 
 class PersistenceError(ValueError):
     pass
+
+
+# ------------------------------------------------------------------ signs of an intruder's entry
+#
+# What a startup file, job or service runs is read for a few signs that are rare in legitimate entries and
+# common in an intruder's. They are labels with a line number: no content is stored. Only the lines an entry
+# runs are read (a unit's Exec lines, a crontab's commands, a script's lines), never comments.
+
+TEMPORARY_FOLDERS = ('/tmp/', '/var/tmp/', '/dev/shm/')
+SYSTEM_PREFIXES = ('/usr/', '/var/', '/etc/', '/opt/', '/lib', '/bin/', '/sbin/', '/srv/', '/boot/')
+INTERPRETERS = re.compile(r'(?:ba|da|z|k|mk|a)?sh|busybox|python[0-9.]*|perl[0-9.]*|ruby[0-9.]*|php[0-9.]*|node|lua')
+LAUNCHERS = frozenset({'sudo', 'nohup', 'setsid', 'exec', 'env', 'nice', 'ionice', 'command', 'builtin', 'time',
+                       'chrt', 'taskset', 'stdbuf', 'flock'})
+FETCHERS = r'(?:curl|wget|fetch|lwp-download|aria2c)'
+SHELL = r'(?:sudo\s+)?(?:/\S*/)?(?:(?:ba|da|z|k)?sh|python[0-9.]*|perl[0-9.]*)\b'
+PATTERNS = (
+    ('download_into_shell', re.compile(rf'\b{FETCHERS}\b[^|;&\n]*\|\s*{SHELL}')),
+    ('download_into_shell', re.compile(rf'(?:\$\(|`|<\()\s*{FETCHERS}\b')),
+    ('decoded_into_shell', re.compile(rf'\bbase(?:64|32)\s+(?:-d|--decode|-D)\b[^;&\n]*\|\s*{SHELL}')),
+    ('shell_network_redirect', re.compile(r'/dev/(?:tcp|udp)/[^/\s]+/\d+')),
+)
+SIGN_SEVERITY = {'runs_from_temporary': 'HIGH', 'runs_from_hidden_folder': 'HIGH', 'download_into_shell': 'HIGH',
+                 'decoded_into_shell': 'HIGH', 'shell_network_redirect': 'CRITICAL', 'preload_library': 'CRITICAL',
+                 'second_uid_0': 'CRITICAL'}
+SYSTEM_CRONTABS = ('/etc/crontab', '/etc/cron.d/')
+PLAIN_PATH = re.compile(r'/[A-Za-z0-9_./+@:-]+')
+MAX_SIGNS = 20
+
+
+def _commands(text, category, path):
+    """(line number, command text) for what an entry runs; comments and settings are left out."""
+    name = os.path.basename(path)
+    for number, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith(('#', ';')):
+            continue
+        if category == 'systemd' or (category == 'autostart' and name.endswith('.desktop')):
+            key, _, value = line.partition('=')
+            if re.fullmatch(r'Exec[A-Za-z]*|TryExec', key.strip()):
+                yield number, value.strip().lstrip('@-:+!|')
+            continue
+        if category == 'init' and name.endswith('.rules'):
+            for value in re.findall(r'\bRUN\{?[a-z]*\}?\s*\+?=\s*"([^"]*)"', line):
+                yield number, value
+            continue
+        if category == 'cron' and not path.startswith(('/etc/cron.hourly/', '/etc/cron.daily/', '/etc/cron.weekly/',
+                                                       '/etc/cron.monthly/')):
+            fields = line.split()  # A setting (MAILTO=, PATH=) has no command fields.
+            if name == 'anacrontab':
+                command = fields[3:]
+            elif fields[0].startswith('@'):
+                command = fields[1:]
+            else:
+                command = fields[5:]
+            if command and path.startswith(SYSTEM_CRONTABS) and not command[0].startswith(('/', '$', '~', '.')):
+                command = command[1:]  # The user field of a system crontab.
+            yield number, ' '.join(command)
+            continue
+        yield number, line  # A script, an at job, a shell startup file, ~/.ssh/rc.
+
+
+def _tokens(command):
+    """Shell words and separators, quotes respected; a whitespace split if the quoting does not balance."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|()<>`')
+    lexer.whitespace_split = True
+    lexer.commenters = ''
+    try:
+        return list(lexer)
+    except ValueError:
+        return command.split()
+
+
+def _run_words(command, depth=0):
+    """The programs and scripts a command line starts: each segment's first word, a script handed to an
+    interpreter, and what an interpreter's ``-c`` runs."""
+    segment = []
+    for token in _tokens(command) + [';']:
+        if token and set(token) <= set(';&|()<>`'):
+            yield from _segment_words(segment, depth)
+            segment = []
+        else:
+            segment.append(token)
+
+
+def _segment_words(words, depth):
+    while words and (words[0] in LAUNCHERS or words[0] in ('{', '}', '!', 'then', 'do', 'else', 'if', 'while')
+                     or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', words[0]) or words[0].startswith('-')):
+        words = words[1:]
+    if not words:
+        return
+    yield words[0]
+    if INTERPRETERS.fullmatch(os.path.basename(words[0])):
+        rest = words[1:]
+        if '-c' in rest and rest.index('-c') + 1 < len(rest) and depth < 2:
+            yield from _run_words(rest[rest.index('-c') + 1], depth + 1)
+        elif '-e' not in rest:
+            scripts = [word for word in rest if not word.startswith('-')]
+            if scripts:
+                yield scripts[0]
+
+
+def _signs(text, category, path):
+    """Signs of an intruder's entry in what it runs, as {sign, line}."""
+    found = []
+    for number, command in _commands(text, category, path):
+        for word in _run_words(command):
+            if not PLAIN_PATH.fullmatch(word):
+                continue  # A pattern, a variable or a quoted fragment, not a program it runs.
+            if word.startswith(TEMPORARY_FOLDERS):
+                found.append(dict(sign='runs_from_temporary', line=number))
+            elif word.startswith(SYSTEM_PREFIXES) and any(
+                    part.startswith('.') and part not in ('.', '..') for part in word.split('/')):
+                found.append(dict(sign='runs_from_hidden_folder', line=number))
+        for sign, pattern in PATTERNS:
+            if pattern.search(command):
+                found.append(dict(sign=sign, line=number))
+    unique = []
+    for item in found:
+        if item not in unique:
+            unique.append(item)
+    return unique[:MAX_SIGNS]
+
+
+def _preload_libraries(text):
+    return [dict(sign='preload_library', line=number) for number, raw in enumerate(text.splitlines(), 1)
+            if raw.strip() and not raw.strip().startswith('#')][:MAX_SIGNS]
+
+
+SIGN_CATEGORIES = ('systemd', 'cron', 'at', 'autostart', 'shell_startup', 'init')
 
 
 # Categories whose entries are services, jobs or startup files; the others are not something to disable.
@@ -190,8 +320,10 @@ def _ssh_keys(data):
     return keys
 
 
-def _describe(path, category):
-    """Metadata for one path, never following links; None if absent; 'unreadable' if not readable."""
+def _describe(path, category, shown=None):
+    """Metadata for one path, never following links; None if absent; 'unreadable' if not readable.
+
+    ``shown`` is the path as reports show it (``/etc/cron.d/job``), which decides how a file is read for signs."""
     try:
         info = os.lstat(path)
     except FileNotFoundError:
@@ -204,6 +336,8 @@ def _describe(path, category):
             entry.update(kind='link', target=os.readlink(path)[:1024])
         except OSError:
             return 'unreadable'
+        if category in SIGN_CATEGORIES and entry['target'].startswith(TEMPORARY_FOLDERS):
+            entry['signs'] = [dict(sign='runs_from_temporary', line=0)]
         return entry
     if stat.S_ISDIR(info.st_mode):
         return None  # Folders are covered by the patterns that list their files.
@@ -224,6 +358,15 @@ def _describe(path, category):
                  lines=data.count(b'\n') + (1 if data and not data.endswith(b'\n') else 0))
     if category == 'ssh' and os.path.basename(path).startswith('authorized_keys'):
         entry['keys'] = _ssh_keys(data)
+    text = data.decode('utf-8', 'replace')
+    if category in SIGN_CATEGORIES or (category == 'ssh' and os.path.basename(path) in ('rc', 'sshrc')):
+        signs = _signs(text, category, shown or path)
+    elif category == 'preload' and os.path.basename(path) == 'ld.so.preload':
+        signs = _preload_libraries(text)
+    else:
+        signs = []
+    if signs:
+        entry['signs'] = signs
     return entry
 
 
@@ -295,7 +438,7 @@ def snapshot(*, root='/', home=None, setuid_dirs=SETUID_DIRS, all_homes=None):
             return
         matches = glob.glob(expanded) if any(ch in expanded for ch in '*?[') else [expanded]
         for path in sorted(matches)[:2000]:
-            described = _describe(path, category)
+            described = _describe(path, category, _display(path, root, folder))
             if described is None:
                 continue
             key = _display(path, root, folder)
@@ -369,15 +512,51 @@ def _read(path):
     return value
 
 
+def _worst(signs):
+    return max((SIGN_SEVERITY[item['sign']] for item in signs), key=RANK.__getitem__)
+
+
+def suspicious(state):
+    """Entries in a snapshot that carry signs of an intruder's, most severe first: what a baseline must not
+    record as normal without saying so."""
+    found = []
+    for key, entry in state['entries'].items():
+        if entry.get('signs'):
+            category, location = key.split(':', 1)
+            found.append(dict(category=category, location=location, technique=TECHNIQUES[category],
+                              severity=_worst(entry['signs']), signs=entry['signs']))
+    for name, account in state['accounts'].items():
+        if account['uid'] == 0 and name != 'root':
+            found.append(dict(category='account', location=name, technique=TECHNIQUES['account'],
+                              severity='CRITICAL', signs=[dict(sign='second_uid_0', line=0)]))
+    found.sort(key=lambda item: (-RANK[item['severity']], item['category'], item['location']))
+    return found
+
+
+SUSPICIOUS_NOTE = ('These entries carry signs of an intruder\'s: review each one before trusting the baseline. '
+                   'Nothing was changed.')
+
+
 def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, **options):
     path = Path(manifest).expanduser()
     if path.exists() and not replace:
         raise PersistenceError(f'{path} exists; use accept to record the reviewed state')
     state = snapshot(**options)
-    _write(path, dict(schema=SCHEMA, recorded_at=_now(), user=os.geteuid(), **state))
-    return dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), entries=len(state['entries']),
-                accounts=len(state['accounts']), modules=len(state['modules']), setuid=len(state['setuid']),
-                homes=sorted(state['homes']), gaps=state['gaps'])
+    _write(path, dict(schema=SCHEMA, recorded_at=_now(), user=os.geteuid(), signs_reviewed=True, **state))
+    report = dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), entries=len(state['entries']),
+                  accounts=len(state['accounts']), modules=len(state['modules']), setuid=len(state['setuid']),
+                  homes=sorted(state['homes']), gaps=state['gaps'], suspicious=suspicious(state))
+    if report['suspicious']:
+        report['note'] = SUSPICIOUS_NOTE
+    return report
+
+
+def scan(**options):
+    """Entries with signs of an intruder's in the current state; no baseline is read or written."""
+    state = snapshot(**options)
+    found = suspicious(state)
+    return dict(schema=REPORT_SCHEMA, action='scan', checked_at=_now(), entries=len(state['entries']),
+                suspicious=found, gaps=state['gaps'], note=SUSPICIOUS_NOTE if found else 'Nothing was changed.')
 
 
 def _finding(change, category, location, severity, detail=None):
@@ -397,6 +576,9 @@ def _compare_entry(key, old, new):
             detail['keys_added'] = new['keys'][:20]
         if new.get('kind') == 'link':
             detail['target'] = new['target']
+        if new.get('signs'):
+            detail['signs'] = new['signs']
+            severity = max(severity, _worst(new['signs']), key=RANK.__getitem__)
         return _finding('added', category, location, severity, detail)
     if new is None:
         return _finding('removed', category, location, severity)
@@ -416,6 +598,9 @@ def _compare_entry(key, old, new):
         if added:
             detail['keys_added'] = added[:20]
             severity = 'CRITICAL'
+    if new.get('signs'):
+        detail['signs'] = new['signs']
+        severity = max(severity, _worst(new['signs']), key=RANK.__getitem__)
     return _finding('changed', category, location, severity, detail)
 
 
@@ -492,6 +677,12 @@ def check(manifest=DEFAULT_MANIFEST, **options):
                   baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
                   severity_counts=counts, gaps=new['gaps'],
                   note='Review each change; accept records the reviewed state. Nothing was changed.')
+    if not old.get('signs_reviewed'):
+        # A baseline from before entries were read for signs: what it recorded was never reviewed for them.
+        report['suspicious'] = suspicious(new)
+        if report['suspicious']:
+            report['note'] += (f' The baseline was taken before entries were read for signs of an intruder\'s; '
+                               f'{len(report["suspicious"])} are listed under suspicious. Review them, then run accept.')
     watched = newly_watched(old, new)
     if watched:
         report['newly_watched'] = watched

@@ -91,8 +91,8 @@ def test_a_new_owner_of_a_setuid_program_is_reported(tree):
     pw.baseline(manifest, **options)
     real = pw._describe
 
-    def described(path, category):
-        value = real(path, category)
+    def described(path, category, *shown):
+        value = real(path, category, *shown)
         if isinstance(value, dict) and path.endswith("usr/bin/tool"):
             value = dict(value, uid=value["uid"] + 1)
         return value

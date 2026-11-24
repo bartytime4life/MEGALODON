@@ -54,8 +54,11 @@ def test_every_account_s_home_is_watched_by_name(homes):
     report = pw.check(manifest, **options)
     assert changes(report) == [
         ("added", "ssh", "~alice/.ssh/authorized_keys", "HIGH"),
-        ("added", "systemd", "~bob/.config/systemd/user/helper.service", "MEDIUM"),
-        ("changed", "shell_startup", "~bob/.zshrc", "MEDIUM")]
+        ("added", "systemd", "~bob/.config/systemd/user/helper.service", "HIGH"),  # It runs from /tmp.
+        ("changed", "shell_startup", "~bob/.zshrc", "HIGH")]  # It pipes a download into a shell.
+    signs = {f["location"]: [s["sign"] for s in f["detail"].get("signs", [])] for f in report["findings"]}
+    assert signs["~bob/.config/systemd/user/helper.service"] == ["runs_from_temporary"]
+    assert signs["~bob/.zshrc"] == ["download_into_shell"]
     added = next(f for f in report["findings"] if f["category"] == "ssh")
     assert [k["comment"] for k in added["detail"]["keys_added"]] == ["added-for-alice"]
     assert "newly_watched" not in report

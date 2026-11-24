@@ -17,16 +17,25 @@ megalodon persistence check
 megalodon persistence accept
 ```
 
+```bash
+megalodon persistence scan
+```
+
 * **`baseline`** records the current state in
   `~/.config/megalodon/persistence.json` (mode 600). Take it on a system you
-  trust.
+  trust. Entries with [signs of an intruder's](#signs-of-an-intruders-entry)
+  are listed under `suspicious`, and the command then exits 1: they are
+  recorded, but not without being reported.
 * **`check`** reports every entry added, changed or removed since the
   baseline, most severe first. It exits 1 when anything changed and 2 on an
   error. With `--alert`, a one-line summary also goes to the
   [off-machine alerts](off-machine-alerts.md) configured in the settings
   file.
 * **`accept`** records the current state as the new baseline once you have
-  reviewed the changes, for example after a software update.
+  reviewed the changes, for example after a software update. It lists
+  suspicious entries as `baseline` does.
+* **`scan`** lists entries with signs of an intruder's now, reading and
+  writing no baseline. It exits 1 if there are any.
 
 Run `check` from cron or a systemd timer, or let the
 [scheduler](scheduling.md) do it. Run as root, it covers every account's home
@@ -57,6 +66,36 @@ as a gap.
 | accounts | `/etc/passwd`: new accounts; a new UID 0; a login shell given to a service account | T1136.001 | MEDIUM; HIGH; CRITICAL for UID 0 |
 
 Removals are reported as LOW.
+
+## Signs of an intruder's entry
+
+What an entry runs is read for a few signs that are rare in legitimate
+entries and common in an intruder's. Only the lines it runs are read: a
+unit's or autostart file's `Exec` lines, a crontab's commands, a udev rule's
+`RUN`, and every line of a script, an at job, a shell startup file or
+`~/.ssh/rc`. Comments and settings are skipped. A program counts as run when it
+starts a command (after `;`, `&&`, `|`, `$(`), when it is handed to a shell or
+interpreter as a script, or when it is run from a `sh -c "..."` string.
+
+| Sign | Severity | What it means |
+| --- | --- | --- |
+| `runs_from_temporary` | HIGH | A program is run from `/tmp`, `/var/tmp` or `/dev/shm`, or the entry is a link into one |
+| `runs_from_hidden_folder` | HIGH | A program is run from a hidden folder in a system location, such as `/var/lib/.cache/agent` |
+| `download_into_shell` | HIGH | A download (`curl`, `wget`...) is piped or substituted into a shell or interpreter |
+| `decoded_into_shell` | HIGH | `base64 -d` (or base32) output is piped into a shell |
+| `shell_network_redirect` | CRITICAL | A shell opens a network connection through `/dev/tcp` or `/dev/udp` |
+| `preload_library` | CRITICAL | `/etc/ld.so.preload` lists a library: every program loads it |
+| `second_uid_0` | CRITICAL | An account other than `root` has UID 0 |
+
+Each sign is stored as its name and line number, never the line. An added or
+changed entry with a sign is reported at the sign's severity, if that is
+higher than its category's. A baseline taken before entries were read for
+signs never reviewed them: `check` lists the entries that have one under
+`suspicious` until you run `accept`.
+
+On this project's test machine, 775 legitimate files (every vendor systemd
+unit, the init scripts, udev rules, cron jobs, shell startup files and shell
+scripts in `/usr/bin` and `/usr/sbin`) showed no sign.
 
 ## Every account's home
 
@@ -91,7 +130,8 @@ one in root's.
 
 ## What is recorded
 
-Only metadata is stored: a content digest, size, line count, mode, owner and,
+Only metadata is stored: a content digest, size, line count, mode, owner,
+the [signs](#signs-of-an-intruders-entry) found (name and line number) and,
 for links, the link target. Links are recorded, never followed. For SSH keys,
 the key type, a SHA-256 fingerprint and the comment are stored, so a report
 can name the new key. For accounts, the name, UID, GID, home folder and shell
@@ -105,8 +145,14 @@ and shared files are refused. Nothing on the system is changed or removed.
 ## Limits
 
 * **Changes since the baseline only.** Persistence that was already present
-  when the baseline was taken is part of the baseline. Take it on a freshly
-  installed or otherwise trusted system.
+  when the baseline was taken is part of the baseline, and reported only if it
+  carries one of the signs above. An intruder's entry that looks ordinary,
+  such as a service running a program installed under `/usr/local/bin`, is
+  recorded like any other. Take the baseline on a freshly installed or
+  otherwise trusted system.
+* **Signs are read from the text.** A command built at run time (from
+  variables or an encoded string) or run by another script the entry calls is
+  not followed.
 * **Updates change things.** Package updates change units, PAM files and
   setuid programs too. Review the report, then run `accept`.
 * **Folder coverage.** Files are hashed up to 4 MiB. The setuid scan stops
