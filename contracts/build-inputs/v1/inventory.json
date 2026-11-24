@@ -44,9 +44,9 @@
     {
       "direct_packages": [
         {
-          "declared_sha256": "sha256:8e8ff70716a4f565ba9c7e91d86e3e60e4baac9794b944e5c35b772e7aedb21e",
+          "declared_sha256": "sha256:467dbdc1057ef3654d67caf5786aefca06875601620d9b82b431863d95caf29b",
           "name": "maxminddb",
-          "version": "3.2.0"
+          "version": "3.3.0"
         },
         {
           "declared_sha256": "sha256:93bfb2459195406a518e2f487a9bbf01df240175f31e06f5a252ac6734c7bbf0",
@@ -62,7 +62,6 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "native installer rehearsal with geography and knowledge readers",
-      "source_sha256": "10ee47975735aea8c6220b8850276e6ba691dad6ccad11d87073880d580ee77d"
     },
     {
       "direct_packages": [
