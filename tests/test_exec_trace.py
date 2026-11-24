@@ -130,6 +130,8 @@ def test_paths_that_are_not_complete():
     assert tracer(cwd=False).parse(exec_record())['cwd'] is None
     # An executable on an unknown mount is kept as a partial path.
     assert tracer().parse(exec_record(exe_mount=999_999))['path'] == '…/tmp/.x/agent'
+    # A name that fills the kernel's buffer may have been cut short.
+    assert tracer().parse(exec_record(exe=('a' * 63, '.x', 'tmp', '/')))['path'].startswith('…/')
 
 
 def test_a_program_run_from_memory():

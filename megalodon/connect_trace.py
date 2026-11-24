@@ -437,7 +437,8 @@ def _exe_offsets(btf):
 def _tail(names, mount=None):
     """The executable's path from the names of its dentry and its parents. The names stop at the root of the
     file system it is on: with ``mount`` (that file system's (root within it, mount point), from mountinfo) the
-    path is put under its mount point; without it, or when the names ran out first, it is shown after '…/'."""
+    path is put under its mount point. Without it, when the names ran out first, or when a name may have been
+    cut short (it fills the 64-byte buffer it is read into), it is shown after '…/' as partial."""
     parts = []
     for name in names:
         if not name or name == '/':
@@ -447,7 +448,9 @@ def _tail(names, mount=None):
         return None
     path = '/' + '/'.join(reversed(parts))
     reached_root = len(parts) < len(names) and names[len(parts)] == '/'
-    if not reached_root or mount is None:
+    # A name that fills the kernel's buffer may have been cut short: the path is then not the program's.
+    cut = any(len(part.encode('utf-8', 'surrogateescape')) >= EXE_NAME - 1 for part in parts)
+    if not reached_root or mount is None or cut:
         return '…' + path
     root, point = mount
     if root != '/':                          # A bind mount of a folder: the path is below that folder.

@@ -86,8 +86,9 @@ small reader started at once from a hidden temporary folder were all
   watch prints when it stops count these as `named_after_exit`.
 * **Paths.** A path is rebuilt from its names and its mount, as
   [`egress watch --trace-connects`](egress-watch.md) does. A path seen only
-  in part (`…/.x/agent`: more than nine names, or on a mount of another
-  mount namespace, such as a container's) is reported as it is, as a
+  in part (`…/.x/agent`: more than nine names, a name of 63 bytes or more
+  that may have been cut short, or on a mount of another mount namespace,
+  such as a container's) is reported as it is, as a
   program that is not an expected reader. A program run from memory is
   named `/memfd:NAME`, as `/proc` names it. A script run by a relative name
   (`python3 steal.py`) is found through the traced working folder.
