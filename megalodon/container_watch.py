@@ -636,8 +636,16 @@ class EscapeWatch:
         self.last = {}
         self.stats = dict(execs=0, escapes=0, repeats=0, runtime_steps=0)
 
+    def _remember(self, pid, exe):
+        self.exes.pop(pid, None)
+        self.exes[pid] = exe
+        if len(self.exes) > MAX_TRACKED:
+            self.exes.pop(next(iter(self.exes)))
+
     def _parent_helper(self, pid):
-        """(device, inode) of the installed runtime helper the process ``pid`` runs, or None."""
+        """(device, inode) of the installed runtime helper the process ``pid`` ran when its child's exec was
+        traced: as the trace last saw it (its exec, or its parent's at its fork), or from /proc for a process
+        the trace has not seen. None when it is not one."""
         exe = self.exes.get(pid)
         if exe is None:
             try:
@@ -661,14 +669,22 @@ class EscapeWatch:
         return sealed or cloned
 
     def handle(self, record):
+        if record.get('kind') == 'fork':
+            # A new process runs its parent's program: a reused process ID forgets what ran under it before.
+            inherited = self.exes.get(record['parent'])
+            if inherited is None:
+                self.exes.pop(record['pid'], None)
+            else:
+                self._remember(record['pid'], inherited)
+            return []
         if record.get('kind') != 'exec':
             return []
         self.stats['execs'] += 1
         pid = record['pid']
         if record.get('exe_file') is not None:
-            self.exes[pid] = record['exe_file']
-            if len(self.exes) > MAX_TRACKED:
-                self.exes.pop(next(iter(self.exes)))
+            self._remember(pid, record['exe_file'])
+        else:
+            self.exes.pop(pid, None)
         if record.get('mnt_ns') != self.host_mnt:
             return []
         owner = container_of(record.get('cgroup'))

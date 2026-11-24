@@ -215,6 +215,14 @@ def _container_offsets(btf):
     return ns, inode, cgroup
 
 
+def written(start, ns, inode, cgroup):
+    """The parts of an exec record the program writes, from the offsets it was built with. A ring buffer's space
+    is not cleared when it is reserved: a part the program does not write holds bytes of earlier records, so it
+    is not read."""
+    return dict(start=start is not None, ns=ns is not None, inode=inode is not None, cgroup=cgroup is not None,
+                memory=cgroup is not None and cgroup[2] is not None)
+
+
 def group_path(names):
     """A control group's path from its kernfs node's name and its parents', leaf first: '…/' before it when the
     names ran out before the hierarchy's root (whose name is empty). None when nothing was read."""
@@ -246,6 +254,7 @@ class ExecTrace:
             raise TraceError(exc.errno or errno.ENOENT, f'kernel type information: {exc}') from None
         task, start, mm, exe, self.cwd_chain = _offsets(btf)
         ns, inode, cgroup = _container_offsets(btf)
+        self.written = written(start, ns, inode, cgroup)
         self.ring = Ring(RING_BYTES)
         try:
             self.fds += attach(exec_program(self.ring.fd, (task['real_parent'], task['tgid'], start), mm, exe,
@@ -298,9 +307,14 @@ class ExecTrace:
         if self.cwd_chain is not None:
             found = _tail(names_at(data, EXEC_CWD, LEVELS), self.mount(cwd_mount))
             cwd = found if found and not found.startswith('…') else None
+        written = self.written
         ino, dev, mnt_ns = struct.unpack_from('<QII', data, EXEC_INO)
+        ino = ino if written['inode'] else 0
+        mnt_ns = mnt_ns if written['ns'] else 0
+        start = start if written['start'] else 0
         groups = [(label, group_path(names_at(data, offset, CG_LEVELS, CG_NAME)))
-                  for label, offset in (('0:', EXEC_CGROUP_DFL), ('memory', EXEC_CGROUP_V1))]
+                  for label, offset, part in (('0:', EXEC_CGROUP_DFL, 'cgroup'), ('memory', EXEC_CGROUP_V1, 'memory'))
+                  if written[part]]
         return dict(kind='exec', pid=pid_tgid >> 32, parent=parent, uid=uid_gid & 0xFFFFFFFF, gid=uid_gid >> 32,
                     comm=comm, start=ticks(start) if start else None, path=path, deleted=deleted, argv=argv,
                     cwd=cwd, mnt_ns=mnt_ns or None,

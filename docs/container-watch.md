@@ -110,7 +110,10 @@ since it was gone within a second; `watch` reported it.
   container's control group already. Anything else a runtime starts in the
   host's namespace is an escape: `nsenter` run by `docker exec` is too. The
   helper files are read again before an escape is reported, so an upgraded
-  runtime is still known.
+  runtime is still known. A parent's program is the one the trace last saw it
+  run, its own exec or its parent's at its fork, so a reused process ID does
+  not keep runc's identity. Only a parent the trace never saw is read from
+  `/proc`.
 * **Once an hour.** The same program from the same container is reported
   once an hour; the statistics printed when the watch stops count the rest.
 * **Response.** With `--respond`, each finding is decided at once by the
