@@ -63,6 +63,27 @@ def kernel_like_btf():
     return b.blob()
 
 
+def test_btf_enumerators_and_renamed_members():
+    b = BTFBuilder()
+    u32 = b.add(1, 'unsigned int', 4, trailer=struct.pack('<I', 32))
+    # An enum's entries (name, value); an enum64's (name, low, high). Their count is in the type's info.
+    enum = struct.pack('<Ii', b.name('cpuset_cgrp_id'), 0) + struct.pack('<Ii', b.name('memory_cgrp_id'), 4)
+    b.types.append(struct.pack('<III', b.name('cgroup_subsys_id'), (6 << 24) | 2, 4) + enum)
+    wide = struct.pack('<III', b.name('big_value'), 1, 2)
+    b.types.append(struct.pack('<III', b.name('wide'), (19 << 24) | 1, 8) + wide)
+    b.add(4, 'kernfs_node', 24, [('name', u32, 128), ('__parent', u32, 64)])
+    btf = ct.BTF(b.blob())
+    assert btf.enumerator('memory_cgrp_id') == 4 and btf.enumerator('cpuset_cgrp_id') == 0
+    assert btf.enumerator('big_value') == 2 << 32 | 1
+    with pytest.raises(ct.TraceError):
+        btf.enumerator('pids_cgrp_id')
+    # A member renamed between kernel versions: the first name the structure has.
+    assert btf.member('kernfs_node', 'parent', '__parent') == 8
+    assert btf.member('kernfs_node', 'name') == 16
+    with pytest.raises(ct.TraceError):
+        btf.member('kernfs_node', 'gone')
+
+
 def test_btf_offsets_look_into_anonymous_members_and_qualifiers():
     btf = ct.BTF(kernel_like_btf())
     layout = btf.offsets(btf.struct('sock_common'), ct.SOCK_FIELDS)

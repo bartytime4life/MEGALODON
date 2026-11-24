@@ -66,7 +66,7 @@ EXE_LEVELS, EXE_NAME = 6, 64
 RINGBUF_BUSY, RINGBUF_DISCARD, RINGBUF_HEADER = 1 << 31, 1 << 30, 8
 
 # BTF kinds, and how many bytes follow each type's 12-byte header (per member where it has members)
-BTF_KIND_STRUCT, BTF_KIND_UNION, BTF_KIND_FUNC = 4, 5, 12
+BTF_KIND_STRUCT, BTF_KIND_UNION, BTF_KIND_ENUM, BTF_KIND_FUNC, BTF_KIND_ENUM64 = 4, 5, 6, 12, 19
 _TRAILER = {1: (4, 0), 2: (0, 0), 3: (12, 0), 4: (0, 12), 5: (0, 12), 6: (0, 8), 7: (0, 0), 8: (0, 0), 9: (0, 0),
             10: (0, 0), 11: (0, 0), 12: (0, 0), 13: (0, 8), 14: (4, 0), 15: (0, 12), 16: (0, 0), 17: (4, 0),
             18: (0, 0), 19: (0, 12)}
@@ -108,6 +108,14 @@ class BTF:
                     m_name, m_type, m_offset = struct.unpack_from('<III', data, position + 12 + index * 12)
                     bits = m_offset & 0xFFFFFF if info >> 31 else m_offset  # kind_flag: bitfield size in high bits
                     members.append((self._name(m_name), m_type, bits))
+            elif kind == BTF_KIND_ENUM:
+                for index in range(count):
+                    e_name, value = struct.unpack_from('<Ii', data, position + 12 + index * 8)
+                    members.append((self._name(e_name), value, None))
+            elif kind == BTF_KIND_ENUM64:
+                for index in range(count):
+                    e_name, low, high = struct.unpack_from('<III', data, position + 12 + index * 12)
+                    members.append((self._name(e_name), high << 32 | low, None))
             self.types.append((kind, self._name(name_off), size, members))
             position += 12 + fixed + count * each
 
@@ -119,6 +127,24 @@ class BTF:
             if entry and entry[0] == BTF_KIND_FUNC and entry[1] == name:
                 return index
         raise TraceError(errno.ENOENT, f'{name} is not in the kernel BTF')
+
+    def enumerator(self, name):
+        """The value of the enumerator ``name`` (C enumerators share one name space)."""
+        for entry in self.types:
+            if entry and entry[0] in (BTF_KIND_ENUM, BTF_KIND_ENUM64):
+                for member, value, _ in entry[3]:
+                    if member == name:
+                        return value
+        raise TraceError(errno.ENOENT, f'{name} is not in the kernel BTF')
+
+    def member(self, struct_name, *names):
+        """Offsets of the first of ``names`` the structure has: a member renamed between kernel versions."""
+        for name in names:
+            try:
+                return self.offsets(self.struct(struct_name), (name,))[name]
+            except TraceError:
+                continue
+        raise TraceError(errno.ENOENT, f'struct {struct_name} has none of {", ".join(names)}')
 
     def struct(self, name):
         for index, entry in enumerate(self.types):
@@ -234,23 +260,24 @@ def read_mount(event, dst_off, reg, to_mount, mount_id):
             mov_reg(1, event), add_imm(1, dst_off), mov_imm(2, 4), call(PROBE_READ_KERNEL)]
 
 
-def walk_names(event, dst_off, reg, name, parent, levels=EXE_LEVELS):
-    """Starting from the dentry in ``reg``, write it and ``levels`` - 1 of its parents' names, EXE_NAME bytes
-    each, from ``event + dst_off``. A read that fails leaves zeros, and the names after it empty."""
+def walk_names(event, dst_off, reg, name, parent, levels=EXE_LEVELS, size=EXE_NAME):
+    """Starting from the node in ``reg`` (a dentry, or a kernfs node), write its name and those of ``levels`` - 1
+    of its parents, ``size`` bytes each, from ``event + dst_off``. A read that fails leaves zeros, and the names
+    after it empty."""
     out = []
     for level in range(levels):
         out += [mov_reg(3, reg), add_imm(3, name), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
                 call(PROBE_READ_KERNEL), load_dw(3, 10, -8),
-                mov_reg(1, event), add_imm(1, dst_off + level * EXE_NAME), mov_imm(2, EXE_NAME),
+                mov_reg(1, event), add_imm(1, dst_off + level * size), mov_imm(2, size),
                 call(PROBE_READ_KERNEL_STR)]
         if level < levels - 1:
             out += deref(reg, parent)
     return out
 
 
-def names_at(data, offset, levels=EXE_LEVELS):
+def names_at(data, offset, levels=EXE_LEVELS, size=EXE_NAME):
     """The names :func:`walk_names` wrote from ``offset``."""
-    return [bytes(data[offset + i * EXE_NAME:offset + (i + 1) * EXE_NAME]).split(b'\0', 1)[0]
+    return [bytes(data[offset + i * size:offset + (i + 1) * size]).split(b'\0', 1)[0]
             .decode('utf-8', 'replace') for i in range(levels)]
 
 
