@@ -231,13 +231,15 @@ program's path.
   program as a scan would, and a shell or interpreter copied into a
   temporary folder is named too: running from there is the finding. An
   installed interpreter, whose script is unknown, or a path the kernel saw
-  only in part (`…/.x/agent`: deeper than six names, a name of 63 bytes or
+  only in part (`…/.x/agent`: more than five names, a name of 63 bytes or
   more that may have been cut short, or on a mount of another mount
   namespace, such as a container's), cannot be: the finding
   stays `BRIEF_OUTBOUND_CONNECTION`, with `evidence.traced` as a lead.
-* **What it changes.** This is the one part of MEGALODON that changes the
-  running kernel. The program only reads; nothing on disk is changed, and it
-  is removed when the watch stops, however it stops. It needs root, a
+* **What it changes.** This and
+  [`credentials watch --trace-execs`](credential-watch.md) are the parts of
+  MEGALODON that change the running kernel. The program only reads;
+  nothing on disk is changed, and it is removed when the watch stops,
+  however it stops. It needs root, a
   kernel built with BTF (`/sys/kernel/btf/vmlinux`) and BPF ring buffers
   (Linux 5.8 or later), on x86-64 or arm64. Where it cannot be loaded, the
   watch says why on standard error and goes on without it. The eBPF program
