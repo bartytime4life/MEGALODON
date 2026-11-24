@@ -68,7 +68,7 @@ def locked_wheels(checkout):
     match = re.fullmatch(r"maxminddb==3\.2\.0 --hash=sha256:([0-9a-f]{64})", lines[1])
     require(match is not None, "INSTALLER_LOCK_FORMAT")
     result[GEO_WHEEL] = "sha256:" + match.group(1)
-    match = re.fullmatch(r"pyyaml==6\.0\.3 --hash=sha256:([0-9a-f]{64})", lines[2])
+    match = re.fullmatch(r"pyyaml==6\.0\.4 --hash=sha256:([0-9a-f]{64})", lines[2])
     require(match is not None, "INSTALLER_LOCK_FORMAT")
     result[KNOWLEDGE_WHEEL] = "sha256:" + match.group(1)
     # Bind both exact lock texts in the existing receipt field.
