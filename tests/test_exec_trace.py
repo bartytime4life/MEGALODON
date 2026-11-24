@@ -101,6 +101,7 @@ def tracer(mounts=None, cwd=True):
     trace.cwd_chain = (1, 2, 3) if cwd else None
     trace.known_mounts = mounts if mounts is not None else {5: ('/', '/'), 6: ('/', '/dev/shm')}
     trace.fds, trace.ring = [], None
+    trace.written = dict(start=True, ns=True, inode=True, cgroup=True, memory=True)
     return trace
 
 
@@ -152,6 +153,31 @@ def test_the_namespace_inode_and_control_groups_of_an_exec():
     # Names that ran out before the hierarchy's root: the path is partial; none read: left out.
     deep = tracer().parse(exec_record(unified=tuple(f'g{i}' for i in range(et.CG_LEVELS))))
     assert deep['cgroup'] == '0::…/' + '/'.join(f'g{i}' for i in reversed(range(et.CG_LEVELS))) + '\n'
+
+
+def test_which_parts_the_program_writes():
+    group = (2376, 112, 32, 0, 256, 16, 8)
+    assert et.written(1560, (1, 2, 3), (1, 2, 3, 4), group) == dict(start=True, ns=True, inode=True, cgroup=True,
+                                                                     memory=True)
+    # A kernel without the memory controller: its group is not written.
+    assert et.written(1560, (1, 2, 3), (1, 2, 3, 4), group[:2] + (None,) + group[3:])['memory'] is False
+    assert et.written(None, None, None, None) == dict(start=False, ns=False, inode=False, cgroup=False,
+                                                      memory=False)
+
+
+@pytest.mark.parametrize('missing', ['start', 'ns', 'inode', 'cgroup', 'memory'])
+def test_parts_the_program_does_not_write_are_not_read(missing):
+    # Reserved ring buffer space is not cleared: a part the loaded program does not write holds bytes of earlier
+    # records, here a container's group name, and must not be read as this exec's.
+    trace = tracer()
+    trace.written = dict(trace.written, **{missing: False})
+    record = trace.parse(exec_record(ino=4242, dev=1, mnt_ns=4026531840,
+                                     unified=('docker-' + 'a' * 64 + '.scope', ''),
+                                     memory=('docker-' + 'b' * 64 + '.scope', '')))
+    unwritten = dict(start=record['start'], ns=record['mnt_ns'], inode=record['exe_file'],
+                     cgroup='a' * 64 in record['cgroup'] or None, memory='b' * 64 in record['cgroup'] or None)
+    assert unwritten[missing] is None
+    assert all(value is not None for part, value in unwritten.items() if part != missing)
 
 
 @pytest.mark.parametrize('parts, path', [(('b', 'a', ''), '/a/b'), (('b', 'a'), '…/a/b'), (('',), None),

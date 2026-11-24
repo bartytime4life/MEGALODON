@@ -85,7 +85,8 @@ def test_what_is_not_an_escape(host, change):
     w, found = watch(host)
     w.handle(record(**change))
     w.handle(dict(kind='fork', pid=1, parent=2, start=3))
-    assert found == [] and w.stats['execs'] == 1, 'a fork is not an exec'
+    w.handle(dict(kind='other', pid=5))
+    assert found == [] and w.stats['execs'] == 1, 'only execs are counted'
 
 
 def test_the_installed_runtime_helpers_are_not_escapes(host):
@@ -111,6 +112,28 @@ def test_runc_running_itself_again_from_a_sealed_copy_is_not_an_escape(host):
     # An in-memory copy not named as runc's, from runc: an escape.
     w.handle(record('/memfd:payload', pid=806, parent=800, deleted=True, exe_file=(9, 79)))
     assert [f['subject'] for f in found] == ['process:803', 'process:804', 'process:805', 'process:806']
+
+
+def test_a_reused_process_id_does_not_keep_the_runtime_identity(host):
+    # runc's process ID, reused by a fork of a process that is not a runtime: that process's child running an
+    # in-memory copy named as runc's is an escape, not runc's setup step.
+    w, found = watch(host)
+    w.handle(record('/usr/bin/runc', pid=800, parent=1, exe_file=runc_file(host), cgroup=''))
+    w.handle(dict(kind='fork', pid=800, parent=555, start=9))
+    w.handle(record('/memfd:runc_cloned:/proc/self/exe', pid=801, parent=800, deleted=True, exe_file=(9, 77)))
+    assert [f['subject'] for f in found] == ['process:801'] and w.stats['runtime_steps'] == 0
+    # A fork of runc itself is still runc's: its child's setup step is not an escape.
+    w.handle(dict(kind='fork', pid=810, parent=820, start=10))
+    w.handle(record('/usr/bin/runc', pid=820, parent=1, exe_file=runc_file(host), cgroup=''))
+    w.handle(dict(kind='fork', pid=830, parent=820, start=11))
+    w.handle(record('/memfd:runc_cloned:/proc/self/exe', pid=831, parent=830, deleted=True, exe_file=(9, 78)))
+    assert len(found) == 1 and w.stats['runtime_steps'] == 1
+    # An exec whose inode is unknown forgets the one before it.
+    w.handle(record('/usr/bin/runc', pid=840, parent=1, exe_file=runc_file(host), cgroup=''))
+    w.handle(record('/tmp/.x/tool', pid=840, parent=1, exe_file=None, cgroup=''))
+    w.handle(record('/memfd:runc_cloned:/proc/self/exe', pid=841, parent=840, deleted=True, exe_file=(9, 79),
+                    cgroup=f'0::/docker/{"e" * 64}\n'))          # another container: not held back as a repeat
+    assert [f['subject'] for f in found] == ['process:801', 'process:841']
 
 
 def test_a_parent_from_before_the_trace_is_read_from_proc(host):
