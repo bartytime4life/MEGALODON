@@ -75,9 +75,13 @@ unit's or autostart file's `Exec` lines, a crontab's commands, a udev rule's
 `RUN`, and every line of a script, an at job, a shell startup file or
 `~/.ssh/rc`. Comments and settings are skipped. A program counts as run when it
 starts a command (after `;`, `&&`, `|`, `$(`), when it is handed to a shell or
-interpreter as a script (also on its input, `sh < file`; option arguments
-such as `-o errexit` are skipped), or when it is run from a `sh -c "..."`
-string (also combined options such as `-ec` or `-lc`). A file a command writes to or reads from
+interpreter as a script (also on its input, `sh < file`), or when it is run
+from a `sh -c "..."` string (also combined options such as `-ec` or `-lc`).
+Each interpreter's own options are read, up to the script: a shell's
+`-o errexit` or `--rcfile FILE`, Python's `-W`, Ruby's and Perl's `-I DIR`
+take an argument, while Python's `-I` does not; Perl's `-e`, Python's `-c`
+and `-m` run code, not a file. Whatever follows the script is the script's
+own arguments. A file a command writes to or reads from
 (`> /tmp/log`, `< /tmp/input`) is not a program it runs.
 
 | Sign | Severity | What it means |
