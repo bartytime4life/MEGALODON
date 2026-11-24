@@ -50,6 +50,11 @@ from . import respond_now
 SAMPLE_BYTES = 64 * 1024
 MIN_BYTES = 1024
 HIGH_ENTROPY = 7.5
+# Ransomware often encrypts only part of each file, for speed: the first few KiB, or strips spaced through it.
+# A 4 KiB block of ciphertext has an entropy near 7.95 bits per byte; text and uncompressed data stay far below.
+BLOCK_BYTES = 4096
+RANDOM_BLOCK = 7.5
+LATER_BYTES = 32 * 1024
 MAX_BASELINE = 50_000
 MAX_DIRS = 8192
 MAX_SUSPECTS = 16
@@ -68,6 +73,9 @@ _MAGIC = (
     (0, b'\xd0\xcf\x11\xe0'), (0, b'wOFF'), (0, b'\x00\x00\x01\x00'), (0, b'II*\x00'), (0, b'MM\x00*'),
     (0, b'8BPS'), (0, b'\x1aE\xdf\xa3'), (4, b'ftyp'), (0, b'BM'), (257, b'ustar'), (0, b'\x28\xb5\x2f\xfd'),
     (0, b'-----BEGIN'), (0, b'ssh-'), (0, b'\x04\x22\x4d\x18'),
+    # Formats whose body is compressed, so their first block looks random once the signature is gone: ar archives
+    # (.a, .deb, .rlib), LLVM bitcode and its wrapper, Java modules, Apple icons.
+    (0, b'!<arch>\n'), (0, b'BC\xc0\xde'), (0, b'\xde\xc0\x17\x0b'), (0, b'JM\x01\x00'), (0, b'icns'),
 )
 _NOTE = re.compile(
     r'(?i)^(?:[!_#@~-]*)(?:'
@@ -114,15 +122,27 @@ def _looks_text(data: bytes) -> bool:
     return printable >= 0.95 * max(1, len(text))
 
 
-def classify_bytes(data: bytes) -> str:
-    """'known' (recognized format), 'text', 'encrypted' (no signature, high entropy) or 'opaque'."""
+def _random_block(data: bytes) -> bool:
+    """Whether any whole 4 KiB block of ``data`` looks like ciphertext."""
+    return any(entropy(data[start:start + BLOCK_BYTES]) >= RANDOM_BLOCK
+               for start in range(0, len(data) - BLOCK_BYTES + 1, BLOCK_BYTES))
+
+
+def classify_bytes(data: bytes, later: bytes = b'') -> str:
+    """'known' (recognized format), 'text', 'encrypted' (no signature, high entropy) or 'opaque'.
+
+    A sample whose first 4 KiB block looks like ciphertext, with no signature, is encrypted even if the rest is
+    plain: its head was encrypted. A text file with a ciphertext-like block further on (``later``: samples from
+    its middle and end) was encrypted in strips."""
     if len(data) < MIN_BYTES:
         return 'small'
     if any(data[offset:offset + len(magic)] == magic for offset, magic in _MAGIC):
         return 'known'
     if _looks_text(data[:8192]):
-        return 'text'
-    return 'encrypted' if entropy(data) >= HIGH_ENTROPY else 'opaque'
+        return 'encrypted' if _random_block(data) or _random_block(later) else 'text'
+    if entropy(data) >= HIGH_ENTROPY or (len(data) >= BLOCK_BYTES and _random_block(data[:BLOCK_BYTES])):
+        return 'encrypted'
+    return 'opaque'
 
 
 def classify(path) -> str | None:
@@ -132,9 +152,16 @@ def classify(path) -> str | None:
     except OSError:
         return None
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
             return None
-        return classify_bytes(os.read(fd, SAMPLE_BYTES))
+        head = os.read(fd, SAMPLE_BYTES)
+        later = b''
+        if info.st_size > SAMPLE_BYTES and _looks_text(head[:8192]):
+            # A text file is text all the way through: look at its middle and its end too.
+            for offset in (info.st_size // 2, max(SAMPLE_BYTES, info.st_size - LATER_BYTES)):
+                later += os.pread(fd, LATER_BYTES, offset - offset % BLOCK_BYTES)
+        return classify_bytes(head, later)
     except OSError:
         return None
     finally:

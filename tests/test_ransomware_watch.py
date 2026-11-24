@@ -320,3 +320,67 @@ def test_host_findings_reach_alerts_without_addresses():
     assert "src_ip" not in sent[0]
     message = alerts.syslog_message(settings.destinations[0], sent[0]).decode()
     assert "RANSOMWARE_ENCRYPTION" in message and "src_ip" not in message and message.startswith("<130>1 ")
+
+
+# ------------------------------------------------------------- partial encryption
+
+CSV = "".join(f"{i},customer {i},order {i * 7},paid\n" for i in range(20000)).encode()  # 741 KB of text
+TABLE = b"SQLite format 3\x00" + bytes((i * 7) % 61 for i in range(400_000))  # an uncompressed format
+
+
+def cipher(size):
+    """Random bytes standing in for ciphertext, that do not start with a format signature."""
+    while True:
+        data = os.urandom(size)
+        if classify_bytes(data + bytes(4096)) != "known":
+            return data
+
+
+@pytest.mark.parametrize("original, kind", [(CSV, "text"), (TABLE, "known")], ids=["csv", "sqlite"])
+def test_a_file_with_only_its_head_encrypted_is_encrypted(tmp_path, original, kind):
+    path = write(tmp_path / "file", original)
+    assert classify(path) == kind
+    write(path, cipher(4096) + original[4096:])
+    assert classify(path) == "encrypted", "the rest of the file is plain, but its head is ciphertext"
+
+
+def test_a_text_file_encrypted_in_strips_is_encrypted(tmp_path):
+    path = tmp_path / "orders.csv"
+    strip = len(CSV) - 40_000  # Past the first 64 KiB, in the part the end sample covers.
+    write(path, CSV[:strip] + cipher(16_384) + CSV[strip + 16_384:])
+    assert classify(path) == "encrypted"
+    middle = len(CSV) // 2 - len(CSV) // 2 % 4096
+    write(path, CSV[:middle] + cipher(16_384) + CSV[middle + 16_384:])
+    assert classify(path) == "encrypted", "the middle is sampled too"
+    end = len(CSV) - rw.LATER_BYTES - (len(CSV) - rw.LATER_BYTES) % 4096 + 4096  # One block into the end sample.
+    write(path, CSV[:end] + cipher(4096) + CSV[end + 4096:])
+    assert classify(path) == "encrypted", "every block of the samples is looked at, not every few"
+    write(path, CSV[:200_000] + cipher(16_384) + CSV[200_000 + 16_384:])
+    assert classify(path) == "text", "a strip between the samples is not seen: a documented limit"
+
+
+def test_partial_encryption_does_not_make_ordinary_files_look_encrypted(tmp_path):
+    import base64
+    assert classify(write(tmp_path / "a.csv", CSV)) == "text"
+    assert classify(write(tmp_path / "b.b64", base64.encodebytes(os.urandom(300_000)))) == "text", \
+        "base64 is printable text, well below ciphertext's entropy"
+    assert classify(write(tmp_path / "c.db", TABLE)) == "known"
+    assert classify(write(tmp_path / "d.a", b"!<arch>\n" + os.urandom(20_000))) == "known"
+    assert classify(write(tmp_path / "e.bin", bytes(range(256)) * 4 + b"\x00\x01" * 2000)) == "opaque"
+    assert classify(write(tmp_path / "g.bin", b"\x00\x01" * 8000 + cipher(8192) + b"\x00\x01" * 8000)) == "opaque", \
+        "a binary with compressed data inside: only an unknown file's head is judged by blocks"
+    # A known compressed format encrypted in strips after its head still looks like itself: a documented limit.
+    assert classify(write(tmp_path / "f.zip", b"PK\x03\x04" + os.urandom(100) + cipher(70_000))) == "known"
+
+
+def test_head_encryption_of_documents_raises_the_alarm(tmp_path):
+    d, clock = detector()
+    paths = [write(tmp_path / f"orders{i}.csv", CSV[i * 1000:]) for i in range(5)]
+    d.seed([tmp_path])
+    found = []
+    for path in paths:
+        data = Path(path).read_bytes()
+        write(path, cipher(4096) + data[4096:])  # As families that encrypt the first few KiB of each file do.
+        found += d.written(path)
+        clock.now += 1
+    assert [f.rule_id for f in found] == ["RANSOMWARE_ENCRYPTION"] and found[0].severity == "CRITICAL"
