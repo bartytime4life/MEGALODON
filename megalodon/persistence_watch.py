@@ -111,13 +111,20 @@ FETCHERS = r'(?:curl|wget|fetch|lwp-download|aria2c)'
 SHELL_NAME = r'(?:/\S*/)?(?:(?:ba|da|z|k)?sh|python[0-9.]*|perl[0-9.]*)'
 SHELL = rf'(?:sudo\s+)?{SHELL_NAME}\b'
 SUBSTITUTED = rf'(?:\$\(|`)\s*{FETCHERS}\b'
+# Options that take the command to run, alone or combined with others: -c, -ec, -lc.
+COMMAND_OPTION = r'-[A-Za-z]*c[A-Za-z]*'
+# Shell and interpreter options followed by their own argument: bash -o errexit, -O extglob, --rcfile FILE;
+# python -W ignore, -X dev; perl -I dir.
+OPTIONS_WITH_ARGUMENT = frozenset({'-o', '+o', '-O', '+O', '--rcfile', '--init-file', '-W', '-X', '-I'})
+# What can stand before a command's own word: launchers (nohup, env, sudo...) and VAR=value assignments.
+PREFIXES = r'(?:(?:sudo|nohup|setsid|exec|env|nice|ionice|command|time|stdbuf|[A-Za-z_][A-Za-z0-9_]*=\S*)\s+)*'
 PATTERNS = (
     ('download_into_shell', re.compile(rf'\b{FETCHERS}\b[^|;&\n]*\|\s*{SHELL}')),
     # A download substituted where its output is run: as the command itself, by eval or exec, by sh -c, or fed to
     # source or a shell as a file. One only assigned to a variable or passed as an argument is not run.
-    ('download_into_shell', re.compile(rf'(?:^|[;&|]|\b(?:then|do|else))\s*["\']?{SUBSTITUTED}')),
+    ('download_into_shell', re.compile(rf'(?:^|[;&|]|\b(?:then|do|else))\s*{PREFIXES}["\']?{SUBSTITUTED}')),
     ('download_into_shell', re.compile(rf'\b(?:eval|exec)\s+["\']?{SUBSTITUTED}')),
-    ('download_into_shell', re.compile(rf'\b{SHELL_NAME}\s+(?:-\S+\s+)*-c\s+["\']?{SUBSTITUTED}')),
+    ('download_into_shell', re.compile(rf'\b{SHELL_NAME}\s+(?:-\S+\s+)*{COMMAND_OPTION}\s+["\']?{SUBSTITUTED}')),
     ('download_into_shell', re.compile(
         rf'(?:\b(?:source|{SHELL_NAME})|(?:^|[;&|])\s*\.)\s+(?:-\S+\s+)*<\(\s*{FETCHERS}\b')),
     ('decoded_into_shell', re.compile(rf'\bbase(?:64|32)\s+(?:-d|--decode|-D)\b[^;&\n]*\|\s*{SHELL}')),
@@ -183,7 +190,7 @@ def _run_words(command, depth=0):
             if redirect == 'in':
                 inputs.append(token)  # A file on standard input: a script, if a shell reads it.
             redirect = None
-        elif token and set(token) <= set(';&|()<>`') and ('<' in token or '>' in token) and not set(token) & set('()'):
+        elif token and set(token) <= set(';&|()<>`') and ('<' in token or '>' in token) and not set(token) & set('()`'):
             redirect = 'in' if '<' in token and '>' not in token else 'out'  # The next word is a file, not a command.
         elif token and set(token) <= set(';&|()<>`'):
             yield from _segment_words(segment, depth, inputs)
@@ -201,10 +208,18 @@ def _segment_words(words, depth, inputs=()):
     yield words[0]
     if INTERPRETERS.fullmatch(os.path.basename(words[0])):
         rest = words[1:]
-        if '-c' in rest and rest.index('-c') + 1 < len(rest) and depth < 2:
-            yield from _run_words(rest[rest.index('-c') + 1], depth + 1)
+        command = next((i for i, word in enumerate(rest) if re.fullmatch(COMMAND_OPTION, word)), None)
+        if command is not None and command + 1 < len(rest) and depth < 2:
+            yield from _run_words(rest[command + 1], depth + 1)
         elif '-e' not in rest:
-            scripts = [word for word in rest if not word.startswith('-')]
+            scripts, skip = [], False
+            for word in rest:
+                if skip:
+                    skip = False  # The argument of an option, not a script.
+                elif word in OPTIONS_WITH_ARGUMENT:
+                    skip = True
+                elif not word.startswith(('-', '+')):
+                    scripts.append(word)
             if scripts:
                 yield scripts[0]
             elif inputs:

