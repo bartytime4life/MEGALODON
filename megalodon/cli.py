@@ -366,6 +366,10 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--watchlist", type=Path,
                                  help="domain watchlist (default [threat_detection] watchlist_path in the settings)")
             command.add_argument("--respond", action="store_true", help=RESPOND_HELP)
+            command.add_argument("--trace-connects", action="store_true",
+                                 help="as root, load a small eBPF program that names the program behind every TCP "
+                                      "connection, so ones too short for a scan are named too; it is removed when "
+                                      "the watch stops")
         if name in ("check", "watch"):
             command.add_argument("--alert", action="store_true",
                                  help="also send findings to the [alerts] destinations in the settings file")
@@ -2162,7 +2166,19 @@ def _egress(args: argparse.Namespace) -> int:
                 except (ValueError, OSError) as exc:
                     print(f"megalodon: watchlist unavailable: {exc}", file=sys.stderr)
                     return 2
-            watcher = egress.Watcher(manifest, emit, interval=args.interval, names=names, watchlist=watchlist)
+            naming = None
+            if args.trace_connects:
+                from .connect_trace import TraceError
+                try:
+                    naming = egress.Naming()
+                except TraceError as exc:
+                    print(f"megalodon: connect tracing unavailable: {exc.strerror or exc}; short connections are "
+                          "reported by destination only", file=sys.stderr)
+                else:
+                    print("megalodon: connect tracing on: short connections are named by their program",
+                          file=sys.stderr)
+            watcher = egress.Watcher(manifest, emit, interval=args.interval, names=names, watchlist=watchlist,
+                                     naming=naming)
             stop = Event()
             try:
                 watcher.run(stop)
