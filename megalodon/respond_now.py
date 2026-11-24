@@ -80,14 +80,15 @@ class Responder:
 
 # The response engine's own reading of each live watch's findings: the same as the timer's pass, so a finding
 # decided here is the same signal the timer would decide, and is never decided twice.
-LIVE_SOURCES = ('ancestry', 'credentials', 'devices', 'egress')
+LIVE_SOURCES = ('ancestry', 'containers', 'credentials', 'devices', 'egress')
 
 
 def signals_of(source, finding):
     from . import response_engine
     from datetime import datetime, timezone
     report = dict(checked_at=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), findings=[finding])
-    reader = dict(ancestry=response_engine.ancestry_signals, credentials=response_engine.credential_signals,
+    reader = dict(ancestry=response_engine.ancestry_signals, containers=response_engine.container_signals,
+                  credentials=response_engine.credential_signals,
                   devices=response_engine.device_signals, egress=response_engine.egress_signals)[source]
     return reader(report)
 

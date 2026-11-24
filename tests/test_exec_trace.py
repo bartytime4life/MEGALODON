@@ -62,6 +62,22 @@ def test_the_exec_program(cwd, start):
     assert reads_start == (start is not None)
 
 
+@pytest.mark.parametrize('memory', [None, 4 * 8])
+def test_the_exec_program_reads_the_namespace_inode_and_control_groups(memory):
+    plain = decode(et.exec_program(9, (1280, 1268, 1560), (488, 496), EXE, (1816, 48, 40)))
+    full = decode(et.exec_program(9, (1280, 1268, 1560), (488, 496), EXE, (1816, 48, 40), ns=(1840, 24, 24),
+                                  inode=(32, 64, 40, 16), cgroup=(2376, 112, memory, 0, 256, 16, 8)))
+    jumps_land_inside(full)
+    strings = [imm for op, _, _, imm in full if op == 0x85].count(ct.PROBE_READ_KERNEL_STR)
+    assert strings == 2 * et.LEVELS + et.CG_LEVELS * (2 if memory is not None else 1)
+    # Each part is written where the record has it, at its size.
+    sizes = {(insn[3], full[i + 1][3]) for i, insn in enumerate(full[:-1]) if insn[0] == 0x07 and insn[1] == 1}
+    assert (et.EXEC_MNTNS, 4) in sizes and (et.EXEC_INO, 8) in sizes and (et.EXEC_DEV, 4) in sizes
+    assert (et.EXEC_CGROUP_DFL, et.CG_NAME) in sizes
+    assert ((et.EXEC_CGROUP_V1, et.CG_NAME) in sizes) == (memory is not None)
+    assert len(full) > len(plain)
+
+
 def test_the_fork_program_skips_new_threads():
     insns = decode(et.fork_program(9, 1264, 1268, 1560))
     jumps, exit_at = jumps_land_inside(insns)
@@ -95,13 +111,22 @@ def names(*parts):
     return out
 
 
+def group_names(*parts):
+    out = b''
+    for part in list(parts) + [''] * (et.CG_LEVELS - len(parts)):
+        out += part.encode().ljust(et.CG_NAME, b'\0')
+    return out
+
+
 def exec_record(exe=('agent', '.x', 'tmp', '/'), cwd=('.x', 'tmp', '/'), argv=b'/tmp/.x/agent\0-q\0',
-                length=None, exe_mount=5, cwd_mount=5, start=1_230_000_000, pid=4321, parent=77, comm=b'agent'):
+                length=None, exe_mount=5, cwd_mount=5, start=1_230_000_000, pid=4321, parent=77, comm=b'agent',
+                ino=0, dev=0, mnt_ns=0, unified=(), memory=()):
     head = struct.pack('<II', et.KIND_EXEC, parent) + struct.pack('<QQ', pid << 32 | pid, 1000 << 32 | 1000)
     head += comm.ljust(16, b'\0') + struct.pack('<Q', start)
     head += struct.pack('<IIII', len(argv) if length is None else length, exe_mount, cwd_mount, 0)
     assert len(head) == et.EXEC_EXE
     data = head + names(*exe) + names(*cwd) + argv.ljust(et.ARGV_BYTES, b'\0')[:et.ARGV_BYTES]
+    data += struct.pack('<QII', ino, dev, mnt_ns) + group_names(*unified) + group_names(*memory)
     assert len(data) == et.EXEC_BYTES
     return data
 
@@ -111,8 +136,28 @@ def test_an_exec_record():
     record = tracer().parse(exec_record())
     assert record == dict(kind='exec', pid=4321, parent=77, uid=1000, gid=1000, comm='agent',
                           start=1_230_000_000 // (10 ** 9 // hz), path='/tmp/.x/agent', deleted=False,
-                          argv=['/tmp/.x/agent', '-q'], cwd='/tmp/.x')
+                          argv=['/tmp/.x/agent', '-q'], cwd='/tmp/.x', mnt_ns=None, exe_file=None, cgroup='')
     assert tracer().parse(exec_record(exe=('helper', '.x', '/'), exe_mount=6))['path'] == '/dev/shm/.x/helper'
+
+
+def test_the_namespace_inode_and_control_groups_of_an_exec():
+    # The kernel's device number is major << 20 | minor; stat() gives it encoded for user space.
+    kernel_dev = 259 << 20 | 3
+    record = tracer().parse(exec_record(ino=4242, dev=kernel_dev, mnt_ns=4026531840,
+                                        unified=('docker-' + 'a' * 64 + '.scope', 'system.slice', ''),
+                                        memory=('c1', 'lxc.payload.web', '')))
+    assert record['mnt_ns'] == 4026531840
+    assert record['exe_file'] == (os.makedev(259, 3), 4242)
+    assert record['cgroup'] == f"0::/system.slice/docker-{'a' * 64}.scope\nmemory:/lxc.payload.web/c1\n"
+    # Names that ran out before the hierarchy's root: the path is partial; none read: left out.
+    deep = tracer().parse(exec_record(unified=tuple(f'g{i}' for i in range(et.CG_LEVELS))))
+    assert deep['cgroup'] == '0::…/' + '/'.join(f'g{i}' for i in reversed(range(et.CG_LEVELS))) + '\n'
+
+
+@pytest.mark.parametrize('parts, path', [(('b', 'a', ''), '/a/b'), (('b', 'a'), '…/a/b'), (('',), None),
+                                         ((), None)])
+def test_a_control_group_path(parts, path):
+    assert et.group_path(list(parts)) == path
 
 
 def test_the_command_line_stops_at_its_length():
