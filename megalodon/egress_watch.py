@@ -635,11 +635,100 @@ def check(manifest=DEFAULT_MANIFEST, *, root='/'):
     return report
 
 
+# ------------------------------------------------------------------ naming short connections (eBPF)
+
+NAMED_SECONDS = 900          # How long a traced connection waits to be matched with its closing.
+MAX_NAMED = 65536
+
+
+class Naming:
+    """Every outgoing TCP connection named by the program that made it, from connect_trace, read by a thread as it
+    is reported so the process can still be read from /proc: matched later with a connection heard closing."""
+
+    def __init__(self, root='/', *, trace=None, clock=time.monotonic):
+        import threading
+        from collections import OrderedDict
+        from . import connect_trace
+        base = Path(root, 'proc')
+        self.trace = trace or connect_trace.ConnectTrace(process=lambda pid: _proc_info(base / str(pid)))
+        self.own = net_namespaces._link(base / 'self/ns/net')
+        self.clock, self.named, self.lock, self.reading = clock, OrderedDict(), threading.Lock(), threading.Lock()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._read, name='megalodon-connect-trace', daemon=True)
+        self.thread.start()
+
+    def _read(self):
+        while not self.stop.is_set():
+            try:
+                if self.trace.wait(0.5):
+                    self.refresh()
+            except (OSError, ValueError):
+                if self.stop.is_set():
+                    return
+                raise
+
+    def refresh(self):
+        """Read what the trace has reported so far. The watch calls this before a lookup too: a closing can be
+        heard before this thread has woken, while its connect is already in the ring buffer."""
+        with self.reading:
+            self.add(self.trace.drain())
+
+    def add(self, traced):
+        now = self.clock()
+        with self.lock:
+            for item in traced:
+                space = f"net:[{item['netns']}]" if item.get('netns') else self.own
+                key = (space, item['address'], item['port'], item['local_port'])
+                self.named.pop(key, None)
+                self.named[key] = (now, item)
+                if len(self.named) > MAX_NAMED:
+                    self.named.popitem(last=False)
+            while self.named and now - next(iter(self.named.values()))[0] > NAMED_SECONDS:
+                self.named.popitem(last=False)
+
+    def lookup(self, namespace, address, port, local_port):
+        """The traced connection a closed one is, or None. `namespace` is None for this one."""
+        key = (namespace or self.own, str(address), port, local_port)
+        self.refresh()
+        with self.lock:
+            found = self.named.pop(key, None)
+        return found[1] if found else None
+
+    def close(self):
+        self.stop.set()
+        self.thread.join(2)
+        self.trace.close()
+
+
+def named(connection, traced):
+    """A connection heard closing, with the program the trace named, judged as a scanned one is: by its program.
+    None when the program cannot be named as a scan would name it: the process was gone, and the kernel's path
+    is partial, or an installed interpreter's, whose script is unknown. A shell or interpreter copied into a
+    temporary folder is named all the same: running from there is the finding."""
+    info = traced.get('process') or {}
+    who = dict(pid=traced['pid'], parent=traced['parent'], uid=traced['uid'], command=traced['comm'],
+               executable_in_kernel=traced.get('exe_tail'))
+    if info.get('path'):
+        executable, program, deleted = info['path'], identity(info), info.get('deleted', False)
+        script_run, argv, start = script(info), info.get('argv', [])[:8], info.get('start')
+    else:
+        tail = traced.get('exe_tail') or ''
+        if not tail.startswith('/') or (_program_kind(tail, traced['comm']) in ('interpreter', 'shell')
+                                        and not tail.startswith(TEMPORARY)):
+            return None         # A shell or interpreter installed where they belong: its script is unknown.
+        executable = program = tail
+        deleted, script_run, argv, start = False, None, [], None
+    found = dict(connection, pid=traced['pid'], executable=executable, deleted=deleted, script=script_run,
+                 argv=argv, start=start, traced=who)
+    found['program'] = _kind(connection.get('namespace'), connection.get('container')) + program
+    return found
+
+
 class Watcher:
     """Poll the socket tables and report each new finding once per hour."""
 
     def __init__(self, manifest=DEFAULT_MANIFEST, emit=print, *, root='/', interval=1.0, clock=time.monotonic,
-                 names=None, watchlist=None, closings='auto', warn=None):
+                 names=None, watchlist=None, closings='auto', warn=None, naming=None):
         self.manifest, self.emit, self.root, self.interval, self.clock = manifest, emit, root, interval, clock
         self.names, self.watchlist = names, watchlist
         self.baseline, self.loaded = read(manifest), self._stamp()
@@ -649,6 +738,9 @@ class Watcher:
         self.closings = _closings(root, closings)
         self.warn = warn or (lambda text: print(f'megalodon: {text}', file=sys.stderr, flush=True))
         self.live, self.listeners, self.containers, self.warned, self.missed = set(), {}, {}, set(), 0
+        # With connect tracing (eBPF, `watch --trace-connects`), connections heard closing are named by program.
+        self.naming = naming
+        self.stats['named'] = 0
         self._tell()
 
     def _tell(self):
@@ -687,7 +779,22 @@ class Watcher:
             if self.names is not None:
                 connection['names'] = self.names.lookup(connection['address'], connection['port'],
                                                         connection.get('local_port'))
-            for found in judge_closed(self.baseline, connection, self.watchlist):
+            traced = None if self.naming is None else self.naming.lookup(
+                space, closed['address'], closed['port'], closed['local_port'])
+            program = named(connection, traced) if traced else None
+            if program is not None:
+                self.stats['named'] += 1
+                findings = judge(self.baseline, program, self.watchlist)
+                for found in findings:
+                    found['evidence']['traced'] = program['traced']
+            else:
+                findings = judge_closed(self.baseline, connection, self.watchlist)
+                if traced:      # Named only partly: the kernel's path and the process, as a lead.
+                    for found in findings:
+                        found['evidence']['traced'] = dict(pid=traced['pid'], parent=traced['parent'],
+                                                           uid=traced['uid'], command=traced['comm'],
+                                                           executable_in_kernel=traced.get('exe_tail'))
+            for found in findings:
                 if self._report(found, now, _network(ipaddress.ip_address(connection['address']))):
                     out.append(found)
         self._tell()
@@ -749,3 +856,5 @@ class Watcher:
         finally:
             if self.closings is not None:
                 self.closings.close()
+            if self.naming is not None:
+                self.naming.close()
