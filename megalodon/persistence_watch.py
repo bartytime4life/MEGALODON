@@ -117,7 +117,7 @@ COMMAND_OPTION = r'-[A-Za-z]*c[A-Za-z]*'
 # read only up to the script: python -I takes no argument where ruby -I does, and bash -e is errexit where
 # perl -e is code.
 INTERPRETER_KINDS = (
-    ('shell', re.compile(r'(?:ba|da|z|k|mk|a)?sh|busybox')),
+    ('shell', re.compile(r'(?:ba|da|z|k|mk|a|hu)?sh')),
     ('python', re.compile(r'python[0-9.]*')),
     ('perl', re.compile(r'perl[0-9.]*')),
     ('ruby', re.compile(r'ruby[0-9.]*')),
@@ -224,6 +224,9 @@ def _segment_words(words, depth, inputs=()):
     if not words:
         return
     yield words[0]
+    if os.path.basename(words[0]) == 'busybox' and len(words) > 1:
+        words = words[1:]  # busybox APPLET [ARGS]: the applet is the program, as if run by its own name.
+        yield words[0]
     kind = _interpreter(os.path.basename(words[0]))
     if kind:
         yield from _script_words(kind, words[1:], depth, inputs)

