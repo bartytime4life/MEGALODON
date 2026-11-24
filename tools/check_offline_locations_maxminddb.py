@@ -1,6 +1,6 @@
 """Exercise the pinned maxminddb file-descriptor integration without pytest.
 
-The native installer CI lane runs this against maxminddb 3.2.0, which is
+The native installer CI lane runs this against maxminddb 3.3.0, which is
 otherwise absent from the general test environment.
 """
 from __future__ import annotations
@@ -34,8 +34,8 @@ def require_closed(descriptor: int) -> None:
 
 def main() -> None:
     version = importlib.metadata.version("maxminddb")
-    if version != "3.2.0":
-        raise AssertionError(f"expected pinned maxminddb 3.2.0, got {version}")
+    if version != "3.3.0":
+        raise AssertionError(f"expected pinned maxminddb 3.3.0, got {version}")
 
     with tempfile.TemporaryDirectory(prefix="megalodon-mmdb-") as raw_directory:
         directory = Path(raw_directory)
@@ -72,7 +72,7 @@ def main() -> None:
             except ValueError as error:
                 if not isinstance(error.__cause__, maxminddb.InvalidDatabaseError):
                     raise AssertionError(
-                        "real maxminddb 3.2.0 did not validate the database"
+                        "real maxminddb 3.3.0 did not validate the database"
                     ) from error
             else:
                 raise AssertionError("invalid MMDB was accepted")
@@ -104,7 +104,7 @@ def main() -> None:
             maxminddb.open_database = real_open_database
             os.open = real_os_open
 
-    print("OFFLINE_LOCATIONS_MAXMINDDB_3_2_0:PASS")
+    print("OFFLINE_LOCATIONS_MAXMINDDB_3_3_0:PASS")
 
 
 if __name__ == "__main__":
