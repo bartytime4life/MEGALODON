@@ -93,11 +93,12 @@ def snapshot(*, root='/', previous=None):
     for path in paths[:MAX_FILES]:
         name = _display(path, root)
         try:
-            info = os.lstat(path)
-            if not stat.S_ISREG(info.st_mode):
+            if not stat.S_ISREG(os.lstat(path).st_mode):
                 continue
             with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC), 'rb') as stream:
                 found = header(stream.read(HEADER_READ))
+                # The size after the header: journald grows a file before it records the larger arena.
+                info = os.fstat(stream.fileno())
         except OSError:
             gaps.append(name)
             continue
@@ -180,15 +181,27 @@ def _why_gone(before, old, new):
     if before['volatile']:
         if rebooted:
             return 'kept in memory, cleared at boot'
-        if any(not record['volatile'] and record['seqnum_id'] == before['seqnum_id'] and record['tail'] >= before['tail']
-               for record in new['files'].values()):
+        if _covered(before, [record for record in new['files'].values()
+                             if not record['volatile'] and record['seqnum_id'] == before['seqnum_id']
+                             and record['n_entries']]):
             return 'flushed to the persistent journal'
     if _active(before):
         return None  # journald never deletes the file it writes to.
-    # Vacuuming deletes the archived files of one folder, oldest first. Empty files have no first entry.
+    # Vacuuming deletes the archived files of one folder, oldest first, and never the files being written.
+    # Empty files have no first entry.
     folder = os.path.dirname(before['path'])
-    present = [record for record in new['files'].values()
-               if os.path.dirname(record['path']) == folder and record['n_entries']]
-    if present and all(_older(before, record) for record in present):
+    archived = [record for record in new['files'].values()
+                if os.path.dirname(record['path']) == folder and record['n_entries'] and not _active(record)]
+    if all(_older(before, record) for record in archived):
         return 'vacuumed (oldest first)'
     return None
+
+
+def _covered(before, records):
+    """Whether the entry numbers of ``records`` together run through all of ``before``'s, with no hole."""
+    reach = before['head'] - 1
+    for record in sorted(records, key=lambda item: item['head']):
+        if record['head'] > reach + 1:
+            break
+        reach = max(reach, record['tail'])
+    return reach >= before['tail']

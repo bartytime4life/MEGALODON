@@ -68,9 +68,15 @@ never written again.
 | `JOURNAL_ARCHIVE_CHANGED` | HIGH | An archived (or `~` corrupt) file's content changed |
 
 Files are followed by their file ID, so rotation to an `@` name is not a
-change. These stay quiet, and are listed under `journals.explained`:
+change. The vacuum order is judged among archived files only, since
+vacuuming never touches the files being written. `journalctl --vacuum-time=`
+and `--vacuum-size=` rotate the active files first, then delete the oldest
+archives. A vacuum that also deletes the files that were being written at the
+previous check removes the newest records, and is reported: that is how
+`journalctl` can be used to wipe the journal. These stay quiet, and are listed under `journals.explained`:
 vacuuming, an empty file removed at rotation, and an in-memory journal
-flushed to disk or cleared at boot. Files journald renamed with `~` after
+flushed to disk (when persistent files hold every entry number it held) or
+cleared at boot. Files journald renamed with `~` after
 finding them damaged are listed under `journals.corrupt`. Journal files that
 cannot be read are listed under `journals.gaps` and keep their record.
 
@@ -131,6 +137,9 @@ A baseline made before the content digests compares only the first 4 KiB.
   hashed. Only once it is archived is its content fixed. Forward-secure
   sealing (`journalctl --setup-keys`, verified with the key kept off the
   machine) covers entries as they are written.
+* **Deleting the oldest journal archives by hand looks like vacuuming,**
+  down to deleting every archive while the active files stay. Only a deletion
+  out of order, or of a file that was being written, is reported.
 * **An archived journal is read again only when its size or change times
   change.** Writing to a file sets its change time, which cannot be set back
   without changing the system clock.
