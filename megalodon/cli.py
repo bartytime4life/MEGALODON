@@ -232,10 +232,14 @@ def build_parser() -> argparse.ArgumentParser:
     persist = sub.add_parser(
         "persistence", help="baseline and check where attackers hide to survive reboots (exit 1 on changes)")
     persist_sub = persist.add_subparsers(dest="persistence_command", required=True)
-    for name, text in (("baseline", "record the current state of every persistence location"),
+    for name, text in (("baseline", "record the current state of every persistence location (exit 1 if an entry "
+                                    "has signs of an intruder's)"),
                        ("check", "report what was added, changed or removed since the baseline"),
-                       ("accept", "after review, record the current state as the new baseline")):
+                       ("accept", "after review, record the current state as the new baseline"),
+                       ("scan", "report entries with signs of an intruder's now, recording nothing (exit 1 if any)")):
         command = persist_sub.add_parser(name, help=text)
+        if name == "scan":
+            continue
         command.add_argument("--manifest", type=Path, help="baseline file (default ~/.config/megalodon/persistence.json)")
         if name == "baseline":
             command.add_argument("--replace", action="store_true", help="overwrite an existing baseline")
@@ -1755,12 +1759,14 @@ def _persistence(args: argparse.Namespace) -> int:
     from . import persistence_watch as watch
     from .validation import ValidationError
 
-    manifest = args.manifest or Path(watch.DEFAULT_MANIFEST).expanduser()
+    manifest = getattr(args, "manifest", None) or Path(watch.DEFAULT_MANIFEST).expanduser()
     try:
         if args.persistence_command == "baseline":
             result = watch.baseline(manifest, replace=args.replace)
         elif args.persistence_command == "accept":
             result = watch.accept(manifest)
+        elif args.persistence_command == "scan":
+            result = watch.scan()
         else:
             result = watch.check(manifest)
     except (watch.PersistenceError, OSError) as exc:
@@ -1784,7 +1790,7 @@ def _persistence(args: argparse.Namespace) -> int:
                 f"{len(findings)} persistence changes since the baseline: {listed}",
                 tuple(sorted({f['technique'] for f in findings}))[:8],
                 "A place attackers use to survive reboots changed since the reviewed baseline.")])
-    return 1 if findings else 0
+    return 1 if findings or result.get("suspicious") else 0
 
 
 def _listeners(args: argparse.Namespace) -> int:
