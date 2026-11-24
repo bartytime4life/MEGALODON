@@ -65,7 +65,7 @@ def locked_wheels(checkout):
     lines = [line for line in installer_raw.decode("utf-8").splitlines()
              if line and not line.startswith("#")]
     require(len(lines) == 3 and lines[0] == "-r build-linux-cp312.txt", "INSTALLER_LOCK_SET")
-    match = re.fullmatch(r"maxminddb==3\.2\.0 --hash=sha256:([0-9a-f]{64})", lines[1])
+    match = re.fullmatch(r"maxminddb==3\.3\.0 --hash=sha256:([0-9a-f]{64})", lines[1])
     require(match is not None, "INSTALLER_LOCK_FORMAT")
     result[GEO_WHEEL] = "sha256:" + match.group(1)
     match = re.fullmatch(r"pyyaml==6\.0\.3 --hash=sha256:([0-9a-f]{64})", lines[2])
