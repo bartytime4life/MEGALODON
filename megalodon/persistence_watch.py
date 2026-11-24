@@ -108,10 +108,18 @@ INTERPRETERS = re.compile(r'(?:ba|da|z|k|mk|a)?sh|busybox|python[0-9.]*|perl[0-9
 LAUNCHERS = frozenset({'sudo', 'nohup', 'setsid', 'exec', 'env', 'nice', 'ionice', 'command', 'builtin', 'time',
                        'chrt', 'taskset', 'stdbuf', 'flock'})
 FETCHERS = r'(?:curl|wget|fetch|lwp-download|aria2c)'
-SHELL = r'(?:sudo\s+)?(?:/\S*/)?(?:(?:ba|da|z|k)?sh|python[0-9.]*|perl[0-9.]*)\b'
+SHELL_NAME = r'(?:/\S*/)?(?:(?:ba|da|z|k)?sh|python[0-9.]*|perl[0-9.]*)'
+SHELL = rf'(?:sudo\s+)?{SHELL_NAME}\b'
+SUBSTITUTED = rf'(?:\$\(|`)\s*{FETCHERS}\b'
 PATTERNS = (
     ('download_into_shell', re.compile(rf'\b{FETCHERS}\b[^|;&\n]*\|\s*{SHELL}')),
-    ('download_into_shell', re.compile(rf'(?:\$\(|`|<\()\s*{FETCHERS}\b')),
+    # A download substituted where its output is run: as the command itself, by eval or exec, by sh -c, or fed to
+    # source or a shell as a file. One only assigned to a variable or passed as an argument is not run.
+    ('download_into_shell', re.compile(rf'(?:^|[;&|]|\b(?:then|do|else))\s*["\']?{SUBSTITUTED}')),
+    ('download_into_shell', re.compile(rf'\b(?:eval|exec)\s+["\']?{SUBSTITUTED}')),
+    ('download_into_shell', re.compile(rf'\b{SHELL_NAME}\s+(?:-\S+\s+)*-c\s+["\']?{SUBSTITUTED}')),
+    ('download_into_shell', re.compile(
+        rf'(?:\b(?:source|{SHELL_NAME})|(?:^|[;&|])\s*\.)\s+(?:-\S+\s+)*<\(\s*{FETCHERS}\b')),
     ('decoded_into_shell', re.compile(rf'\bbase(?:64|32)\s+(?:-d|--decode|-D)\b[^;&\n]*\|\s*{SHELL}')),
     ('shell_network_redirect', re.compile(r'/dev/(?:tcp|udp)/[^/\s]+/\d+')),
 )
@@ -169,16 +177,22 @@ def _tokens(command):
 def _run_words(command, depth=0):
     """The programs and scripts a command line starts: each segment's first word, a script handed to an
     interpreter, and what an interpreter's ``-c`` runs."""
-    segment = []
+    segment, inputs, redirect = [], [], None
     for token in _tokens(command) + [';']:
-        if token and set(token) <= set(';&|()<>`'):
-            yield from _segment_words(segment, depth)
-            segment = []
+        if redirect:
+            if redirect == 'in':
+                inputs.append(token)  # A file on standard input: a script, if a shell reads it.
+            redirect = None
+        elif token and set(token) <= set(';&|()<>`') and ('<' in token or '>' in token) and not set(token) & set('()'):
+            redirect = 'in' if '<' in token and '>' not in token else 'out'  # The next word is a file, not a command.
+        elif token and set(token) <= set(';&|()<>`'):
+            yield from _segment_words(segment, depth, inputs)
+            segment, inputs = [], []
         else:
             segment.append(token)
 
 
-def _segment_words(words, depth):
+def _segment_words(words, depth, inputs=()):
     while words and (words[0] in LAUNCHERS or words[0] in ('{', '}', '!', 'then', 'do', 'else', 'if', 'while')
                      or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', words[0]) or words[0].startswith('-')):
         words = words[1:]
@@ -193,6 +207,8 @@ def _segment_words(words, depth):
             scripts = [word for word in rest if not word.startswith('-')]
             if scripts:
                 yield scripts[0]
+            elif inputs:
+                yield inputs[0]  # sh < /tmp/script
 
 
 def _signs(text, category, path):

