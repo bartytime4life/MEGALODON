@@ -126,6 +126,9 @@ def test_the_program_filters_syn_sent_and_every_jump_lands_on_an_instruction(ext
     (['helper', '.x', '/', '', '', ''], None, '…/.x/helper'),                          # a mount not ours to read
     (['python3.13', 'bin', 'local', 'usr', 'opt', 'srv'], ('/', '/'), '…/srv/opt/usr/local/bin/python3.13'),
     (['', '', '', '', '', ''], ('/', '/'), None),
+    # From review: a name that fills the kernel's 64-byte buffer may have been cut short, so the path is partial.
+    (['a' * 63, '.x', 'tmp', '/', '', ''], ('/', '/'), '…/tmp/.x/' + 'a' * 63),
+    (['a' * 62, '.x', 'tmp', '/', '', ''], ('/', '/'), '/tmp/.x/' + 'a' * 62),
 ])
 def test_the_kernel_path_tail(names, mount, tail):
     assert ct._tail(names, mount) == tail
@@ -244,29 +247,45 @@ def traced(**kw):
     return base
 
 
+def closing(**kw):
+    import ipaddress
+    base = dict(protocol='tcp', local=ipaddress.ip_address('10.0.0.2'), local_port=51000,
+                address=ipaddress.ip_address('9.9.9.9'), port=443, sent=5, received=0)
+    base.update(kw)
+    return base
+
+
 def test_naming_matches_a_closing_and_forgets_old_ones():
+    import ipaddress
     fake = FakeTrace()
     naming = ew.Naming(trace=fake, clock=lambda: now[0])
     now = [0.0]
     try:
         fake.items.append(traced())
-        assert naming.lookup(None, '9.9.9.9', 443, 51000)['pid'] == 4242, 'read before the lookup'
-        assert naming.lookup(None, '9.9.9.9', 443, 51000) is None, 'matched once'
+        assert naming.lookup(None, closing())['pid'] == 4242, 'read before the lookup'
+        assert naming.lookup(None, closing()) is None, 'matched once'
         naming.add([traced(netns=7)])
-        assert naming.lookup(None, '9.9.9.9', 443, 51000) is None, 'another namespace'
-        assert naming.lookup('net:[7]', '9.9.9.9', 443, 51000)['pid'] == 4242
+        assert naming.lookup(None, closing()) is None, 'another namespace'
+        assert naming.lookup('net:[7]', closing())['pid'] == 4242
+        # From review: the whole identity is matched, protocol and local address included.
+        naming.add([traced()])
+        assert naming.lookup(None, closing(protocol='udp')) is None, 'a UDP socket is not the TCP connection'
+        assert naming.lookup(None, closing(local=ipaddress.ip_address('10.0.0.3'))) is None, 'another local address'
+        assert naming.lookup(None, closing())['pid'] == 4242, 'and the TCP connection is still there to match'
+        naming.add([traced(local_address='10.0.0.2'), traced(local_address='10.0.0.3', pid=99)])
+        assert naming.lookup(None, closing())['pid'] == 4242, 'two local addresses do not overwrite each other'
+        assert naming.lookup(None, closing(local=ipaddress.ip_address('10.0.0.3')))['pid'] == 99
         naming.add([traced()])
         now[0] = ew.NAMED_SECONDS + 1
         naming.add([])
-        assert naming.lookup(None, '9.9.9.9', 443, 51000) is None, 'too old to be matched'
+        assert naming.lookup(None, closing()) is None, 'too old to be matched'
     finally:
         naming.close()
     assert fake.closed
 
 
 def test_a_named_closing_is_judged_by_its_program():
-    connection = ew.heard(dict(protocol='tcp', address=__import__('ipaddress').ip_address('9.9.9.9'), port=443,
-                               local_port=51000, sent=10, received=20))
+    connection = ew.heard(closing(sent=10, received=20))
     found = ew.named(connection, traced())
     assert found['program'] == '/tmp/.x/agent' and found['argv'] == ['/tmp/.x/agent', '-q']
     assert found['traced']['parent'] == 1
@@ -307,8 +326,7 @@ def test_the_watch_names_a_short_connection_it_would_otherwise_report_by_destina
     import ipaddress
     manifest = tmp_path / 'egress.json'
     ew._write(manifest, ew._empty())
-    closed = dict(protocol='tcp', address=ipaddress.ip_address('9.9.9.9'), port=443, local_port=51000, sent=5,
-                  received=0)
+    closed = closing()
     plain = ew.Watcher(manifest, emit=lambda f: None, closings=FakeClosings([(None, closed)]))
     assert [f['rule_id'] for f in plain.hear()] == ['BRIEF_OUTBOUND_CONNECTION']
     fake = FakeTrace()

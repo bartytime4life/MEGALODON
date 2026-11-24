@@ -678,7 +678,8 @@ class Naming:
         with self.lock:
             for item in traced:
                 space = f"net:[{item['netns']}]" if item.get('netns') else self.own
-                key = (space, item['address'], item['port'], item['local_port'])
+                key = (space, item['protocol'], item['local_address'], item['local_port'], item['address'],
+                       item['port'])
                 self.named.pop(key, None)
                 self.named[key] = (now, item)
                 if len(self.named) > MAX_NAMED:
@@ -686,9 +687,11 @@ class Naming:
             while self.named and now - next(iter(self.named.values()))[0] > NAMED_SECONDS:
                 self.named.popitem(last=False)
 
-    def lookup(self, namespace, address, port, local_port):
-        """The traced connection a closed one is, or None. `namespace` is None for this one."""
-        key = (namespace or self.own, str(address), port, local_port)
+    def lookup(self, namespace, closed):
+        """The traced connection a closed one is, by its whole identity: namespace (None for this one), protocol,
+        and both addresses and ports. None when it is not one."""
+        key = (namespace or self.own, closed['protocol'], str(closed['local']), closed['local_port'],
+               str(closed['address']), closed['port'])
         self.refresh()
         with self.lock:
             found = self.named.pop(key, None)
@@ -779,8 +782,7 @@ class Watcher:
             if self.names is not None:
                 connection['names'] = self.names.lookup(connection['address'], connection['port'],
                                                         connection.get('local_port'))
-            traced = None if self.naming is None else self.naming.lookup(
-                space, closed['address'], closed['port'], closed['local_port'])
+            traced = None if self.naming is None else self.naming.lookup(space, closed)
             program = named(connection, traced) if traced else None
             if program is not None:
                 self.stats['named'] += 1
