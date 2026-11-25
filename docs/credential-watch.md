@@ -115,7 +115,8 @@ small reader started at once from a hidden temporary folder were all
   one of 24 bytes into an 8 MiB ring buffer, which the watch empties as they
   arrive and reads each new program's `/proc` entry once. If programs start
   faster than that, the kernel drops records, and those readers are named as
-  they were without the trace.
+  they were without the trace. The programs count the records dropped, and
+  the statistics printed when the watch stops show them as `trace_dropped`.
 
 ## What is watched, and who may read it
 

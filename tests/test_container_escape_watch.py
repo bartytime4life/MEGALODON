@@ -29,8 +29,11 @@ def record(path='/usr/bin/cat', pid=900, parent=800, mnt=HOST, cgroup=DOCKER, ex
 
 
 class Trace:
-    def __init__(self, records=()):
-        self.records, self.closed = list(records), False
+    def __init__(self, records=(), dropped=(0,)):
+        self.records, self.closed, self.drops = list(records), False, list(dropped)
+
+    def dropped(self):
+        return self.drops.pop(0) if len(self.drops) > 1 else self.drops[0]
 
     def wait(self, seconds):
         time.sleep(min(seconds, 0.01))
@@ -165,7 +168,7 @@ def test_the_same_program_from_the_same_container_is_reported_once_an_hour(host)
     now[0] = cw.COOLDOWN_SECONDS
     w.handle(record('/usr/bin/cat', pid=904))
     assert [f['subject'] for f in found] == ['process:900', 'process:902', 'process:903', 'process:904']
-    assert w.stats == dict(execs=5, escapes=4, repeats=1, runtime_steps=0)
+    assert w.stats == dict(execs=5, escapes=4, repeats=1, runtime_steps=0, dropped=0)
 
 
 def test_where_the_host_namespace_is_read(tmp_path):
@@ -180,19 +183,30 @@ def test_where_the_host_namespace_is_read(tmp_path):
 
 
 def test_the_watch_runs_until_stopped_and_closes_the_trace(host):
-    found = []
-    trace = Trace([record()])
-    w = cw.EscapeWatch(found.append, trace, root=str(host))
+    found, told = [], []
+    trace = Trace([record()], dropped=[2])
+    w = cw.EscapeWatch(found.append, trace, root=str(host), notice=told.append)
     stop = threading.Event()
     worker = threading.Thread(target=w.run, args=(stop,), kwargs=dict(timeout=0.01))
     worker.start()
     deadline = time.monotonic() + 3
-    while not found and time.monotonic() < deadline:
+    while not (found and told) and time.monotonic() < deadline:
         time.sleep(0.01)
     stop.set()
     worker.join(5)
     w.close()
     assert len(found) == 1 and trace.closed
+    assert told == [2], 'the loop checks what the trace lost'
+
+
+def test_records_the_trace_had_no_room_for_are_told(host):
+    # Each time more are lost, the watch says how many: an escape among them is not reported.
+    told = []
+    trace = Trace(dropped=[0, 0, 4, 4, 9])
+    w = cw.EscapeWatch(lambda f: None, trace, root=str(host), notice=told.append)
+    for _ in range(5):
+        w._dropped()
+    assert told == [4, 9] and w.stats['dropped'] == 9
 
 
 def test_a_live_escape_is_decided_as_the_timer_would_decide_it(host):
@@ -216,16 +230,17 @@ def test_the_command_line(monkeypatch, capsys, host):
     assert exit_.value.code == 2
     assert 'exec tracing unavailable: the kernel refused the program' in capsys.readouterr().err
 
-    monkeypatch.setattr(exec_trace, 'ExecTrace', lambda: Trace([record()]))
+    monkeypatch.setattr(exec_trace, 'ExecTrace', lambda: Trace([record()], dropped=[3]))
     real = cw.EscapeWatch
 
     class Once(real):
         def __init__(self, emit, trace, **kw):
-            super().__init__(emit, trace, root=str(host))
+            super().__init__(emit, trace, **dict(kw, root=str(host)))
 
         def run(self, stop, timeout=0.5):
             for item in self.trace.drain():
                 self.handle(item)
+            self._dropped()
     monkeypatch.setattr(cw, 'EscapeWatch', Once)
     with pytest.raises(SystemExit) as exit_:
         main(['containers', 'watch'])
@@ -233,6 +248,7 @@ def test_the_command_line(monkeypatch, capsys, host):
     assert exit_.value.code == 0
     assert json.loads(out.out.splitlines()[0])['rule_id'] == 'CONTAINER_ESCAPE'
     assert '"escapes": 1' in out.err and "process 1's" in out.err
+    assert 'no room for 3 execs and forks so far' in out.err and '"dropped": 3' in out.err
 
 
 # ------------------------------------------------------------- live: a throwaway runc container

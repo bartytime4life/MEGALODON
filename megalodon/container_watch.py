@@ -625,8 +625,11 @@ class EscapeWatch:
     """Report each program started in the host's mount namespace from a container's control group, as the kernel
     starts it (an :class:`exec_trace.ExecTrace`), so an escape that finishes within a second is reported too."""
 
-    def __init__(self, emit, trace, *, root='/', api=None, clock=time.monotonic):
+    def __init__(self, emit, trace, *, root='/', api=None, clock=time.monotonic, notice=None):
         self.emit, self.trace, self.root, self.clock = emit, trace, root, clock
+        # Told how many records the trace's ring buffer had no room for, each time more are lost: an escape among
+        # them is not reported.
+        self.notice = notice or (lambda dropped: None)
         self.host_mnt, self.host_from = host_mount_namespace(root)
         if self.host_mnt is None:
             raise ContainerError('the host\'s mount namespace cannot be read' + _why())
@@ -634,7 +637,7 @@ class EscapeWatch:
         self.names = _names(root, api)
         self.exes = {}                  # pid -> the executable of its last exec, by (device, inode)
         self.last = {}
-        self.stats = dict(execs=0, escapes=0, repeats=0, runtime_steps=0)
+        self.stats = dict(execs=0, escapes=0, repeats=0, runtime_steps=0, dropped=0)
 
     def _remember(self, pid, exe):
         self.exes.pop(pid, None)
@@ -723,6 +726,13 @@ class EscapeWatch:
             self.trace.wait(timeout)
             for record in self.trace.drain():
                 self.handle(record)
+            self._dropped()
+
+    def _dropped(self):
+        dropped = self.trace.dropped()
+        if dropped > self.stats['dropped']:
+            self.stats['dropped'] = dropped
+            self.notice(dropped)
 
     def close(self):
         self.trace.close()

@@ -116,6 +116,10 @@ since it was gone within a second; `watch` reported it.
   `/proc`.
 * **Once an hour.** The same program from the same container is reported
   once an hour; the statistics printed when the watch stops count the rest.
+* **Records the kernel had no room for.** If programs start faster than the
+  watch reads, the kernel drops records, and an escape among them is not
+  reported. The programs count them: each time the count rises, the watch
+  says so on standard error, and its statistics show it as `dropped`.
 * **Response.** With `--respond`, each finding is decided at once by the
   **container-escape** playbook, as the pass would decide it, and the same
   process is decided only once. With `--alert`, findings also go to the
