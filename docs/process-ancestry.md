@@ -78,6 +78,8 @@ instead, and all 20 were reported, each with its arguments.
   still leads back to the service. A parent the trace recorded is taken as
   its records left it, not as `/proc` shows it later: a startup script that
   ran `id` and then became `nginx` is not reported as `nginx` running `id`.
+  A parent known only from `/proc`, such as one started before the watch, is
+  read from `/proc` again each time.
 * **Lost records.** If programs start faster than the watch reads, the
   kernel has no room for some records. The statistics printed when the watch
   stops count them as `trace_dropped`.

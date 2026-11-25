@@ -379,21 +379,21 @@ class Judge:
                 processes=[dict(program=proc.path, pid=proc.pid, start=proc.start)]))
 
 
-def _ancestors(base, proc, cache, parent_of, forked=lambda pid: False, recorded=False):
+def _ancestors(base, proc, cache, parent_of, forked=lambda pid: False, recorded=lambda pid: False):
     """Parents up to init. A parent that already exited comes from the cache, so `sh -c 'id &'` run by a
     service still leads back to it after the shell is gone and `id` was reparented.
 
     A cached parent is trusted over the live process at that PID only when a fork event tied this child to
     it (`forked`). Otherwise the PID may simply have been reused, and the live process is the parent.
 
-    With ``recorded`` (the exec trace), the cache holds each process as its exec and fork records left it,
-    in order, and is always trusted: /proc is read later, and may show a program run since, with the same
-    start time."""
+    A parent ``recorded`` by the exec trace is as its exec and fork records left it, in order, and is trusted:
+    /proc is read later, and may show a program run since, with the same start time. One known only from /proc,
+    such as a process started before the watch, is read again, as without the trace."""
     chain, seen, child, ppid = [], {proc.pid}, proc, parent_of(proc)
     while ppid and ppid not in seen and len(chain) < MAX_DEPTH:
         seen.add(ppid)
         cached = cache.get(ppid)
-        if recorded and cached is not None:
+        if cached is not None and recorded(ppid):
             chain.append(cached)
             child, ppid = cached, parent_of(cached)
             continue
@@ -544,6 +544,7 @@ class Watcher:
         self.emit, self.clock = emit, clock
         self.parents: OrderedDict = OrderedDict()   # child -> parent, from fork events
         self.cache: OrderedDict = OrderedDict()     # pid -> Proc, for ancestors that exit quickly
+        self.recorded: OrderedDict = OrderedDict()  # pid -> the cached Proc, when it came from the exec trace
         self.last: dict = {}
         self.stats = dict(started=0, vanished=0, lost=0, findings=0)
         # An exec trace (exec_trace.ExecTrace) gives each started program as the kernel recorded it at its exec:
@@ -567,6 +568,11 @@ class Watcher:
         while len(table) > MAX_TRACKED:
             table.popitem(last=False)
 
+    def _recorded(self, pid):
+        # From the exec trace, and not replaced since by what /proc showed.
+        entry = self.recorded.get(pid)
+        return entry is not None and entry is self.cache.get(pid)
+
     def _parent_of(self, proc):
         # The process that forked it, as the kernel reported; /proc shows init once that parent exits.
         return self.parents.get(proc.pid, proc.ppid)
@@ -580,15 +586,18 @@ class Watcher:
             # Until it execs, a forked child runs its parent's program: remember it so, in case it exits
             # before anything it starts is examined (a subshell in `sh -c '(id &)'`).
             known = self.cache.get(parent)
-            # With the trace, a recorded parent is as its records left it: /proc may show a program run since.
-            live = None if self.trace is not None and known is not None else read_proc(self.base, parent)
+            # A parent the trace recorded is as its records left it: /proc may show a program run since.
+            recorded = self._recorded(parent)
+            live = None if recorded else read_proc(self.base, parent)
             if live is not None and (known is None or known.start != live.start):
                 # The parent's PID may have been reused since it was last seen: the forking process is the live one.
                 known = live
                 self._remember(self.cache, parent, live)
             if known is not None:
-                self._remember(self.cache, pid, Proc(pid, parent, known.path, known.comm, known.uid, None,
-                                                     list(known.argv), known.cwd))
+                child = Proc(pid, parent, known.path, known.comm, known.uid, None, list(known.argv), known.cwd)
+                self._remember(self.cache, pid, child)
+                if recorded:
+                    self._remember(self.recorded, pid, child)
             return None
         self.stats['started'] += 1
         proc = read_proc(self.base, pid)
@@ -606,13 +615,16 @@ class Watcher:
             return None
         self.stats['started'] += 1
         return self._started(Proc(record['pid'], record['parent'], record['path'] or '', record['comm'],
-                                  record['uid'], record['start'], list(record['argv']), record['cwd'] or ''))
+                                  record['uid'], record['start'], list(record['argv']), record['cwd'] or ''),
+                             recorded=True)
 
-    def _started(self, proc):
+    def _started(self, proc, recorded=False):
         pid = proc.pid
         self._remember(self.cache, pid, proc)
+        if recorded:
+            self._remember(self.recorded, pid, proc)
         chain = _ancestors(self.base, proc, _BoundedCache(self.cache, self._remember), self._parent_of,
-                           forked=lambda child: child in self.parents, recorded=self.trace is not None)
+                           forked=lambda child: child in self.parents, recorded=self._recorded)
         found = self.judge.judge(proc, chain, _now())
         if not found:
             return None
