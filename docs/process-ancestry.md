@@ -16,7 +16,8 @@ megalodon ancestry check
 
 * **`watch`** reports each program a service starts, as it starts, as one
   JSON line per finding. Run as root, it uses the kernel's process events, so
-  a command that ends within milliseconds (`id`, `uname -a`) is still seen.
+  a command that ends within milliseconds (`id`, `uname -a`) is still seen
+  while the watch keeps up; with `--trace-execs`, also when it falls behind.
   Without root it scans `/proc` every `--interval` seconds (default 0.25) and
   misses programs that end sooner.
   With `--respond`, it decides each finding itself, at once, and runs
@@ -53,6 +54,36 @@ megalodon ancestry check
 
 With `--alert`, findings also go to the
 [off-machine alerts](off-machine-alerts.md).
+
+### Commands gone before they are read: `watch --trace-execs`
+
+```bash
+sudo megalodon ancestry watch --trace-execs
+```
+
+The process events give only a process ID; the watch then reads the program
+and its arguments from `/proc`. When commands come faster than the watch
+reads them, as a script run through a web shell does, some are gone by then.
+They are counted as `vanished` and not judged, and one read as it exits has
+no program or arguments. On this machine, a program named `nginx` started 20
+different quick commands at once: 2 of them were reported.
+`--trace-execs` loads the [exec trace](credential-watch.md#naming-readers-gone-at-once-watch---trace-execs)
+instead, and all 20 were reported, each with its arguments.
+
+* **How.** Each started program is judged as the kernel recorded it at its
+  exec: its program, arguments, working folder, account, parent and start
+  time. That record is its identity, even when `/proc` shows something else
+  by the time it is read. Each exec and fork is also remembered, so a parent
+  that already exited, such as the `sh -c` between a service and the command,
+  still leads back to the service.
+* **Lost records.** If programs start faster than the watch reads, the
+  kernel has no room for some records. The statistics printed when the watch
+  stops count them as `trace_dropped`.
+* **What it changes.** As with the other watches, the programs only read, and
+  are removed when the watch stops. It needs root, a kernel with BTF and BPF
+  ring buffers (Linux 5.8 or later), on x86-64 or arm64. Where they cannot be
+  loaded, the watch says why and uses the process events. The scheduler runs
+  `ancestry watch` without it.
 
 ## What is reported
 
@@ -149,4 +180,6 @@ line (up to 512 bytes), the service and the chain of parents.
   `python3 -c 'import pty; ...'`, is not reported, but the shell it then
   starts is.
 * **The kernel can drop events under heavy load.** The watch counts this as
-  `lost` in the statistics it prints when it stops.
+  `lost` in the statistics it prints when it stops (`trace_dropped` with
+  `--trace-execs`). Without `--trace-execs`, a command gone before the watch
+  reads it is counted as `vanished` and not judged.

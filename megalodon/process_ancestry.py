@@ -529,7 +529,8 @@ class Poller:
 
 
 class Watcher:
-    def __init__(self, emit, *, root='/', allow_path=None, source=None, interval=0.25, clock=time.monotonic):
+    def __init__(self, emit, *, root='/', allow_path=None, source=None, interval=0.25, clock=time.monotonic,
+                 trace=None):
         self.base = Path(root, 'proc')
         self.judge = Judge(_load_allow(allow_path), listens=Listeners(self.base, clock))
         self.emit, self.clock = emit, clock
@@ -537,7 +538,13 @@ class Watcher:
         self.cache: OrderedDict = OrderedDict()     # pid -> Proc, for ancestors that exit quickly
         self.last: dict = {}
         self.stats = dict(started=0, vanished=0, lost=0, findings=0)
-        if source is None:
+        # An exec trace (exec_trace.ExecTrace) gives each started program as the kernel recorded it at its exec:
+        # one gone before it could be read is still judged, however far behind the watch is.
+        self.trace = trace
+        if trace is not None:
+            self.mode, self.source = 'exec trace', None
+            self.stats['trace_dropped'] = 0
+        elif source is None:
             try:
                 source, self.mode = ProcEvents(), 'process events'
             except OSError:
@@ -578,6 +585,21 @@ class Watcher:
         if proc is None:
             self.stats['vanished'] += 1
             return None
+        return self._started(proc)
+
+    def handle_traced(self, record):
+        """One record of the exec trace: a fork as the process events give it, an exec as the program the kernel
+        recorded starting, whether or not it still runs."""
+        if record.get('kind') == 'fork':
+            return self.handle('fork', record['pid'], record['parent'])
+        if record.get('kind') != 'exec':
+            return None
+        self.stats['started'] += 1
+        return self._started(Proc(record['pid'], record['parent'], record['path'] or '', record['comm'],
+                                  record['uid'], record['start'], list(record['argv']), record['cwd'] or ''))
+
+    def _started(self, proc):
+        pid = proc.pid
         self._remember(self.cache, pid, proc)
         chain = _ancestors(self.base, proc, _BoundedCache(self.cache, self._remember), self._parent_of,
                            forked=lambda child: child in self.parents)
@@ -600,11 +622,18 @@ class Watcher:
 
     def run(self, stop, timeout=0.5):
         while not stop.is_set():
+            if self.trace is not None:
+                self.trace.wait(timeout)
+                for record in self.trace.drain():
+                    self.handle_traced(record)
+                # Execs and forks the ring buffer had no room for: a program among them is not judged.
+                self.stats['trace_dropped'] = self.trace.dropped()
+                continue
             for kind, pid, parent in self.source.events(timeout):
                 self.handle(kind, pid, parent)
 
     def close(self):
-        self.source.close()
+        (self.trace or self.source).close()
 
 
 class _BoundedCache:
