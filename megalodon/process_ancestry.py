@@ -379,17 +379,25 @@ class Judge:
                 processes=[dict(program=proc.path, pid=proc.pid, start=proc.start)]))
 
 
-def _ancestors(base, proc, cache, parent_of, forked=lambda pid: False):
+def _ancestors(base, proc, cache, parent_of, forked=lambda pid: False, recorded=False):
     """Parents up to init. A parent that already exited comes from the cache, so `sh -c 'id &'` run by a
     service still leads back to it after the shell is gone and `id` was reparented.
 
     A cached parent is trusted over the live process at that PID only when a fork event tied this child to
-    it (`forked`). Otherwise the PID may simply have been reused, and the live process is the parent."""
+    it (`forked`). Otherwise the PID may simply have been reused, and the live process is the parent.
+
+    With ``recorded`` (the exec trace), the cache holds each process as its exec and fork records left it,
+    in order, and is always trusted: /proc is read later, and may show a program run since, with the same
+    start time."""
     chain, seen, child, ppid = [], {proc.pid}, proc, parent_of(proc)
     while ppid and ppid not in seen and len(chain) < MAX_DEPTH:
         seen.add(ppid)
-        item = read_proc(base, ppid)
         cached = cache.get(ppid)
+        if recorded and cached is not None:
+            chain.append(cached)
+            child, ppid = cached, parent_of(cached)
+            continue
+        item = read_proc(base, ppid)
         if item is None:
             item = cached if forked(child.pid) else None
         elif cached is not None and cached.start is not None and item.start != cached.start and forked(child.pid):
@@ -571,7 +579,9 @@ class Watcher:
             self._remember(self.parents, pid, parent)
             # Until it execs, a forked child runs its parent's program: remember it so, in case it exits
             # before anything it starts is examined (a subshell in `sh -c '(id &)'`).
-            known, live = self.cache.get(parent), read_proc(self.base, parent)
+            known = self.cache.get(parent)
+            # With the trace, a recorded parent is as its records left it: /proc may show a program run since.
+            live = None if self.trace is not None and known is not None else read_proc(self.base, parent)
             if live is not None and (known is None or known.start != live.start):
                 # The parent's PID may have been reused since it was last seen: the forking process is the live one.
                 known = live
@@ -602,7 +612,7 @@ class Watcher:
         pid = proc.pid
         self._remember(self.cache, pid, proc)
         chain = _ancestors(self.base, proc, _BoundedCache(self.cache, self._remember), self._parent_of,
-                           forked=lambda child: child in self.parents)
+                           forked=lambda child: child in self.parents, recorded=self.trace is not None)
         found = self.judge.judge(proc, chain, _now())
         if not found:
             return None

@@ -85,6 +85,32 @@ def test_the_kernels_record_is_the_program_not_what_proc_shows_later(root):
     assert [f['evidence']['program'] for f in found] == ['/usr/bin/curl']
 
 
+@pytest.mark.parametrize('recorded, now, reported', [
+    # A startup script ran id, then exec nginx: /proc shows nginx with the same start time. Not a finding.
+    ('/usr/bin/dash', '/usr/sbin/nginx', []),
+    # nginx ran id, then the worker ran something else: /proc no longer shows nginx. Still a finding.
+    ('/usr/sbin/nginx', '/usr/bin/true', ['/usr/sbin/nginx']),
+])
+def test_a_recorded_parent_is_as_its_records_left_it(root, recorded, now, reported):
+    proc(root, 800, 1, now, start=5800)
+    w, found = watcher(root)
+    for record in (started(800, 1, recorded, [recorded], start=5800), forked(801, 800),
+                   started(801, 800, '/usr/bin/id', ['id'])):
+        w.handle_traced(record)
+    assert [f['evidence']['service']['program'] for f in found if f['evidence']['pid'] == 801] == reported
+
+
+def test_a_subshell_and_a_reparented_command_lead_back_to_the_service(root):
+    # nginx -> sh -c '(id &)': the subshell forks without exec, id is reparented to init before it execs, and
+    # nginx's PID now belongs to another process. The fork records, not /proc, say where id came from.
+    proc(root, 800, 1, '/usr/bin/true', start=9999)
+    w, found = watcher(root)
+    for record in (started(800, 1, '/usr/sbin/nginx', ['nginx'], start=5800), forked(801, 800),
+                   forked(802, 801), started(802, 1, '/usr/bin/id', ['id'])):
+        w.handle_traced(record)
+    assert [(f['evidence']['pid'], f['evidence']['service']['program']) for f in found] == [(802, '/usr/sbin/nginx')]
+
+
 def test_distinct_commands_are_each_reported(root):
     w, found = watcher(root)
     for number in range(5):
