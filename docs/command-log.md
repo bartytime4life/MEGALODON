@@ -38,6 +38,38 @@ sudo megalodon commands show --since 2026-11-19T12:00 --uid 1000
 
 Never pass the key on a command line: the log would record it.
 
+### Programs gone at once: `record --trace-execs`
+
+```bash
+sudo megalodon commands record --trace-execs
+```
+
+The kernel's process events give only a process ID. The recorder then reads
+the program from `/proc`, and a program that has exited by then is recorded
+without its arguments or folder. On this machine, 300 small programs started at
+once were all recorded that way, or not at all.
+`--trace-execs` loads the [exec trace](credential-watch.md#naming-readers-gone-at-once-watch---trace-execs)
+instead: two small eBPF programs that record each program as the kernel starts
+it. With it, all 300 were recorded with their arguments.
+
+* **What each line holds then.** The program, its arguments, working folder,
+  account, parent and start time come from the kernel's own record of the
+  exec, and so do the account that logged in and the login session. `/proc`
+  adds only the terminal, while it shows the same process running the same
+  program. A command line longer than the 512 bytes the trace reads is
+  completed from `/proc` only when `/proc` shows the same start of it;
+  otherwise it ends with `[cut]`. A line for a program that was gone, or
+  running something else, by the time it was read has `"exited": true`.
+* **Lost records.** If programs start faster than the recorder reads, the
+  kernel has no room for some records. The programs count each one, and the
+  recorder writes a `lost` line with how many, which `verify` reports as
+  `COMMAND_LOG_EVENTS_LOST`.
+* **What it changes.** As with the other watches, the programs only read, and
+  are removed when recording stops. It needs root, a kernel with BTF and BPF
+  ring buffers (Linux 5.8 or later), on x86-64 or arm64. Where they cannot be
+  loaded, the recorder says why and records from the process events instead.
+  The [scheduler](scheduling.md) runs `commands record` without it.
+
 ## What each line holds
 
 Each line records:
@@ -109,7 +141,7 @@ is refused, because two would sign different lines with the same key.
 | `COMMAND_LOG_GAP` | HIGH | Lines are missing from the middle: they were removed |
 | `COMMAND_LOG_TRUNCATED` | HIGH | The log ends before `--expect-sequence`: its end was cut off |
 | `COMMAND_LOG_STOPPED_UNCLEANLY` | MEDIUM | The recorder started again without having stopped: it crashed or was killed, and programs in between are not recorded |
-| `COMMAND_LOG_EVENTS_LOST` | MEDIUM | The kernel dropped process events on a busy machine: some programs were not recorded |
+| `COMMAND_LOG_EVENTS_LOST` | MEDIUM | The kernel dropped process events on a busy machine, or with `--trace-execs` had no room for some records: some programs were not recorded |
 
 These are reported by the heartbeat monitor and the fleet view:
 
@@ -128,8 +160,8 @@ These are reported by the heartbeat monitor and the fleet view:
 * **Root is needed.** Without it, the recorder polls `/proc` four times a
   second. It misses programs that exit sooner, and other accounts' arguments
   and folders.
-* **Very short programs** may be recorded without their arguments or folder.
-  They are gone before the recorder reads them; the line still records that
-  they ran.
+* **Very short programs** may be recorded without their arguments or folder,
+  unless the recorder runs with `--trace-execs`. They are gone before the
+  recorder reads them; the line still records that they ran.
 * **The key's safety is yours.** A key left on the machine makes the log
   rewritable by whoever finds it. A lost key makes it impossible to verify.

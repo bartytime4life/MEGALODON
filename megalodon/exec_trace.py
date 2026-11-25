@@ -37,7 +37,8 @@ import struct
 
 from .connect_trace import (BTF, BTF_PATH, EXE_NAME, GET_CURRENT_COMM, GET_CURRENT_PID_TGID,
                             GET_CURRENT_TASK, GET_CURRENT_UID_GID, PROBE_READ_KERNEL, PROBE_READ_USER,
-                            RINGBUF_RESERVE, RINGBUF_SUBMIT, Ring, TraceError, _count, _exe_offsets, _insn,
+                            RINGBUF_RESERVE, RINGBUF_SUBMIT, Counter, Ring, TraceError, _count, _exe_offsets,
+                            _insn, count_drop,
                             _tail, add_imm, attach, call, deref, exit_, jump_if_at_most, jump_if_zero, load_dw,
                             load_map, mounts, mov_imm, mov_reg, names_at, read_into, read_mount, store_dw,
                             store_w, sub_reg, walk_names)
@@ -58,7 +59,11 @@ CG_LEVELS, CG_NAME = 6, 128
 EXEC_INO = EXEC_ARGV + ARGV_BYTES
 EXEC_DEV, EXEC_MNTNS, EXEC_CGROUP_DFL = EXEC_INO + 8, EXEC_INO + 12, EXEC_INO + 16
 EXEC_CGROUP_V1 = EXEC_CGROUP_DFL + CG_LEVELS * CG_NAME
-EXEC_BYTES = EXEC_CGROUP_V1 + CG_LEVELS * CG_NAME
+# Then the account that logged in (the audit login ID, kept through sudo and su) and the login session.
+EXEC_LOGIN = EXEC_CGROUP_V1 + CG_LEVELS * CG_NAME
+EXEC_SESSION = EXEC_LOGIN + 4
+EXEC_BYTES = EXEC_LOGIN + 8
+UNSET = 0xFFFFFFFF               # No login ID, or no session: the kernel's (u32)-1.
 # The fork record: kind, parent tgid, child pid, child tgid, child start time
 FORK_KIND, FORK_PARENT, FORK_PID, FORK_TGID, FORK_START, FORK_BYTES = 0, 4, 8, 12, 16, 24
 
@@ -75,7 +80,17 @@ def jump_if_regs_differ(dst, src, off):
     return _insn(0x5D, dst, src, off)
 
 
-def exec_program(ring_fd, task, mm, exe, cwd, ns=None, inode=None, cgroup=None):
+def _finish(ring_fd, size, fill, counter_fd):
+    """Reserve ``size`` bytes, run ``fill`` (which submits), and return 0; with ``counter_fd``, a reserve that
+    fails (the ring buffer is full) adds one to that counter instead."""
+    reserve = [load_map(1, ring_fd), mov_imm(2, size), mov_imm(3, 0), call(RINGBUF_RESERVE)]
+    done = [mov_imm(0, 0), exit_()]
+    if counter_fd is None:
+        return reserve + [jump_if_zero(0, _count(fill))] + fill + done
+    return reserve + [jump_if_zero(0, _count(fill) + 2)] + fill + done + count_drop(counter_fd) + done
+
+
+def exec_program(ring_fd, task, mm, exe, cwd, ns=None, inode=None, cgroup=None, login=None, counter_fd=None):
     """Raw tracepoint sched_process_exec: one record per exec, in the new program.
 
     ``task`` is the offsets of real_parent, tgid and start_boottime (or None) in task_struct; ``mm`` those of
@@ -83,7 +98,9 @@ def exec_program(ring_fd, task, mm, exe, cwd, ns=None, inode=None, cgroup=None):
     (task->fs, fs->pwd.dentry, fs->pwd.mnt) or None. Each of these may be None: ``ns`` (task->nsproxy,
     nsproxy->mnt_ns, the namespace number in it); ``inode`` (file->f_inode, inode->i_ino, inode->i_sb,
     super_block->s_dev); ``cgroup`` (task->cgroups, css_set->dfl_cgrp, the memory controller's state in
-    css_set->subsys or None, its ->cgroup, cgroup->kn, kernfs_node->name, kernfs_node->parent)."""
+    css_set->subsys or None, its ->cgroup, cgroup->kn, kernfs_node->name, kernfs_node->parent); ``login``
+    (task->loginuid, task->sessionid). ``counter_fd`` is the map that counts records the ring buffer had no
+    room for."""
     real_parent, tgid, start = task
     arg_start, arg_end = mm
     to_mm, to_file, to_dentry, name, parent, to_mount, mount_id = exe
@@ -133,12 +150,15 @@ def exec_program(ring_fd, task, mm, exe, cwd, ns=None, inode=None, cgroup=None):
         if memory is not None:
             fill += [load_dw(9, 10, -24), *deref(9, memory), *deref(9, css_cgroup), *deref(9, to_kn),
                      *walk_names(8, EXEC_CGROUP_V1, 9, kn_name, kn_parent, CG_LEVELS, CG_NAME)]
+    if login is not None:
+        loginuid, sessionid = login
+        fill += [load_dw(9, 10, -16), mov_reg(3, 9), add_imm(3, loginuid), *read_into(8, EXEC_LOGIN, 4, 3),
+                 mov_reg(3, 9), add_imm(3, sessionid), *read_into(8, EXEC_SESSION, 4, 3)]
     fill += [mov_reg(1, 8), mov_imm(2, 0), call(RINGBUF_SUBMIT)]
-    reserve = [load_map(1, ring_fd), mov_imm(2, EXEC_BYTES), mov_imm(3, 0), call(RINGBUF_RESERVE)]
-    return b''.join(reserve + [jump_if_zero(0, _count(fill))] + fill + [mov_imm(0, 0), exit_()])
+    return b''.join(_finish(ring_fd, EXEC_BYTES, fill, counter_fd))
 
 
-def fork_program(ring_fd, pid, tgid, start):
+def fork_program(ring_fd, pid, tgid, start, counter_fd=None):
     """Raw tracepoint sched_process_fork(parent, child): one record per new process, none for a new thread.
     It runs in the parent. ``pid``, ``tgid`` and ``start`` are their offsets in task_struct (``start`` may be
     None)."""
@@ -151,8 +171,7 @@ def fork_program(ring_fd, pid, tgid, start):
     if start is not None:
         fill += [mov_reg(3, 7), add_imm(3, start), *read_into(8, FORK_START, 8, 3)]
     fill += [mov_reg(1, 8), mov_imm(2, 0), call(RINGBUF_SUBMIT)]
-    reserve = [load_map(1, ring_fd), mov_imm(2, FORK_BYTES), mov_imm(3, 0), call(RINGBUF_RESERVE)]
-    body = reserve + [jump_if_zero(0, _count(fill))] + fill
+    body = _finish(ring_fd, FORK_BYTES, fill, counter_fd)[:-2]         # its return is the program's last
     # A new thread has pid != tgid: read both through the stack and skip the record.
     head = [
         load_dw(7, 6, 8),                   # r7 = the child task
@@ -215,12 +234,12 @@ def _container_offsets(btf):
     return ns, inode, cgroup
 
 
-def written(start, ns, inode, cgroup):
+def written(start, ns, inode, cgroup, login=None):
     """The parts of an exec record the program writes, from the offsets it was built with. A ring buffer's space
     is not cleared when it is reserved: a part the program does not write holds bytes of earlier records, so it
     is not read."""
     return dict(start=start is not None, ns=ns is not None, inode=inode is not None, cgroup=cgroup is not None,
-                memory=cgroup is not None and cgroup[2] is not None)
+                memory=cgroup is not None and cgroup[2] is not None, login=login is not None)
 
 
 def group_path(names):
@@ -254,13 +273,20 @@ class ExecTrace:
             raise TraceError(exc.errno or errno.ENOENT, f'kernel type information: {exc}') from None
         task, start, mm, exe, self.cwd_chain = _offsets(btf)
         ns, inode, cgroup = _container_offsets(btf)
-        self.written = written(start, ns, inode, cgroup)
-        self.ring = Ring(RING_BYTES)
         try:
+            login = (btf.member('task_struct', 'loginuid'), btf.member('task_struct', 'sessionid'))
+        except TraceError:
+            login = None                         # A kernel built without audit.
+        self.written = written(start, ns, inode, cgroup, login)
+        self.ring = Ring(RING_BYTES)
+        self.counter = None
+        try:
+            self.counter = Counter()
             self.fds += attach(exec_program(self.ring.fd, (task['real_parent'], task['tgid'], start), mm, exe,
-                                            self.cwd_chain, ns, inode, cgroup), 'megalodon_exec', EXEC_POINT)
-            self.fds += attach(fork_program(self.ring.fd, task['pid'], task['tgid'], start), 'megalodon_fork',
-                               FORK_POINT)
+                                            self.cwd_chain, ns, inode, cgroup, login, self.counter.fd),
+                               'megalodon_exec', EXEC_POINT)
+            self.fds += attach(fork_program(self.ring.fd, task['pid'], task['tgid'], start, self.counter.fd),
+                               'megalodon_fork', FORK_POINT)
         except BaseException:
             self.close()
             raise
@@ -270,6 +296,10 @@ class ExecTrace:
 
     def wait(self, seconds):
         return self.ring.wait(seconds)
+
+    def dropped(self):
+        """How many execs and forks the ring buffer had no room for since the trace started."""
+        return self.counter.value()
 
     def drain(self):
         """[record] since the last call, oldest first: dict(kind='exec', pid, parent, uid, gid, comm, start,
@@ -312,12 +342,15 @@ class ExecTrace:
         ino = ino if written['inode'] else 0
         mnt_ns = mnt_ns if written['ns'] else 0
         start = start if written['start'] else 0
+        login_uid, session = struct.unpack_from('<II', data, EXEC_LOGIN) if written['login'] else (UNSET, UNSET)
         groups = [(label, group_path(names_at(data, offset, CG_LEVELS, CG_NAME)))
                   for label, offset, part in (('0:', EXEC_CGROUP_DFL, 'cgroup'), ('memory', EXEC_CGROUP_V1, 'memory'))
                   if written[part]]
         return dict(kind='exec', pid=pid_tgid >> 32, parent=parent, uid=uid_gid & 0xFFFFFFFF, gid=uid_gid >> 32,
                     comm=comm, start=ticks(start) if start else None, path=path, deleted=deleted, argv=argv,
-                    cwd=cwd, mnt_ns=mnt_ns or None,
+                    argv_cut=length > ARGV_BYTES, argv_bytes=raw, cwd=cwd, mnt_ns=mnt_ns or None,
+                    login_uid=None if login_uid == UNSET else login_uid,
+                    session=None if session == UNSET else session,
                     exe_file=(os.makedev(dev >> 20, dev & 0xFFFFF), ino) if ino else None,
                     # As /proc/PID/cgroup gives them: what the container watch names containers from.
                     cgroup=''.join(f'{label}:{found}\n' for label, found in groups if found))
@@ -337,6 +370,9 @@ class ExecTrace:
         if self.ring is not None:
             self.ring.close()
             self.ring = None
+        if getattr(self, 'counter', None) is not None:
+            self.counter.close()
+            self.counter = None
 
     def __enter__(self):
         return self

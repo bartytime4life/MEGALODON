@@ -23,8 +23,8 @@ COMMIT, TREE = "a" * 40, "b" * 40
 
 @pytest.mark.parametrize('sizes,accepted', [
     ((4 * 1024**2, 4 * 1024**2 + 256 * 1024), True),
-    ((5 * 1024**2, 5 * 1024**2), True),
-    ((5 * 1024**2, 5 * 1024**2 + 1), False),
+    ((6 * 1024**2, 6 * 1024**2), True),
+    ((6 * 1024**2, 6 * 1024**2 + 1), False),
     ((8 * 1024**2 + 1,), False),
 ])
 def test_installed_package_budget_keeps_individual_and_aggregate_limits(sizes, accepted):

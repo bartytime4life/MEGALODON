@@ -78,6 +78,33 @@ def test_the_exec_program_reads_the_namespace_inode_and_control_groups(memory):
     assert len(full) > len(plain)
 
 
+@pytest.mark.parametrize('program', ['exec', 'fork'])
+def test_a_full_ring_buffer_is_counted(program):
+    def build(counter):
+        if program == 'exec':
+            return et.exec_program(9, (1280, 1268, 1560), (488, 496), EXE, None, login=(1952, 1956),
+                                   counter_fd=counter)
+        return et.fork_program(9, 1264, 1268, 1560, counter_fd=counter)
+    plain, counted = decode(build(None)), decode(build(13))
+    assert not any(op == 0xDB for op, *_ in plain)
+    jumps, exit_at = jumps_land_inside(counted)
+    maps = [i for i, (op, _, _, imm) in enumerate(counted) if op == 0x18]
+    assert [counted[i][3] for i in maps] == [9, 13], 'the ring buffer, then the counter'
+    reserve_failed = next(j for j in jumps if j[1] == 0x15 and j[0] > maps[0])
+    # A failed reserve goes to the counting, which adds one to the counter's value and then returns.
+    count_at = reserve_failed[0] + 1 + reserve_failed[2]
+    assert counted[count_at] == (0x62, 10, -4, 0), 'the key, 0, on the stack'
+    assert count_at < maps[1] < len(counted) - 2
+    assert [imm for op, _, _, imm in counted[maps[1]:] if op == 0x85] == [ct.MAP_LOOKUP_ELEM]
+    xadd = next(i for i, (op, *_) in enumerate(counted) if op == 0xDB)
+    assert counted[xadd] == (0xDB, 0 | (1 << 4), 0, 0) and counted[xadd - 1] == (0xB7, 1, 0, 1)
+    found_null = next(j for j in jumps if j[0] > maps[1])
+    assert found_null[0] + 1 + found_null[2] == exit_at, 'no value: nothing to add'
+    # A record that is reserved is submitted and returns before the counting.
+    submit = max(i for i, (op, _, _, imm) in enumerate(counted) if op == 0x85 and imm == ct.RINGBUF_SUBMIT)
+    assert counted[submit + 1:submit + 3] == [(0xB7, 0, 0, 0), (0x95, 0, 0, 0)] and submit < count_at
+
+
 def test_the_fork_program_skips_new_threads():
     insns = decode(et.fork_program(9, 1264, 1268, 1560))
     jumps, exit_at = jumps_land_inside(insns)
@@ -101,7 +128,7 @@ def tracer(mounts=None, cwd=True):
     trace.cwd_chain = (1, 2, 3) if cwd else None
     trace.known_mounts = mounts if mounts is not None else {5: ('/', '/'), 6: ('/', '/dev/shm')}
     trace.fds, trace.ring = [], None
-    trace.written = dict(start=True, ns=True, inode=True, cgroup=True, memory=True)
+    trace.written = dict(start=True, ns=True, inode=True, cgroup=True, memory=True, login=True)
     return trace
 
 
@@ -121,13 +148,14 @@ def group_names(*parts):
 
 def exec_record(exe=('agent', '.x', 'tmp', '/'), cwd=('.x', 'tmp', '/'), argv=b'/tmp/.x/agent\0-q\0',
                 length=None, exe_mount=5, cwd_mount=5, start=1_230_000_000, pid=4321, parent=77, comm=b'agent',
-                ino=0, dev=0, mnt_ns=0, unified=(), memory=()):
+                ino=0, dev=0, mnt_ns=0, unified=(), memory=(), login=(et.UNSET, et.UNSET)):
     head = struct.pack('<II', et.KIND_EXEC, parent) + struct.pack('<QQ', pid << 32 | pid, 1000 << 32 | 1000)
     head += comm.ljust(16, b'\0') + struct.pack('<Q', start)
     head += struct.pack('<IIII', len(argv) if length is None else length, exe_mount, cwd_mount, 0)
     assert len(head) == et.EXEC_EXE
     data = head + names(*exe) + names(*cwd) + argv.ljust(et.ARGV_BYTES, b'\0')[:et.ARGV_BYTES]
     data += struct.pack('<QII', ino, dev, mnt_ns) + group_names(*unified) + group_names(*memory)
+    data += struct.pack('<II', *login)
     assert len(data) == et.EXEC_BYTES
     return data
 
@@ -137,7 +165,9 @@ def test_an_exec_record():
     record = tracer().parse(exec_record())
     assert record == dict(kind='exec', pid=4321, parent=77, uid=1000, gid=1000, comm='agent',
                           start=1_230_000_000 // (10 ** 9 // hz), path='/tmp/.x/agent', deleted=False,
-                          argv=['/tmp/.x/agent', '-q'], cwd='/tmp/.x', mnt_ns=None, exe_file=None, cgroup='')
+                          argv=['/tmp/.x/agent', '-q'], argv_cut=False, argv_bytes=b'/tmp/.x/agent\0-q\0',
+                          cwd='/tmp/.x', mnt_ns=None,
+                          login_uid=None, session=None, exe_file=None, cgroup='')
     assert tracer().parse(exec_record(exe=('helper', '.x', '/'), exe_mount=6))['path'] == '/dev/shm/.x/helper'
 
 
@@ -158,24 +188,34 @@ def test_the_namespace_inode_and_control_groups_of_an_exec():
 def test_which_parts_the_program_writes():
     group = (2376, 112, 32, 0, 256, 16, 8)
     assert et.written(1560, (1, 2, 3), (1, 2, 3, 4), group) == dict(start=True, ns=True, inode=True, cgroup=True,
-                                                                     memory=True)
+                                                                     memory=True, login=False)
     # A kernel without the memory controller: its group is not written.
     assert et.written(1560, (1, 2, 3), (1, 2, 3, 4), group[:2] + (None,) + group[3:])['memory'] is False
     assert et.written(None, None, None, None) == dict(start=False, ns=False, inode=False, cgroup=False,
-                                                      memory=False)
+                                                      memory=False, login=False)
+    assert et.written(None, None, None, None, (1952, 1956))['login'] is True
 
 
-@pytest.mark.parametrize('missing', ['start', 'ns', 'inode', 'cgroup', 'memory'])
+def test_the_login_and_a_cut_command_line():
+    record = tracer().parse(exec_record(login=(1000, 42)))
+    assert (record['login_uid'], record['session']) == (1000, 42)
+    long = b'x' * (et.ARGV_BYTES + 1)
+    assert tracer().parse(exec_record(argv=long, length=len(long)))['argv_cut'] is True
+    assert tracer().parse(exec_record())['argv_cut'] is False
+
+
+@pytest.mark.parametrize('missing', ['start', 'ns', 'inode', 'cgroup', 'memory', 'login'])
 def test_parts_the_program_does_not_write_are_not_read(missing):
     # Reserved ring buffer space is not cleared: a part the loaded program does not write holds bytes of earlier
     # records, here a container's group name, and must not be read as this exec's.
     trace = tracer()
     trace.written = dict(trace.written, **{missing: False})
-    record = trace.parse(exec_record(ino=4242, dev=1, mnt_ns=4026531840,
+    record = trace.parse(exec_record(ino=4242, dev=1, mnt_ns=4026531840, login=(1000, 3),
                                      unified=('docker-' + 'a' * 64 + '.scope', ''),
                                      memory=('docker-' + 'b' * 64 + '.scope', '')))
     unwritten = dict(start=record['start'], ns=record['mnt_ns'], inode=record['exe_file'],
-                     cgroup='a' * 64 in record['cgroup'] or None, memory='b' * 64 in record['cgroup'] or None)
+                     cgroup='a' * 64 in record['cgroup'] or None, memory='b' * 64 in record['cgroup'] or None,
+                     login=record['login_uid'])
     assert unwritten[missing] is None
     assert all(value is not None for part, value in unwritten.items() if part != missing)
 
@@ -496,6 +536,7 @@ def test_live_execs_and_forks_are_described_as_proc_does(tmp_path):
         try:
             time.sleep(0.3)
             live = _proc_info(Path('/proc', str(child.pid)))
+            login = [int(Path('/proc', str(child.pid), name).read_text()) for name in ('loginuid', 'sessionid')]
             forked = os.fork()
             if forked == 0:
                 os._exit(0)
@@ -516,6 +557,7 @@ def test_live_execs_and_forks_are_described_as_proc_does(tmp_path):
     assert (traced['path'], traced['argv'], traced['start'], traced['cwd']) == (
         live['path'], live['argv'], live['start'], live['cwd'])
     assert execs[0]['parent'] == os.getpid() and execs[0]['comm'] == 'sleeper'
+    assert [execs[0]['login_uid'], execs[0]['session']] == [None if n == et.UNSET else n for n in login]
     forks = [r for r in records if r['kind'] == 'fork' and r['parent'] == os.getpid()]
     assert forked in {r['pid'] for r in forks}
     assert all(r['pid'] != threading.get_native_id() for r in forks)

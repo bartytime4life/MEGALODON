@@ -506,6 +506,10 @@ def build_parser() -> argparse.ArgumentParser:
     command = commands_sub.add_parser("record", help="record every started program until stopped (root sees all)")
     command.add_argument("--keep-secrets", action="store_true",
                          help="do not blank passwords and tokens on command lines")
+    command.add_argument("--trace-execs", action="store_true",
+                         help="as root, load a small eBPF program and record each program from the kernel's own "
+                              "record of its start, so one gone at once keeps its arguments and folder; it is "
+                              "removed when recording stops")
     command = commands_sub.add_parser("verify", help="check every line against the first key (exit 1 on findings)")
     command.add_argument("--key-file", type=Path, required=True,
                          help="mode-600 file holding the key `commands init` printed; never pass the key on a "
@@ -2440,7 +2444,18 @@ def _commands(args: argparse.Namespace) -> int:
             stop = threading.Event()
             for number in (signals.SIGTERM, signals.SIGINT):
                 signals.signal(number, lambda *_: stop.set())
-            count = cl.record(stop, state=paths["state"], log=paths["log"], redact=not args.keep_secrets)
+            trace = None
+            if args.trace_execs:
+                from .connect_trace import TraceError
+                from .exec_trace import ExecTrace
+                try:
+                    trace = ExecTrace()
+                except TraceError as exc:
+                    print(f"megalodon: exec tracing unavailable: {exc.strerror or exc}; recording from the "
+                          "kernel's process events, where a program gone at once loses its arguments",
+                          file=sys.stderr)
+            count = cl.record(stop, state=paths["state"], log=paths["log"], redact=not args.keep_secrets,
+                              trace=trace)
             print(json.dumps(dict(recorded=count), sort_keys=True))
             return 0
         if args.commands_command == "verify":

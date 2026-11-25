@@ -37,6 +37,9 @@ DEFAULT_STATE = '~/.local/state/megalodon/commands-state.json'
 EVOLVE = b'megalodon-command-log-evolve-v1'
 ROTATE_BYTES = 64 * 1024 * 1024
 MAX_ARGV_CHARS = 4096
+# Enough for MAX_ARGV_CHARS characters of UTF-8: a command line longer than this is longer than is kept, and ends
+# with [cut].
+MAX_CMDLINE_BYTES = 4 * MAX_ARGV_CHARS
 FLUSH_SECONDS = 1.0
 FLUSH_LINES = 256
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
@@ -339,14 +342,10 @@ def describe(base, pid, *, redact=True):
         tty = int(stat_text[stat_text.rindex(')') + 2:].split()[4])
     except (ValueError, IndexError):
         tty = 0
-    argv, hidden = _redact(proc.argv) if redact else (proc.argv, 0)
-    joined, kept = 0, []
-    for arg in argv:
-        joined += len(arg) + 1
-        if joined > MAX_ARGV_CHARS:
-            kept.append('[cut]')
-            break
-        kept.append(arg)
+    full = _command_line(base, pid)
+    full = proc.argv if full is None else full
+    argv, hidden = _redact(full) if redact else (full, 0)
+    kept = _kept(argv)
     entry = dict(pid=pid, ppid=proc.ppid, uid=proc.uid, program=proc.path, argv=kept, cwd=link('cwd'),
                  login_uid=int(login) if login and login.lstrip('-').isdigit() and int(login) != 4294967295
                  else None,
@@ -357,11 +356,84 @@ def describe(base, pid, *, redact=True):
     return entry
 
 
-def record(stop, *, state=DEFAULT_STATE, log=DEFAULT_LOG, root='/', source=None, redact=True, clock=None):
-    """Record every started program until `stop` is set. Returns how many were recorded."""
+def _command_line_bytes(base, pid):
+    """/proc/PID/cmdline as it is, read up to MAX_CMDLINE_BYTES: further than process_ancestry.read_proc reads it,
+    as far as a line keeps. None when it cannot be read."""
+    try:
+        with open(base / str(pid) / 'cmdline', 'rb') as handle:
+            return handle.read(MAX_CMDLINE_BYTES + 1)
+    except OSError:
+        return None
+
+
+def _arguments(raw):
+    return [part.decode('utf-8', 'replace') for part in raw.split(b'\0') if part]
+
+
+def _command_line(base, pid):
+    """The arguments in /proc/PID/cmdline, read up to MAX_CMDLINE_BYTES; None when it cannot be read."""
+    raw = _command_line_bytes(base, pid)
+    return None if raw is None else _arguments(raw)
+
+
+def _kept(argv):
+    joined, kept = 0, []
+    for arg in argv:
+        joined += len(arg) + 1
+        if joined > MAX_ARGV_CHARS:
+            kept.append('[cut]')
+            break
+        kept.append(arg)
+    return kept
+
+
+def describe_traced(base, record, *, redact=True):
+    """What is recorded about one program the exec trace saw start: the kernel's own record, made as the exec
+    completed, so a program gone at once is recorded in full. /proc adds only what the kernel's record lacks
+    (the terminal, and the rest of a command line longer than the trace reads), and only while it shows the
+    same process running the same program with the same start of its command line."""
+    from .process_ancestry import read_proc
+    argv, cut = record['argv'], record.get('argv_cut', False)
+    tty, exited = None, True
+    proc = read_proc(base, record['pid'])
+    if proc is not None and proc.start == record['start'] and proc.path == record['path']:
+        exited = False
+        read = _command_line_bytes(base, record['pid']) if cut else None
+        # The same command line, read as far as a line keeps. Compared as bytes: the trace's may end inside a
+        # character, which decodes differently from the whole one.
+        traced = record.get('argv_bytes')
+        same = read is not None and (read.startswith(traced) if traced is not None
+                                     else '\0'.join(_arguments(read)).startswith('\0'.join(argv)))
+        if same:
+            argv, cut = _arguments(read), False
+        try:
+            text = (base / str(record['pid']) / 'stat').read_text('utf-8', 'replace')
+            tty = int(text[text.rindex(')') + 2:].split()[4]) or None
+        except (OSError, ValueError, IndexError):
+            tty = None
+    argv, hidden = _redact(argv) if redact else (argv, 0)
+    kept = _kept(argv)
+    if cut and kept[-1:] != ['[cut]']:
+        kept.append('[cut]')
+    entry = dict(pid=record['pid'], ppid=record['parent'], uid=record['uid'], program=record['path'], argv=kept,
+                 cwd=record['cwd'], login_uid=record.get('login_uid'), session=record.get('session'), tty=tty,
+                 start=record['start'])
+    if hidden:
+        entry['hidden'] = hidden
+    if exited:
+        entry['exited'] = True                   # Gone, or running something else, by the time it was read.
+    return entry
+
+
+def record(stop, *, state=DEFAULT_STATE, log=DEFAULT_LOG, root='/', source=None, redact=True, clock=None,
+           trace=None):
+    """Record every started program until `stop` is set. Returns how many were recorded. With ``trace`` (an
+    exec_trace.ExecTrace), each program is recorded from the kernel's own record of its exec."""
     from .process_ancestry import Poller, ProcEvents
     base = Path(root, 'proc')
     recorder = Recorder(state=state, log=log, clock=clock)
+    if trace is not None:
+        return _record_traced(stop, recorder, trace, base, redact)
     if source is None:
         try:
             source, mode = ProcEvents(), 'process events'
@@ -393,6 +465,34 @@ def record(stop, *, state=DEFAULT_STATE, log=DEFAULT_LOG, root='/', source=None,
         finally:
             recorder.close()
             source.close()
+    return count
+
+
+def _record_traced(stop, recorder, trace, base, redact):
+    recorder.add('start', mode='exec trace', recorder_pid=os.getpid())
+    recorder.flush()
+    count, dropped = 0, 0
+    try:
+        while not stop.is_set():
+            trace.wait(0.5)
+            for item in trace.drain():
+                if item['kind'] == 'exec':
+                    recorder.add('exec', **describe_traced(base, item, redact=redact))
+                    count += 1
+            # Execs and forks the ring buffer had no room for: some programs were not recorded.
+            now = trace.dropped()
+            if now > dropped:
+                recorder.add('lost', dropped=now - dropped)
+                dropped = now
+            if recorder.pending and time.monotonic() - recorder.flushed_at >= FLUSH_SECONDS:
+                recorder.flush()
+    finally:
+        try:
+            recorder.add('stop', recorded=count)
+            recorder.flush()
+        finally:
+            recorder.close()
+            trace.close()
     return count
 
 
@@ -485,8 +585,10 @@ def verify(key_hex, *, log=DEFAULT_LOG, expect_sequence=None, from_sequence=1):
         elif kind == 'stop':
             running = False
         elif kind == 'lost':
+            dropped = entry.get('dropped')
             findings.append(_finding('COMMAND_LOG_EVENTS_LOST', f'line:{sequence}',
-                                     f'the kernel dropped process events before {entry.get("at")}'))
+                                     f'the kernel dropped process events before {entry.get("at")}'
+                                     + (f' ({dropped} execs and forks)' if isinstance(dropped, int) else '')))
         previous, expected = entry.get('mac'), sequence + 1
         key, position = evolve(key), position + 1
     last = expected - 1
