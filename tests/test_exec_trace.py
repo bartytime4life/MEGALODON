@@ -165,7 +165,8 @@ def test_an_exec_record():
     record = tracer().parse(exec_record())
     assert record == dict(kind='exec', pid=4321, parent=77, uid=1000, gid=1000, comm='agent',
                           start=1_230_000_000 // (10 ** 9 // hz), path='/tmp/.x/agent', deleted=False,
-                          argv=['/tmp/.x/agent', '-q'], argv_cut=False, cwd='/tmp/.x', mnt_ns=None,
+                          argv=['/tmp/.x/agent', '-q'], argv_cut=False, argv_bytes=b'/tmp/.x/agent\0-q\0',
+                          cwd='/tmp/.x', mnt_ns=None,
                           login_uid=None, session=None, exe_file=None, cgroup='')
     assert tracer().parse(exec_record(exe=('helper', '.x', '/'), exe_mount=6))['path'] == '/dev/shm/.x/helper'
 

@@ -356,15 +356,24 @@ def describe(base, pid, *, redact=True):
     return entry
 
 
-def _command_line(base, pid):
-    """The arguments in /proc/PID/cmdline, read up to MAX_CMDLINE_BYTES: further than process_ancestry.read_proc
-    reads it, as far as a line keeps. None when it cannot be read."""
+def _command_line_bytes(base, pid):
+    """/proc/PID/cmdline as it is, read up to MAX_CMDLINE_BYTES: further than process_ancestry.read_proc reads it,
+    as far as a line keeps. None when it cannot be read."""
     try:
         with open(base / str(pid) / 'cmdline', 'rb') as handle:
-            raw = handle.read(MAX_CMDLINE_BYTES + 1)
+            return handle.read(MAX_CMDLINE_BYTES + 1)
     except OSError:
         return None
+
+
+def _arguments(raw):
     return [part.decode('utf-8', 'replace') for part in raw.split(b'\0') if part]
+
+
+def _command_line(base, pid):
+    """The arguments in /proc/PID/cmdline, read up to MAX_CMDLINE_BYTES; None when it cannot be read."""
+    raw = _command_line_bytes(base, pid)
+    return None if raw is None else _arguments(raw)
 
 
 def _kept(argv):
@@ -389,9 +398,14 @@ def describe_traced(base, record, *, redact=True):
     proc = read_proc(base, record['pid'])
     if proc is not None and proc.start == record['start'] and proc.path == record['path']:
         exited = False
-        read = _command_line(base, record['pid']) if cut else None
-        if read is not None and '\0'.join(read).startswith('\0'.join(argv)):
-            argv, cut = read, False              # The same command line, read as far as a line keeps.
+        read = _command_line_bytes(base, record['pid']) if cut else None
+        # The same command line, read as far as a line keeps. Compared as bytes: the trace's may end inside a
+        # character, which decodes differently from the whole one.
+        traced = record.get('argv_bytes')
+        same = read is not None and (read.startswith(traced) if traced is not None
+                                     else '\0'.join(_arguments(read)).startswith('\0'.join(argv)))
+        if same:
+            argv, cut = _arguments(read), False
         try:
             text = (base / str(record['pid']) / 'stat').read_text('utf-8', 'replace')
             tty = int(text[text.rindex(')') + 2:].split()[4]) or None

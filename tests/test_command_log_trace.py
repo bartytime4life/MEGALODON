@@ -64,10 +64,11 @@ def long_running(arguments):
 
 
 def as_traced(child, live, argv):
-    """What the trace holds: the first 512 bytes of the command line, cut."""
-    raw = '\0'.join(argv).encode()[:512]
-    return traced(pid=child.pid, path=live['path'], argv=[a.decode() for a in raw.split(b'\0') if a],
-                  start=live['start'], cut=True)
+    """What the trace holds: the first 512 bytes of the command line, cut, as parse decodes them."""
+    raw = ('\0'.join(argv) + '\0').encode()[:512]
+    return dict(traced(pid=child.pid, path=live['path'],
+                       argv=[a.decode('utf-8', 'replace') for a in raw.split(b'\0') if a], start=live['start'],
+                       cut=True), argv_bytes=raw)
 
 
 def test_a_long_command_line_is_completed_only_from_the_same_one():
@@ -81,11 +82,29 @@ def test_a_long_command_line_is_completed_only_from_the_same_one():
         # Without the trace too, the whole command line is recorded.
         assert cl.describe(BASE, child.pid)['argv'] == full
         # A different start of the command line: the kernel's part is kept, marked cut.
-        other = dict(record, argv=['something', 'else'])
+        other = dict(record, argv=['something', 'else'], argv_bytes=b'something\0else\0')
         assert cl.describe_traced(BASE, other)['argv'] == ['something', 'else', '[cut]']
         # Gone: kept as read, marked cut.
         gone = dict(record, pid=GONE)
         assert cl.describe_traced(BASE, gone)['argv'] == record['argv'] + ['[cut]']
+    finally:
+        child.kill()
+        child.wait()
+
+
+def test_a_cut_inside_a_character_is_still_the_same_command_line():
+    # The trace's 512 bytes end inside a two-byte character: decoded, it differs from the whole one.
+    code = 'import time; time.sleep(5) '
+    extra = ['é' * 400, 'trailing']
+    full = ['python3', '-c', code, *extra]
+    assert len(('\0'.join(full[:3]) + '\0').encode()) % 2 == 1          # so byte 512 splits an é
+    child = subprocess.Popen(full)
+    try:
+        time.sleep(0.4)
+        live = _proc_info(BASE / str(child.pid))
+        record = as_traced(child, live, full)
+        assert record['argv'][-1].endswith('\ufffd')
+        assert cl.describe_traced(BASE, record)['argv'] == full
     finally:
         child.kill()
         child.wait()

@@ -348,7 +348,7 @@ class ExecTrace:
                   if written[part]]
         return dict(kind='exec', pid=pid_tgid >> 32, parent=parent, uid=uid_gid & 0xFFFFFFFF, gid=uid_gid >> 32,
                     comm=comm, start=ticks(start) if start else None, path=path, deleted=deleted, argv=argv,
-                    argv_cut=length > ARGV_BYTES, cwd=cwd, mnt_ns=mnt_ns or None,
+                    argv_cut=length > ARGV_BYTES, argv_bytes=raw, cwd=cwd, mnt_ns=mnt_ns or None,
                     login_uid=None if login_uid == UNSET else login_uid,
                     session=None if session == UNSET else session,
                     exe_file=(os.makedev(dev >> 20, dev & 0xFFFFF), ino) if ino else None,
