@@ -24,10 +24,11 @@ megalodon credentials check
   [enforcement](enforcement.md) before it reads the next event, so the
   process it names can be paused while it still runs. What was decided and
   done is written to standard error as one `megalodon: response {...}`
-  line. The scheduled `megalodon-credentials` job runs it this way:
+  line. The scheduled `megalodon-credentials` job runs it this way, with the
+  exec trace below:
 
   ```bash
-  sudo megalodon credentials watch --respond
+  sudo megalodon credentials watch --respond --trace-execs
   ```
 
   The five-minute response pass still reads `check`. The same process is

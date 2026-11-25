@@ -3,7 +3,8 @@
 Each host watch only helps if it runs regularly. `megalodon schedule` sets
 them all up as systemd timers, each with `--alert`, plus the response
 engine's shadow pass and, as root, the live
-[process ancestry watch](process-ancestry.md).
+[process ancestry watch](process-ancestry.md) and
+[container escape watch](container-watch.md#escapes-as-they-start-containers-watch).
 
 ```bash
 sudo megalodon schedule plan
@@ -30,8 +31,7 @@ sudo megalodon schedule remove --yes
 
 As root, units go to `/etc/systemd/system` and run as root, which sees every
 process, socket and file. Otherwise they are user units in
-`~/.config/systemd/user`, and the ancestry watch, which needs root, is left
-out. Choose with `--system` or `--user`, and limit the jobs with `--only`
+`~/.config/systemd/user`, and the jobs that need root are left out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 (repeatable).
 
 ## The jobs
@@ -59,11 +59,31 @@ out. Choose with `--system` or `--user`, and limit the jobs with `--only`
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
 | vulns | daily at 06:41 | `vulns check --alert` ([known-vulnerable software](known-vulnerable-software.md)) |
 | binaries | daily at 03:17 | `binaries check --alert` |
-| ancestry | always running (root) | `ancestry watch --alert --respond`: each service starting a shell or tool is decided at once, and the process paused if the enforcement policy allows ([process ancestry](process-ancestry.md)) |
-| commands | always running (root) | `commands record`, after `megalodon commands init --key-file ...` ([command log](command-log.md)) |
-| credentials | always running | `credentials watch --alert --respond` ([credential access watch](credential-watch.md); as root it names every reader; each finding is decided at once) |
+| ancestry | always running (root) | `ancestry watch --alert --respond --trace-execs`: each service starting a shell or tool is decided at once, and the process paused if the enforcement policy allows; a command gone before it is read is judged from the exec trace ([process ancestry](process-ancestry.md)) |
+| commands | always running (root) | `commands record --trace-execs`, after `megalodon commands init --key-file ...`; a program gone at once keeps its arguments ([command log](command-log.md)) |
+| credentials | always running | `credentials watch --alert --respond --trace-execs` ([credential access watch](credential-watch.md); as root it names every reader, also one gone at once; each finding is decided at once) |
+| container-escapes | always running (root, eBPF) | `containers watch --alert --respond`: each program started on the host from a container, as it starts, decided at once ([container watch](container-watch.md#escapes-as-they-start-containers-watch)). Left out where eBPF cannot run; the 15-minute `containers check` covers those machines, and without systemd too |
 | egress | always running | `egress watch --alert --respond`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md); each finding is decided at once) |
 | ransomware | always running | `ransomware watch --respond`, after `megalodon ransomware init --dir FOLDER ...`; each finding is decided and enforced as it is raised ([ransomware watch](ransomware-watch.md#answer-it-at-once)) |
+
+**The exec trace.** `--trace-execs` loads the
+[exec trace](credential-watch.md#naming-readers-gone-at-once-watch---trace-execs)
+(eBPF), so a program gone before a watch reads it is still seen. Where it
+cannot be loaded (no root, no kernel type information, before Linux 5.8, not
+x86-64 or arm64), each of those watches says why on standard error and goes
+on as without it. The container escape watch has no such fallback:
+`schedule plan` lists it as skipped where the kernel lacks what it needs.
+If it cannot be loaded anyway, it exits 2 and is restarted every 10
+seconds, as the other watches are, and the tamper check reports it
+stopped. Each
+service has a mount namespace of its own (`ProtectSystem=full`), whose
+copies of the host's mounts have other IDs. So the trace names each
+program from init's mount table too. No other table is read: a program in
+a mount namespace of its own (a container's, or one it made, which can put
+any folder at `/usr/bin`) keeps a partial path, `…/`, as before. Each job
+that loads it is allowed 64 MiB of locked memory, which kernels before
+5.11 count BPF maps against. Each loads its own copy, with an 8 MiB ring
+buffer: four, as root.
 
 Timers add a random delay of up to a minute, so that machines set up the same
 way do not all run at once, and they catch up after the machine was off.

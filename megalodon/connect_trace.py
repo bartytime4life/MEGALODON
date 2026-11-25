@@ -513,6 +513,25 @@ def _tail(names, mount=None):
     return (point.rstrip('/') + path) if point != '/' else path
 
 
+PROC = '/proc'
+HOST = 1          # a process in the host's mount namespace: init
+
+
+def mount_table(mount_id):
+    """{mount ID: (root, mount point)}: this process's mounts, then, if ``mount_id`` is not among them, the
+    host's (init's).
+
+    A service can run in a mount namespace of its own (systemd's ``ProtectSystem=``), whose copies of the host's
+    mounts have other IDs: a program on the host is found in init's table. Mount IDs are unique across
+    namespaces, so one table can hold both. No other table is read: a mount namespace a program made itself
+    can put any folder at ``/usr/bin``, so its mount points are not the host's paths, and its programs stay
+    partial (``…/``)."""
+    found = mounts(f'{PROC}/self/mountinfo')
+    if mount_id not in found:
+        found.update(mounts(f'{PROC}/{HOST}/mountinfo'))
+    return found
+
+
 def mounts(path='/proc/self/mountinfo'):
     """{mount ID: (root within its file system, mount point)} for this process's mounts."""
     found = {}
@@ -627,13 +646,13 @@ class ConnectTrace:
                     address=str(remote), port=remote_port)
 
     def mount(self, mount_id):
-        """(root, mount point) of a mount ID, reading mountinfo again when one is new: None if it is not
-        among this process's mounts (another mount namespace, such as a container's)."""
+        """(root, mount point) of a mount ID, reading the mount tables again when one is new: None if it is
+        neither this process's nor the host's (another mount namespace, such as a container's)."""
         if not mount_id:
             return None
         known = getattr(self, 'known_mounts', None)
         if known is None or mount_id not in known:
-            known = self.known_mounts = mounts()
+            known = self.known_mounts = mount_table(mount_id)
         return known.get(mount_id)
 
     def close(self):

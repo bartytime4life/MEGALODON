@@ -40,7 +40,7 @@ from .connect_trace import (BTF, BTF_PATH, EXE_NAME, GET_CURRENT_COMM, GET_CURRE
                             RINGBUF_RESERVE, RINGBUF_SUBMIT, Counter, Ring, TraceError, _count, _exe_offsets,
                             _insn, count_drop,
                             _tail, add_imm, attach, call, deref, exit_, jump_if_at_most, jump_if_zero, load_dw,
-                            load_map, mounts, mov_imm, mov_reg, names_at, read_into, read_mount, store_dw,
+                            load_map, mount_table, mov_imm, mov_reg, names_at, read_into, read_mount, store_dw,
                             store_w, sub_reg, walk_names)
 
 EXEC_POINT, FORK_POINT = b'sched_process_exec', b'sched_process_fork'
@@ -356,12 +356,13 @@ class ExecTrace:
                     cgroup=''.join(f'{label}:{found}\n' for label, found in groups if found))
 
     def mount(self, mount_id):
-        """(root, mount point) of a mount ID, reading mountinfo again when one is new; None when it is not
-        among this process's mounts."""
+        """(root, mount point) of a mount ID, reading the mount tables again when one is new; None when it is
+        neither this process's nor the host's. See :func:`connect_trace.mount_table`: in a service with a mount
+        namespace of its own, the host's programs' mounts are not among this process's."""
         if not mount_id:
             return None
         if self.known_mounts is None or mount_id not in self.known_mounts:
-            self.known_mounts = mounts()
+            self.known_mounts = mount_table(mount_id)
         return self.known_mounts.get(mount_id)
 
     def close(self):

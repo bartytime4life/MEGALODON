@@ -68,7 +68,7 @@ it. With it, all 300 were recorded with their arguments.
   are removed when recording stops. It needs root, a kernel with BTF and BPF
   ring buffers (Linux 5.8 or later), on x86-64 or arm64. Where they cannot be
   loaded, the recorder says why and records from the process events instead.
-  The [scheduler](scheduling.md) runs `commands record` without it.
+  The [scheduler](scheduling.md) runs `commands record` with it.
 
 ## What each line holds
 

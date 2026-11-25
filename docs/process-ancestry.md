@@ -24,10 +24,11 @@ megalodon ancestry check
   [enforcement](enforcement.md) before it reads the next event, so the
   process it names can be paused while it still runs. What was decided and
   done is written to standard error as one `megalodon: response {...}`
-  line. The scheduled `megalodon-ancestry` job runs it this way:
+  line. The scheduled `megalodon-ancestry` job runs it this way, with the
+  exec trace below:
 
   ```bash
-  sudo megalodon ancestry watch --respond
+  sudo megalodon ancestry watch --respond --trace-execs
   ```
 
   The five-minute response pass still reads `check`. The same process is
@@ -86,8 +87,8 @@ instead, and all 20 were reported, each with its arguments.
 * **What it changes.** As with the other watches, the programs only read, and
   are removed when the watch stops. It needs root, a kernel with BTF and BPF
   ring buffers (Linux 5.8 or later), on x86-64 or arm64. Where they cannot be
-  loaded, the watch says why and uses the process events. The scheduler runs
-  `ancestry watch` without it.
+  loaded, the watch says why and uses the process events. The
+  [scheduler](scheduling.md) runs `ancestry watch` with it.
 
 ## What is reported
 
