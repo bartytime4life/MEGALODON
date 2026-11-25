@@ -26,6 +26,8 @@ command, source_identity = _common.command, _common.source_identity
 MAX_RECEIPT = 8192
 LOCK = "constraints/build-linux-cp312.txt"
 INSTALLER_LOCK = "constraints/installer-linux-cp312.txt"
+GEO_WHEEL = "maxminddb-3.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+KNOWLEDGE_WHEEL = "pyyaml-6.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
 CHECKS = {
     "initial_install": "real_release_ready",
     "same_source_replacement": "new_real_release_selected_previous_retained",

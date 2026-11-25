@@ -62,6 +62,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "native installer rehearsal with geography and knowledge readers",
+      "source_sha256": "de4d2e7f1bd5fff0f8a4d62dbd57933a9cc97d1f55af2adca37ae2f77b0e86c1"
     },
     {
       "direct_packages": [
