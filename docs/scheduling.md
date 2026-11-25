@@ -75,7 +75,11 @@ on as without it. The container escape watch has no such fallback:
 `schedule plan` lists it as skipped where the kernel lacks what it needs.
 If it cannot be loaded anyway, it exits 2 and is restarted every 10
 seconds, as the other watches are, and the tamper check reports it
-stopped. Each job
+stopped. Each
+service has a mount namespace of its own (`ProtectSystem=full`), whose
+copies of the host's mounts have other IDs. So the trace names each
+program from init's mount table, or its own or its parent's, not only the
+service's. Each job
 that loads it is allowed 64 MiB of locked memory, which kernels before
 5.11 count BPF maps against. Each loads its own copy, with an 8 MiB ring
 buffer: four, as root.

@@ -40,7 +40,7 @@ from .connect_trace import (BTF, BTF_PATH, EXE_NAME, GET_CURRENT_COMM, GET_CURRE
                             RINGBUF_RESERVE, RINGBUF_SUBMIT, Counter, Ring, TraceError, _count, _exe_offsets,
                             _insn, count_drop,
                             _tail, add_imm, attach, call, deref, exit_, jump_if_at_most, jump_if_zero, load_dw,
-                            load_map, mounts, mov_imm, mov_reg, names_at, read_into, read_mount, store_dw,
+                            load_map, mount_table, mov_imm, mov_reg, names_at, read_into, read_mount, store_dw,
                             store_w, sub_reg, walk_names)
 
 EXEC_POINT, FORK_POINT = b'sched_process_exec', b'sched_process_fork'
@@ -328,14 +328,15 @@ class ExecTrace:
         raw = bytes(data[EXEC_ARGV:EXEC_ARGV + min(length, ARGV_BYTES)])
         argv = [a.decode('utf-8', 'replace') for a in raw.split(b'\0') if a]
         names = names_at(data, EXEC_EXE, LEVELS)
-        mount = self.mount(exe_mount)
+        pid = pid_tgid >> 32
+        mount = self.mount(exe_mount, pid, parent)
         path, deleted = _tail(names, mount), False
         if mount is None and names[0].startswith('memfd:'):
             # A program run from memory: /proc shows it as /memfd:NAME (deleted).
             path, deleted = '/' + names[0], True
         cwd = None
         if self.cwd_chain is not None:
-            found = _tail(names_at(data, EXEC_CWD, LEVELS), self.mount(cwd_mount))
+            found = _tail(names_at(data, EXEC_CWD, LEVELS), self.mount(cwd_mount, pid, parent))
             cwd = found if found and not found.startswith('…') else None
         written = self.written
         ino, dev, mnt_ns = struct.unpack_from('<QII', data, EXEC_INO)
@@ -355,13 +356,14 @@ class ExecTrace:
                     # As /proc/PID/cgroup gives them: what the container watch names containers from.
                     cgroup=''.join(f'{label}:{found}\n' for label, found in groups if found))
 
-    def mount(self, mount_id):
-        """(root, mount point) of a mount ID, reading mountinfo again when one is new; None when it is not
-        among this process's mounts."""
+    def mount(self, mount_id, *pids):
+        """(root, mount point) of a mount ID, reading the mount tables again when one is new; None when it is
+        in none of them. See :func:`connect_trace.mount_table`: in a service with a mount namespace of its own,
+        the traced programs' mounts are not among this process's."""
         if not mount_id:
             return None
         if self.known_mounts is None or mount_id not in self.known_mounts:
-            self.known_mounts = mounts()
+            self.known_mounts = mount_table(mount_id, pids)
         return self.known_mounts.get(mount_id)
 
     def close(self):
