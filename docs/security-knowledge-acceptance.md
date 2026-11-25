@@ -115,9 +115,9 @@ coverage has gaps. The four earlier reports remain available.
 
 ## Offline packaging
 
-The ATLAS parser uses PyYAML 6.0.3. The test and native installer wheel profiles
+The ATLAS parser uses PyYAML 6.0.4. The test and native installer wheel profiles
 include its exact CPython 3.11/3.12 Linux wheel hashes from
-[the publisher's PyPI release](https://pypi.org/project/PyYAML/6.0.3/#files).
+[the publisher's PyPI release](https://pypi.org/project/PyYAML/6.0.4/#files).
 The build-input inventory and isolated-environment checks include this reader;
 CI does not depend on a copy incidentally installed on the runner. The existing
 locked installer wheelhouse was checked with hash-required downloads. All 13

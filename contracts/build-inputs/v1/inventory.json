@@ -49,9 +49,9 @@
           "version": "3.3.0"
         },
         {
-          "declared_sha256": "sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc",
+          "declared_sha256": "sha256:93bfb2459195406a518e2f487a9bbf01df240175f31e06f5a252ac6734c7bbf0",
           "name": "pyyaml",
-          "version": "6.0.3"
+          "version": "6.0.4"
         }
       ],
       "id": "installer-linux-cp312",
@@ -62,7 +62,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "native installer rehearsal with geography and knowledge readers",
-      "source_sha256": "534fd2253b0a56799a0c12e0d0f711dac2a8c688dc32463cc275c8eba5d95ddf"
+      "source_sha256": "de4d2e7f1bd5fff0f8a4d62dbd57933a9cc97d1f55af2adca37ae2f77b0e86c1"
     },
     {
       "direct_packages": [
@@ -107,9 +107,9 @@
           "version": "9.2.0"
         },
         {
-          "declared_sha256": "sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d",
+          "declared_sha256": "sha256:622aa875fa6533f25fedcffe23079357d65a690d462200afed5d8e9d0e01ebee",
           "name": "pyyaml",
-          "version": "6.0.3"
+          "version": "6.0.4"
         },
         {
           "declared_sha256": "sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231",
@@ -138,7 +138,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.11",
       "role": "required test job",
-      "source_sha256": "0aeab5ef7c1d2c383817090774e77a1260ccdb0bf5b311e41ab84f73c65122c3"
+      "source_sha256": "a38b5c7a87b4971a204b5ebf0a8721c8c7bc5c57ea83df3be13862564c3e849d"
     },
     {
       "direct_packages": [
@@ -183,9 +183,9 @@
           "version": "9.2.0"
         },
         {
-          "declared_sha256": "sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc",
+          "declared_sha256": "sha256:93bfb2459195406a518e2f487a9bbf01df240175f31e06f5a252ac6734c7bbf0",
           "name": "pyyaml",
-          "version": "6.0.3"
+          "version": "6.0.4"
         },
         {
           "declared_sha256": "sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231",
@@ -209,7 +209,7 @@
       "platform": "linux-glibc-x86_64",
       "python": "3.12",
       "role": "wheel-smoke tests",
-      "source_sha256": "69b44fc63809131e49e175693940f9314e122190b36ef738eb748ac8397dcba7"
+      "source_sha256": "5b0aec6a88cf3852e8240c0793121ffb1f00fd91928e26841be19428f6628283"
     },
     {
       "direct_packages": [
