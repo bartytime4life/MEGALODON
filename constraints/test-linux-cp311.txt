@@ -21,9 +21,9 @@ pluggy==1.7.0 --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c4
 pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
 # pytest-9.2.0-py3-none-any.whl — https://pypi.org/project/pytest/9.2.0/#files (verified 2026-11-04 UTC)
 pytest==9.2.0 --hash=sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588
-# pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-# https://pypi.org/project/PyYAML/6.0.3/#files (verified 2026-10-02 UTC)
-pyyaml==6.0.3 --hash=sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d
+# pyyaml-6.0.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+# https://pypi.org/project/PyYAML/6.0.4/#files (verified 2026-11-24 UTC)
+pyyaml==6.0.4 --hash=sha256:622aa875fa6533f25fedcffe23079357d65a690d462200afed5d8e9d0e01ebee
 # referencing-0.37.0-py3-none-any.whl — https://pypi.org/project/referencing/0.37.0/#files
 referencing==0.37.0 --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231
 # rpds_py-2026.9.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl — https://pypi.org/project/rpds-py/2026.9.1/#files
