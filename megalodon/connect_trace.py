@@ -514,20 +514,21 @@ def _tail(names, mount=None):
 
 
 PROC = '/proc'
+HOST = 1          # a process in the host's mount namespace: init
 
 
-def mount_table(mount_id, pids=()):
-    """{mount ID: (root, mount point)} holding ``mount_id`` if it can be found: this process's mounts, then
-    init's, then those of ``pids``, such as the traced process and its parent.
+def mount_table(mount_id):
+    """{mount ID: (root, mount point)}: this process's mounts, then, if ``mount_id`` is not among them, the
+    host's (init's).
 
     A service can run in a mount namespace of its own (systemd's ``ProtectSystem=``), whose copies of the host's
-    mounts have other IDs: a traced program on the host is found in init's table, or its own. Mount IDs are
-    unique across namespaces, so one table can hold several."""
-    found = {}
-    for source in ('self', 1, *pids):
-        found.update(mounts(f'{PROC}/{source}/mountinfo'))
-        if mount_id in found:
-            break
+    mounts have other IDs: a program on the host is found in init's table. Mount IDs are unique across
+    namespaces, so one table can hold both. No other table is read: a mount namespace a program made itself
+    can put any folder at ``/usr/bin``, so its mount points are not the host's paths, and its programs stay
+    partial (``…/``)."""
+    found = mounts(f'{PROC}/self/mountinfo')
+    if mount_id not in found:
+        found.update(mounts(f'{PROC}/{HOST}/mountinfo'))
     return found
 
 
@@ -639,19 +640,19 @@ class ConnectTrace:
         if self.exe_chain:
             names = names_at(data, EVENT_SOCK + self.sock_bytes)
             mount_id, = struct.unpack_from('<I', data, EVENT_MOUNT)
-            mount = self.mount(mount_id, pid_tgid >> 32, parent)
+            mount = self.mount(mount_id)
         return dict(exe_tail=_tail(names, mount), pid=pid_tgid >> 32, uid=uid_gid & 0xFFFFFFFF, gid=uid_gid >> 32, comm=comm, parent=parent,
                     old=old, new=new, sk=sk, netns=netns or None, local_address=str(local), local_port=local_port,
                     address=str(remote), port=remote_port)
 
-    def mount(self, mount_id, *pids):
-        """(root, mount point) of a mount ID, reading the mount tables again when one is new: None if it is in
-        none of them (another mount namespace, such as a container's, whose processes are gone)."""
+    def mount(self, mount_id):
+        """(root, mount point) of a mount ID, reading the mount tables again when one is new: None if it is
+        neither this process's nor the host's (another mount namespace, such as a container's)."""
         if not mount_id:
             return None
         known = getattr(self, 'known_mounts', None)
         if known is None or mount_id not in known:
-            known = self.known_mounts = mount_table(mount_id, pids)
+            known = self.known_mounts = mount_table(mount_id)
         return known.get(mount_id)
 
     def close(self):

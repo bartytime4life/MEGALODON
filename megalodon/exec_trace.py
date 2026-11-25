@@ -328,15 +328,14 @@ class ExecTrace:
         raw = bytes(data[EXEC_ARGV:EXEC_ARGV + min(length, ARGV_BYTES)])
         argv = [a.decode('utf-8', 'replace') for a in raw.split(b'\0') if a]
         names = names_at(data, EXEC_EXE, LEVELS)
-        pid = pid_tgid >> 32
-        mount = self.mount(exe_mount, pid, parent)
+        mount = self.mount(exe_mount)
         path, deleted = _tail(names, mount), False
         if mount is None and names[0].startswith('memfd:'):
             # A program run from memory: /proc shows it as /memfd:NAME (deleted).
             path, deleted = '/' + names[0], True
         cwd = None
         if self.cwd_chain is not None:
-            found = _tail(names_at(data, EXEC_CWD, LEVELS), self.mount(cwd_mount, pid, parent))
+            found = _tail(names_at(data, EXEC_CWD, LEVELS), self.mount(cwd_mount))
             cwd = found if found and not found.startswith('…') else None
         written = self.written
         ino, dev, mnt_ns = struct.unpack_from('<QII', data, EXEC_INO)
@@ -356,14 +355,14 @@ class ExecTrace:
                     # As /proc/PID/cgroup gives them: what the container watch names containers from.
                     cgroup=''.join(f'{label}:{found}\n' for label, found in groups if found))
 
-    def mount(self, mount_id, *pids):
+    def mount(self, mount_id):
         """(root, mount point) of a mount ID, reading the mount tables again when one is new; None when it is
-        in none of them. See :func:`connect_trace.mount_table`: in a service with a mount namespace of its own,
-        the traced programs' mounts are not among this process's."""
+        neither this process's nor the host's. See :func:`connect_trace.mount_table`: in a service with a mount
+        namespace of its own, the host's programs' mounts are not among this process's."""
         if not mount_id:
             return None
         if self.known_mounts is None or mount_id not in self.known_mounts:
-            self.known_mounts = mount_table(mount_id, pids)
+            self.known_mounts = mount_table(mount_id)
         return self.known_mounts.get(mount_id)
 
     def close(self):

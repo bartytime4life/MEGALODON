@@ -78,8 +78,9 @@ seconds, as the other watches are, and the tamper check reports it
 stopped. Each
 service has a mount namespace of its own (`ProtectSystem=full`), whose
 copies of the host's mounts have other IDs. So the trace names each
-program from init's mount table, or its own or its parent's, not only the
-service's. Each job
+program from init's mount table too. No other table is read: a program in
+a mount namespace of its own (a container's, or one it made, which can put
+any folder at `/usr/bin`) keeps a partial path, `…/`, as before. Each job
 that loads it is allowed 64 MiB of locked memory, which kernels before
 5.11 count BPF maps against. Each loads its own copy, with an 8 MiB ring
 buffer: four, as root.
