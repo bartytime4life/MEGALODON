@@ -37,8 +37,8 @@ DEFAULT_STATE = '~/.local/state/megalodon/commands-state.json'
 EVOLVE = b'megalodon-command-log-evolve-v1'
 ROTATE_BYTES = 64 * 1024 * 1024
 MAX_ARGV_CHARS = 4096
-# Enough for MAX_ARGV_CHARS characters of UTF-8: a command line longer than this is longer than is kept, and ends
-# with [cut].
+# Enough for MAX_ARGV_CHARS characters of UTF-8. A command line longer than this ends with [cut], even when
+# blanking a secret in it makes it short enough to keep.
 MAX_CMDLINE_BYTES = 4 * MAX_ARGV_CHARS
 FLUSH_SECONDS = 1.0
 FLUSH_LINES = 256
@@ -342,10 +342,12 @@ def describe(base, pid, *, redact=True):
         tty = int(stat_text[stat_text.rindex(')') + 2:].split()[4])
     except (ValueError, IndexError):
         tty = 0
-    full = _command_line(base, pid)
-    full = proc.argv if full is None else full
+    # Unreadable here means unreadable to read_proc too: nothing more is known.
+    full, whole = _command_line(base, pid) or (proc.argv, True)
     argv, hidden = _redact(full) if redact else (full, 0)
     kept = _kept(argv)
+    if not whole and kept[-1:] != ['[cut]']:
+        kept.append('[cut]')
     entry = dict(pid=pid, ppid=proc.ppid, uid=proc.uid, program=proc.path, argv=kept, cwd=link('cwd'),
                  login_uid=int(login) if login and login.lstrip('-').isdigit() and int(login) != 4294967295
                  else None,
@@ -367,11 +369,13 @@ def _command_line_bytes(base, pid):
 
 
 def _arguments(raw):
-    return [part.decode('utf-8', 'replace') for part in raw.split(b'\0') if part]
+    """(arguments, whether the whole command line was read) from what _command_line_bytes read."""
+    return ([part.decode('utf-8', 'replace') for part in raw[:MAX_CMDLINE_BYTES].split(b'\0') if part],
+            len(raw) <= MAX_CMDLINE_BYTES)
 
 
 def _command_line(base, pid):
-    """The arguments in /proc/PID/cmdline, read up to MAX_CMDLINE_BYTES; None when it cannot be read."""
+    """(arguments, whether all were read) from /proc/PID/cmdline; None when it cannot be read."""
     raw = _command_line_bytes(base, pid)
     return None if raw is None else _arguments(raw)
 
@@ -402,10 +406,9 @@ def describe_traced(base, record, *, redact=True):
         # The same command line, read as far as a line keeps. Compared as bytes: the trace's may end inside a
         # character, which decodes differently from the whole one.
         traced = record.get('argv_bytes')
-        same = read is not None and (read.startswith(traced) if traced is not None
-                                     else '\0'.join(_arguments(read)).startswith('\0'.join(argv)))
-        if same:
-            argv, cut = _arguments(read), False
+        if read is not None and traced is not None and read.startswith(traced):
+            argv, whole = _arguments(read)
+            cut = not whole
         try:
             text = (base / str(record['pid']) / 'stat').read_text('utf-8', 'replace')
             tty = int(text[text.rindex(')') + 2:].split()[4]) or None

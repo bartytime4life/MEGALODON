@@ -110,6 +110,23 @@ def test_a_cut_inside_a_character_is_still_the_same_command_line():
         child.wait()
 
 
+@pytest.mark.parametrize('joined', [False, True])
+def test_a_blanked_secret_does_not_hide_that_the_command_line_was_cut(joined):
+    # A value longer than is read is blanked to a short placeholder: the line still says it was cut.
+    import secrets
+    value = secrets.token_urlsafe(15000)                               # random, made here: about 20,000 characters
+    extra = (['--token=' + value] if joined else ['--token', value]) + ['TRAILING']
+    child, live = long_running(extra)
+    try:
+        full = ['python3', '-c', 'import time; time.sleep(5)', *extra]
+        for entry in (cl.describe_traced(BASE, as_traced(child, live, full)), cl.describe(BASE, child.pid)):
+            assert value not in str(entry) and entry['hidden'] == 1
+            assert entry['argv'][-1] == '[cut]' and 'TRAILING' not in entry['argv']
+    finally:
+        child.kill()
+        child.wait()
+
+
 def test_a_command_line_longer_than_is_read_stays_cut():
     extra = ['y' * 1000 for _ in range(20)]                           # 20 KB: more than the 16 KiB read
     child, live = long_running(extra)
