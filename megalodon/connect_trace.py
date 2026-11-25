@@ -53,11 +53,12 @@ MAX_EVENTS_PER_DRAIN = 65536
 LICENSE = b'Dual BSD/GPL'
 
 # bpf() commands, program and map types (include/uapi/linux/bpf.h)
-BPF_MAP_CREATE, BPF_PROG_LOAD, BPF_RAW_TRACEPOINT_OPEN = 0, 5, 17
-BPF_MAP_TYPE_RINGBUF = 27
+BPF_MAP_CREATE, BPF_MAP_LOOKUP_ELEM, BPF_PROG_LOAD, BPF_RAW_TRACEPOINT_OPEN = 0, 1, 5, 17
+BPF_MAP_TYPE_ARRAY, BPF_MAP_TYPE_RINGBUF = 2, 27
 BPF_PROG_TYPE_RAW_TRACEPOINT = 17
 BPF_PSEUDO_MAP_FD = 1
 # Helpers
+MAP_LOOKUP_ELEM = 1
 GET_CURRENT_PID_TGID, GET_CURRENT_UID_GID, GET_CURRENT_COMM, GET_CURRENT_TASK = 14, 15, 16, 35
 PROBE_READ_USER, PROBE_READ_KERNEL, PROBE_READ_KERNEL_STR, RINGBUF_RESERVE, RINGBUF_SUBMIT = 112, 113, 115, 131, 132
 # The executable's last path components, read in the kernel: kept for a process gone before it can be read.
@@ -241,6 +242,14 @@ def sub_reg(dst, src):
     return _insn(0x1F, dst, src)
 
 
+def count_drop(counter_fd):
+    """Add one to the counter map's only value: a record the ring buffer had no room for."""
+    return [_insn(0x62, 10, off=-4, imm=0),               # the key, 0, on the stack
+            load_map(1, counter_fd), mov_reg(2, 10), add_imm(2, -4), call(MAP_LOOKUP_ELEM),
+            jump_if_zero(0, 2), mov_imm(1, 1),
+            _insn(0xDB, 0, 1)]                            # lock *(u64 *)(r0 + 0) += r1
+
+
 def deref(reg, offset):
     """reg = *(u64 *)(reg + offset), read through the stack. Clobbers r0 to r5."""
     return [mov_reg(3, reg), add_imm(3, offset), mov_reg(1, 10), add_imm(1, -8), mov_imm(2, 8),
@@ -379,6 +388,23 @@ def attach(code, name, tracepoint):
     except BaseException:
         os.close(prog)
         raise
+
+
+class Counter:
+    """A one-value BPF array map that the programs add to when the ring buffer is full."""
+
+    def __init__(self):
+        self.fd = _bpf(BPF_MAP_CREATE, struct.pack('<IIIII', BPF_MAP_TYPE_ARRAY, 4, 8, 1, 0))
+
+    def value(self):
+        key, value = ctypes.c_uint32(0), ctypes.c_uint64(0)
+        _bpf(BPF_MAP_LOOKUP_ELEM, struct.pack('<IIQQQ', self.fd, 0, _address(key), _address(value), 0))
+        return value.value
+
+    def close(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
 
 
 class Ring:
