@@ -100,15 +100,53 @@ def test_a_recorded_parent_is_as_its_records_left_it(root, recorded, now, report
     assert [f['evidence']['service']['program'] for f in found if f['evidence']['pid'] == 801] == reported
 
 
+def _now_runs(root, pid, path, start):
+    shutil.rmtree(root / 'proc' / str(pid))
+    proc(root, pid, 1, path, start=start)
+
+
+@pytest.mark.parametrize('first', [
+    [forked(801, 800)],                                                  # a fork reads the parent from /proc
+    [forked(801, 800), started(801, 800, '/usr/bin/true', ['true'])],    # so does the walk for a command
+])
+def test_a_parent_known_only_from_proc_is_read_again(root, first):
+    # A script running before the watch, never recorded, later becomes nginx, and that exec's record is lost.
+    proc(root, 800, 1, '/usr/bin/dash', start=5800)
+    w, found = watcher(root)
+    for record in first:
+        w.handle_traced(record)
+    _now_runs(root, 800, '/usr/sbin/nginx', 5800)
+    for record in (forked(802, 800), started(802, 800, '/usr/bin/id', ['id'])):
+        w.handle_traced(record)
+    assert [(f['evidence']['pid'], f['evidence']['service']['program']) for f in found] == [(802, '/usr/sbin/nginx')]
+
+
+def test_a_reused_pid_is_not_taken_as_recorded(root):
+    # 850 ran true, recorded, and exited. Its PID went to a child of a script known only from /proc, which
+    # then became nginx without a record: that child is read again, not trusted as the trace's.
+    proc(root, 800, 1, '/usr/bin/dash', start=5800)
+    w, found = watcher(root)
+    for record in (forked(850, 11), started(850, 11, '/usr/bin/true', ['true']), forked(850, 800)):
+        w.handle_traced(record)
+    proc(root, 850, 800, '/usr/sbin/nginx', start=5850)
+    for record in (forked(851, 850), started(851, 850, '/usr/bin/id', ['id'])):
+        w.handle_traced(record)
+    assert [(f['evidence']['pid'], f['evidence']['service']['program']) for f in found
+            if f['evidence']['pid'] == 851] == [(851, '/usr/sbin/nginx')]
+
+
 def test_a_subshell_and_a_reparented_command_lead_back_to_the_service(root):
     # nginx -> sh -c '(id &)': the subshell forks without exec, id is reparented to init before it execs, and
-    # nginx's PID now belongs to another process. The fork records, not /proc, say where id came from.
+    # the PIDs of nginx and the subshell now belong to other processes. The fork records, not /proc, say where
+    # id came from.
     proc(root, 800, 1, '/usr/bin/true', start=9999)
+    proc(root, 801, 1, '/usr/bin/true', start=9998)
     w, found = watcher(root)
     for record in (started(800, 1, '/usr/sbin/nginx', ['nginx'], start=5800), forked(801, 800),
                    forked(802, 801), started(802, 1, '/usr/bin/id', ['id'])):
         w.handle_traced(record)
     assert [(f['evidence']['pid'], f['evidence']['service']['program']) for f in found] == [(802, '/usr/sbin/nginx')]
+    assert found[0]['evidence']['chain'][:2] == ['/usr/sbin/nginx', '/usr/sbin/nginx']   # the subshell, then nginx
 
 
 def test_distinct_commands_are_each_reported(root):
