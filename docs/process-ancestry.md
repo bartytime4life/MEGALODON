@@ -75,7 +75,9 @@ instead, and all 20 were reported, each with its arguments.
   time. That record is its identity, even when `/proc` shows something else
   by the time it is read. Each exec and fork is also remembered, so a parent
   that already exited, such as the `sh -c` between a service and the command,
-  still leads back to the service.
+  still leads back to the service. A parent the trace recorded is taken as
+  its records left it, not as `/proc` shows it later: a startup script that
+  ran `id` and then became `nginx` is not reported as `nginx` running `id`.
 * **Lost records.** If programs start faster than the watch reads, the
   kernel has no room for some records. The statistics printed when the watch
   stops count them as `trace_dropped`.
