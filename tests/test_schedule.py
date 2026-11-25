@@ -35,8 +35,9 @@ def test_the_plan_lists_jobs_missing_baselines_and_cron_lines(home, tmp_path):
     baselines(home, "persistence.json")
     result = sc.plan(system=False, directory=tmp_path / "units", launcher=["/usr/bin/megalodon"])
     jobs = {row["job"]: row for row in result["jobs"]}
-    assert "ancestry" not in jobs and {s["job"] for s in result["skipped"]} == {"ancestry", "ebpf", "containers", "enforce", "commands"}, \
-        "the live ancestry watch, the eBPF and container checks and enforcement need root"
+    assert "ancestry" not in jobs and {s["job"] for s in result["skipped"]} == {"ancestry", "ebpf", "containers", "enforce", "commands",
+                                                                        "container-escapes"}, \
+        "the live ancestry and container escape watches, the eBPF and container checks and enforcement need root"
     assert jobs["persistence"]["baseline"] is None
     assert jobs["listeners"]["baseline"] == "/usr/bin/megalodon listeners baseline"
     assert jobs["rootkit"]["command"] == "/usr/bin/megalodon rootkit check --skip-ports --alert"
@@ -136,3 +137,71 @@ def test_without_systemd_each_live_watch_with_a_check_runs_it_from_crontab(tmp_p
 def test_a_watch_with_no_check_has_no_crontab_line(tmp_path):
     rows = {r["job"]: r for r in sc.plan(system=True, directory=tmp_path / "units", launcher=["m"])["jobs"]}
     assert rows["ransomware"]["cron"] is None and rows["commands"]["cron"] is None, "no one-shot check to run instead"
+
+
+def _service(name, system=True):
+    return sc.units(next(j for j in sc.JOBS if j.name == name), ["m"], system)[f"megalodon-{name}.service"]
+
+
+@pytest.mark.parametrize("name, command", [
+    ("ancestry", "m ancestry watch --alert --respond --trace-execs"),
+    ("commands", "m commands record --trace-execs"),
+    ("credentials", "m credentials watch --alert --respond --trace-execs"),
+])
+def test_the_watches_that_go_on_without_ebpf_trace_execs(name, command):
+    # Each takes started programs from the kernel's record where eBPF loads, and the process events where not.
+    service = _service(name)
+    assert f"ExecStart={command}" in service
+    assert "LimitMEMLOCK=64M" in service, "before Linux 5.11 the 8 MiB ring buffer counts against it"
+
+
+def test_a_user_unit_does_not_raise_the_locked_memory_limit():
+    # A user unit cannot raise it, and fails to start if it asks; without root there is no eBPF anyway.
+    assert "--trace-execs" in _service("credentials", system=False)
+    assert "LimitMEMLOCK" not in _service("credentials", system=False)
+
+
+def test_the_container_escape_watch_runs_as_root_where_ebpf_can_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(sc, "ebpf_missing", lambda: None)
+    rows = {r["job"]: r for r in sc.plan(system=True, directory=tmp_path / "units", launcher=["m"])["jobs"]}
+    row = rows["container-escapes"]
+    assert (row["command"], row["every"], row["cron"]) == ("m containers watch --alert --respond", "always running",
+                                                           None), "without systemd, the containers check covers it"
+    service = _service("container-escapes")
+    # Restarted like the other watches: its exit 2 is also a settings error, which a later fix clears.
+    assert "Restart=on-failure" in service and "LimitMEMLOCK=64M" in service
+    assert "ReadWritePaths=/etc" in service, "its enforcement run writes what the enforce job writes"
+
+
+def test_where_ebpf_cannot_run_the_container_escape_watch_is_left_out(home, tmp_path, monkeypatch):
+    # Installed, it would stop at once and the tamper check would report it stopped every 15 minutes.
+    monkeypatch.setattr(sc, "ebpf_missing", lambda: "the kernel has no type information (/sys/kernel/btf/vmlinux)")
+    result = sc.plan(system=True, directory=tmp_path / "units", launcher=["m"])
+    assert "container-escapes" not in {r["job"] for r in result["jobs"]}
+    assert {"job": "container-escapes",
+            "reason": "needs eBPF: the kernel has no type information (/sys/kernel/btf/vmlinux)"} in result["skipped"]
+    assert {"ancestry", "commands", "credentials"} <= {r["job"] for r in result["jobs"]}, "these go on without it"
+    folder = tmp_path / "units"
+    result = sc.install(system=True, only=["container-escapes", "rootkit"], directory=folder, launcher=["m"],
+                        runner=Systemctl())
+    assert result["enabled"] == ["megalodon-rootkit.timer"]
+    assert not (folder / "megalodon-container-escapes.service").exists()
+
+
+@pytest.mark.parametrize("machine, release, btf, reason", [
+    ("x86_64", "6.18.4", True, None),
+    ("aarch64", "5.8.0-63-generic", True, None),
+    ("riscv64", "6.1.0", True, "eBPF tracing supports x86-64 and arm64, not riscv64"),
+    ("x86_64", "6.1.0", False, "the kernel has no type information (/sys/kernel/btf/vmlinux)"),
+    ("x86_64", "5.4.0-150-generic", True, "BPF ring buffers need Linux 5.8 or later, not 5.4.0-150-generic"),
+    ("x86_64", "5.4-rc7", True, "BPF ring buffers need Linux 5.8 or later, not 5.4-rc7"),
+    ("x86_64", "custom", True, None),                 # a version it cannot read: the watch itself will say
+])
+def test_what_ebpf_needs_is_seen_without_loading_it(monkeypatch, machine, release, btf, reason):
+    import platform
+    from megalodon import connect_trace
+    monkeypatch.setattr(platform, "machine", lambda: machine)
+    monkeypatch.setattr(platform, "release", lambda: release)
+    real = sc.os.path.exists
+    monkeypatch.setattr(sc.os.path, "exists", lambda path: btf if path == connect_trace.BTF_PATH else real(path))
+    assert sc.ebpf_missing() == reason

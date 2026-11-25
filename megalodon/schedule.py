@@ -2,7 +2,8 @@
 
 `megalodon schedule plan` shows the systemd timers and services it would
 install: each baseline check with `--alert`, the rootkit cross-checks, the
-response engine's shadow pass and, as root, the live process ancestry watch.
+response engine's shadow pass and, as root, the live process ancestry and
+container escape watches.
 `install --yes` writes those units and enables them; `remove --yes` disables
 and deletes them. Nothing is written or started without `--yes`.
 
@@ -37,6 +38,7 @@ class Job:
     interval: int | None = None           # seconds between runs, for the tamper check's overdue test
     setup: str | None = None              # what to run when there is no baseline command
     writable: tuple = ()                  # folders the job changes, writable inside ProtectSystem=full
+    ebpf: str | None = None               # 'optional': goes on without it; 'required': left out where it cannot run
 
 
 JOBS = (
@@ -116,17 +118,27 @@ JOBS = (
     Job('rootkit', 'MEGALODON rootkit cross-checks', ('rootkit', 'check', '--skip-ports', '--alert'), 'hourly',
         cron='41 * * * *', interval=3600),
     # The live watches answer each finding as it is seen; their enforcement run is a whole run, so they can
-    # write what the enforce job writes.
-    Job('ancestry', 'MEGALODON process ancestry watch, answered at once', ('ancestry', 'watch', '--alert', '--respond'),
+    # write what the enforce job writes. With --trace-execs, each started program is taken from the kernel's
+    # record at its exec (eBPF), so one gone before the watch reads it is still seen; where eBPF cannot be
+    # loaded, each watch says why and goes on as without it.
+    Job('ancestry', 'MEGALODON process ancestry watch, answered at once',
+        ('ancestry', 'watch', '--alert', '--respond', '--trace-execs'), ebpf='optional',
         root_only=True, writable=('/etc', '-/usr/local/lib/systemd/system'),
         cron='*/5 * * * *', cron_command=('ancestry', 'check', '--alert')),
     # Every started program, in a signed log; its first key is printed once by init and kept off the machine.
-    Job('commands', 'MEGALODON command log', ('commands', 'record'), root_only=True,
+    Job('commands', 'MEGALODON command log', ('commands', 'record', '--trace-execs'), root_only=True, ebpf='optional',
         manifest='~/.local/state/megalodon/commands-state.json',
         setup='megalodon commands init --key-file /path/to/move/off/this/machine'),
     Job('credentials', 'MEGALODON credential access watch, answered at once',
-        ('credentials', 'watch', '--alert', '--respond'), writable=('/etc', '-/usr/local/lib/systemd/system'),
+        ('credentials', 'watch', '--alert', '--respond', '--trace-execs'), ebpf='optional',
+        writable=('/etc', '-/usr/local/lib/systemd/system'),
         cron='*/5 * * * *', cron_command=('credentials', 'check', '--alert')),
+    # Live: a program started on the host from a container, as it starts, so an escape over within a second is
+    # seen. It needs eBPF and has no fallback, so it is left out where the kernel lacks what eBPF needs; the
+    # 15-minute containers check covers those machines.
+    Job('container-escapes', 'MEGALODON container escape watch, answered at once',
+        ('containers', 'watch', '--alert', '--respond'), root_only=True, ebpf='required',
+        writable=('/etc', '-/usr/local/lib/systemd/system')),
     # Encryption is decided and enforced as it is seen, not on the next timer; enforcement may disable a
     # persistence entry decided earlier in the same pass, so the same folders as the enforce job are writable.
     Job('ransomware', 'MEGALODON ransomware watch, answered at once', ('ransomware', 'watch', '--respond'),
@@ -152,6 +164,27 @@ def _system_mode(system):
     return os.geteuid() == 0 if system is None else system
 
 
+def ebpf_missing():
+    """Why the exec trace cannot be loaded here, as far as can be seen without loading it; None if it can."""
+    import platform
+    from .connect_trace import BTF_PATH, SYSCALL_BPF
+    if platform.machine() not in SYSCALL_BPF:
+        return f'eBPF tracing supports x86-64 and arm64, not {platform.machine()}'
+    if not os.path.exists(BTF_PATH):
+        return f'the kernel has no type information ({BTF_PATH})'
+    try:
+        release = tuple(int(part) for part in platform.release().split('-')[0].split('.')[:2])
+    except ValueError:
+        return None
+    if release < (5, 8):
+        return f'BPF ring buffers need Linux 5.8 or later, not {platform.release()}'
+    return None
+
+
+def _cannot_run(job):
+    return ebpf_missing() if job.ebpf == 'required' else None
+
+
 def unit_dir(system):
     return Path('/etc/systemd/system') if system else Path.home() / '.config/systemd/user'
 
@@ -171,6 +204,10 @@ def units(job, launcher, system):
                # Read-only checks: no new privileges, the system tree read-only, low priority.
                'NoNewPrivileges=yes', 'ProtectSystem=full', 'Nice=10']
     service += [f'ReadWritePaths={folder}' for folder in job.writable]
+    if job.ebpf and system:
+        # Before Linux 5.11, BPF maps count against the locked-memory limit, 8 MiB by default: the trace's
+        # ring buffer alone is that much. Only as root: eBPF needs it, and a user unit cannot raise the limit.
+        service.append('LimitMEMLOCK=64M')
     if job.calendar is None:
         service += ['Restart=on-failure', 'RestartSec=10', '', '[Install]',
                     f'WantedBy={"multi-user.target" if system else "default.target"}']
@@ -188,7 +225,7 @@ def units(job, launcher, system):
 
 
 def _selected(only, system):
-    jobs = [j for j in JOBS if (not only or j.name in only) and (system or not j.root_only)]
+    jobs = [j for j in JOBS if (not only or j.name in only) and (system or not j.root_only) and not _cannot_run(j)]
     unknown = set(only or ()) - {j.name for j in JOBS}
     if unknown:
         raise ScheduleError(f'unknown jobs: {", ".join(sorted(unknown))}; choose from '
@@ -206,6 +243,8 @@ def plan(*, system=None, only=None, directory=None, launcher=None):
             continue
         if job.root_only and not system:
             skipped.append(dict(job=job.name, reason='needs root: run `sudo megalodon schedule plan`'))
+        elif _cannot_run(job):
+            skipped.append(dict(job=job.name, reason=f'needs eBPF: {_cannot_run(job)}'))
     for job in _selected(only, system):
         ready = job.manifest is None or Path(job.manifest).expanduser().exists()
         rows.append(dict(job=job.name, description=job.description, command=_exec(job, launcher),

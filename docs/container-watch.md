@@ -128,7 +128,8 @@ since it was gone within a second; `watch` reported it.
   are removed when the watch stops. It needs root, a kernel with BTF and
   BPF ring buffers (Linux 5.8 or later), on x86-64 or arm64. Where they
   cannot be loaded, the watch says so and exits 2: `check` still runs. The
-  [scheduler](scheduling.md) does not start it.
+  [scheduler](scheduling.md) runs it as root, as the `container-escapes`
+  job, where the kernel has what it needs.
 
 ## What is reported
 
