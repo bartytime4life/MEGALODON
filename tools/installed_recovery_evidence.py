@@ -25,7 +25,7 @@ MAX_OUTPUT = 16_384
 MAX_FILE = 8 * 1024 * 1024
 # Aggregate installed source includes the bundled local map and HUD modules.
 # Individual files, wheel input and synthetic databases retain the 8 MiB cap.
-MAX_PACKAGE_BYTES = 10 * 1024 * 1024
+MAX_PACKAGE_BYTES = 12 * 1024 * 1024
 COMMAND_SECONDS = 30
 TABLES = ("events", "detections", "actions", "ingestion_runs",
           "ingestion_run_events", "detection_actions", "sqlite_sequence")
