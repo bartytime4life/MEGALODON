@@ -286,6 +286,10 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--interval", type=float, default=0.25,
                                  help="seconds between /proc scans when not root (default 0.25)")
             command.add_argument("--respond", action="store_true", help=RESPOND_HELP)
+            command.add_argument("--trace-execs", action="store_true",
+                                 help="as root, load a small eBPF program and judge each program from the kernel's "
+                                      "own record of its start, so one gone before the watch reads it is still "
+                                      "judged; it is removed when the watch stops")
         command.add_argument("--alert", action="store_true",
                              help="also send findings to the [alerts] destinations in the settings file")
         command.add_argument("--config", type=Path,
@@ -1958,9 +1962,20 @@ def _ancestry(args: argparse.Namespace) -> int:
         print(json.dumps(found, sort_keys=True), flush=True)
         respond(found)
         notify(found)
+    trace = None
+    if args.trace_execs:
+        from .connect_trace import TraceError
+        from .exec_trace import ExecTrace
+        try:
+            trace = ExecTrace()
+        except TraceError as exc:
+            print(f"megalodon: exec tracing unavailable: {exc.strerror or exc}; using the kernel's process events, "
+                  "where a program gone before it is read is not judged", file=sys.stderr)
     try:
-        watcher = ancestry.Watcher(emit, allow_path=allow_file, interval=args.interval)
+        watcher = ancestry.Watcher(emit, allow_path=allow_file, interval=args.interval, trace=trace)
     except (ancestry.AncestryError, OSError) as exc:
+        if trace is not None:
+            trace.close()
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(f"megalodon: watching programs that services start ({watcher.mode})"
