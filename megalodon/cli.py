@@ -2552,7 +2552,9 @@ def _containers_watch(args, cw) -> int:
               "reports escapes that last more than a second", file=sys.stderr)
         return 2
     try:
-        watcher = cw.EscapeWatch(emit, trace)
+        watcher = cw.EscapeWatch(emit, trace, notice=lambda dropped: print(
+            f"megalodon: the exec trace had no room for {dropped} execs and forks so far; an escape among them is "
+            "not reported", file=sys.stderr, flush=True))
     except (cw.ContainerError, OSError) as exc:
         trace.close()
         print(f"megalodon: {exc}", file=sys.stderr)

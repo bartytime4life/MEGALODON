@@ -466,7 +466,7 @@ class Watcher:
         self.judge = Judge(_load_allow(allow_path))
         self.emit, self.clock = emit, clock
         self.cache: OrderedDict = OrderedDict()
-        self.stats = dict(opens=0, findings=0, unattributed=0, lost=0, named_after_exit=0)
+        self.stats = dict(opens=0, findings=0, unattributed=0, lost=0, named_after_exit=0, trace_dropped=0)
         if source is None:
             try:
                 source = Fanotify(self.files, self.folders)
@@ -520,6 +520,8 @@ class Watcher:
         severe. A forked process is remembered as its parent's program at the fork."""
         from .exec_trace import info as traced_info
         records = self.trace.drain()
+        # Execs and forks the ring buffer had no room for: a reader among them may be unattributed.
+        self.stats['trace_dropped'] = max(self.stats['trace_dropped'], self.trace.dropped())
         # Where a process runs another program later in this batch, /proc already shows that one.
         last_exec = {record['pid']: index for index, record in enumerate(records) if record['kind'] == 'exec'}
         for index, record in enumerate(records):

@@ -297,9 +297,12 @@ class FakeSource:
 
 
 class FakeTrace:
-    def __init__(self, records=(), source=None):
-        self.records, self.source, self.closed = list(records), source, False
+    def __init__(self, records=(), source=None, dropped=0):
+        self.records, self.source, self.closed, self.lost = list(records), source, False, dropped
         self.r, self.w = os.pipe()
+
+    def dropped(self):
+        return self.lost
 
     def fileno(self):
         return self.r
@@ -483,6 +486,14 @@ def test_the_watch_wakes_for_the_trace_alone(home):
         os.write(w.source.w, b'x')        # wake it to stop
         worker.join(5)
         w.close()
+
+
+def test_the_credential_watch_counts_what_the_trace_lost(home):
+    w, _, _, trace = watcher(home, [gone_exec()])
+    trace.lost = 7
+    w._traced()
+    assert w.stats['trace_dropped'] == 7
+    w.close()
 
 
 def test_without_fanotify_the_trace_is_not_used(home):
