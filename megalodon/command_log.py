@@ -37,6 +37,9 @@ DEFAULT_STATE = '~/.local/state/megalodon/commands-state.json'
 EVOLVE = b'megalodon-command-log-evolve-v1'
 ROTATE_BYTES = 64 * 1024 * 1024
 MAX_ARGV_CHARS = 4096
+# Enough for MAX_ARGV_CHARS characters of UTF-8: a command line longer than this is longer than is kept, and ends
+# with [cut].
+MAX_CMDLINE_BYTES = 4 * MAX_ARGV_CHARS
 FLUSH_SECONDS = 1.0
 FLUSH_LINES = 256
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
@@ -339,7 +342,9 @@ def describe(base, pid, *, redact=True):
         tty = int(stat_text[stat_text.rindex(')') + 2:].split()[4])
     except (ValueError, IndexError):
         tty = 0
-    argv, hidden = _redact(proc.argv) if redact else (proc.argv, 0)
+    full = _command_line(base, pid)
+    full = proc.argv if full is None else full
+    argv, hidden = _redact(full) if redact else (full, 0)
     kept = _kept(argv)
     entry = dict(pid=pid, ppid=proc.ppid, uid=proc.uid, program=proc.path, argv=kept, cwd=link('cwd'),
                  login_uid=int(login) if login and login.lstrip('-').isdigit() and int(login) != 4294967295
@@ -349,6 +354,17 @@ def describe(base, pid, *, redact=True):
     if hidden:
         entry['hidden'] = hidden
     return entry
+
+
+def _command_line(base, pid):
+    """The arguments in /proc/PID/cmdline, read up to MAX_CMDLINE_BYTES: further than process_ancestry.read_proc
+    reads it, as far as a line keeps. None when it cannot be read."""
+    try:
+        with open(base / str(pid) / 'cmdline', 'rb') as handle:
+            raw = handle.read(MAX_CMDLINE_BYTES + 1)
+    except OSError:
+        return None
+    return [part.decode('utf-8', 'replace') for part in raw.split(b'\0') if part]
 
 
 def _kept(argv):
@@ -373,8 +389,9 @@ def describe_traced(base, record, *, redact=True):
     proc = read_proc(base, record['pid'])
     if proc is not None and proc.start == record['start'] and proc.path == record['path']:
         exited = False
-        if cut and '\0'.join(proc.argv).startswith('\0'.join(argv)):
-            argv, cut = proc.argv, False         # The same command line, read in full.
+        read = _command_line(base, record['pid']) if cut else None
+        if read is not None and '\0'.join(read).startswith('\0'.join(argv)):
+            argv, cut = read, False              # The same command line, read as far as a line keeps.
         try:
             text = (base / str(record['pid']) / 'stat').read_text('utf-8', 'replace')
             tty = int(text[text.rindex(')') + 2:].split()[4]) or None

@@ -56,20 +56,51 @@ def test_a_running_process_adds_its_terminal_and_only_that():
         assert cl.describe_traced(BASE, other)['exited'] is True
 
 
+def long_running(arguments):
+    """A child that runs for a few seconds with these extra arguments, and its /proc description."""
+    child = subprocess.Popen(['python3', '-c', 'import time; time.sleep(5)', *arguments])
+    time.sleep(0.4)
+    return child, _proc_info(BASE / str(child.pid))
+
+
+def as_traced(child, live, argv):
+    """What the trace holds: the first 512 bytes of the command line, cut."""
+    raw = '\0'.join(argv).encode()[:512]
+    return traced(pid=child.pid, path=live['path'], argv=[a.decode() for a in raw.split(b'\0') if a],
+                  start=live['start'], cut=True)
+
+
 def test_a_long_command_line_is_completed_only_from_the_same_one():
-    me = os.getpid()
-    live = _proc_info(BASE / str(me))
-    full = live['argv']
-    joined = '\0'.join(full)
-    # The trace read the first part, cut inside an argument.
-    head = joined[:max(1, len(joined) // 2)].split('\0')
-    record = traced(pid=me, path=live['path'], argv=head, start=live['start'], cut=True)
-    assert cl.describe_traced(BASE, record)['argv'] == cl._kept(full)
-    # A different start of the command line: the kernel's part is kept, marked cut.
-    other = dict(record, argv=['something', 'else'])
-    assert cl.describe_traced(BASE, other)['argv'] == ['something', 'else', '[cut]']
-    # Gone: kept as read, marked cut.
-    assert cl.describe_traced(BASE, dict(record, pid=GONE))['argv'] == head + ['[cut]']
+    extra = [f'part{i:03d}-' + 'x' * 40 for i in range(16)]             # past the 512 bytes read elsewhere
+    child, live = long_running(extra)
+    try:
+        full = ['python3', '-c', 'import time; time.sleep(5)', *extra]
+        record = as_traced(child, live, full)
+        assert len('\0'.join(full)) > 512 and record['argv'] != full
+        assert cl.describe_traced(BASE, record)['argv'] == full
+        # Without the trace too, the whole command line is recorded.
+        assert cl.describe(BASE, child.pid)['argv'] == full
+        # A different start of the command line: the kernel's part is kept, marked cut.
+        other = dict(record, argv=['something', 'else'])
+        assert cl.describe_traced(BASE, other)['argv'] == ['something', 'else', '[cut]']
+        # Gone: kept as read, marked cut.
+        gone = dict(record, pid=GONE)
+        assert cl.describe_traced(BASE, gone)['argv'] == record['argv'] + ['[cut]']
+    finally:
+        child.kill()
+        child.wait()
+
+
+def test_a_command_line_longer_than_is_read_stays_cut():
+    extra = ['y' * 1000 for _ in range(20)]                           # 20 KB: more than the 16 KiB read
+    child, live = long_running(extra)
+    try:
+        full = ['python3', '-c', 'import time; time.sleep(5)', *extra]
+        assert cl.describe_traced(BASE, as_traced(child, live, full))['argv'][-1] == '[cut]'
+        assert cl.describe(BASE, child.pid)['argv'][-1] == '[cut]'
+    finally:
+        child.kill()
+        child.wait()
 
 
 def test_secrets_are_blanked_in_the_kernels_record_too():
