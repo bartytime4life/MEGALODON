@@ -565,14 +565,27 @@ def load_policy(path=DEFAULT_POLICY):
         quarantine_roots=roots, sources=dict(sources))
 
 
+def _toml_string(text):
+    """`text` as a TOML basic string. JSON's escapes are TOML's, except that JSON writes a character beyond the
+    Basic Multilingual Plane as two surrogate escapes, which TOML refuses, and leaves DEL alone, which TOML
+    forbids unescaped."""
+    out = json.dumps(text, ensure_ascii=False).replace('\x7f', '\\u007f')
+    out.encode('utf-8')          # a lone surrogate (an undecodable file name byte) cannot be written
+    return out
+
+
 def write_default_policy(path=DEFAULT_POLICY, *, replace=False):
     path = Path(path).expanduser()
     if path.exists() and not replace:
         raise ResponseError(f'{path} exists; edit it, or pass --replace to start again from the defaults')
     # The network audit store as `megalodon run` started here creates it, written out in full: the scheduled pass
     # runs from another folder, where the relative default names nothing.
-    text = DEFAULT_POLICY_TEXT.replace('audit_db = "data/megalodon.db"',
-                                       f'audit_db = {json.dumps(str(Path("data/megalodon.db").resolve()))}', 1)
+    text = DEFAULT_POLICY_TEXT
+    try:
+        text = text.replace('audit_db = "data/megalodon.db"',
+                            f'audit_db = {_toml_string(str(Path("data/megalodon.db").resolve()))}', 1)
+    except UnicodeEncodeError:
+        pass        # a folder name that is not UTF-8 cannot be written in TOML: the relative default stays
     _atomic_write(path, text.encode('utf-8'))
     return dict(action='init', policy=str(path), playbooks=len(load_policy(path).playbooks),
                 note='Shadow mode: decisions are recorded, never carried out. Review the playbooks before use.')
