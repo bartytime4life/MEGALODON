@@ -2826,8 +2826,19 @@ def _tamper(args: argparse.Namespace) -> int:
     except (tamper.TamperError, OSError) as exc:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(_sanitize_tamper_output(result), indent=2, sort_keys=True))
-    _keep(args, _sanitize_tamper_output(result))
+    sanitized_result = _sanitize_tamper_output(result)
+    output = {
+        "schema": sanitized_result.get("schema"),
+        "action": sanitized_result.get("action"),
+        "manifest": sanitized_result.get("manifest"),
+        "state_digest": sanitized_result.get("state_digest"),
+        "code_files": sanitized_result.get("code_files"),
+        "findings_count": len(result.get("findings", [])),
+        "units_count": len(result.get("units", [])) if isinstance(result.get("units"), list) else None,
+        "configs_count": len(result.get("configs", [])) if isinstance(result.get("configs"), list) else None,
+    }
+    print(json.dumps(output, indent=2, sort_keys=True))
+    _keep(args, sanitized_result)
     findings = result.get("findings", [])
     if args.tamper_command == "check" and args.alert and findings:
         if not _tamper_alert(args, findings, "MEGALODON's own code, schedule or configuration changed."):
