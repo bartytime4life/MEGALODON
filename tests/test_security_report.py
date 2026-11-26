@@ -833,6 +833,21 @@ def test_two_checks_at_once_move_earlier_watch_findings_once(home):
     assert results.seen("listeners")["total"] == 1
 
 
+def test_results_loads_without_fcntl_and_a_watch_refuses_to_keep_unlocked(home, monkeypatch):
+    # Windows has no fcntl: the module must still load, and a watch's result is not kept without the lock.
+    import sys
+    code = "import sys; sys.modules['fcntl'] = None; import megalodon.results as r; print(r.fcntl)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         cwd=Path(results.__file__).parent.parent)
+    assert out.returncode == 0 and out.stdout.strip() == "None", out.stderr
+    monkeypatch.setattr(results, "fcntl", None)
+    with pytest.raises(results.ResultError, match="file locking"):
+        results.keep("listeners", dict(findings=[_seen(4444)], gaps=[]), 1, now=AT)
+    assert not (results._folder() / "listeners.json").exists()
+    results.keep("devices", dict(findings=[], gaps=[]), 0)            # a check that takes no lock still keeps
+    assert (results._folder() / "devices.json").exists()
+
+
 def test_moved_findings_do_not_push_out_newer_ones(home, monkeypatch):
     from megalodon import listener_watch
     old = (NOW - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")

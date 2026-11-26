@@ -15,7 +15,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
-import fcntl
+try:
+    import fcntl
+except ImportError:  # Windows: only the Linux-only watches take the lock
+    fcntl = None
 import hashlib
 import json
 import os
@@ -133,6 +136,8 @@ def add_seen(check, found, *, folder=None, now=None):
 @contextmanager
 def _locked(check, folder=None):
     """An exclusive lock for `check`'s result, held across reading, moving and replacing it."""
+    if fcntl is None:
+        raise ResultError(f'keeping the {check} result needs file locking (fcntl), which this system lacks')
     fd = os.open(_folder(folder) / f'.{check}.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
