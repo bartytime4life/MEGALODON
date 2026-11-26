@@ -338,6 +338,21 @@ def _check_view(check, record, now, live_state=None, system=True, shown=SHOWN_PE
         view.update(problem=f'Its watch is installed but not running (systemd: {clean(live_state, 40)})',
                     next=command('sudo', 'systemctl', 'start', f'megalodon-{check}.service') if system
                     else command('systemctl', '--user', 'start', f'megalodon-{check}.service'))
+    # What the listener or web-root watch saw since the last accept, kept beside the check's own result.
+    seen = record.get('seen') if isinstance(record, dict) and isinstance(record.get('seen'), dict) else None
+    if seen is not None and seen.get('error'):
+        view['problem'] = f'What its watch saw cannot be read: {clean(seen["error"])}'
+        seen = None
+        if record.get('ran') is None and not record.get('error'):
+            # Only the watch's log, and it cannot be trusted.
+            view.update(status='error', status_text=view['problem'])
+            return view
+    if seen is not None and record.get('ran') is None:     # only the watch's log, or an untrusted result beside it
+        # Only the watch's log, or a check result that cannot be trusted beside it: what the watch saw still counts.
+        if record.get('error'):
+            view['problem'] = f'Its last result cannot be trusted: {clean(record["error"])}'
+        record = dict(check=check, at=seen.get('at'), ran=True, exit_code=0, findings=0,
+                      result=dict(findings=[], gaps=[]), seen=seen, only_seen=True)
     if record is None and stopped:
         view.update(status='error', status_text=view['problem'])
         return view
@@ -367,6 +382,22 @@ def _check_view(check, record, now, live_state=None, system=True, shown=SHOWN_PE
     if check == 'persistence':
         # Entries already present at the baseline that carry an intruder's signs: the check exits 1 for them too.
         findings += [dict(f, change='suspicious') for f in result.get('suspicious', []) if isinstance(f, dict)]
+    seen_extra, seen_unkept = 0, {}
+    if seen is not None:
+        # Each finding once: one the check also found reads the same without the watch's own stamps.
+        known = {results.identity(f) for f in findings}
+        kept = [f for f in seen.get('findings', []) if isinstance(f, dict)]
+        findings += [f for f in kept if results.identity(f) not in known]
+        seen_extra = max(0, seen.get('total', len(kept)) - len(kept))
+        listed_seen = {}
+        for f in kept:
+            level = _severity(f.get('severity'))
+            listed_seen[level] = listed_seen.get(level, 0) + 1
+        for level, count in (seen.get('severities') or {}).items():
+            if isinstance(count, int):
+                listed_seen.setdefault(_severity(level), 0)
+                seen_unkept[_severity(level)] = seen_unkept.get(_severity(level), 0) + count
+        seen_unkept = {level: max(0, count - listed_seen.get(level, 0)) for level, count in seen_unkept.items()}
     if record.get('exit_code') == 1 and record.get('ran') and not findings:
         # The check said it found something (exit 1) that this report does not know how to list: never "nothing".
         findings = [dict(rule_id='CHECK_REPORTED_SOMETHING', severity='HIGH',
@@ -395,15 +426,16 @@ def _check_view(check, record, now, live_state=None, system=True, shown=SHOWN_PE
             meaning=_meaning(check, rule), choices=_choices(check, finding, rule, where)))
     view['findings'].sort(key=lambda f: RANK.index(f['severity']))
     # Every finding the check kept (a cut result keeps fewer than it found), and those added above.
-    view['finding_count'] = max(record.get('findings', listed), listed) + len(findings) - listed
-    # A live watch keeps what it saw when it saw it; its age says when, not that a timer stopped.
-    watched = bool(result.get('seen_by_watch'))
-    stale = not watched and age is not None and interval and age > 3 * interval
+    view['finding_count'] = max(record.get('findings', listed), listed) + len(findings) - listed + seen_extra
+    # A live watch's log says when it saw something, not that a timer stopped.
+    watched = seen is not None
+    stale = not record.get('only_seen') and age is not None and interval and age > 3 * interval
     if view['findings']:
         worst = view['findings'][0]['severity']
         view.update(status='findings', worst=worst,
-                    status_text=f'{view["finding_count"]} to review, the worst {worst.lower()}'
-                    + (f' — seen by the watch, the last at {record.get("at")}' if watched else ''))
+                    status_text=f'{"at least " if watched and seen.get("at_least") else ""}'
+                                f'{view["finding_count"]} to review, the worst {worst.lower()}'
+                    + (f' — its watch saw some, the last at {seen.get("at")}' if watched else ''))
     else:
         view.update(status='clean', status_text='Nothing found')
     if stale:
@@ -413,6 +445,8 @@ def _check_view(check, record, now, live_state=None, system=True, shown=SHOWN_PE
     # Counted before only the first are kept for the page: the totals count every finding read, and for a result
     # too large to keep whole, every finding the check made.
     view['severities'] = {level: sum(1 for f in view['findings'] if f['severity'] == level) for level in RANK}
+    for level, count in seen_unkept.items():
+        view['severities'][level] += count
     saved = record.get('severities')
     if record.get('truncated') and isinstance(saved, dict):
         # The saved counts cover the check's `findings`; entries added above (suspicious ones) come on top.
@@ -422,6 +456,8 @@ def _check_view(check, record, now, live_state=None, system=True, shown=SHOWN_PE
                 view['severities'][_severity(level)] += count
         for finding in findings[listed:]:
             view['severities'][_severity(finding.get('severity'))] += 1
+        for level, count in seen_unkept.items():
+            view['severities'][level] += count
     kept = len(view['findings'])
     view['findings'] = view['findings'][:shown] if shown else view['findings']
     # Every finding counts; only the first are listed. Say how many more are kept (`report --all` lists them), and

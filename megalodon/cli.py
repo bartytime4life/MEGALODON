@@ -3922,15 +3922,14 @@ def _record(args, code, reason=None):
         return
     from . import results
     try:
-        save = results.keep_after_watch if name in WATCHES_KEPT else results.keep
-        save(name, _PRINTED.pop(name, None), code, reason=reason)
+        results.keep(name, _PRINTED.pop(name, None), code, reason=reason)
     except OSError as exc:
         print(f"megalodon: this check's result was not kept for `megalodon report`: {exc}", file=sys.stderr)
 
 
 # The live watches whose findings reach neither a check's kept result nor the response engine: what they see is kept
 # for `megalodon report` as they see it, until the next check, accept or baseline.
-WATCHES_KEPT = ("listeners", "webroot")
+WATCHES_KEPT = ("listeners", "webroot")      # results.SEEN_CHECKS: the one list, checked by a test
 
 
 def _watch_keeper(args, check):
