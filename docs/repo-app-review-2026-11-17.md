@@ -2,8 +2,7 @@
 
 Source basis: merged `main@dee4027a8541335f43460d6bef37024606f4bfdf`, tree
 `481694b9000db76d9fc66197d89c3429c67b1744`. This follows host protection #780 and
-the Playwright 1.65.2 repair #779. Changes below are candidate source until their
-own PR merges; an installed PC and published Wiki require separate readback.
+the Playwright 1.65.2 repair #779. The documented candidate later merged in [PR #781](https://github.com/bartytime4life/MEGALODON/pull/781). Its original evidence scope below remains dated. See [current source and acceptance](current-state.md#november-26-source-and-acceptance-map) for the later source and its checks.
 
 ## Discovery, fixes and second pass
 

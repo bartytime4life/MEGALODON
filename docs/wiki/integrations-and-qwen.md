@@ -1,6 +1,6 @@
 # Integrations and Local AI
 
-> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+> [Current capabilities, checks and remaining acceptance](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-26-source-and-acceptance-map) · November 26, 2026. Pinned examples below keep their original dates.
 
 > Historical November 11 source orientation: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). Older immutable links below retain their historical source snapshots. Source presence, runtime observations and native producer/model acceptance remain separate; see the [November 11 reading](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation).
 
@@ -49,9 +49,17 @@ The provider uses literal loopback. Local model code does not sandbox the separa
 
 ## Canonical Qwen Airlock is still held
 
-[The canonical record](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/config/model-bindings/qwen.unbound.json) remains **UNBOUND / NOT_RECORDED**. The [current release fence](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/qwen-runtime-unbound.md) has no BOUND path or operator override: enabling AI, selecting another family/tag/digest, or editing binding JSON cannot activate operational generation. Explicit catalog/selection and the fixed response diagnostic are named exceptions, not operational inference acceptance. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) tracks the remaining acceptance evidence.
+[The canonical record](https://github.com/bartytime4life/MEGALODON/blob/e2bafb3f52d5d7f827557d83b43c81017f645a4b/config/model-bindings/qwen.unbound.json) remains **UNBOUND / NOT_RECORDED**.
+The [release fence](https://github.com/bartytime4life/MEGALODON/blob/main/docs/qwen-runtime-unbound.md) has no BOUND path or
+operator override. Operational generation remains held across model families.
+Explicit catalog/selection and the fixed response diagnostic have separate,
+limited scope. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) was closed on November 2 Central time.
+Provider provenance, loaded-byte attestation, signed evaluation and accepted
+model execution remain distinct evidence requirements.
 
-[Current runtime-gate tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_qwen_runtime_gate.py) and [diagnostic tests](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/tests/test_ollama_model_test.py) distinguish these entrypoints. The [October reconciliation](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/qwen-446-zero-effect-reconciliation-2026-10-07.md) and its original sentinel results remain historical; they do not lift the current release fence.
+[Runtime-gate tests](https://github.com/bartytime4life/MEGALODON/blob/e2bafb3f52d5d7f827557d83b43c81017f645a4b/tests/test_qwen_runtime_gate.py) and
+[diagnostic tests](https://github.com/bartytime4life/MEGALODON/blob/e2bafb3f52d5d7f827557d83b43c81017f645a4b/tests/test_ollama_model_test.py) distinguish these
+entry points. The [October reconciliation](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/qwen-446-zero-effect-reconciliation-2026-10-07.md) and its original sentinel results remain historical; they do not lift the current release fence.
 
 ## Local host security and dated reference context
 

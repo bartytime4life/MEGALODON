@@ -41,9 +41,13 @@ recorded.
 `check` prints each finding's rule, severity and summary, and the file or
 unit it is about (`code:`, `config:` or `unit:`), never its details or what
 a file holds. It also prints what it could not look at (`gaps`, such as
-systemd not answering) and when it ran. It exits 1 on findings and 2 on an
-error, and `--alert` sends them off the machine. Tamper alerts are sent
-whatever the alert minimum severity is.
+systemd not answering), the available baseline/check timestamps and the
+unit count. It exits 0 on a successful check without findings, 1 on findings
+and 2 on an error. Read `gaps` even when it exits 0. With `--alert`, findings
+use the configured off-machine routes and bypass the normal minimum severity.
+[PR #918](https://github.com/bartytime4life/MEGALODON/pull/918) restored these
+operator fields after the limited #916 terminal summary. [Host report and
+guided review](security-report.md) uses the saved results for the current account.
 `accept` records the current state after an upgrade, or after you accepted a
 watch's baseline yourself.
 
