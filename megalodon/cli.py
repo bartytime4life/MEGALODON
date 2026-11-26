@@ -478,6 +478,10 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--output", type=Path,
                         help="write the report to this file, mode 600, instead of printing it")
     report.add_argument("--hours", type=int, default=168, help="incidents of the last HOURS (default a week)")
+    review = sub.add_parser(
+        "review", help="go through the report's findings one at a time and choose what to do; a command runs only "
+                       "after you confirm it")
+    review.add_argument("--hours", type=int, default=168, help="incidents of the last HOURS (default a week)")
     timeline = sub.add_parser(
         "timeline", help="each incident's findings, decisions and actions in order, from every check")
     timeline_sub = timeline.add_subparsers(dest="timeline_command", required=True)
@@ -3936,6 +3940,26 @@ def _report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _review(args: argparse.Namespace) -> int:
+    from . import guided_review, security_report as sr
+    if not sys.stdin.isatty():
+        print("megalodon: review asks you what to do about each finding: run it in a terminal. "
+              "`megalodon report` prints the same choices.", file=sys.stderr)
+        return 2
+    if not 1 <= args.hours <= 24 * 366:
+        print("megalodon: --hours must be between 1 and 8784", file=sys.stderr)
+        return 2
+    try:
+        guided_review.review(sr.build(hours=args.hours))
+    except (EOFError, KeyboardInterrupt):
+        print("\nmegalodon: review stopped; nothing more was run.", file=sys.stderr)
+        return 0
+    except OSError as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def entry(argv: list[str] | None = None) -> None:
     """The `megalodon` command and `python -m megalodon`. Exit 1 means findings, 2 an error: the scheduler counts
     exit 1 as a successful run that found something (SuccessExitStatus=1), so an unexpected error, which Python
@@ -4054,6 +4078,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _secrets(args)
     elif args.command == "report":
         code = _report(args)
+    elif args.command == "review":
+        code = _review(args)
     elif args.command == "timeline":
         code = _timeline(args)
     elif args.command == "commands":

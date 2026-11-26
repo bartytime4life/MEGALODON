@@ -89,6 +89,26 @@ carried out by the report.
 * **Undo** what enforcement did: `megalodon enforce list`, then
   `megalodon enforce undo ID`.
 
+## Going through it: `megalodon review`
+
+```bash
+megalodon review
+```
+
+`review` goes through the same findings and incidents one at a time, worst
+first. For each, it shows what happened and what it means, then your
+choices as a numbered list. Pick one and it shows the exact command, then
+asks before running it: only `y` or `yes` runs it. The command runs as the
+arguments shown, without a shell, and as this installation's `megalodon`.
+A choice with a placeholder or alternatives (`sudo systemctl restart
+SERVICE`, apt or dnf) is printed for you to adapt and run, never run for
+you. `s` or a blank answer skips a finding; `q` stops.
+
+Each choice you make, and the exit code of what ran, is appended to
+`~/.local/state/megalodon/review.jsonl` (mode 600): a record of how each
+finding was handled. `review` needs a terminal; without one it refuses, and
+`megalodon report` prints the same choices.
+
 ## Safety
 
 Everything a finding names (a path, a program, an address, a log line) can
@@ -112,3 +132,5 @@ Read a command before you run it all the same.
 * **Live watches report through incidents.** Their individual findings are
   in the incidents, decided by the response engine, not listed per check.
 * **The dashboard does not show it yet.** Open the HTML page instead.
+* **Choices are commands, not judgments.** "It was you" accepts what the
+  check sees now; only you know whether a change was yours.

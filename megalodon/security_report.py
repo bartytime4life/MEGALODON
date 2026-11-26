@@ -50,6 +50,15 @@ def command(*parts):
                     for index, part in enumerate(parts))
 
 
+def _choice(kind, label, *parts, note=None):
+    """One choice: the command shown (shell-quoted) and the same command as arguments, which `megalodon review`
+    runs without a shell when you confirm it. A choice with no arguments is yours to adapt and run."""
+    item = dict(choice=kind, label=label, command=command(*parts), argv=[clean(part, 500) for part in parts])
+    if note:
+        item['note'] = note
+    return item
+
+
 # What each check is for, how it runs, and how a finding is said to be expected. `live` checks run all the time
 # and act at once; their findings also reach the incidents below.
 CHECKS = {
@@ -214,41 +223,39 @@ def _choices(check, finding, rule, where):
     """What you can do about one finding, most useful first, each with the exact command."""
     info = CHECKS[check]
     serious = _severity(finding.get('severity')) in ('CRITICAL', 'HIGH')
-    out = [dict(choice='look', label='See the full details', command=command('megalodon', check, 'check'))]
+    out = [_choice('look', 'See the full details', 'megalodon', check, 'check')]
     entity = _entity(check, finding, where)
     if entity:
-        out.append(dict(choice='look', label='See everything recorded about it, in order',
-                        command=command('megalodon', 'timeline', 'show', '--entity', entity)))
+        out.append(_choice('look', 'See everything recorded about it, in order',
+                           'megalodon', 'timeline', 'show', '--entity', entity))
     if serious and info['group'] != 'Weak spots':
-        out.append(dict(choice='evidence', label='Keep evidence before anything changes',
-                        command=command('sudo', 'megalodon', 'evidence', 'collect')))
+        out.append(_choice('evidence', 'Keep evidence before anything changes', 'sudo', 'megalodon', 'evidence',
+                           'collect'))
     evidence = finding.get('evidence') if isinstance(finding.get('evidence'), dict) else {}
+    program = finding.get('program') or evidence.get('program')
     if check == 'ancestry':
         service = (evidence.get('service') or {}).get('program')
-        program = evidence.get('program')
-        if service and program:
-            out.append(dict(choice='expected', label='This service may start this program: allow it',
-                            command=command('megalodon', 'ancestry', 'allow', service, program)))
-    elif check == 'egress' and (finding.get('program') or evidence.get('program')):
-        out.append(dict(choice='expected', label='This program may connect out: allow it',
-                        command=command('megalodon', 'egress', 'allow', finding.get('program') or
-                                        evidence.get('program'))))
-    elif check == 'credentials' and (finding.get('program') or evidence.get('program')):
-        out.append(dict(choice='expected', label='This program may read these: allow it',
-                        command=command('megalodon', 'credentials', 'allow', finding.get('program') or
-                                        evidence.get('program'))))
+        if service and evidence.get('program'):
+            out.append(_choice('expected', 'This service may start this program: allow it',
+                               'megalodon', 'ancestry', 'allow', service, evidence['program']))
+    elif check == 'egress' and program:
+        out.append(_choice('expected', 'This program may connect out: allow it', 'megalodon', 'egress', 'allow',
+                           program))
+    elif check == 'credentials' and program:
+        out.append(_choice('expected', 'This program may read these: allow it', 'megalodon', 'credentials',
+                           'allow', program))
     elif check == 'vulns':
         label, fix = VULN_FIXES.get(rule, VULN_FIXES['SECURITY_UPDATES_PENDING'])
-        out.append(dict(choice='fix', label=label, command=fix))
+        out.append(dict(choice='fix', label=label, command=fix))       # yours to adapt: never run for you
     elif info.get('accept'):
-        out.append(dict(choice='expected', label=info.get('accept_label', 'It was you: record things as they are now'),
-                        command=command('megalodon', *info['accept']),
-                        note='This records every current change of this check as expected, not only this one.'))
+        out.append(_choice('expected', info.get('accept_label', 'It was you: record things as they are now'),
+                           'megalodon', *info['accept'],
+                           note='This records every current change of this check as expected, not only this one.'))
     if serious and check not in ('vulns', 'hardening', 'secrets'):
-        out.append(dict(choice='contain', label='See what the response engine would do',
-                        command=command('megalodon', 'enforce', 'run', '--dry-run'),
-                        note='Containment (pausing a process, blocking an address) is carried out only for the '
-                             'actions and playbooks you list in ~/.config/megalodon/enforce.toml.'))
+        out.append(_choice('contain', 'See what the response engine would do', 'megalodon', 'enforce', 'run',
+                           '--dry-run',
+                           note='Containment (pausing a process, blocking an address) is carried out only for the '
+                                'actions and playbooks you list in ~/.config/megalodon/enforce.toml.'))
     return out
 
 
@@ -472,13 +479,13 @@ def _incidents(hours, now):
                          involved={clean(k, 20): [clean(v, 120) for v in values[:3]]
                                    for k, values in item.get('entities', {}).items()},
                          actions_applied=item.get('actions_applied', 0), undone=item.get('undone', 0),
-                         choices=[dict(choice='look', label='See what happened, in order',
-                                       command=command('megalodon', 'timeline', 'show', item['incident'])),
-                                  dict(choice='undo', label='See what was done, to undo it',
-                                       command='megalodon enforce list   # then: megalodon enforce undo ID')
+                         choices=[_choice('look', 'See what happened, in order', 'megalodon', 'timeline', 'show',
+                                          item['incident']),
+                                  _choice('undo', 'See what was done, to undo it', 'megalodon', 'enforce', 'list',
+                                          note='then: megalodon enforce undo ID')
                                   if item.get('actions_applied') else
-                                  dict(choice='contain', label='See what the response engine would do',
-                                       command='megalodon enforce run --dry-run')]))
+                                  _choice('contain', 'See what the response engine would do', 'megalodon', 'enforce',
+                                          'run', '--dry-run')]))
     return rows, None
 
 
