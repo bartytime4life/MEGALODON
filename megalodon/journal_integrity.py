@@ -38,6 +38,9 @@ STATE_ONLINE, STATE_OFFLINE, STATE_ARCHIVED = 1, 0, 2
 COMPATIBLE_SEALED = 1
 MAX_FILES = 4096
 TECHNIQUE = 'T1070.002'
+# A recorded digest is reused only while these are unchanged: writing a file changes its ctime, which cannot be
+# set back.
+CACHE_KEYS = ('inode', 'device', 'size', 'mtime_ns', 'ctime_ns')
 SEVERITY = {'JOURNAL_FILE_DELETED': 'HIGH', 'JOURNAL_ENTRIES_REMOVED': 'HIGH', 'JOURNAL_ARCHIVE_CHANGED': 'HIGH'}
 
 
@@ -111,7 +114,7 @@ def snapshot(*, root='/', previous=None):
                      device=info.st_dev, size=info.st_size, mtime_ns=info.st_mtime_ns, ctime_ns=info.st_ctime_ns)
         if found['state'] == STATE_ARCHIVED or dirty:  # Never written again.
             before = known.get(found['file_id'], {})
-            same = all(before.get(key) == found[key] for key in ('inode', 'device', 'size', 'mtime_ns', 'ctime_ns'))
+            same = all(before.get(key) == found[key] for key in CACHE_KEYS)
             try:
                 found['sha256'] = before['sha256'] if same and before.get('sha256') else _digest(path)
             except OSError:
@@ -119,6 +122,25 @@ def snapshot(*, root='/', previous=None):
                 continue
         files[found['file_id']] = found
     return dict(files=files, gaps=gaps, corrupt=corrupt, boot_id=_boot_id(root))
+
+
+def vouched(record, reviewed, *, root='/'):
+    """``record`` (from a snapshot) with a digest that ``reviewed`` vouches for, or that was read again.
+
+    A snapshot reuses the digest of the record it was given; when that record is not trusted (a progress file
+    anyone able to write the sensor's files could rewrite), an archive is held to ``reviewed`` only with the
+    reviewed digest, if its inode, size and change times are still the reviewed ones, or with its content read
+    again. An archive is never written again, so normally nothing is read. A file being written at the review has
+    no reviewed digest, so there is nothing to hold its content to, and nothing is read for it."""
+    if 'sha256' not in record or not reviewed.get('sha256'):
+        return record
+    if all(reviewed.get(key) == record.get(key) for key in CACHE_KEYS) and reviewed.get('sha256'):
+        return dict(record, sha256=reviewed['sha256'])
+    path = record['path'] if root == '/' else os.path.join(root, record['path'].lstrip('/'))
+    try:
+        return dict(record, sha256=_digest(path))
+    except OSError:
+        return {key: value for key, value in record.items() if key != 'sha256'}
 
 
 def _active(record):
