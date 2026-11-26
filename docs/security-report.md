@@ -48,12 +48,14 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   `--manifest` checks another baseline, not this machine's state.
 * **The live watches.** Credentials, process ancestry, listeners, egress, the
   web root and devices run all the time once scheduled. The report says
-  whether their service is running. The listener and web-root watches add
-  what they see, as they see it, to their check's last result, listed under
-  the check with when; a restarted watch keeps what it saw before. A `check`
-  adds what it finds now, and keeps what the watch saw, since a listener or a
-  web script the watch saw may be gone; `accept` or a new baseline clears it.
-  The latest 500 are kept and every one is counted. The other watches pass what
+  whether their service is running. The listener and web-root watches
+  append what they see, as they see it, to a log of their own
+  (`listeners-seen.jsonl`, `webroot-seen.jsonl`, mode 600), listed under the
+  check with when, beside what the last `check` found: a listener or web
+  script the watch saw may be gone, and a check cannot see it again. A check,
+  failed or not, only replaces its own result; `accept` or a new baseline
+  clears both. The latest 500 are listed and every one is counted; a flood is
+  bounded, and the count then says "at least". The other watches pass what
   they find to the response engine, and it reaches the incidents.
 * **Incidents** of the last week (`--hours` to change), from the response
   engine's ledger and the enforcement journal, as `megalodon timeline` tells

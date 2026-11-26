@@ -540,16 +540,14 @@ def test_what_a_live_watch_sees_is_kept_until_accept(home, monkeypatch):
     import argparse
     from megalodon import cli, listener_watch
     kept = cli._watch_keeper(argparse.Namespace(manifest=None), "listeners")
-    kept(dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:4444", programs=[]))
     old = (NOW - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    record = results.latest()["listeners"]
-    results.keep("listeners", record["result"], 1, now=old)            # seen three days ago, gone since
+    results.add_seen("listeners", dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:4444",
+                                       programs=[]), now=old)        # seen three days ago, gone since
     listeners = view(build(), "listeners")
     assert listeners["findings"][0]["where"] == "tcp/0.0.0.0:4444" and not listeners.get("stale")
-    assert "seen by the watch" in listeners["status_text"]
-    results.keep("listeners", None, 2, now=AT)
+    assert "its watch saw some" in listeners["status_text"]
     cli._watch_keeper(argparse.Namespace(manifest="/other.json"), "listeners")(dict(rule_id="X", severity="HIGH"))
-    assert results.latest()["listeners"]["ran"] is False, "a watch of another baseline keeps nothing"
+    assert results.seen("listeners")["total"] == 1, "a watch of another baseline keeps nothing"
     kept(dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:4444", programs=[]))
     monkeypatch.setattr(listener_watch, "accept", lambda *a, **k: dict(action="accept"))
     assert run_cli(["listeners", "accept"]) == 0
@@ -588,8 +586,7 @@ def test_the_watch_commands_keep_what_they_see(home, monkeypatch, check, module,
             self.emit(found)
     monkeypatch.setattr(watch, "Watcher", Once)
     run_cli([check, "watch"])
-    record = results.latest()[check]
-    assert record["result"]["seen_by_watch"] and record["result"]["findings"] == [found]
+    assert results.seen(check)["findings"] == [found]
 
 
 # ------------------------------------------------------------------ what a watch keeps is the saved result, not a copy in memory
@@ -616,9 +613,9 @@ def test_what_was_accepted_or_checked_since_does_not_come_back(home):
     results.forget("listeners")                           # accept, while the watch runs on
     kept(_seen(2))
     assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:2"]
-    keep("listeners", [])                                 # a check replaced it
+    keep("listeners", [])                                 # a check, which cannot see what is gone, keeps it
     kept(_seen(3))
-    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:3"]
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:2", "tcp/0.0.0.0:3"]
 
 
 def test_a_watch_counts_every_finding_beyond_those_it_keeps(home):
@@ -630,7 +627,7 @@ def test_a_watch_counts_every_finding_beyond_those_it_keeps(home):
     listeners = view(report, "listeners")
     assert report["counts"]["HIGH"] == 1 and report["counts"]["LOW"] == results.MAX_FINDINGS
     assert listeners["finding_count"] == results.MAX_FINDINGS + 1 and report["verdict"] == "act"
-    assert len(results.latest()["listeners"]["result"]["findings"]) == results.MAX_FINDINGS, "the latest are kept"
+    assert len(results.seen("listeners")["findings"]) == results.MAX_FINDINGS, "the latest are kept"
 
 
 def test_the_watch_keeps_what_a_check_found_before_its_alert_failed(home):
@@ -671,7 +668,7 @@ def test_a_check_keeps_what_the_watch_saw_of_things_since_gone(home, monkeypatch
     monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[_seen(22), _seen(4444)], gaps=[]))
     run_cli(["listeners", "check"])
     listeners = view(build(), "listeners")
-    assert [f["where"] for f in listeners["findings"]] == ["tcp/0.0.0.0:4444", "tcp/0.0.0.0:22"], "once each"
+    assert [f["where"] for f in listeners["findings"]] == ["tcp/0.0.0.0:22", "tcp/0.0.0.0:4444"], "once each"
     assert listeners["finding_count"] == 2
     monkeypatch.setattr(listener_watch, "accept", lambda *a, **k: dict(action="accept"))
     run_cli(["listeners", "accept"])
@@ -689,3 +686,82 @@ def test_a_check_keeps_the_watch_totals_beyond_those_kept(home, monkeypatch):
     run_cli(["listeners", "check"])
     report = build()
     assert report["counts"]["HIGH"] == 1 and view(report, "listeners")["finding_count"] == results.MAX_FINDINGS + 1
+
+
+def test_a_finding_the_watch_stamped_is_the_same_finding_a_check_makes(home, monkeypatch):
+    # The watch adds when it sent it (and, for the web root, whether it is still there); a check does not.
+    from megalodon import listener_watch
+    _keeper()(dict(_seen(22), detected_at="2026-11-26T07:00:00Z"))
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[_seen(22)], gaps=[]))
+    run_cli(["listeners", "check"])
+    listeners = view(build(), "listeners")
+    assert len(listeners["findings"]) == 1 and listeners["finding_count"] == 1
+
+
+def test_a_check_that_fails_does_not_erase_what_the_watch_saw(home, monkeypatch):
+    from megalodon import listener_watch
+    _keeper()(_seen(4444))
+
+    def broken(*a, **k):
+        raise listener_watch.ListenerError("the listener baseline cannot be read")
+    monkeypatch.setattr(listener_watch, "check", broken)
+    assert run_cli(["listeners", "check"]) == 2
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    run_cli(["listeners", "check"])
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:4444"]
+
+
+def test_what_the_watch_saw_is_appended_never_rewritten(home):
+    # A check runs while the watch appends: the watch's log is its own file, written by appending one line.
+    _keeper()(_seen(1))
+    keep("listeners", [])
+    _keeper()(_seen(2))
+    path = results.seen_path("listeners")
+    assert path.stat().st_mode & 0o777 == 0o600 and len(path.read_text().splitlines()) == 2
+    assert not (Path(results.DEFAULT_FOLDER).expanduser() / "listeners.json").read_text().count("4444")
+
+
+def test_the_watches_kept_are_one_list():
+    from megalodon import cli
+    assert tuple(cli.WATCHES_KEPT) == tuple(results.SEEN_CHECKS)
+
+
+def test_a_flood_of_watch_findings_is_bounded_and_still_counted(home, monkeypatch):
+    # Past half the bound only severities are added (still counted); past the bound nothing (the count says so).
+    monkeypatch.setattr(results, "MAX_SEEN_BYTES", 4000)
+    monkeypatch.setattr(results, "_SEEN_FULL", 2000)
+    kept = _keeper()
+    for n in range(200):
+        kept(_seen(n, "HIGH" if n == 199 else "LOW"))
+    log = results.seen("listeners")
+    assert results.seen_path("listeners").stat().st_size < 4000 + 200
+    assert all(isinstance(f, dict) and "listener" in f for f in log["findings"])
+    assert log["at_least"] and log["total"] < 200 and log["total"] > len(log["findings"])
+    listeners = view(build(), "listeners")
+    assert listeners["status_text"].startswith("at least ") and listeners["not_kept"] > 0
+
+
+def test_the_latest_watch_findings_are_the_ones_kept(home):
+    kept = _keeper()
+    for n in range(results.MAX_FINDINGS + 3):
+        kept(_seen(n))
+    log = results.seen("listeners")
+    assert log["findings"][0]["listener"] == "tcp/0.0.0.0:3" and log["findings"][-1]["listener"].endswith(
+        f":{results.MAX_FINDINGS + 2}")
+
+
+def test_what_the_watch_saw_shows_beside_an_untrusted_check_result(home):
+    _keeper()(_seen(4444))
+    path = keep("listeners", [])
+    os.chmod(path, 0o644)
+    listeners = view(build(), "listeners")
+    assert listeners["findings"][0]["where"] == "tcp/0.0.0.0:4444" and "cannot be trusted" in listeners["problem"]
+
+
+def test_a_watch_log_others_could_write_is_not_trusted(home):
+    _keeper()(_seen(4444))
+    os.chmod(results.seen_path("listeners"), 0o644)
+    listeners = view(build(), "listeners")
+    assert listeners["findings"] == [] and "cannot be read" in listeners["problem"]
+    with pytest.raises(results.ResultError):
+        results.add_seen("listeners", _seen(1))

@@ -46,7 +46,7 @@ def _findings(result):
     return found if isinstance(found, list) else []
 
 
-def keep(check, result, exit_code, *, folder=None, now=None, reason=None, counted=None):
+def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
     """Record `check`'s latest result. `result` is what the check printed, or None when it could not run;
     `reason` is what it said when it could not."""
     if check not in NAMES:
@@ -59,11 +59,6 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None, counte
         severities[level] = severities.get(level, 0) + 1
     record = dict(schema=SCHEMA, check=check, at=now or _now(), exit_code=exit_code,
                   ran=result is not None, findings=len(findings), severities=severities, result=result)
-    if counted:
-        # A live watch keeps its latest findings and counts every one it saw (see `add_seen`).
-        record.update(findings=counted['findings'], severities=counted['severities'])
-        if counted['findings'] > len(findings):
-            record['truncated'] = True
     if reason:
         record['reason'] = str(reason)[:500]
     data = json.dumps(record, sort_keys=True, default=str)
@@ -93,64 +88,101 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None, counte
     return target / f'{check}.json'
 
 
+# The listener and web-root watches neither keep a check's result nor feed the response engine. What they see is
+# appended to a log of its own beside the check's result: `CHECK-seen.jsonl`, one finding a line. Appending never
+# reads or rewrites anything, so a check that runs meanwhile cannot lose it, and a check, failed or not, only ever
+# replaces its own result. The report reads both. `accept` or a new baseline clears both.
+SEEN_CHECKS = ('listeners', 'webroot')
+MAX_SEEN_BYTES = 8 * 1024 * 1024        # beyond this a watch's findings are no longer added; the count says "at least"
+_SEEN_FULL = MAX_SEEN_BYTES // 2       # beyond this only each finding's severity is added, so it is still counted
+# Added by a watch when it sends a finding, not part of what was found: left out when telling findings apart.
+EMISSION_KEYS = frozenset({'detected_at', 'live'})
+
+
+def seen_path(check, folder=None):
+    return _folder(folder) / f'{check}-seen.jsonl'
+
+
+def identity(finding):
+    """A finding as found, without what a watch adds when it sends it: the same finding from a check and a watch
+    reads the same."""
+    return json.dumps({k: v for k, v in finding.items() if k not in EMISSION_KEYS}, sort_keys=True, default=str)
+
+
 def add_seen(check, found, *, folder=None, now=None):
-    """Add what a live watch just saw to its kept result.
-
-    Nothing is held in the watch's memory: each finding is added to the result kept on disk now, so a restarted
-    watch keeps what it saw before. A result a check kept, or none (after accept), starts a new list, so what was
-    reviewed does not come back. The latest MAX_FINDINGS are kept in full and every finding is counted.
-
-    What the last check found is kept too: the watch adds to it until the next check replaces the result, or
-    accept or a new baseline clears it."""
+    """Append what a live watch just saw to its log (one line, O_APPEND: atomic, and nothing is read first)."""
+    if check not in SEEN_CHECKS:
+        raise ResultError(f'{check} is not a watch whose findings are kept')
+    target = _folder(folder)
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd = os.open(seen_path(check, folder), os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+                 0o600)
     try:
-        record = _read(_folder(folder) / f'{check}.json')
-    except (ResultError, OSError):
-        record = None
-    prior = record if record and isinstance(record.get('result'), dict) else None
-    findings = (prior['result'].get('findings', []) if prior else [])[-(MAX_FINDINGS - 1):] + [found]
-    severities = dict(prior.get('severities') or {}) if prior else {}
-    level = str(found.get('severity') or '').upper()
-    severities[level] = severities.get(level, 0) + 1
-    total = (prior.get('findings', 0) if prior else 0) + 1
-    return keep(check, dict(findings=findings, gaps=[], seen_by_watch=True), 1, folder=folder, now=now,
-                counted=dict(findings=total, severities=severities))
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise ResultError(f'{check}-seen.jsonl must be a mode-600 file owned by you')
+        if info.st_size >= MAX_SEEN_BYTES:
+            return False
+        entry = dict(at=now or _now(), finding=found)
+        if info.st_size >= _SEEN_FULL:
+            entry = dict(at=entry['at'], severity=str(found.get('severity') or '').upper())
+        os.write(fd, (json.dumps(entry, sort_keys=True, default=str) + '\n').encode())
+        return True
+    finally:
+        os.close(fd)
 
 
-def keep_after_watch(check, result, exit_code, *, folder=None, now=None, reason=None):
-    """Keep a check's result without losing what the live watch saw since the last accept.
-
-    A check looks at what is there now; a listener or web script the watch saw may be gone, and the check cannot
-    see it again. So what the watch kept stays, with the check's own findings after it, until accept or a new
-    baseline clears it."""
+def seen(check, *, folder=None):
+    """What the watch saw since the last accept: the latest MAX_FINDINGS in full, every one counted; or None."""
+    path = seen_path(check, folder)
     try:
-        prior = _read(_folder(folder) / f'{check}.json')
-    except (ResultError, OSError):
-        prior = None
-    seen = prior['result'] if (prior and isinstance(prior.get('result'), dict)
-                               and prior['result'].get('seen_by_watch')) else None
-    if not seen or not isinstance(result, dict):
-        return keep(check, result, exit_code, folder=folder, now=now, reason=reason)
-    before = [f for f in seen.get('findings', []) if isinstance(f, dict)]
-    known = {json.dumps(f, sort_keys=True, default=str) for f in before}
-    new = [f for f in _findings(result)
-           if isinstance(f, dict) and json.dumps(f, sort_keys=True, default=str) not in known]
-    severities = dict(prior.get('severities') or {})
-    for finding in new:
-        level = str(finding.get('severity') or '').upper()
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise ResultError(f'{path} must be a mode-600 file owned by you')
+        raw = b''
+        while len(raw) <= MAX_SEEN_BYTES:
+            chunk = os.read(fd, 1 << 20)
+            if not chunk:
+                break
+            raw += chunk
+    finally:
+        os.close(fd)
+    findings, severities, total, last = [], {}, 0, None
+    for line in raw.decode('utf-8', 'replace').splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue                    # a line cut short by a full disk or a crash
+        if not isinstance(entry, dict):
+            continue
+        finding = entry.get('finding')
+        level = str((finding.get('severity') if isinstance(finding, dict) else entry.get('severity')) or '').upper()
         severities[level] = severities.get(level, 0) + 1
-    merged = dict(result, findings=(before + new)[-MAX_FINDINGS:], seen_by_watch=True)
-    return keep(check, merged, exit_code, folder=folder, now=now, reason=reason,
-                counted=dict(findings=prior.get('findings', len(before)) + len(new), severities=severities))
+        total += 1
+        last = entry.get('at') or last
+        if isinstance(finding, dict):
+            findings.append(finding)
+    if not total:
+        return None
+    return dict(findings=findings[-MAX_FINDINGS:], total=total, severities=severities, at=last,
+                at_least=info.st_size >= MAX_SEEN_BYTES)
 
 
 def forget(check, *, folder=None):
-    """Remove `check`'s kept result: after `accept` or a new baseline of a check a live watch adds to, what was
-    kept is no longer what to review, and the watch would otherwise add to it."""
-    try:
-        os.unlink(_folder(folder) / f'{check}.json')
-        return True
-    except FileNotFoundError:
-        return False
+    """Clear `check`'s kept result and what its watch saw: after `accept` or a new baseline, neither is what to
+    review now."""
+    removed = False
+    for path in (_folder(folder) / f'{check}.json', seen_path(check, folder)):
+        try:
+            os.unlink(path)
+            removed = True
+        except FileNotFoundError:
+            pass
+    return removed
 
 
 def _read(path):
@@ -184,9 +216,17 @@ def latest(*, folder=None):
             record = _read(_folder(folder) / f'{name}.json')
         except (ResultError, OSError) as exc:
             # One result that cannot be read (a link, no permission) is that check's error, not the report's end.
-            found[name] = dict(check=name, error=str(exc) if isinstance(exc, ResultError)
-                               else f'{name}.json cannot be read: {exc.strerror or exc}')
-            continue
+            record = dict(check=name, error=str(exc) if isinstance(exc, ResultError)
+                          else f'{name}.json cannot be read: {exc.strerror or exc}')
+        if name in SEEN_CHECKS:
+            try:
+                watched = seen(name, folder=folder)
+            except (ResultError, OSError) as exc:
+                watched = dict(error=str(exc) if isinstance(exc, ResultError) else f'{name}-seen.jsonl cannot be read')
+            if watched is not None:
+                record = dict(record) if record is not None else dict(schema=SCHEMA, check=name, at=watched.get('at'),
+                                                                     exit_code=None, ran=None, findings=0, result=None)
+                record['seen'] = watched
         if record is not None:
             found[name] = record
     return found
