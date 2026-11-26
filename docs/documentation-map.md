@@ -208,6 +208,7 @@ or source basis.
 | [Scheduling the host watches](scheduling.md) | `docs/scheduling.md` |
 | [Evidence collection: sealed, hashed snapshots](evidence-collection.md) | `docs/evidence-collection.md` |
 | [Response engine: shadow-mode automated response](response-engine.md) | `docs/response-engine.md` |
+| [Automated attack campaigns: machine-speed attackers across sensors](automated-campaigns.md) | `docs/automated-campaigns.md` |
 | [Self-test drill: prove the detections fire](self-test-drill.md) | `docs/self-test-drill.md` |
 | [Log integrity: wiped, truncated or rewritten logs](log-integrity.md) | `docs/log-integrity.md` |
 | [Threat-feed refresh into the IOC watchlist](threat-feeds.md) | `docs/threat-feeds.md` |
