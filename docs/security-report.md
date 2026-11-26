@@ -62,7 +62,7 @@ Each check is shown as:
 | to review | Its last run found something; the findings follow, worst first |
 | watching | A live watch is installed and running |
 | not run | It has never run; run it, or schedule it |
-| broken | Its last run failed, its watch is installed but stopped, or its saved result cannot be trusted |
+| broken | Its last run failed (the report gives the reason it printed, or the error it stopped on), its watch is installed but stopped, or its saved result cannot be trusted |
 
 A check whose last run is more than three of its scheduled intervals old is
 marked out of date: its timer may have stopped.

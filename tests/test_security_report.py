@@ -88,6 +88,56 @@ def test_a_check_keeps_its_result_with_its_exit_code(home, monkeypatch, capsys):
     assert results.latest()["hardening"]["ran"] is False
 
 
+def test_a_check_that_could_not_run_says_why(home, monkeypatch, capsys):
+    from megalodon import hardening_drift
+
+    def broken(*a, **k):
+        raise hardening_drift.HardeningError("no hardening baseline; run megalodon hardening baseline")
+    monkeypatch.setattr(hardening_drift, "check", broken)
+    assert run_cli(["hardening", "check"]) == 2
+    assert "no hardening baseline" in capsys.readouterr().err, "the person at the terminal still sees it"
+    assert results.latest()["hardening"]["reason"] == "no hardening baseline; run megalodon hardening baseline"
+    import sys
+    assert type(sys.stderr).__name__ != "_Said", "stderr is put back"
+    hardening = view(build(), "hardening")
+    assert hardening["status"] == "error"
+    assert hardening["status_text"] == "Could not run: no hardening baseline; run megalodon hardening baseline"
+    assert hardening["next"] == "megalodon hardening baseline", "the fix it names, not the same check again"
+    results.keep("boot", None, 2, now=AT, reason="the boot log could not be read")
+    assert view(build(), "boot")["next"] == "megalodon boot check"
+    results.keep("logins", None, 2, now=AT, reason="no baseline at /x; run megalodon logins learn")
+    assert view(build(), "logins")["next"] == "megalodon logins learn"
+    # Only the check's own baseline command, and only as the line's last words, not one a path could name.
+    results.keep("binaries", None, 2, now=AT, reason="/srv/; run megalodon boot baseline/x could not be read")
+    assert view(build(), "binaries")["next"] == "megalodon binaries check"
+    assert any(step["command"] == "megalodon hardening baseline" for step in build()["next_steps"])
+    keep("hardening", [])
+    assert "reason" not in results.latest()["hardening"], "a run that worked has no reason"
+
+
+def test_a_check_that_crashes_replaces_its_older_result(home, monkeypatch, capsys):
+    # An older clean result must not be shown as current when the check now stops with an error.
+    from megalodon import persistence_watch
+    keep("persistence", [])
+
+    def crash(*a, **k):
+        raise RuntimeError("the table could not be read")
+    monkeypatch.setattr(persistence_watch, "check", crash)
+    with pytest.raises(RuntimeError):
+        run_cli(["persistence", "check"])
+    record = results.latest()["persistence"]
+    assert (record["exit_code"], record["ran"]) == (2, False)
+    assert record["reason"] == "it stopped with an error: RuntimeError: the table could not be read"
+    assert view(build(), "persistence")["status"] == "error"
+    import sys
+    assert type(sys.stderr).__name__ != "_Said", "stderr is put back"
+
+
+def test_a_hostile_reason_is_cleaned(home):
+    results.keep("boot", None, 2, now=AT, reason="bad\x1b[2J\u202eline")
+    assert view(build(), "boot")["status_text"] == "Could not run: bad?[2J?line"
+
+
 def test_only_a_check_of_this_machines_own_baseline_is_kept(home, monkeypatch, tmp_path):
     from megalodon import persistence_watch
     monkeypatch.setattr(persistence_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
@@ -150,7 +200,10 @@ def test_live_watches_say_whether_their_service_runs(home, monkeypatch, tmp_path
     assert view(report, "credentials")["status"] == "watching"
     egress = view(report, "egress")
     assert egress["status"] == "error" and "not running (systemd: failed)" in egress["status_text"]
-    assert egress["next"] == "sudo systemctl start megalodon-egress.service"
+    assert egress["next"] == "systemctl --user start megalodon-egress.service", "a user schedule: no sudo"
+    assert any(step["command"] == egress["next"] for step in report["next_steps"])
+    as_root = sr.build(now=NOW, system=True, runner=systemctl)
+    assert view(as_root, "egress")["next"] == "sudo systemctl start megalodon-egress.service"
     assert view(report, "ancestry")["status"] == "never_run", "not installed: nothing to say it watches"
 
 

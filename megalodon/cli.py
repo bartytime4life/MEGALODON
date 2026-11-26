@@ -3908,15 +3908,55 @@ def _keep(args, result):
         _PRINTED[args.command] = result
 
 
-def _record(args, code):
+def _record(args, code, reason=None):
     name = _kept(args)
     if name is None:
         return
     from . import results
     try:
-        results.keep(name, _PRINTED.pop(name, None), code)
+        results.keep(name, _PRINTED.pop(name, None), code, reason=reason)
     except OSError as exc:
         print(f"megalodon: this check's result was not kept for `megalodon report`: {exc}", file=sys.stderr)
+
+
+class _Said:
+    """sys.stderr, also keeping the last `megalodon: ...` line: why a check could not run, for the report."""
+
+    def __init__(self, stream):
+        self._stream = stream
+        self._line = ""
+        self.reason = None
+
+    def write(self, text):
+        self._line += text
+        *done, self._line = self._line.split("\n")
+        for line in done:
+            if line.startswith("megalodon: "):
+                self.reason = line[len("megalodon: "):][:500]
+        self._line = self._line[-2000:]
+        return self._stream.write(text)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def _run_and_keep(args) -> int:
+    """Run the command. A check whose result is kept is kept however it ends: with what it found, with why it
+    could not run, or with the error it stopped on, so the report never shows an older result as current."""
+    if _kept(args) is None:
+        return _dispatch(args)
+    said = _Said(sys.stderr)
+    sys.stderr = said
+    try:
+        code = _dispatch(args)
+    except (Exception, KeyboardInterrupt) as exc:
+        sys.stderr = said._stream
+        _record(args, 2, reason=f"it stopped with an error: {type(exc).__name__}: {exc}"[:500])
+        raise
+    finally:
+        sys.stderr = said._stream
+    _record(args, code, reason=said.reason if code not in (0, 1) else None)
+    return code
 
 
 def _report(args: argparse.Namespace) -> int:
@@ -4009,6 +4049,11 @@ def main(argv: list[str] | None = None) -> None:
             pass  # The fixed refusal below also covers a poisoned/late mode.
         print(execution_boundary.DENIAL, file=sys.stderr)
         raise SystemExit(2)
+    raise SystemExit(_run_and_keep(args))
+
+
+def _dispatch(args: argparse.Namespace) -> int:
+    """Run the chosen command; its exit code."""
     if args.command == "stage0-status":
         print(json.dumps(execution_boundary.status(), sort_keys=True))
         code = 0
@@ -4126,5 +4171,4 @@ def main(argv: list[str] | None = None) -> None:
         code = _firewall(args, "block")
     else:
         code = 2
-    _record(args, code)
-    raise SystemExit(code)
+    return code

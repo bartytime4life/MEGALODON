@@ -320,14 +320,15 @@ def _live_states(system, runner=None):
     return {check: states.get(unit, {}).get('active') or 'unknown' for check, unit in installed.items()}
 
 
-def _check_view(check, record, now, live_state=None):
+def _check_view(check, record, now, live_state=None, system=True):
     info = CHECKS[check]
     view = dict(check=check, title=info['title'], group=info['group'], why=info['why'],
                 live=bool(info.get('live')), findings=[], gaps=[])
     if live_state is not None and live_state not in ('active', 'installed'):
         view.update(status='error', status_text=f'Its watch is installed but not running (systemd: '
                                                 f'{clean(live_state, 40)})',
-                    next=command('sudo', 'systemctl', 'start', f'megalodon-{check}.service'))
+                    next=command('sudo', 'systemctl', 'start', f'megalodon-{check}.service') if system
+                    else command('systemctl', '--user', 'start', f'megalodon-{check}.service'))
         return view
     if record is None and live_state is not None:
         view.update(status='watching', status_text='Watching all the time; what it finds is in the incidents below'
@@ -347,8 +348,12 @@ def _check_view(check, record, now, live_state=None):
     gaps = result.get('gaps') if isinstance(result.get('gaps'), list) else []
     view['gaps'] = [readable(g) for g in gaps[:10]]
     if not record.get('ran') or record.get('exit_code') not in (0, 1):
-        view.update(status='error', status_text='Could not run the last time it was started',
-                    next=command('megalodon', check, 'check'))
+        reason = record.get('reason') if isinstance(record.get('reason'), str) else ''
+        # A check without a baseline says which command records one; that, not running it again, is the fix.
+        first = re.search(rf'; run megalodon {re.escape(check)} (baseline|learn)$', reason)
+        view.update(status='error', status_text=f'Could not run: {clean(reason, 300)}' if reason
+                    else 'Could not run the last time it was started',
+                    next=command('megalodon', check, first.group(1)) if first else command('megalodon', check, 'check'))
         return view
     findings = [f for f in result.get('findings', []) if isinstance(f, dict)]
     for finding in findings:
@@ -500,7 +505,7 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
         live = _live_states(system, runner)
     except (OSError, ValueError):
         live = {}
-    checks = [_check_view(name, kept.get(name), now, live.get(name)) for name in CHECKS]
+    checks = [_check_view(name, kept.get(name), now, live.get(name), system) for name in CHECKS]
     incidents, incident_gap = _incidents(hours, now)
     setup = _setup(system)
     counts = {level: sum(1 for c in checks for f in c['findings'] if f['severity'] == level) for level in RANK}
@@ -532,7 +537,7 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
     for check in broken:
         if check['status'] == 'error' or check.get('stale'):
             steps.append(dict(text=f'{check["title"]}: {check["status_text"]}',
-                              command=command('megalodon', check['check'], 'check')))
+                              command=check.get('next') or command('megalodon', check['check'], 'check')))
     return dict(schema=SCHEMA, generated_at=now.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 host=clean(os.uname().nodename, 80), account='root' if system else 'user',
                 verdict=verdict, headline=headline, counts=counts, next_steps=steps[:12],

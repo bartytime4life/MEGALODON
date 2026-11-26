@@ -4,8 +4,9 @@ Each `megalodon CHECK check` writes what it found, and when, to
 ``~/.local/state/megalodon/results/CHECK.json`` (mode 600, in a mode-700
 folder): its findings, gaps and exit code. The scheduled checks so keep the
 report current without it running any check again. A check that could not
-run is kept too, with its exit code and no findings, so the report can tell
-"clean" from "broken" and from "never run".
+run is kept too, with its exit code and the reason it gave, so the report can
+tell "clean" from "broken" and from "never run". A check that stops with an
+error is kept as well, so an older result is never shown as current.
 
 Only the latest run of each check is kept. Results are what the check printed;
 nothing here decides or changes anything.
@@ -45,13 +46,16 @@ def _findings(result):
     return found if isinstance(found, list) else []
 
 
-def keep(check, result, exit_code, *, folder=None, now=None):
-    """Record `check`'s latest result. `result` is what the check printed, or None when it could not run."""
+def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
+    """Record `check`'s latest result. `result` is what the check printed, or None when it could not run;
+    `reason` is what it said when it could not."""
     if check not in NAMES:
         raise ResultError(f'{check} is not a check whose results are kept')
     findings = _findings(result)
     record = dict(schema=SCHEMA, check=check, at=now or _now(), exit_code=exit_code,
                   ran=result is not None, findings=len(findings), result=result)
+    if reason:
+        record['reason'] = str(reason)[:500]
     data = json.dumps(record, sort_keys=True, default=str)
     if len(data) > MAX_BYTES and isinstance(result, dict):
         # A very large report keeps its first findings and says so; the count stays exact.
