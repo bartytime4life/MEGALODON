@@ -21,8 +21,10 @@ passes, are counted the same. Every window that holds a new attempt is looked at
 read at once can hold a campaign that ended before its newest finding. When several qualify, the most severe is
 raised, and of equals the latest.
 
-This machine's own addresses, its gateways and its DNS servers are never followed: a finding piped in names both
-ends, and the end under attack is not the attacker.
+A finding is counted against the address it says the activity came from: the source of a finding piped in, or the
+one address a finding names. A finding that names several addresses and no source is not counted, so an address
+under attack is never taken for the attacker. This machine's own addresses, its gateways and its DNS servers are
+never followed: a gateway stands for everyone behind it, and none of them may be blocked.
 
 ## What you see
 
