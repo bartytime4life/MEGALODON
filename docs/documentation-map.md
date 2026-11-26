@@ -1,17 +1,17 @@
 # Complete documentation catalog
 
-**200 Markdown documents accounted for.** Current inventory basis:
-[`main@b423a40a2b64b2bc4699c85b378ec62f9bafe716`](https://github.com/bartytime4life/MEGALODON/commit/b423a40a2b64b2bc4699c85b378ec62f9bafe716)
-plus the agent harness playbook.
-Every tracked or non-ignored new Markdown path is listed below, including
-maintained guides, versioned contracts, proposals, templates and dated records.
-See [current state](current-state.md) and the
-[refresh scope and validation](documentation-refresh-2026-11-11.md).
+**234 tracked Markdown documents accounted for.** Inventory basis [`main@4b39b082`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c).
+Each tracked Markdown path appears once in the tables, including maintained
+guides, Wiki source, versioned contracts, proposals, templates and dated
+records. JSON receipts and benchmarks sit alongside their owning guides.
+See the [November 26 evidence map](current-state.md#november-26-source-and-acceptance-map)
+for source and validation scope. Historical counts below keep their dates.
 
 ## Current additions
 
 | Document | Repository path |
 | --- | --- |
+| [Suspension recovery evidence and acceptance](enforcement-recovery-acceptance.md) | `docs/enforcement-recovery-acceptance.md` |
 | [Agent harness for reviewing local monitoring evidence](agent-harness-playbook.md) | `docs/agent-harness-playbook.md` |
 | [Security science in Help](security-science-lab.md) | `docs/security-science-lab.md` |
 | [Repository and application review](repo-app-review-2026-11-17.md) | `docs/repo-app-review-2026-11-17.md` |
@@ -292,7 +292,7 @@ or source basis.
 | [Bounded Suricata EVE reader contract v1](../contracts/suricata-eve/v1/reader/README.md) | `contracts/suricata-eve/v1/reader/README.md` |
 | [Read-only Suricata consumer reconciliation contract v1](../contracts/suricata-eve/v1/reconciliation/README.md) | `contracts/suricata-eve/v1/reconciliation/README.md` |
 | [Ubuntu candidate coverage contract v1](../contracts/ubuntu-candidate-coverage/v1/README.md) | `contracts/ubuntu-candidate-coverage/v1/README.md` |
-| [Zeek conn.log producer profile — PLACEHOLDER scaffold, not a qualified profile](../contracts/zeek-conn-log/v1/producer/README.md) | `contracts/zeek-conn-log/v1/producer/README.md` |
+| [Zeek 8.0.10 conn.log candidate producer profile — qualification pending](../contracts/zeek-conn-log/v1/producer/README.md) | `contracts/zeek-conn-log/v1/producer/README.md` |
 
 ## Wiki source
 

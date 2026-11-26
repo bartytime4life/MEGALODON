@@ -1,7 +1,8 @@
-# Security report: the whole machine, in plain language
+# Host security report and guided review
 
-`megalodon report` puts everything MEGALODON knows about this machine on one
-page, written for the person who owns it rather than for a security analyst:
+`megalodon report` puts the available saved findings, incidents and
+protection status for the current account on one page. Start with the
+verdict, the reported coverage and the timestamp of each check.
 
 - **a verdict**: act now, review, parts not running (or not looked at), or all clear;
 - **what to do next**, most important first, each step with its command;
@@ -39,7 +40,7 @@ The [scheduler](scheduling.md) writes the HTML page to
 
 ## Where it comes from
 
-The report runs no check itself, so it is quick and changes nothing. It reads:
+The report reads saved results and local setup status. It runs no watch checks or suggested commands. Use `--output` to write an owner-private copy.
 
 * **Each check's latest result.** Every `megalodon CHECK check` keeps what it
   found, when, and its exit code in `~/.local/state/megalodon/results/`
@@ -54,12 +55,13 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   check with when, beside what the last `check` found: a listener or web
   script the watch saw may be gone, and a check cannot see it again. A check,
   failed or not, only replaces its own result; `accept` or a new baseline
-  clears both. The latest 500 are listed and every one is counted; a flood is
-  bounded, and the count then says "at least". Findings an earlier version
+  clears both. The watch projection retains up to 500 entries with full detail. The default
+  report shows up to 25 per check. A saturated log can retain severity counts
+  without full detail, and reports an "at least" count at its upper bound. Findings an earlier version
   kept in the check's result are moved into the log, with when, before a
   check replaces that result: once, under a lock (`flock`, so on Linux), and
-  listed in the order they were seen. The log is only ever opened as a
-  mode-600 file you own, never through a link or as a pipe; one that is not
+  listed in the order they were seen. That lock coordinates cooperating local processes. The log is only ever opened as a
+  private regular file you own, never through a link or as a pipe; one that is not
   is that check's error. The other watches pass what
   they find to the response engine, and it reaches the incidents.
 * **Incidents** of the last week (`--hours` to change), from the response
@@ -86,11 +88,13 @@ Each check is shown as:
 
 | Status | Means |
 | --- | --- |
-| clear | Its last run found nothing |
+| clear | No finding was recorded in the last check. Read its gaps and time before interpreting coverage. |
 | to review | Its last run found something; the findings follow, worst first |
 | watching | A live watch is installed and running |
 | not run | It has never run; run it, or schedule it |
 | broken | Its last run failed (the report gives the reason it printed, or the error it stopped on), its watch is installed but stopped, or its saved result cannot be trusted |
+
+A report verdict of **all clear** describes the available configured scope. Unobserved systems, sources and time windows are outside it. The CLI returns 0 when it renders successfully even when the verdict calls for action.
 
 A check whose last run is more than three of its scheduled intervals old is
 marked out of date: its timer may have stopped.

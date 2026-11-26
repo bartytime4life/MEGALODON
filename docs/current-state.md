@@ -1,19 +1,105 @@
 # Current state and evidence boundaries
 
-## November 17 maintained source and review candidate
+## November 26 source and acceptance map
+
+**Source basis (America/Chicago)** — [`main@4b39b0820bfc527de88813f999ddefcea643d93c`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c),
+tree `bf9c557d8ec41ce4dd1ee026ff4d07ac791c64a3`, merged through [PR #917](https://github.com/bartytime4life/MEGALODON/pull/917).
+All 1,393 tracked blobs were matched and the reconstructed Git tree reproduced
+the same tree ID. The [catalog](documentation-map.md) accounts for all 234
+tracked Markdown paths. The specification and security review define the
+contracts. Historical records below retain the scope and source of their runs.
+
+**How to read this page.** **OBSERVED** means source, GitHub state or a hosted
+result was directly read. **VERIFIED** means a named check was rerun in this
+audit. A successful scoped test supports only the property and environment
+it exercised. Source availability, a configured installation, native execution,
+independent review, owner approval, and release or publication each require
+their own evidence.
+
+### What the source implements
+
+| Area | OBSERVED at the pinned tree | Evidence still needed |
+| --- | --- | --- |
+| Network core and storage | Bounded packet metadata admission, fixed SYN/port/DNS heuristics, private SQLite, linked event/detection/run records, retention and bounded reads. Extra [threat signals](threat-detection.md) use separate inputs and settings. [Core specification](../SPECIFICATION.md) · [storage](storage-layout.md) | Representative traffic and independent labels, source-loss accounting, long-running load, and production alert workload. No packet payloads or payload-derived hashes in the packet evidence ledger. |
+| HUD and evidence | Linux loopback UI, Findings and provenance inspector, Sensors, connection views, retained history, reports, Help, and protected Setup/actions. Evidence readers and separately authorized action routes have distinct contracts. [HTTP contract](dashboard-http-contract.md) · [operator guide](wiki/operator-guide.md) | Current owner-PC installation and accessible real-data walkthrough, including degraded source states and assistive technology. Hosted browser cases use controlled fixtures. |
+| Offline and optional sources | Bounded JSONL and offline TShark/Zeek inputs, pinned Suricata closed-profile producer/reader/consumer contracts, scoped optional ClamAV/Lynis/AIDE/Nmap workflows and configured background collection. [Offline analysis](offline-analysis.md) · [companions](background-tools.md) · [integrations](integration-hub.md) | Distinguish tool presence, running status, admitted data and producer qualification. [Zeek #445](https://github.com/bartytime4life/MEGALODON/issues/445) remains open. Fixture coverage does not qualify native Zeek or a deployed Suricata, live capture or IPS. |
+| Layered detection | Retained pattern reviews combine bounded evidence and disclose uncertainty. The documented rolling comparison produced reviews in **8 of 10 investigation-useful** and **4 of 10 ordinary** synthetic cases. Five indeterminate cases are outside those denominators. [Evaluation and oracle limits](layered-evaluation.md#current-rolling-window-comparison) | Representative independent labels, deployment exposure/time denominators, false-alarm workload, source overlap and loss, and acceptance thresholds. Synthetic results are workload examples. |
+| Host posture and live watches | Baseline/drift checks, observations for process ancestry, credentials, egress, containers, persistence, boot, binaries, logs and other host surfaces. Scoped Linux exec/connect tracing adds short-lived observations and exposes gaps. [Scheduling and coverage](scheduling.md) · [host security](host-security.md) | Distribution/kernel/privilege coverage, buffer loss under sustained load, native journald rotation/vacuum, and clean install or upgrade acceptance. A baseline describes the files and state read during a window. |
+| Host reports and local review | `megalodon report` reads saved checks, watch history, incidents and setup. `megalodon review` can run a fixed command after confirmation. Listener and web-root watch history uses separate bounded logs. [Report and review](security-report.md) · [results source](../megalodon/results.py) | Account coverage, migration under live operating conditions, operator workflow and alert delivery. A missing input is visible where the report can identify it. |
+| Response and containment | The metadata planner records plans. The Linux HUD has separate scoped, expiring containment and host-input policy. The host response engine records decisions in shadow mode. Separate policy-pinned, default-off enforcement can act only through configured guards and records recovery outcomes. [Host protection](host-protection.md) · [response](response-engine.md) · [enforcement](enforcement.md) | Native installed-policy verification and rollback evidence. Timed process recovery depends on later invocations, access to the same journal and usable target identity. [Recovery acceptance](enforcement-recovery-acceptance.md) |
+| Artifacts and external delivery | Explicit confined structural/file identification and optional YARA inspection, evidence collection and verification, opt-in alerts/heartbeat/shipping/fleet workflows. [File inspection](file-inspection.md) · [collection](evidence-collection.md) · [shipping](evidence-shipping.md) · [fleet](fleet.md) | Per-tool confinement and coverage on the target, review of enabled destinations and data, delivery failure and recovery drills. Host bundles and reports can contain sensitive local artifacts and are distinct from packet metadata. |
+| Model preparation and AI | Explicit installed-model discovery/selection, saved preferences, offline component verification/staging, and a fixed no-telemetry diagnostic have separate scopes. Canonical record is `UNBOUND`, operator decision `NOT_RECORDED`, and operational generation is refused before provider access. [Binding record](../config/model-bindings/qwen.unbound.json) · [runtime fence](qwen-runtime-unbound.md) | [#446](https://github.com/bartytime4life/MEGALODON/issues/446) was closed by the owner on November 2 Central time. Authenticated provenance, loaded-byte attestation, signed corpus/model evaluation, provider confinement, independent review and acceptance remain unproved by that closure. [#732](https://github.com/bartytime4life/MEGALODON/issues/732) remains open for model staging/library follow-up. |
+| Stage 0 | Fresh-process application latch refuses named entry points, with source/wheel parity and scoped effect tripwires. Fixed companion schedules and host watch schedules belong to other modes. [Application fence](offline-analysis.md#stage-0-application-entry-fence--issue-750) | [#750](https://github.com/bartytime4life/MEGALODON/issues/750) remains open for immutable OS-level isolation, complete entry/descendant coverage and acceptance. A process-local fence cannot undo work that already started. |
+| Installation and recovery | Per-user Linux installation, loopback service and opt-in login startup. Explicit SQLite backup/restore targets new databases. Host backup/test receipt validation is read-only and leaves `restore_eligible` false. [Setup](local-pc-setup.md) · [SQLite recovery](sqlite-recovery-contract.md) · [host receipt scope](host-backup-evidence.md) | An installed workstation, real backups and restore drill, native storage fault evidence and an operator-approved recovery path. Synthetic recovery and source/wheel smoke cover bounded scenarios. |
+| Platform, delivery and publication | Linux is the reference. Windows and macOS have narrow synthetic CI jobs. Packaging, Wiki projection and release-evidence workflows have separate entry points. The Site is a separately published address-free snapshot viewer. [Platform gates](platform-baseline.md) · [release evidence](ubuntu-release-evidence.md) · [Site scope](../site/README.md) | Native platform parity, an accepted release packet and current Wiki/Site parity. GitHub's releases endpoint returned no published releases when inspected. |
+
+### Recent merged changes and pending work
+
+| Change | What the evidence covers | Remaining limit |
+| --- | --- | --- |
+| [#902–#908](https://github.com/bartytime4life/MEGALODON/pull/908) | Bounded kernel-record use for short-lived process/connection observations and scheduler wiring, with unit and synthetic controls for attribution and dropped records. | Kernel/privilege variants, read failures, actual ring-buffer loss, and live workload under the installed service profile. |
+| [#909](https://github.com/bartytime4life/MEGALODON/pull/909), [#910](https://github.com/bartytime4life/MEGALODON/pull/910), [#912](https://github.com/bartytime4life/MEGALODON/pull/912) | Checks separate findings from execution or delivery errors. Enforcement orders containment before collection when both are authorized. Log/journal checks preserve the reviewed verification floor. An unreadable required archive digest remains a gap and is retried. | Native journald rotation and vacuum acceptance remain open. Scope includes reviewed logs that could be read and compared. [Log guide](log-integrity.md) |
+| [#911](https://github.com/bartytime4life/MEGALODON/pull/911), [#913](https://github.com/bartytime4life/MEGALODON/pull/913)–[#917](https://github.com/bartytime4life/MEGALODON/pull/917) | Guided review and coverage-aware reports. Listener/web-root history is retained per watch. Fixture regressions cover one-time migration, retries, order, file admission and lock refusal. | The migration lock is advisory. A report reflects saved results, accessible configuration and recorded gaps. Current tamper CLI prints an allowlisted summary/counts. [Draft #918](https://github.com/bartytime4life/MEGALODON/pull/918) proposes returning per-finding summaries and gaps to that command. |
+
+### Local audit evidence
+
+- **VERIFIED** the repository static audit and Python compilation, CLI and
+  report help, Wiki projection, catalog coverage and local Markdown links.
+  Static results cover source structure and navigation targets. Browser
+  interaction evidence is in the hosted lane below.
+- **VERIFIED** the 25-case layered replay at this source. It produced 39
+  individual candidates and 13 layered reviews, checked 841 evidence
+  references and found zero provenance errors or permutation differences.
+  The operational accuracy fields remain unset.
+- **Local test boundary.** The selected regression suite reported 1,298
+  passes, eight native skips and one `STORAGE_PATH:UNSAFE_ANCESTOR` failure
+  also reproduced at the untouched source. The full pinned baseline suite
+  was non-green in this sandbox. Path-ancestry and permission restrictions
+  dominated its failures and setup errors. The hosted checks below provide
+  the separate CI results for the exact source.
+
+### Checks tied to this tree
+
+All entries below are **OBSERVED GitHub results**. The November 26 push runs
+point to `4b39b0820bfc527de88813f999ddefcea643d93c`. PR #917's final head,
+`ed04179b157bc904abc479d77a81a53bcdbf75de`, has the identical Git tree. Its
+PR-only runs remain candidate runs, even though the source bytes match.
+
+| Check | Result and scope |
+| --- | --- |
+| [Push CI 45879634003](https://github.com/bartytime4life/MEGALODON/actions/runs/45879634003) | Passed source tests, wheel smoke, CLI, native loopback sender/socket-holder and measured cadence fixtures, offline layered replay, and isolated SQLite lock acceptance. The two identity-artifact jobs were skipped on this push. |
+| [Linux browser 45879634094](https://github.com/bartytime4life/MEGALODON/actions/runs/45879634094) | Passed the pinned hosted browser matrix. Covers controlled HUD interaction and recorded browser cases. |
+| [CodeQL 45879634015](https://github.com/bartytime4life/MEGALODON/actions/runs/45879634015) | Passed the Python analysis job. The underlying security alert disposition and independent review are separate evidence. |
+| [Host protection 45879634039](https://github.com/bartytime4life/MEGALODON/actions/runs/45879634039) | Passed packet checks in fresh user/network namespaces. Owner-PC policy and coexistence remain separate. |
+| [Qwen 45879634032](https://github.com/bartytime4life/MEGALODON/actions/runs/45879634032) · [Stage 0 parity 45879634009](https://github.com/bartytime4life/MEGALODON/actions/runs/45879634009) | Passed scoped disabled/UNBOUND checks and named source/wheel projection parity. No real-provider or general OS containment result follows from either lane. |
+| [Windows 45876858011](https://github.com/bartytime4life/MEGALODON/actions/runs/45876858011) · [macOS 45876857515](https://github.com/bartytime4life/MEGALODON/actions/runs/45876857515) | Passed synthetic core/sample fixtures at the final candidate. Full Windows/macOS support remains outside that evidence. |
+| [Linux installer 45876858013](https://github.com/bartytime4life/MEGALODON/actions/runs/45876858013) · [recovery rehearsal 45876857532](https://github.com/bartytime4life/MEGALODON/actions/runs/45876857532) · [installed-wheel recovery 45876857605](https://github.com/bartytime4life/MEGALODON/actions/runs/45876857605) · [release subjects 45876857565](https://github.com/bartytime4life/MEGALODON/actions/runs/45876857565) | Passed the named hosted fixture/packaging lanes at the final candidate. No owner workstation deployment, real host-file restore, or accepted release was inferred. |
+
+**Lifecycle readback.** The active [main ruleset](https://github.com/bartytime4life/MEGALODON/rules/22394782)
+requires strict `test` status and records zero required approving reviews. The
+[separate review ruleset](https://github.com/bartytime4life/MEGALODON/rules/24377756)
+requests Copilot review for drafts. Branch-protection details returned 403 to
+this audit, so those rulesets are the verified read boundary. The project
+[owner lifecycle procedure](exact-head-owner-lifecycle.md) remains separate.
+The exact source head also had two failed and one cancelled lifecycle runs
+triggered by issue comments. Those runs and the successful push checks establish
+different facts. No independent approval or release is inferred from them.
+
+## Historical November 17 source and candidate
 
 Merged source: [`main@dee4027a8541335f43460d6bef37024606f4bfdf`](https://github.com/bartytime4life/MEGALODON/commit/dee4027a8541335f43460d6bef37024606f4bfdf).
 PR #780 delivered finite host-input protection; #779 delivered the qualified
 Playwright 1.65.2 profile and fifteen-wheel browser closure. Their source and
 hosted validation do not establish installation or live-PC protection.
 
-The [current repo/app candidate](repo-app-review-2026-11-17.md) adds an
+The [November 17 review candidate](repo-app-review-2026-11-17.md), later merged in
+[PR #781](https://github.com/bartytime4life/MEGALODON/pull/781), added an
 [offline security-science lab](security-science-lab.md), direct Help routes to
 PC protection, truthful library failure/recovery, single-flight library status
 and protection-refresh admission/visibility fixes. It also excludes contradictory
-comparison-hour copies and explains the actual cadence tolerance in Findings. The complete documentation
-catalog and maintained Wiki source point here; older pins and counts below are
-historical. Candidate verification is reported at its own PR head.
+comparison-hour copies and explains the actual cadence tolerance in Findings. The documentation
+catalog and Wiki source were also refreshed. Candidate verification is reported
+at its own PR head.
 
 ## November 17 merged host-protection source
 
@@ -32,7 +118,7 @@ retain their original source and validation scope.
 
 **Source basis:** [`main@418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b),
 tree `f0e47918ed0f6715197e944e6cb18e221ea498d5`. PR [#774](https://github.com/bartytime4life/MEGALODON/pull/774)
-merged at `2026-11-12T00:03:54Z` (November 11 in America/Chicago). This is the November 11 reading; the November 17 section above supplies the
+merged at `2026-11-12T00:03:54Z` (November 11 in America/Chicago). This is the November 11 reading. The November 26 map above supplies the
 current orientation. Earlier sections remain historical at their own pins.
 
 | Task | Implemented behavior | Meaning / guide |

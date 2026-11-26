@@ -38,8 +38,15 @@ megalodon tamper accept
 The dashboard's own settings files change in normal use and are not
 recorded.
 
-`check` exits 1 on findings and 2 on an error, and `--alert` sends them off
-the machine. Tamper alerts are sent whatever the alert minimum severity is.
+At the November 26 source pin, `check` prints a limited JSON summary with
+`findings_count`. It leaves individual findings, timestamps and gaps out of
+terminal output, and `units_count` may be null. For saved findings and
+coverage gaps, run [`megalodon report`](security-report.md) as the account that
+ran the check, using the default local baseline. [Draft PR #918](https://github.com/bartytime4life/MEGALODON/pull/918)
+proposes restoring per-finding summaries and gaps to `tamper check`.
+
+`check` exits 1 on findings and 2 on an error. With `--alert`, findings use
+the configured off-machine routes and bypass the normal minimum severity.
 `accept` records the current state after an upgrade, or after you accepted a
 watch's baseline yourself.
 
