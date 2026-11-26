@@ -38,8 +38,12 @@ megalodon tamper accept
 The dashboard's own settings files change in normal use and are not
 recorded.
 
-`check` exits 1 on findings and 2 on an error, and `--alert` sends them off
-the machine. Tamper alerts are sent whatever the alert minimum severity is.
+`check` prints each finding's rule, severity and summary, and the file or
+unit it is about (`code:`, `config:` or `unit:`), never its details or what
+a file holds. It also prints what it could not look at (`gaps`, such as
+systemd not answering) and when it ran. It exits 1 on findings and 2 on an
+error, and `--alert` sends them off the machine. Tamper alerts are sent
+whatever the alert minimum severity is.
 `accept` records the current state after an upgrade, or after you accepted a
 watch's baseline yourself.
 
