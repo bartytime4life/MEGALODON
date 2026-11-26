@@ -28,8 +28,11 @@ manual plan receipts, but `record_event(..., run_id=...)` and a later
 `INGESTION_RUN:ATOMIC_WRITE_REQUIRED`.
 
 The bundle API accepts only concrete list/tuple collections with equal lengths,
-typed records, and at most three detections/actions—the closed number of fixed
-Stage 0 rules. It rejects a generator or oversized collection before iteration
+typed records, and at most one detection/action per rule in the catalog
+(`rule_catalog.ALL_RULE_IDS`): each core and threat rule fires at most once per
+event, and all of them can fire on the same one. (The bound was three, the
+Stage 0 rules, until the threat layer's rules could cross with them on one packet
+and fail the run.) It rejects a generator or oversized collection before iteration
 or database mutation, so the transaction boundary is not an unbounded
 materialization surface.
 

@@ -18,6 +18,7 @@ from time import monotonic, sleep
 from typing import Any
 
 from .models import ActionRecord, DetectionResult, PacketEvent
+from .rule_catalog import ALL_RULE_IDS
 from .validation import (
     parse_nonnegative_int,
     parse_timestamp,
@@ -335,7 +336,9 @@ INGESTION_TERMINATION_REASONS = frozenset(
         "reconciliation_required",
     }
 )
-MAX_DETECTIONS_PER_EVENT = 3
+# Every rule in the catalog can fire on the same packet, at most once each (a scan, a sweep, a flood and a decoy
+# crossed together): an event's bundle holds all of them. A smaller bound let one crafted packet fail the run.
+MAX_DETECTIONS_PER_EVENT = len(ALL_RULE_IDS)
 RECONCILIATION_REQUIRED = "INGESTION_RUN:RECONCILIATION_REQUIRED"
 
 PRIVATE_DIRECTORY_MODE = 0o700
