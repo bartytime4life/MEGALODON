@@ -244,6 +244,7 @@ def test_advance_keeps_the_record_of_a_log_with_a_finding(logs):
     assert stored["/var/log/syslog"]["size"] > len(LINES)
     again = li.check(manifest, advance=True, **options)
     assert {(f["rule_id"], f["log"]) for f in again["findings"]} == {("LOG_TRUNCATED", "/var/log/auth.log")}
+    assert len(again["findings"]) == 1, "found against the progress and the baseline, reported once"
     assert li.progress_path(manifest).stat().st_mode & 0o777 == 0o600
 
 
@@ -412,3 +413,65 @@ def test_the_tamper_check_stays_quiet_while_the_log_check_advances(logs, tmp_pat
     assert tamper.check(recorded, runner=lambda *a: None)["findings"] == []
     li.accept(manifest, **options)                       # a reviewed change to the baseline is still seen
     assert [f["rule_id"] for f in tamper.check(recorded, runner=lambda *a: None)["findings"]] == ["BASELINE_CHANGED"]
+
+
+def _forge_progress(manifest, options):
+    """What an intruder able to write the sensor's files could do: record the logs as they are now as progress."""
+    li._write(li.progress_path(manifest), dict(schema=li.SCHEMA, recorded_at="2026-11-26T00:00:00Z",
+                                                **li.snapshot(**options)))
+
+
+@pytest.mark.parametrize("damage", ["truncate", "empty", "rewrite"])
+def test_progress_cannot_hide_damage_to_a_log_the_reviewed_baseline_recorded(logs, damage):
+    # The tamper check watches the reviewed baseline, not the progress file, so the baseline is the floor: a log
+    # that is still the same file as at the baseline can only have grown since, whatever the progress says.
+    folder, options, manifest = logs
+    li.check(manifest, advance=True, **options)
+    log = folder / "auth.log"
+    if damage == "truncate":
+        os.truncate(log, 100)
+    elif damage == "empty":
+        os.truncate(log, 0)
+    else:
+        with open(log, "r+", encoding="utf-8") as out:
+            out.seek(200)
+            out.write("X" * 40)
+    _forge_progress(manifest, options)
+    report = li.check(manifest, advance=True, **options)
+    found = {(f["rule_id"], f["log"]) for f in report["findings"]}
+    assert found == {("LOG_REWRITTEN" if damage == "rewrite" else "LOG_TRUNCATED", "/var/log/auth.log")}
+    assert report["findings"][0]["detail"]["compared_with"] == "the reviewed baseline"
+    again = li.check(manifest, advance=True, **options)
+    assert {(f["rule_id"], f["log"]) for f in again["findings"]} == found, "reported until accept"
+
+
+def test_the_floor_is_quiet_for_normal_growth_and_rotation(logs):
+    folder, options, manifest = logs
+    with open(folder / "syslog", "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:00:00 host service[1]: later entry\n")
+    log = folder / "auth.log"
+    log.rename(folder / "auth.log.1")
+    log.write_text("Nov 18 09:00:00 host service[1]: new file\n" * 50, encoding="utf-8")
+    assert li.check(manifest, advance=True, **options)["findings"] == []
+    (folder / "auth.log.1").unlink()
+    with open(log, "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:05:00 host sshd[2]: later\n")
+    assert li.check(manifest, advance=True, **options)["findings"] == []
+    assert li.check(manifest, advance=True, **options)["findings"] == []
+
+
+def test_a_copytruncate_log_is_reported_once_no_copy_holds_the_reviewed_content(logs):
+    # Copied and emptied in place, the log stays the same file, so the reviewed baseline still speaks for it: once
+    # the rotated copies holding what it recorded are gone, the change is reported until accept.
+    folder, options, manifest = logs
+    log = folder / "auth.log"
+    shutil.copy(log, folder / "auth.log.1")
+    os.truncate(log, 0)
+    log.write_text("Nov 18 09:00:00 host service[1]: after rotation\n", encoding="utf-8")
+    assert li.check(manifest, advance=True, **options)["findings"] == []
+    (folder / "auth.log.1").unlink()
+    report = li.check(manifest, advance=True, **options)
+    assert {(f["rule_id"], f["log"]) for f in report["findings"]} == {("LOG_TRUNCATED", "/var/log/auth.log")}
+    assert "copytruncate" in report["findings"][0]["detail"]["note"], "the finding says what to do"
+    li.accept(manifest, **options)
+    assert li.check(manifest, advance=True, **options)["findings"] == []

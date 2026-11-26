@@ -244,6 +244,7 @@ def test_advance_keeps_the_record_of_a_journal_with_a_finding_or_unreadable(mach
     stored = json.loads(manifest.read_text())["journals"]["files"]
     assert next(r for r in stored.values() if r["path"].endswith("/system.journal"))["n_entries"] == 50
     assert check(manifest, root)[0] == {("JOURNAL_ENTRIES_REMOVED", "system.journal")}, "reported until accept"
+    assert len(check(manifest, root)[1]["findings"]) == 1, "found against the progress and the baseline, once"
     real_open = os.open
     blocked = str(folder / "user-1000.journal")
     monkeypatch.setattr(os, "open", lambda path, *a, **k: (_ for _ in ()).throw(PermissionError(13, "denied"))
@@ -379,3 +380,28 @@ def test_accept_reuses_the_digests_the_last_advancing_check_recorded(machine, mo
     monkeypatch.setattr(ji, "_digest", lambda path: pytest.fail(f"{path} was read again"))
     li.accept(manifest, root=str(root))
     assert not li.progress_path(manifest).exists()
+
+
+@pytest.mark.parametrize("damage", ["entries", "archive"])
+def test_progress_cannot_hide_damage_to_a_journal_file_the_review_recorded(machine, damage):
+    # The progress file is not watched by the tamper check; rewriting it must not hide a cut-back journal.
+    root, folder, manifest = machine
+    li.check(manifest, root=str(root), advance=True)
+    if damage == "entries":
+        grow(folder / "system.journal", 240, entries=40)
+        expected = ("JOURNAL_ENTRIES_REMOVED", "system.journal")
+    else:
+        path = next(folder.glob(f"system@*-{1:016x}-*.journal"))
+        data = bytearray(path.read_bytes())
+        data[-1] ^= 0xFF
+        path.write_bytes(bytes(data))
+        expected = ("JOURNAL_ARCHIVE_CHANGED", path.name)
+    options = dict(root=str(root))
+    li._write(li.progress_path(manifest), dict(schema=li.SCHEMA, recorded_at="2026-11-26T00:00:00Z",
+                                                journals=li._journals(options), **li.snapshot(**options)))
+    found, report = check(manifest, root, advance=True)
+    assert found == {expected}
+    assert report["findings"][0]["detail"]["compared_with"] == "the reviewed baseline"
+    assert check(manifest, root, advance=True)[0] == {expected}, "reported until accept"
+    li.accept(manifest, root=str(root))
+    assert check(manifest, root)[0] == set()

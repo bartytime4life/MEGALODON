@@ -151,6 +151,9 @@ collect evidence and notify you of HIGH and CRITICAL findings.
   `BASELINE_CHANGED` is expected. The scheduled `logwatch check --advance`
   does not set it off: what it records as it goes is kept in
   `log-integrity-progress.json`, which is not watched, and the reviewed
-  baseline changes only at `logwatch accept`.
+  baseline changes only at `logwatch accept`. A rewritten progress file
+  cannot hide a log cut back in place: the log check still holds every log
+  that is the file you reviewed to the watched baseline
+  ([log integrity](log-integrity.md)).
 * **The heartbeat proves the sender holds the key and is running.** It does
   not prove the machine is uncompromised.

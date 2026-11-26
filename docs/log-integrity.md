@@ -117,6 +117,22 @@ from the logs as they are. So the [tamper check](tamper-detection.md), which
 watches the baseline, is not set off by every scheduled check, and still
 reports a baseline that was changed.
 
+The progress file is not watched, so it is not trusted on its own: anything
+able to write MEGALODON's files could rewrite it to match a log it cut back.
+The reviewed baseline is the floor. A log that is still the same file (the
+same inode) as when you reviewed it can only have grown since, or its
+earlier content must be in a rotated copy, so every check also compares such
+a log with the baseline, and reports what the progress hid, with
+`compared_with: the reviewed baseline`. Journal files are held to the
+baseline the same way, by their file ID.
+
+This has one cost. A log rotated by copying and emptying it in place
+(logrotate's `copytruncate`) stays the same file, so once no rotated copy
+holds what the baseline recorded, it is reported as truncated until you run
+`accept`. So is a new log that the file system gave the old one's inode. The
+finding says so. A log rotated the usual way (a new file) is followed by the
+progress alone.
+
 ## What is stored
 
 For each log, the baseline stores its inode, device, size, owner, mode, a
