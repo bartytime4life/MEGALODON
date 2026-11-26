@@ -3934,13 +3934,10 @@ def _watch_keeper(args, check):
     if getattr(args, "manifest", None) is not None:
         return lambda found: None
     from . import results
-    seen = []
 
     def keep(found):
-        seen.append(found)
-        del seen[:-results.MAX_FINDINGS]
         try:
-            results.keep(check, dict(findings=list(seen), gaps=[], seen_by_watch=True), 1)
+            results.add_seen(check, found)
         except OSError as exc:
             print(f"megalodon: what the watch saw was not kept for `megalodon report`: {exc}", file=sys.stderr)
     return keep
@@ -3976,7 +3973,7 @@ def _run_and_keep(args) -> int:
                 and getattr(args, f"{args.command}_command", None) in ("accept", "baseline")):
             from . import results
             try:
-                results.forget_watch(args.command)
+                results.forget(args.command)
             except OSError as exc:
                 print(f"megalodon: what the watch saw before is still in `megalodon report`: {exc}", file=sys.stderr)
         return code

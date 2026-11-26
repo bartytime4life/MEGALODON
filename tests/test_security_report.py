@@ -556,13 +556,19 @@ def test_what_a_live_watch_sees_is_kept_until_accept(home, monkeypatch):
     assert "listeners" not in results.latest(), "reviewed and accepted: no longer to review"
 
 
-def test_a_check_result_is_not_removed_by_accept(home, monkeypatch):
+def test_accept_clears_what_the_last_listener_check_found_too(home, monkeypatch):
+    # The watch adds to the kept result; under systemd no scheduled check replaces it, so accept must clear it.
     from megalodon import listener_watch
     keep("listeners", [dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:22")])
     monkeypatch.setattr(listener_watch, "accept", lambda *a, **k: dict(action="accept"))
     run_cli(["listeners", "accept"])
-    assert "listeners" in results.latest(), "the next check replaces it"
+    assert "listeners" not in results.latest()
 
+
+def test_the_watch_adds_to_what_the_last_check_found(home):
+    keep("listeners", [dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:22")])
+    _keeper()(_seen(4444))
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:22", "tcp/0.0.0.0:4444"]
 
 @pytest.mark.parametrize("check, module, found", [
     ("listeners", "listener_watch", dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:4444",
@@ -584,3 +590,50 @@ def test_the_watch_commands_keep_what_they_see(home, monkeypatch, check, module,
     run_cli([check, "watch"])
     record = results.latest()[check]
     assert record["result"]["seen_by_watch"] and record["result"]["findings"] == [found]
+
+
+# ------------------------------------------------------------------ what a watch keeps is the saved result, not a copy in memory
+
+def _keeper():
+    import argparse
+    from megalodon import cli
+    return cli._watch_keeper(argparse.Namespace(manifest=None), "listeners")
+
+
+def _seen(n, severity="HIGH"):
+    return dict(rule_id="NEW_LISTENER", severity=severity, listener=f"tcp/0.0.0.0:{n}", programs=[])
+
+
+def test_a_restarted_watch_keeps_what_it_saw_before(home):
+    _keeper()(_seen(1))
+    _keeper()(_seen(2))                                   # the watch restarted
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:1", "tcp/0.0.0.0:2"]
+
+
+def test_what_was_accepted_or_checked_since_does_not_come_back(home):
+    kept = _keeper()
+    kept(_seen(1))
+    results.forget("listeners")                           # accept, while the watch runs on
+    kept(_seen(2))
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:2"]
+    keep("listeners", [])                                 # a check replaced it
+    kept(_seen(3))
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:3"]
+
+
+def test_a_watch_counts_every_finding_beyond_those_it_keeps(home):
+    kept = _keeper()
+    kept(_seen(0, "HIGH"))
+    for n in range(1, results.MAX_FINDINGS + 1):
+        kept(_seen(n, "LOW"))
+    report = build()
+    listeners = view(report, "listeners")
+    assert report["counts"]["HIGH"] == 1 and report["counts"]["LOW"] == results.MAX_FINDINGS
+    assert listeners["finding_count"] == results.MAX_FINDINGS + 1 and report["verdict"] == "act"
+    assert len(results.latest()["listeners"]["result"]["findings"]) == results.MAX_FINDINGS, "the latest are kept"
+
+
+def test_the_watch_keeps_what_a_check_found_before_its_alert_failed(home):
+    results.keep("listeners", dict(findings=[_seen(22)], gaps=[]), 2, now=AT, reason="alerts unavailable")
+    _keeper()(_seen(4444))
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:22", "tcp/0.0.0.0:4444"]

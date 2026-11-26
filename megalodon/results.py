@@ -46,7 +46,7 @@ def _findings(result):
     return found if isinstance(found, list) else []
 
 
-def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
+def keep(check, result, exit_code, *, folder=None, now=None, reason=None, counted=None):
     """Record `check`'s latest result. `result` is what the check printed, or None when it could not run;
     `reason` is what it said when it could not."""
     if check not in NAMES:
@@ -59,6 +59,11 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
         severities[level] = severities.get(level, 0) + 1
     record = dict(schema=SCHEMA, check=check, at=now or _now(), exit_code=exit_code,
                   ran=result is not None, findings=len(findings), severities=severities, result=result)
+    if counted:
+        # A live watch keeps its latest findings and counts every one it saw (see `add_seen`).
+        record.update(findings=counted['findings'], severities=counted['severities'])
+        if counted['findings'] > len(findings):
+            record['truncated'] = True
     if reason:
         record['reason'] = str(reason)[:500]
     data = json.dumps(record, sort_keys=True, default=str)
@@ -88,18 +93,37 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
     return target / f'{check}.json'
 
 
-def forget_watch(check, *, folder=None):
-    """Remove `check`'s result if a live watch kept it: after `accept` or a new baseline, what the watch saw
-    before is no longer what to review. A result a check run kept is replaced by the next run instead."""
-    path = _folder(folder) / f'{check}.json'
+def add_seen(check, found, *, folder=None, now=None):
+    """Add what a live watch just saw to its kept result.
+
+    Nothing is held in the watch's memory: each finding is added to the result kept on disk now, so a restarted
+    watch keeps what it saw before. A result a check kept, or none (after accept), starts a new list, so what was
+    reviewed does not come back. The latest MAX_FINDINGS are kept in full and every finding is counted.
+
+    What the last check found is kept too: the watch adds to it until the next check replaces the result, or
+    accept or a new baseline clears it."""
     try:
-        record = _read(path)
+        record = _read(_folder(folder) / f'{check}.json')
     except (ResultError, OSError):
-        return False
-    if record and isinstance(record.get('result'), dict) and record['result'].get('seen_by_watch'):
-        os.unlink(path)
+        record = None
+    prior = record if record and isinstance(record.get('result'), dict) else None
+    findings = (prior['result'].get('findings', []) if prior else [])[-(MAX_FINDINGS - 1):] + [found]
+    severities = dict(prior.get('severities') or {}) if prior else {}
+    level = str(found.get('severity') or '').upper()
+    severities[level] = severities.get(level, 0) + 1
+    total = (prior.get('findings', 0) if prior else 0) + 1
+    return keep(check, dict(findings=findings, gaps=[], seen_by_watch=True), 1, folder=folder, now=now,
+                counted=dict(findings=total, severities=severities))
+
+
+def forget(check, *, folder=None):
+    """Remove `check`'s kept result: after `accept` or a new baseline of a check a live watch adds to, what was
+    kept is no longer what to review, and the watch would otherwise add to it."""
+    try:
+        os.unlink(_folder(folder) / f'{check}.json')
         return True
-    return False
+    except FileNotFoundError:
+        return False
 
 
 def _read(path):
