@@ -1,6 +1,6 @@
 # MEGALODON architecture security review
 
-> **Current source orientation — merged source `418fa54474f3f77d0758e94aab5735a516d8c43b` (2026-11-12 UTC):** The [current-state guide](docs/current-state.md) distinguishes legacy CLI refusal surfaces, protected Linux HUD actions and the partial Stage 0 application entry fence. [PR #774](https://github.com/bartytime4life/MEGALODON/pull/774) adds read-only HUD guidance and current-query/selection binding; it grants no new action endpoint or runtime authority. The dated reviews below retain their original interfaces and evidence scope. This documentation refresh does not rerun installed-host, native containment or independent acceptance checks.
+> **Current source orientation · November 26, 2026.** Start with [current state and acceptance](docs/current-state.md#november-26-source-and-acceptance-map) at [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b). The dated reviews below retain their original scope. The latest map identifies the protected effect paths, scoped Stage 0 and provider refusals, host reporting and coverage gaps, plus the remaining native, installed-host and independent acceptance evidence.
 
 The current HUD labels returned Suricata context as **Sensor observations** and
 keeps it separate from the retained Findings queue. Guidance links only navigate;

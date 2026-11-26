@@ -1,6 +1,6 @@
 # Quick Start
 
-> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+> [Current capabilities, checks and remaining acceptance](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-26-source-and-acceptance-map) · November 26, 2026. Pinned examples below keep their original dates.
 
 > [See the interface first](visual-tour.md) · [Current scope and open gates](roadmap-and-limits.md). Commands below are run from the root of a reviewed checkout as your ordinary user.
 

@@ -1,6 +1,6 @@
 # Engineering Case Studies
 
-> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+> [Current capabilities, checks and remaining acceptance](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-26-source-and-acceptance-map) · November 26, 2026. Pinned examples below keep their original dates.
 
 > **Historical case studies:** The first four studies retain their October 11 source revision and recorded measurement scope. The November update below describes later source repairs separately. [Current documentation](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-11-source-orientation) and [the visual tour](visual-tour.md) provide the current orientation without rewriting historical results.
 
@@ -65,7 +65,7 @@ Temporary HUD containment requires an observed public endpoint, preview, separat
 
 **Regression example:** [#520](https://github.com/bartytime4life/MEGALODON/pull/520) keeps disabled model telemetry idle. [Sentinel tests](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/tests/test_qwen_zero_effect.py) distinguish disabled denial, read-only status, explicitly audited broker behavior, and the limits of the canonical binding gate.
 
-**Acceptance boundary:** `config/model-bindings/qwen.unbound.json` remains **UNBOUND** with no recorded owner model decision. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) is open. HUD runtime model selection and working provider code do not establish canonical Airlock acceptance, native containment, or representative model quality. [#530–#532](https://github.com/bartytime4life/MEGALODON/pull/530) add privacy-minimized evaluation and outcome-consistency contracts; they do not supply an executed production corpus.
+**Acceptance boundary:** `config/model-bindings/qwen.unbound.json` remains **UNBOUND** with no recorded owner model decision. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) was open at this case-study pin and is now closed. The canonical status remains UNBOUND. HUD runtime model selection and working provider code do not establish canonical Airlock acceptance, native containment, or representative model quality. [#530–#532](https://github.com/bartytime4life/MEGALODON/pull/530) add privacy-minimized evaluation and outcome-consistency contracts; they do not supply an executed production corpus.
 
 **Inspect:** [Model selection](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/local-model-selection.md) · [Advisory adapter](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/megalodon/qwen_advisory.py) · [Canonical binding](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/config/model-bindings/qwen.unbound.json) · [Evaluation contract](https://github.com/bartytime4life/MEGALODON/blob/4da7fae0d8df2d8cd6b3ff93964055f7e14972bb/docs/qwen-adversarial-evaluation.md)
 

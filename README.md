@@ -59,15 +59,18 @@ It contains documentation-only addresses.
 
 ## What works today
 
-**Source basis: [`main@dee4027`](https://github.com/bartytime4life/MEGALODON/commit/dee4027a8541335f43460d6bef37024606f4bfdf), November 17, 2026 (America/Chicago).**
-Merged changes include exact rolling/time arithmetic, router/switch guidance,
-finite host-input protection and Playwright 1.65.2 qualification. The current
-[repo/app review candidate](docs/repo-app-review-2026-11-17.md) adds refresh
-recovery and [interactive security science in Help](docs/security-science-lab.md).
-[Current changes and exact boundaries](docs/current-state.md) distinguish this
-candidate from the merged baseline and older validation records.
-Code presence and hosted checks do not establish the configuration, accuracy
-or recovery capability of a particular installed PC.
+**Source basis** — [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b), November 26, 2026 (America/Chicago).
+MEGALODON brings together a Linux loopback workspace, bounded network
+analysis and separate host checks, watches and response workflows. The recent
+merged work adds coverage-aware host reporting, confirmed guided review,
+bounded watch-history migration, reviewed log and journal verification, and
+scheduler wiring for optional Linux tracing.
+
+[Current capability and acceptance map](docs/current-state.md#november-26-source-and-acceptance-map) ties the claims to
+source, exact check runs and remaining evidence. Linux is the reference.
+Windows and macOS pass narrow synthetic workflow lanes at the identical
+PR #918 tree. Installed-PC operation, native producer and model acceptance,
+and representative detection accuracy have separate evidence requirements.
 
 | Capability | Implemented behavior | Meaningful boundary |
 | --- | --- | --- |
@@ -98,10 +101,11 @@ or recovery capability of a particular installed PC.
 | [Known-vulnerable software](docs/known-vulnerable-software.md) | `megalodon vulns check` reads waiting security updates from apt or dnf's local data, a newer kernel than the one running, and programs still running code an update replaced, and puts first the services that listen beyond the machine with a fix waiting | Only as fresh as the last package-list refresh; packages only, not pip, npm or containers |
 | [Boot integrity](docs/boot-integrity.md) | `megalodon boot baseline/check/accept` checks kernels against their packages, matches initramfs and bootloader changes against package-manager activity, and reports weakened Secure Boot, lockdown, module signing and kernel command lines | Files, not what the firmware loaded |
 | [Login watch](docs/login-watch.md) | `megalodon logins learn/check` learns where, how and when each account logs in and reports successful logins that do not fit: new networks, new SSH keys, unusual hours, service accounts logging in, root over the network, first use of `sudo` | Reads auth.log, secure, journal or wtmp; the baseline is only as good as its logs |
-| [Credential access watch](docs/credential-watch.md) | `megalodon credentials watch/check/allow` reports programs other than the expected readers opening SSH keys, browser password and cookie stores, cloud and developer tokens, keyrings, wallets and `/etc/shadow`, and info-stealer sweeps across several kinds | Root names every reader, and with `watch --trace-execs` (eBPF) those gone within microseconds too; never reads the contents |
+| [Credential access watch](docs/credential-watch.md) | `megalodon credentials watch/check/allow` reports programs other than the expected readers opening SSH keys, browser password and cookie stores, cloud and developer tokens, keyrings, wallets and `/etc/shadow`, and info-stealer sweeps across several kinds | Root fanotify supplies process IDs for delivered events; optional exec tracing can identify short-lived readers. Coverage and attribution can be incomplete. Credential contents are excluded |
 | [Tamper detection](docs/tamper-detection.md) | `megalodon tamper baseline/check/accept` reports changes to MEGALODON's code, its scheduled units and its configuration, and stopped, disabled or overdue watches; `megalodon heartbeat send/monitor` posts signed, numbered heartbeats off the machine and reports silence, forgery and replay | A root intruder can change the local baseline; the off-machine record of silence and state changes is what stays |
+| [Host report and guided review](docs/security-report.md) | `megalodon report` reads retained checks, incidents and setup. `megalodon review` shows the supported next steps and can run a fixed choice after confirmation | Coverage can be incomplete or stale. Report generation and operator action have different authority |
 | [Scheduling](docs/scheduling.md) | `megalodon schedule plan/install/remove` runs each host check on a systemd timer and each live watch (listeners, devices, web root, credentials, egress, ransomware and, as root, process ancestry, the command log and container escapes) as an always-running service, with `--alert`, the eBPF traces where they load, and the response engine's pass and, as root, enforcement; nothing is written without `--yes` | Removes only its own units; without systemd, prints crontab lines |
-| [Evidence collection](docs/evidence-collection.md) | `megalodon evidence collect` saves processes with program hashes, sockets, sessions, recently changed files, copies of deleted or in-memory programs and every watch report into a sealed, hashed, read-only bundle; `evidence verify` proves it unchanged | Read-only snapshot; no memory images |
+| [Evidence collection](docs/evidence-collection.md) | `megalodon evidence collect` writes a bounded bundle of available process, socket, session and file evidence, with optional program copies. Verification checks bundle contents against the manifest and an independently retained digest when supplied | Host bundles can contain sensitive artifacts. Keep local by default and review any explicitly configured delivery |
 | [Response engine](docs/response-engine.md) | `megalodon respond run/watch/ingest/report` correlates network and host findings into incidents and records, under an owner-written policy, which guarded, reversible actions it would take (block an address, suspend a program, quarantine a file, lock an account) | The engine only records decisions; [enforcement](docs/enforcement.md) carries out those its own policy lists, and is off until you turn it on |
 | [Ransomware watch](docs/ransomware-watch.md) | `megalodon ransomware watch` raises a CRITICAL alarm while files in chosen folders turn from recognized formats into encrypted data, flags ransom notes, names the processes writing them by PID and start time, and forwards to off-machine alerts; with `--respond` (the scheduled `ransomware` job) each finding is decided and enforced at once, so the writers can be paused within seconds; `selftest` proves the chain | Linux inotify; files encrypted before the alarm are not restored; pauses only what the enforcement policy allows |
 | [Off-machine alerts](docs/off-machine-alerts.md) | Opt-in forwarding of saved findings to webhooks (JSON, Slack, Discord, ntfy phone push) and RFC 5424 syslog, with `megalodon alerts test` | Best effort: after saving, background-only, rate-limited, secrets in owner-private files; no receipts or lifecycle |
@@ -582,10 +586,10 @@ entry point, not a replacement platform contract.
 | --- | --- | --- |
 | Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, and optional operator-reviewed local containment | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host; legacy firewall CLI apply remains unsupported |
 | Other Linux distributions or architectures | Evaluate the same bounded workflows where prerequisites and safety checks hold | Not certified by the Ubuntu CI lane. Validate Python, filesystem/privilege behavior, tool paths, and each selected integration; do not remove guards to make a recipe run |
-| Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **UNVERIFIED / evaluation only.** No native MEGALODON capture, offline adapter, or Windows firewall backend. Windows acceptance is tracked separately |
+| Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **Synthetic evaluation only.** The hosted synthetic-core lane passed at the PR #918 tree. Native capture, offline adapters, firewall, and installation acceptance are outside that lane |
 | A separately prepared Linux VM | Linux workflow inside the guest; W2 documents a Windows-host evaluation option | **PROPOSED configuration / guest validation required.** Not native host support, complete host-traffic visibility, or host-firewall authority; other host/guest pairings need their own evidence |
 | WSL2 | Development evaluation under the documented W2 limits | Not the hostile-capture isolation baseline or proof of Windows-host monitoring/enforcement |
-| macOS, BSD, and other native systems | Read the `other` catalog and identify future port/acceptance work | Core runtime and network adapters are **unsupported in the current catalog**; Python or upstream-tool availability alone does not establish support |
+| macOS, BSD, and other native systems | Read the `other` catalog and identify future port/acceptance work | A hosted macOS M1 synthetic sample passed at the PR #918 tree. The catalog adds no general native support or network adapter acceptance for these platforms |
 | Containers and unattended operation | Installed Linux HUD has a managed per-user service and optional login startup | See [local startup](docs/local-pc-setup.md#optional-start-the-installed-hud-at-login). Container deployment, system-wide unattended services, privilege, mounts, networking and isolation require separate review |
 
 The catalog distinguishes `implemented`, `optional`, `evaluation_only`,
@@ -1683,6 +1687,11 @@ command, path, endpoint, or tool field exists. See
 staged design.
 
 ## Development status and remaining evidence
+
+The [current acceptance register](docs/current-state.md#november-26-source-and-acceptance-map)
+records open Zeek, Stage 0 and model-library work, plus the closed Qwen tracking
+issue and the still-UNBOUND runtime. It also separates fixture, native and owner
+acceptance evidence.
 
 Historical tickets in this selected table retain their closed dispositions;
 issues #196, #221, and #231 were read back as closed/completed on 2026-09-16.

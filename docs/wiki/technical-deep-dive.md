@@ -1,6 +1,6 @@
 # Technical Deep Dive
 
-> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+> [Current capabilities, checks and remaining acceptance](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-26-source-and-acceptance-map) · November 26, 2026. Pinned examples below keep their original dates.
 
 **Historical November 11 source reading:** [`418fa54474f3f77d0758e94aab5735a516d8c43b`](https://github.com/bartytime4life/MEGALODON/commit/418fa54474f3f77d0758e94aab5735a516d8c43b), November 11, 2026 (America/Chicago).
 These are implemented source boundaries. Regression tests and hosted results
@@ -86,7 +86,7 @@ authorization to operate it. [Defense contract](https://github.com/bartytime4lif
 
 ## AI admission before explanation
 
-At the current November source, the [UNBOUND release fence](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/qwen-runtime-unbound.md)
+The [UNBOUND release fence](https://github.com/bartytime4life/MEGALODON/blob/main/docs/qwen-runtime-unbound.md)
 refuses operational generation for every model family. Explicit bounded catalog
 discovery/selection and the separate fixed no-telemetry READY diagnostic are
 named exceptions; a saved model or passing diagnostic cannot lift the hold.

@@ -78,7 +78,11 @@ vacuuming, an empty file removed at rotation, and an in-memory journal
 flushed to disk (when persistent files hold every entry number it held) or
 cleared at boot. Files journald renamed with `~` after
 finding them damaged are listed under `journals.corrupt`. Journal files that
-cannot be read are listed under `journals.gaps` and keep their record.
+cannot be read are listed under `journals.gaps` and keep their record. That includes an
+archive whose header is readable but whose required digest cannot be
+verified. A later check retries that verification. The merged tests
+exercise these paths with fixtures. Native journald rotation and vacuum
+remain open acceptance work. [Verification patch](https://github.com/bartytime4life/MEGALODON/pull/912)
 
 The baseline stores each file's header fields and a SHA-256 digest of each
 archived file, never journal content. A baseline made before journal support

@@ -1,6 +1,6 @@
 # Roadmap and Current Limits
 
-> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+> [Current capabilities, checks and remaining acceptance](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-26-source-and-acceptance-map) · November 26, 2026. Pinned examples below keep their original dates.
 
 ## Implemented source, separate acceptance
 
@@ -15,7 +15,7 @@ qualified finding → event → ingestion-run inspector. Core evidence reads,
 legacy plan-only firewall interfaces and separately protected HUD actions have
 different contracts. Implementation does not authorize operation.
 
-The current source also includes exact/indexed hourly comparisons, integer CPU
+The November 11 source also included exact/indexed hourly comparisons, integer CPU
 tick aggregation, final-only report percentage rounding, selection-bound report
 pages and revision-bound search/device reviews. The guided HUD recommends
 existing read-only views from the current source mode, distinguishes sensor
@@ -31,9 +31,10 @@ their historical October 11 source pin and October 1 benchmark.
 
 | Tracked acceptance record | Gate to satisfy |
 | --- | --- |
-| [#445](https://github.com/bartytime4life/MEGALODON/issues/445) | One exact Zeek offline producer qualification; candidate selection is not acceptance |
-| [#446](https://github.com/bartytime4life/MEGALODON/issues/446) | Canonical Qwen Airlock binding and zero-effect/containment/evaluation evidence; record remains UNBOUND |
-| [#750](https://github.com/bartytime4life/MEGALODON/issues/750) | Complete the exact Stage 0 no-effect boundary and independent/owner acceptance; named Python entry fences and synthetic package parity are partial evidence |
+| [#445](https://github.com/bartytime4life/MEGALODON/issues/445) · Open | Qualify the selected Zeek 8.0.10 producer with authenticated provenance and matching native output. |
+| [#446](https://github.com/bartytime4life/MEGALODON/issues/446) · Closed | Canonical record stays UNBOUND. Real-provider acceptance, loaded bytes, signed evaluation and independent review still require their own evidence. |
+| [#732](https://github.com/bartytime4life/MEGALODON/issues/732) · Open | Finish the model staging/library follow-up. Explicit model preparation and operational inference remain separate. |
+| [#750](https://github.com/bartytime4life/MEGALODON/issues/750) · Open | Complete the Stage 0 OS boundary and independent/owner acceptance. Named entry fences and synthetic package parity are partial evidence. |
 
 The [Stage 0 entry-fence contract](https://github.com/bartytime4life/MEGALODON/blob/418fa54474f3f77d0758e94aab5735a516d8c43b/docs/offline-analysis.md#stage-0-application-entry-fence--issue-750)
 states its implemented scope and remaining gates. Trusted process-local checks
@@ -46,8 +47,7 @@ or preference does not activate operational inference.
 
 Issue #345 closed after #656; #662 later qualified macOS writer fixtures without
 changing production ancestry checks. Native macOS/operator acceptance remains
-separate. Merged #660 supplies Playwright 1.64.0 and its exact native-focus
-profile. The historical October 22 CI, Linux browser and CodeQL successes apply
+separate. The older #660 profile was Playwright 1.64.0. Merged #779 qualified the maintained Linux 1.65.2 profile. The historical October 22 CI, Linux browser and CodeQL successes apply
 to `2cb706039724d9ea0bda09cbd3c17698b15ba55c`; they are not runs of the November
 source. The [November validation record](https://github.com/bartytime4life/MEGALODON/blob/main/docs/documentation-refresh-2026-11-11.md)
 separates later candidate checks, merge identity and fresh documentation checks.
