@@ -72,8 +72,10 @@ table uses these values. A policy written before this table existed also needs t
 added before campaigns are decided. Until then they are still recorded, and reach the timeline and the report.
 
 The engine follows up to 512 addresses, and for each the last 256 different attempts from up to a day before its
-newest, so findings that arrive out of order, across passes, still complete a campaign. An attempt repeated is kept
-once, at its latest, so repeats never push the others out. An address with nothing new for a day is forgotten.
+newest, so findings that arrive out of order, across passes, still complete a campaign. An attempt seen again and
+again is kept at just enough of its times that every window still holds it when it did (at most 16 times, the
+latest), and repeats are dropped before any different attempt is. An address with nothing new for a day is
+forgotten.
 
 ## Limits
 

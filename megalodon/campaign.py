@@ -30,7 +30,8 @@ import statistics
 RULE_ID = 'AUTOMATED_CAMPAIGN'
 SOURCE = 'campaign'
 MAX_ADDRESSES = 512           # addresses followed at once; the least recently active is dropped first
-MAX_ATTEMPTS = 256            # attempts kept per address, newest kept
+MAX_ATTEMPTS = 256            # different attempts kept per address, newest kept, with room for repeats
+PER_ATTEMPT = 16              # times one attempt is kept at most
 KEEP_HOURS = 24               # attempts this much older than an address's newest are dropped; so is an address
                               # with nothing newer than this
 SUMMARY_ROOM = 300 - 47       # a finding's summary is kept to 300 characters; an address and ': ' take up to 47
@@ -160,17 +161,37 @@ def _worst_window(attempts, fresh, settings):
 
 
 def _kept(attempts, settings):
-    """What a later pass can still use: each distinct attempt at its latest time only (an earlier copy is inside any
-    window the later one is), from up to KEEP_HOURS before the newest, the newest MAX_ATTEMPTS of them. Not only
-    the newest window: findings can arrive out of order, and the rest of an earlier campaign can still come."""
+    """What a later pass can still use, from up to KEEP_HOURS before the newest attempt: findings arrive out of order,
+    so the rest of an earlier campaign can still come, and any window can still be completed.
+
+    Of the times one attempt (a rule against a target) was seen, a time is dropped only when the times kept on
+    either side of it are at most a window apart: any window holding it holds one of them, so every window counts
+    the same. At most PER_ATTEMPT times are kept for one attempt, the latest. Then the latest time of up to
+    MAX_ATTEMPTS different attempts, the newest, and as many of their earlier times as there is room for: repeats
+    never push out a different attempt."""
     if not attempts:
         return []
     start = _time(attempts[-1][0], None) - timedelta(hours=KEEP_HOURS)
-    latest = {}
+    width = timedelta(seconds=settings.window_seconds)
+    seen = {}
     for attempt in attempts:
         if _time(attempt[0], None) >= start:
-            latest[(attempt[1], attempt[3])] = attempt
-    return sorted(latest.values())[-MAX_ATTEMPTS:]
+            seen.setdefault((attempt[1], attempt[3]), []).append(attempt)
+    latest, earlier = [], []
+    for times in seen.values():
+        thinned = [times[0]]
+        for here, after in zip(times[1:-1], times[2:]):
+            if _time(after[0], None) - _time(thinned[-1][0], None) > width:
+                thinned.append(here)
+        if len(times) > 1:
+            thinned.append(times[-1])
+        thinned = thinned[-PER_ATTEMPT:]
+        latest.append(thinned[-1])
+        earlier += thinned[:-1]
+    latest = sorted(latest)[-MAX_ATTEMPTS:]
+    # Room for earlier times is left only when no different attempt was dropped, so all of them are of kept ones.
+    room = MAX_ATTEMPTS - len(latest)
+    return sorted(latest + (sorted(earlier)[-room:] if room else []))
 
 
 def _assess(attempts, settings):

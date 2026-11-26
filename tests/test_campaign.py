@@ -124,6 +124,42 @@ def test_a_campaign_whose_findings_arrive_out_of_order_across_passes_is_found(pa
     assert "8 different attacks of 3 kinds in 42 s" in decision["signal"]["summary"]
 
 
+def test_a_repeat_seen_later_does_not_erase_the_time_an_earlier_campaign_needs(paths):
+    burst = sweep()
+    again = attempt(98, burst[0].rule_id, HOSTS[0], 3600)            # the first attempt again, an hour later
+    run(paths, burst[:4] + [again], now=NOW + timedelta(hours=1, minutes=1))
+    run(paths, burst[4:], now=NOW + timedelta(hours=1, minutes=2))
+    [decision] = campaigns(paths)
+    assert "8 different attacks of 3 kinds in 42 s" in decision["signal"]["summary"]
+
+
+def test_dropped_repeat_times_never_change_what_a_window_holds(monkeypatch):
+    import random
+    settings, width = campaign.Settings(), campaign.Settings().window_seconds
+    generator = random.Random(920)
+    samples = [sorted(generator.sample(range(0, 7200), generator.randint(1, 60))) for _ in range(200)]
+
+    def kept(seconds):
+        attempts = [[at(t), "PORT_SCAN", "network", "target"] for t in seconds]
+        return {int((campaign._time(a[0], None) - NOW).total_seconds()) for a in campaign._kept(attempts, settings)}
+    assert all(len(kept(seconds)) <= campaign.PER_ATTEMPT for seconds in samples), "bounded"
+    monkeypatch.setattr(campaign, "PER_ATTEMPT", 10_000)       # and, short of the bound, exact:
+    assert sum(len(kept(seconds)) for seconds in samples) < sum(len(seconds) for seconds in samples) / 2, "it thins"
+    for seconds in samples:
+        thinned = kept(seconds)
+        for begin in range(-width, 7200, 37):
+            def holds(times):
+                return any(begin <= t <= begin + width for t in times)
+            assert holds(seconds) == holds(thinned), (seconds, sorted(thinned), begin)
+
+
+def test_repeats_are_dropped_before_any_different_attempt():
+    singles = [[at(n), "PORT_SCAN", "network", f"host-{n}"] for n in range(240)]
+    repeated = [[at(1000 + 700 * k), "BRUTE_FORCE", "network", f"service-{n}"] for n in range(10) for k in range(16)]
+    kept = campaign._kept(sorted(singles + repeated), campaign.Settings())
+    assert len({(a[1], a[3]) for a in kept}) == 250 and len(kept) == campaign.MAX_ATTEMPTS
+
+
 def test_a_raise_after_a_short_cooldown_is_a_finding_of_its_own(paths):
     text = paths["policy_path"].read_text()
     paths["policy_path"].write_text(text.replace("cooldown_minutes = 30", "cooldown_minutes = 1"))
