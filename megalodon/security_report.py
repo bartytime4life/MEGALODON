@@ -35,6 +35,9 @@ SCHEMA = 'megalodon-security-report-v1'
 DEFAULT_OUTPUT = '~/.local/state/megalodon/report.html'
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO')
 SHOWN_PER_CHECK = 25
+# Every kept finding, read only. Not the check's own command: that looks again and replaces what was kept, which
+# for a watch is what it saw of things since gone.
+ALL_FINDINGS = 'megalodon report --all'
 CONTROL = re.compile(r'[\x00-\x1f\x7f-\x9f  ‪-‮⁦-⁩]')
 
 
@@ -128,6 +131,9 @@ EXTRA_MEANINGS = {
     'PERSISTENCE_CHANGED': 'Something already set to start by itself was changed, for example to run another '
                            'program.',
     'PERSISTENCE_REMOVED': 'Something that started by itself was removed.',
+    'PERSISTENCE_SUSPICIOUS': 'Something set to start by itself, or an account, carries signs of an intruder\'s. '
+                              'It was already there when the baseline was taken, so it is not a change: review it.',
+    'CHECK_REPORTED_SOMETHING': 'The check reported something this report cannot list. Run the check to see it.',
     'NEW_LISTENER': 'A program started listening for network connections.',
     'LISTENER_PROGRAM_CHANGED': 'A known port is now held by another program.',
     'LISTENER_EXPOSED': 'A listener that was reachable only from this machine is now reachable from the network.',
@@ -322,7 +328,7 @@ def _live_states(system, runner=None):
     return {check: states.get(unit, {}).get('active') or 'unknown' for check, unit in installed.items()}
 
 
-def _check_view(check, record, now, live_state=None, system=True):
+def _check_view(check, record, now, live_state=None, system=True, shown=SHOWN_PER_CHECK):
     info = CHECKS[check]
     view = dict(check=check, title=info['title'], group=info['group'], why=info['why'],
                 live=bool(info.get('live')), findings=[], gaps=[])
@@ -336,7 +342,11 @@ def _check_view(check, record, now, live_state=None, system=True):
         view.update(status='error', status_text=view['problem'])
         return view
     if record is None and live_state is not None:
-        view.update(status='watching', status_text='Watching all the time; what it finds is in the incidents below'
+        # The listener and web-root watches keep what they see as a result of their own (none yet, here); the others
+        # pass it to the response engine, whose incidents follow.
+        where = ('nothing seen since its last check or accept' if check in ('listeners', 'webroot')
+                 else 'what it finds is in the incidents below')
+        view.update(status='watching', status_text=f'Watching all the time; {where}'
                     if live_state == 'active' else 'Installed as a watch that runs all the time')
         return view
     if record is None:
@@ -353,6 +363,14 @@ def _check_view(check, record, now, live_state=None, system=True):
     gaps = result.get('gaps') if isinstance(result.get('gaps'), list) else []
     view['gaps'] = [readable(g) for g in gaps[:10]]
     findings = [f for f in result.get('findings', []) if isinstance(f, dict)]
+    listed = len(findings)
+    if check == 'persistence':
+        # Entries already present at the baseline that carry an intruder's signs: the check exits 1 for them too.
+        findings += [dict(f, change='suspicious') for f in result.get('suspicious', []) if isinstance(f, dict)]
+    if record.get('exit_code') == 1 and record.get('ran') and not findings:
+        # The check said it found something (exit 1) that this report does not know how to list: never "nothing".
+        findings = [dict(rule_id='CHECK_REPORTED_SOMETHING', severity='HIGH',
+                         detail=f'megalodon {check} check exited 1 (findings) with nothing this report can list')]
     if not record.get('ran') or record.get('exit_code') not in (0, 1):
         reason = record.get('reason') if isinstance(record.get('reason'), str) else ''
         # A check without a baseline says which command records one; that, not running it again, is the fix.
@@ -376,21 +394,40 @@ def _check_view(check, record, now, live_state=None, system=True):
             where=clean(where) if where else None, detail=readable(detail) if detail else None,
             meaning=_meaning(check, rule), choices=_choices(check, finding, rule, where)))
     view['findings'].sort(key=lambda f: RANK.index(f['severity']))
-    view['finding_count'] = record.get('findings', len(findings))
-    stale = age is not None and interval and age > 3 * interval
+    # Every finding the check kept (a cut result keeps fewer than it found), and those added above.
+    view['finding_count'] = max(record.get('findings', listed), listed) + len(findings) - listed
+    # A live watch keeps what it saw when it saw it; its age says when, not that a timer stopped.
+    watched = bool(result.get('seen_by_watch'))
+    stale = not watched and age is not None and interval and age > 3 * interval
     if view['findings']:
         worst = view['findings'][0]['severity']
         view.update(status='findings', worst=worst,
-                    status_text=f'{view["finding_count"]} to review, the worst {worst.lower()}')
+                    status_text=f'{view["finding_count"]} to review, the worst {worst.lower()}'
+                    + (f' — seen by the watch, the last at {record.get("at")}' if watched else ''))
     else:
         view.update(status='clean', status_text='Nothing found')
     if stale:
         view.update(stale=True, status_text=view['status_text'] + f' — but its last run was {_ago(age)} ago')
     if view.get('problem'):
         view['status_text'] += f' — {view["problem"][0].lower()}{view["problem"][1:]}'
-    # Counted before only the first are kept for the page: the totals count every finding read.
+    # Counted before only the first are kept for the page: the totals count every finding read, and for a result
+    # too large to keep whole, every finding the check made.
     view['severities'] = {level: sum(1 for f in view['findings'] if f['severity'] == level) for level in RANK}
-    view['findings'] = view['findings'][:SHOWN_PER_CHECK]
+    saved = record.get('severities')
+    if record.get('truncated') and isinstance(saved, dict):
+        # The saved counts cover the check's `findings`; entries added above (suspicious ones) come on top.
+        view['severities'] = dict.fromkeys(RANK, 0)
+        for level, count in saved.items():
+            if isinstance(count, int) and count > 0:
+                view['severities'][_severity(level)] += count
+        for finding in findings[listed:]:
+            view['severities'][_severity(finding.get('severity'))] += 1
+    kept = len(view['findings'])
+    view['findings'] = view['findings'][:shown] if shown else view['findings']
+    # Every finding counts; only the first are listed. Say how many more are kept (`report --all` lists them), and
+    # how many were counted but not kept (a very large result keeps its first findings, a watch its latest).
+    view['more'] = kept - len(view['findings'])
+    view['not_kept'] = max(0, view.get('finding_count', 0) - kept)
     return view
 
 
@@ -556,7 +593,7 @@ def _incidents(hours, now):
 
 # ------------------------------------------------------------------ the report
 
-def build(*, hours=168, now=None, system=None, folder=None, runner=None):
+def build(*, hours=168, now=None, system=None, folder=None, runner=None, every=False):
     now = now or datetime.now(timezone.utc)
     from . import schedule
     system = schedule._system_mode(system)
@@ -565,19 +602,24 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
         live = _live_states(system, runner)
     except (OSError, ValueError):
         live = {}
-    checks = [_check_view(name, kept.get(name), now, live.get(name), system) for name in CHECKS]
+    checks = [_check_view(name, kept.get(name), now, live.get(name), system, None if every else SHOWN_PER_CHECK)
+              for name in CHECKS]
     incidents, incident_gap = _incidents(hours, now)
     setup = _setup(system)
     counts = {level: sum(c.get('severities', {}).get(level, 0) for c in checks) for level in RANK}
     broken = [c for c in checks if c['status'] in ('error', 'never_run') or c.get('stale') or c.get('problem')]
+    # A check that ran but could not look somewhere (an unmounted partition, processes it could not read) did not
+    # see everything: that is not all clear.
+    unseen = [c for c in checks if c.get('gaps') and c['status'] in ('clean', 'findings')]
     serious = counts['CRITICAL'] + counts['HIGH'] + sum(1 for i in incidents if i['severity'] in
                                                          ('CRITICAL', 'HIGH'))
     if serious:
         verdict, headline = 'act', 'Act now: there are serious findings to look at.'
-    elif counts['MEDIUM'] or incidents:
+    elif counts['MEDIUM'] or counts['LOW'] or counts['INFO'] or incidents:
         verdict, headline = 'review', 'Review: some findings need a look, none of them serious.'
-    elif broken or incident_gap or any(r['ok'] is False for r in setup):
-        verdict, headline = 'gaps', 'Nothing found, but parts of the protection are not running.'
+    elif broken or incident_gap or unseen or any(r['ok'] is False for r in setup):
+        verdict, headline = 'gaps', ('Nothing found, but parts of the protection are not running, or could not look '
+                                     'everywhere.')
     else:
         verdict, headline = 'clear', 'All clear: every check ran and found nothing.'
     steps = []
@@ -588,6 +630,10 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
     for row in setup:
         if row['ok'] is False and row.get('fix'):
             steps.append(dict(text=row['text'], command=row['fix']))
+    for check in unseen:
+        shown = '; '.join(check['gaps'][:3]) + ('…' if len(check['gaps']) > 3 else '')
+        steps.append(dict(text=f'{check["title"]}: could not look at everything: {shown}',
+                          command=check.get('next') or command('megalodon', check['check'], 'check')))
     if incident_gap:
         # The incidents are where the live watches report: unread, they may hide what the watches found.
         steps.append(dict(text=incident_gap, command=command('megalodon', 'timeline', 'list')))
@@ -639,6 +685,12 @@ def text(report):
                     out.append(f'                {finding["meaning"]}')
                 for choice in finding['choices']:
                     out.append(f'                · {choice["label"]}: {choice["command"]}')
+            if check.get('more'):
+                out.append(f'       …and {check["more"]} more: {ALL_FINDINGS}')
+            if check.get('not_kept'):
+                out.append(f'       …and {check["not_kept"]} more that were counted but not kept')
+            if check.get('gaps'):
+                out.append(f'       Could not see: {"; ".join(check["gaps"])}')
     if report['incidents'] or report['incident_gap']:
         out += ['', 'INCIDENTS (findings the response engine joined, last week)']
         if report['incident_gap']:
@@ -713,6 +765,10 @@ def page(report):
                 findings.append(f'<div class="finding"><span class="sev {f["severity"]}">{f["severity"]}</span> '
                                 f'{_e(f["rule_id"])}{where}{meaning}{detail}'
                                 + ''.join(_choice_html(c) for c in f['choices']) + '</div>')
+            if check.get('more'):
+                findings.append(f'<p class="soft">…and {check["more"]} more: <code>{_e(ALL_FINDINGS)}</code></p>')
+            if check.get('not_kept'):
+                findings.append(f'<p class="soft">…and {check["not_kept"]} more that were counted but not kept</p>')
             extra = (f'<p class="soft">Could not see: {_e("; ".join(check["gaps"]))}</p>' if check['gaps'] else '')
             run = f'<p class="soft">Last run {_e(check["last_run"])} UTC</p>' if check.get('last_run') else ''
             nxt = f'<p>Run it: <code>{_e(check["next"])}</code></p>' if check.get('next') else ''

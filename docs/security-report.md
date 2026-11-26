@@ -3,7 +3,7 @@
 `megalodon report` puts everything MEGALODON knows about this machine on one
 page, written for the person who owns it rather than for a security analyst:
 
-- **a verdict**: act now, review, parts not running, or all clear;
+- **a verdict**: act now, review, parts not running (or not looked at), or all clear;
 - **what to do next**, most important first, each step with its command;
 - **every check**, grouped as break-ins and backdoors, tampering and
   integrity, and weak spots, with what it watches and what it last found;
@@ -31,6 +31,8 @@ megalodon report --format json
 * **`--format json`** is for programs.
 * **`--output`** writes the report to a file, mode 600, and prints the
   verdict. It names programs, files and addresses on this machine.
+* **`--all`** lists every kept finding of each check; otherwise the first 25
+  are listed, with how many more there are.
 
 The [scheduler](scheduling.md) writes the HTML page to
 `~/.local/state/megalodon/report.html` every morning (the `report` job).
@@ -46,7 +48,13 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   `--manifest` checks another baseline, not this machine's state.
 * **The live watches.** Credentials, process ancestry, listeners, egress, the
   web root and devices run all the time once scheduled. The report says
-  whether their service is running; what they find reaches the incidents.
+  whether their service is running. The listener and web-root watches add
+  what they see, as they see it, to their check's last result, listed under
+  the check with when; a restarted watch keeps what it saw before. A `check`
+  adds what it finds now, and keeps what the watch saw, since a listener or a
+  web script the watch saw may be gone; `accept` or a new baseline clears it.
+  The latest 500 are kept and every one is counted. The other watches pass what
+  they find to the response engine, and it reaches the incidents.
 * **Incidents** of the last week (`--hours` to change), from the response
   engine's ledger and the enforcement journal, as `megalodon timeline` tells
   them.
@@ -57,9 +65,15 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   response policy that has changed since is reported as carrying nothing out.
   Without systemd the schedule is crontab lines you add yourself; the report
   cannot see them, and says so.
+* **Whatever form a finding takes**: suspicious entries a persistence baseline
+  recorded without review are findings too, and a check that exited with
+  findings this report cannot list is shown as such, never as nothing found.
+  A result file that cannot be opened is that one check's error.
 * **Never all clear on missing information**: incidents that cannot be read,
-  a watch that stopped, or a check that failed after finding something keep
-  the verdict from "all clear".
+  a watch that stopped, a check that failed after finding something, or a
+  check that could not look everywhere (an unmounted partition, processes it
+  could not read) keep the verdict from "all clear", and each is among the
+  next steps. Any finding at all, LOW and INFO included, is "review".
 
 Each check is shown as:
 
@@ -141,8 +155,9 @@ Read a command before you run it all the same.
 * **One account's view.** Results are kept in the home of the account that
   ran the check. Run the report as the account the schedule runs as (root
   for the full schedule).
-* **Live watches report through incidents.** Their individual findings are
-  in the incidents, decided by the response engine, not listed per check.
+* **Most live watches report through incidents.** The credential, ancestry,
+  egress, device and container watches' findings are in the incidents,
+  decided by the response engine, not listed per check.
 * **The dashboard does not show it yet.** Open the HTML page instead.
 * **Choices are commands, not judgments.** "It was you" accepts what the
   check sees now; only you know whether a change was yours.
