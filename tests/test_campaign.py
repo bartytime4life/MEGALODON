@@ -97,6 +97,38 @@ def test_this_machine_is_never_the_attacker_when_both_ends_are_named(paths):
                              message=f"attempt {n}")) for n, kind in enumerate(kinds)]
     re_.ingest(piped, now=NOW + timedelta(minutes=1), **dict(paths, protected={me}))
     assert [d["signal"]["entities"]["address"] for d in campaigns(paths)] == [[ATTACKER]]
+    # A network finding names one address: when that is this machine's own, or its gateway's, it is not followed.
+    gateway = "192.168.1.1"
+    run(paths | dict(protected={me, gateway}), sweep(start=900, address=gateway), now=NOW + timedelta(minutes=30))
+    assert [d["signal"]["entities"]["address"] for d in campaigns(paths)] == [[ATTACKER]]
+
+
+def test_a_remote_victim_of_many_attackers_is_never_taken_for_one(paths):
+    victim = "198.51.100.200"
+    kinds = ("PORT_SCAN", "BRUTE_FORCE", "HOST_SWEEP")
+    piped = [json.dumps(dict(rule_id=kinds[n % 3], severity="MEDIUM", src_ip=f"203.0.113.{10 + n}", dst_ip=victim,
+                             detected_at=at(n), message=f"attempt {n}")) for n in range(8)]
+    re_.ingest(piped, now=NOW + timedelta(minutes=1), **paths)
+    assert campaigns(paths) == [], "eight attackers, one attempt each: no campaign, and never one by the victim"
+
+
+def test_a_finding_naming_several_addresses_and_no_actor_is_not_counted():
+    both = [re_.Signal(f"process:{n}", "process_review", ("PIPED_TO_SHELL", "STDIO_ON_NETWORK", "SHELL_HOLDS_SOCKET")[n % 3],
+                       "HIGH", at(n), "a program", re_._entities(process=[f"/tmp/tool-{n}"], address=[ATTACKER, HOSTS[n]]))
+            for n in range(10)]
+    assert campaign.observe({}, both, NOW, campaign.Settings(), re_._campaign_signal) == []
+    one = [re_.Signal(s.key, s.source, s.rule_id, s.severity, s.observed_at, s.summary,
+                      re_._entities(process=list(s.entities["process"]), address=[ATTACKER])) for s in both]
+    assert len(campaign.observe({}, one, NOW, campaign.Settings(), re_._campaign_signal)) == 1
+
+
+def test_a_piped_finding_from_a_container_namespace_names_no_actor():
+    line = json.dumps(dict(rule_id="OUTBOUND_FROM_TEMPORARY", severity="HIGH", src_ip="10.88.0.5", dst_ip=ATTACKER,
+                           namespace="net:[4026532900]", detected_at=at(0), message="placeholder"))
+    [signal], _ = re_.ingest_signals([line], NOW)
+    assert signal.actor == "" and campaign._actors(signal) == []
+    [signal], _ = re_.ingest_signals([line.replace(', "namespace": "net:[4026532900]"', '')], NOW)
+    assert signal.actor == "10.88.0.5"
 
 
 def test_it_counts_across_passes_by_when_attempts_happened_not_when_they_were_read(paths):

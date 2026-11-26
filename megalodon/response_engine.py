@@ -665,6 +665,9 @@ class Signal:
     summary: str
     entities: dict
     category: str = ''
+    # The address the finding says the activity came from, when it names more than one (a finding piped in names
+    # both ends): what an automated campaign is counted against. Empty: its one address, if it names only one.
+    actor: str = ''
 
     def to_dict(self):
         return dict(key=self.key, source=self.source, rule_id=self.rule_id, severity=self.severity,
@@ -973,10 +976,12 @@ def ingest_signals(lines, now):
         # its destination is blocked inside that namespace.
         remote = (dict(peer=addresses, namespace_address=_inside(item.get('dst_ip'), item.get('namespace')))
                   if item.get('namespace') else dict(address=addresses))
+        # The finding's source is who acted; from a container's namespace, it is no address of this machine's.
+        actor = '' if item.get('namespace') else next(iter(_entities(address=[item.get('src_ip')])['address']), '')
         signals.append(Signal(f"ingest:{item['rule_id']}:{digest}", 'ingest', item['rule_id'][:64],
                               _severity(item.get('severity')), detected, str(item.get('message', ''))[:300],
                               _entities(process=processes, process_id=ids,
-                                        file=[folder] if isinstance(folder, str) else [], **remote)))
+                                        file=[folder] if isinstance(folder, str) else [], **remote), actor=actor))
     return signals, refused
 
 

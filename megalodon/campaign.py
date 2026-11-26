@@ -63,6 +63,16 @@ def _iso(moment):
     return moment.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
+def _actors(signal):
+    """The address a finding's activity came from: the one it names as its actor, or its only address. A finding
+    naming several addresses and no actor says nothing about which of them attacked, so it is not counted: an
+    address under attack is never taken for the attacker."""
+    if getattr(signal, 'actor', ''):
+        return [signal.actor]
+    addresses = signal.entities.get('address', ())
+    return list(addresses) if len(addresses) == 1 else []
+
+
 def _followed(address):
     """An address a campaign can come from: not this machine's loopback, nor an unspecified or multicast one."""
     try:
@@ -84,8 +94,8 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
     """Record the fresh `signals` per address in `state['campaigns']`, and return a campaign signal (built with
     `make_signal(key, severity, observed_at, summary, address)`) for each address that has just become one.
 
-    Addresses in `exclude` (this machine's own, its gateways and DNS servers) are never followed: a finding piped in
-    names both ends, and the end under attack is not the attacker."""
+    Addresses in `exclude` (this machine's own, its gateways and DNS servers) are never followed: a gateway stands for
+    everyone behind it, and none of them may be blocked."""
     if not settings.enabled:
         return []
     book = state.setdefault('campaigns', {})
@@ -94,7 +104,7 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
         if signal.source == SOURCE or signal.rule_id == RULE_ID:
             continue
         at = _time(signal.observed_at, now)
-        for address in sorted(signal.entities.get('address', ())):
+        for address in _actors(signal):
             if address in exclude or not _followed(address):
                 continue
             book.setdefault(address, dict(attempts=[], raised_at=None, raised_severity=None))
