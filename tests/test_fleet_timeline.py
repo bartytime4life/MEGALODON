@@ -13,7 +13,8 @@ from megalodon import response_engine as re_
 from megalodon import timeline as tl
 from test_fleet import collector, machine  # noqa: F401
 
-T0 = datetime(2026, 11, 19, 12, 0, tzinfo=timezone.utc)
+# Recent, not a fixed date: the view lists the last week as of now, so a fixed date falls out of it a week on.
+T0 = (datetime.now(timezone.utc) - timedelta(hours=6)).replace(second=0, microsecond=0)
 
 
 class Machine:

@@ -56,6 +56,7 @@ process, socket and file. Otherwise they are user units in
 | secrets | daily at 04:23 | `secrets check --alert` ([exposed secrets](exposed-secrets.md)) |
 | containers | every 15 minutes (root) | `containers check --alert` ([container watch](container-watch.md)) |
 | boot | hourly | `boot check --alert` ([boot integrity](boot-integrity.md)) |
+| report | daily at 07:47 | `report --format html --output ~/.local/state/megalodon/report.html`: the [security report](security-report.md), one page of every check's latest result, the incidents and how the protection is set up, with your choices for each finding. It runs no check itself |
 | rootkit | hourly | `rootkit check --skip-ports --alert` |
 | vulns | daily at 06:41 | `vulns check --alert` ([known-vulnerable software](known-vulnerable-software.md)) |
 | binaries | daily at 03:17 | `binaries check --alert` |

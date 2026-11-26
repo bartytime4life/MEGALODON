@@ -62,3 +62,16 @@ def synthetic_runtime_binding(monkeypatch):
     """
     from megalodon import local_model_runtime
     monkeypatch.setattr(local_model_runtime, "binding_failure", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def _results_kept_aside(tmp_path_factory):
+    """`megalodon CHECK check` keeps its latest result for `megalodon report`; in tests, never in the real home.
+
+    Not through `monkeypatch`: an autouse fixture that requests it would undo every test's patches only after
+    the test's own fixtures are torn down, so a fixture's teardown would run with the test's patches in place."""
+    from megalodon import results
+    before = results.DEFAULT_FOLDER
+    results.DEFAULT_FOLDER = str(tmp_path_factory.mktemp("results"))
+    yield
+    results.DEFAULT_FOLDER = before
