@@ -1,9 +1,11 @@
 """One command to run every host watch on a schedule, with alerts.
 
 `megalodon schedule plan` shows the systemd timers and services it would
-install: each baseline check with `--alert`, the rootkit cross-checks, the
-response engine's shadow pass and, as root, the live process ancestry and
-container escape watches.
+install: a timer for each baseline check with `--alert`, the rootkit
+cross-checks, the response engine's pass and, as root, enforcement; and an
+always-running service for each live watch (listeners, devices, web root,
+credentials, egress, ransomware, and as root process ancestry, the command
+log and container escapes).
 `install --yes` writes those units and enables them; `remove --yes` disables
 and deletes them. Nothing is written or started without `--yes`.
 

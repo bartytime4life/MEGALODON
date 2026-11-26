@@ -40,7 +40,7 @@ sudo megalodon boot accept
   at once.
 * **`check`** reports what changed, most severe first. It exits 1 on
   findings and 2 on an error. Changes that package updates explain are
-  listed under `explained` and are not findings. A protection the baseline
+  listed under `explained`, as `BOOT_UPDATED` (LOW), and are not findings. A protection the baseline
   could read but this check cannot, for example after securityfs is
   unmounted, is listed under `gaps` rather than skipped.
 * **`accept`** records the current state after a kernel or bootloader update

@@ -50,6 +50,11 @@ megalodon respond report
 separate [enforcement](enforcement.md) step carries out the ones its own
 policy allows, each with a way to undo it.
 
+When enforcement carries out a decision, it pauses the process and blocks
+the address first, then does the rest in the playbook's order: collecting
+evidence takes a while, and a process encrypting files or holding a shell
+would otherwise go on meanwhile.
+
 ## How a decision is made
 
 1. **Collect.** Findings come from:
@@ -168,14 +173,14 @@ Guards apply whatever the playbooks say:
 | credential-read | HIGH `CREDENTIAL_READ` | Collect evidence, notify |
 | dropped-tool-phoning-home | `OUTBOUND_FROM_TEMPORARY` | Collect evidence, suspend the process, block the address for 60 minutes, notify |
 | new-outbound-program | HIGH `NEW_OUTBOUND_PROGRAM` | Collect evidence, notify |
-| sensor-tampering | HIGH and CRITICAL [tamper](tamper-detection.md) findings | Collect evidence, notify |
+| sensor-tampering | HIGH and CRITICAL [tamper](tamper-detection.md) findings this machine's tamper check raises (those of the heartbeat monitor are raised off the machine) | Collect evidence, notify |
 | new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Cut off the USB device, notify: only you know whether you plugged it in, and `enforce undo` lets it back |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
-| attacker-at-the-door | HIGH `BRUTE_FORCE`, `HOST_SWEEP`, `DECOY_TOUCH`, `SYN_FLOOD`, `PORT_SCAN` | Block the source for 30 minutes, notify |
-| command-and-control-or-exfiltration | HIGH `BEACONING`, `DATA_EXFILTRATION`, `IOC_MATCH`, DNS rules | Only when corroborated: collect evidence, block for 60 minutes, notify |
+| attacker-at-the-door | HIGH `BRUTE_FORCE`, `DECOY_TOUCH`, `SYN_FLOOD` | Block the source for 30 minutes, notify. `PORT_SCAN` and `HOST_SWEEP` are listed too, but are always MEDIUM, so they are alerted, not acted on |
+| command-and-control-or-exfiltration | HIGH `DATA_EXFILTRATION`, `IOC_MATCH`, `DNS_TUNNELING`, `DNS_TUNNEL_CHURN` | Only when corroborated: collect evidence, block for 60 minutes, notify. `BEACONING` and `DGA_DOMAIN` are listed too, but are always MEDIUM, so they are alerted, not acted on |
 | new-backdoor-account | CRITICAL account changes in the persistence watch | Collect evidence, lock the account, notify |
 | new-persistence-entry | `PERSISTENCE_ADDED`: a service, timer, cron or at job, startup file, SSH key file, preload, sudoers, PAM, init or module file the baseline did not have | Collect evidence, disable the entry, notify |
-| trojaned-program-or-wiped-log | Program integrity, log integrity and canary findings | Collect evidence, notify |
+| trojaned-program-or-wiped-log | HIGH and CRITICAL program integrity (including an unpackaged program in a system folder, or a writable one), log and journal integrity, and canary findings | Collect evidence, notify |
 
 Findings no playbook matches, such as `DNS_BYPASS`, are not decided.
 
@@ -188,9 +193,10 @@ decision or escalate it to you, never start an action.
 
 ## Limits
 
-* **Nothing is carried out.** There is no apply route. A `would_apply` plan
-  shows what a future enforcement step would do with this policy, and
-  nothing more.
+* **The engine itself carries nothing out.** A `would_apply` plan is what
+  the [enforcement](enforcement.md) step does, if its own policy lists that
+  action and playbook; with enforcement off, as it is until you turn it on,
+  nothing is done.
 * **Correlation is by shared values.** Two findings about the same attack
   with nothing in common stay separate incidents.
 * **Process targets name processes where the source knows them.** The
