@@ -514,3 +514,31 @@ def test_a_file_archived_after_the_review_is_read_once(machine, monkeypatch):
     for _ in range(3):
         assert check(manifest, root, advance=True)[0] == set()
     assert read == [str(archived)], "read once, when it was first seen archived"
+
+
+def test_a_journal_archived_after_the_review_does_not_undo_an_explained_vacuum(tmp_path):
+    # A long-lived user journal, being written at the review, starts before the archive vacuumed since. Once it
+    # is archived too, it is older than the vacuumed one: that must not make the vacuuming look like a deletion.
+    root = tmp_path / "root"
+    folder = root / "var/log/journal" / MACHINE
+    archive(folder, 10, 20)
+    archive(folder, 21, 40)
+    journal(folder / "user-1000.journal", head=1, tail=300, entries=30)
+    journal(folder / "system.journal", head=41, tail=60)
+    boot = root / "proc/sys/kernel/random/boot_id"
+    boot.parent.mkdir(parents=True)
+    boot.write_text("boot-one\n")
+    manifest = tmp_path / "logs.json"
+    li.baseline(manifest, root=str(root))
+    li.check(manifest, root=str(root), advance=True)
+    next(folder.glob(f"system@*-{10:016x}-*.journal")).unlink()          # vacuumed, oldest archive first
+    assert check(manifest, root, advance=True)[0] == set()
+    user = folder / "user-1000.journal"
+    rotated = folder / f"user-1000@{SEQUENCE.hex()}-{1:016x}-{1_700_000_000_000_000 + 1:016x}.journal"
+    user.rename(rotated)
+    data = bytearray(rotated.read_bytes())
+    data[16] = ji.STATE_ARCHIVED
+    rotated.write_bytes(bytes(data))
+    journal(user, head=301, tail=310)
+    assert check(manifest, root, advance=True)[0] == set(), "the vacuuming is still explained"
+    assert check(manifest, root, advance=True)[0] == set()

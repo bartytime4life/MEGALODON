@@ -397,13 +397,18 @@ def _floor(reviewed, new):
 
 
 def _journal_floor(reviewed, journals, held, root):
-    """The reviewed journal files to hold to the baseline, and the snapshot to compare them with.
+    """The reviewed journal files to hold to the baseline, each with the snapshot to compare it with.
 
     Journal files are named by a random ID, never reused: every reviewed file still present, and every reviewed
     archive that is gone (journald deletes archives only by vacuuming, oldest first, which the comparison
     recognizes). A file being written at the review may since have been archived and vacuumed; it is followed
     by the progress alone. Digests in `journals` may come from the progress's cache, so they are taken from the
-    review or read again."""
+    review or read again.
+
+    Whether a gone archive was vacuumed oldest first is judged only against the archives that cannot have been
+    older than it at the time: those already archived at the review, and files new since, which start after the
+    review. A file being written at the review may be archived later with earlier entries; it says nothing about
+    the order in which the reviewed archives were vacuumed."""
     files = (reviewed.get('journals') or {}).get('files', {})
     present = {file_id: record for file_id, record in files.items() if file_id in journals['files'] and file_id not in held}
     gone = {file_id: record for file_id, record in files.items()
@@ -411,7 +416,10 @@ def _journal_floor(reviewed, journals, held, root):
     current = dict(journals, files=dict(journals['files'], **{
         file_id: journal_integrity.vouched(journals['files'][file_id], record, root=root)
         for file_id, record in present.items()}))
-    return dict((reviewed.get('journals') or {}), files=dict(present, **gone)), current
+    ordered = dict(journals, files={file_id: record for file_id, record in journals['files'].items()
+                                    if not (file_id in files and journal_integrity._active(files[file_id]))})
+    base = reviewed.get('journals') or {}
+    return [(dict(base, files=present), current), (dict(base, files=gone), ordered)]
 
 
 def _forget_progress(manifest):
@@ -464,10 +472,10 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
                 findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline',
                                                        note=FLOOR_NOTE)))
         held_files = {item['journal_file_id'] for item in journal_findings}
-        floor, current = _journal_floor(reviewed, journals, held_files, options.get('root', '/'))
-        for item in journal_integrity.compare(floor, current)[0]:
-            journal_findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline')))
-            reviewed_files[item['journal_file_id']] = floor['files'][item['journal_file_id']]
+        for floor, current in _journal_floor(reviewed, journals, held_files, options.get('root', '/')):
+            for item in journal_integrity.compare(floor, current)[0]:
+                journal_findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline')))
+                reviewed_files[item['journal_file_id']] = floor['files'][item['journal_file_id']]
     findings = sorted(findings + journal_findings, key=lambda item: (-RANK[item['severity']], item['log']))
     report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
                   compared_with=str(compared_with),

@@ -131,7 +131,9 @@ baseline, and reports what the progress hid, with
   from the review (while its inode, size and change times are the reviewed
   ones) or read again, never from the progress;
 * each journal archive that is gone: journald deletes archives only by
-  vacuuming, oldest first.
+  vacuuming, oldest first. The order is judged against the archives that
+  were already archived at the review and the files new since; a file that
+  was being written at the review may be archived later with older entries.
 
 This has one cost. A log rotated by copying and emptying it in place
 (logrotate's `copytruncate`) stays the same file, so once no rotated copy
