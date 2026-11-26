@@ -113,7 +113,7 @@ def review(report, *, ask=input, say=print, run=None, log=DEFAULT_LOG, now=None)
     for check in report['checks']:
         if check.get('more'):
             say(f'{check["title"]}: {check["more"]} more finding(s) were not listed here; all of them: '
-                f'{sr.command("megalodon", check["check"], "check")}')
+                f'{sr.ALL_FINDINGS}')
     ran = sum(1 for entry in done if entry.get('ran'))
     say(f'{len(done)} choice(s) made, {ran} command(s) run. Run `megalodon report` again to see where things '
         'stand.')

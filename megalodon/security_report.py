@@ -35,6 +35,9 @@ SCHEMA = 'megalodon-security-report-v1'
 DEFAULT_OUTPUT = '~/.local/state/megalodon/report.html'
 RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO')
 SHOWN_PER_CHECK = 25
+# Every kept finding, read only. Not the check's own command: that looks again and replaces what was kept, which
+# for a watch is what it saw of things since gone.
+ALL_FINDINGS = 'megalodon report --all'
 CONTROL = re.compile(r'[\x00-\x1f\x7f-\x9f  ‪-‮⁦-⁩]')
 
 
@@ -325,7 +328,7 @@ def _live_states(system, runner=None):
     return {check: states.get(unit, {}).get('active') or 'unknown' for check, unit in installed.items()}
 
 
-def _check_view(check, record, now, live_state=None, system=True):
+def _check_view(check, record, now, live_state=None, system=True, shown=SHOWN_PER_CHECK):
     info = CHECKS[check]
     view = dict(check=check, title=info['title'], group=info['group'], why=info['why'],
                 live=bool(info.get('live')), findings=[], gaps=[])
@@ -419,9 +422,12 @@ def _check_view(check, record, now, live_state=None, system=True):
                 view['severities'][_severity(level)] += count
         for finding in findings[listed:]:
             view['severities'][_severity(finding.get('severity'))] += 1
-    view['findings'] = view['findings'][:SHOWN_PER_CHECK]
-    # Every finding counts; only the first are listed. Say how many more there are, and where they all are.
-    view['more'] = max(0, view.get('finding_count', 0) - len(view['findings']))
+    kept = len(view['findings'])
+    view['findings'] = view['findings'][:shown] if shown else view['findings']
+    # Every finding counts; only the first are listed. Say how many more are kept (`report --all` lists them), and
+    # how many were counted but not kept (a very large result keeps its first findings, a watch its latest).
+    view['more'] = kept - len(view['findings'])
+    view['not_kept'] = max(0, view.get('finding_count', 0) - kept)
     return view
 
 
@@ -587,7 +593,7 @@ def _incidents(hours, now):
 
 # ------------------------------------------------------------------ the report
 
-def build(*, hours=168, now=None, system=None, folder=None, runner=None):
+def build(*, hours=168, now=None, system=None, folder=None, runner=None, every=False):
     now = now or datetime.now(timezone.utc)
     from . import schedule
     system = schedule._system_mode(system)
@@ -596,7 +602,8 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
         live = _live_states(system, runner)
     except (OSError, ValueError):
         live = {}
-    checks = [_check_view(name, kept.get(name), now, live.get(name), system) for name in CHECKS]
+    checks = [_check_view(name, kept.get(name), now, live.get(name), system, None if every else SHOWN_PER_CHECK)
+              for name in CHECKS]
     incidents, incident_gap = _incidents(hours, now)
     setup = _setup(system)
     counts = {level: sum(c.get('severities', {}).get(level, 0) for c in checks) for level in RANK}
@@ -679,7 +686,9 @@ def text(report):
                 for choice in finding['choices']:
                     out.append(f'                · {choice["label"]}: {choice["command"]}')
             if check.get('more'):
-                out.append(f'       …and {check["more"]} more: {command("megalodon", check["check"], "check")}')
+                out.append(f'       …and {check["more"]} more: {ALL_FINDINGS}')
+            if check.get('not_kept'):
+                out.append(f'       …and {check["not_kept"]} more that were counted but not kept')
             if check.get('gaps'):
                 out.append(f'       Could not see: {"; ".join(check["gaps"])}')
     if report['incidents'] or report['incident_gap']:
@@ -757,8 +766,9 @@ def page(report):
                                 f'{_e(f["rule_id"])}{where}{meaning}{detail}'
                                 + ''.join(_choice_html(c) for c in f['choices']) + '</div>')
             if check.get('more'):
-                findings.append(f'<p class="soft">…and {check["more"]} more: '
-                                f'<code>{_e(command("megalodon", check["check"], "check"))}</code></p>')
+                findings.append(f'<p class="soft">…and {check["more"]} more: <code>{_e(ALL_FINDINGS)}</code></p>')
+            if check.get('not_kept'):
+                findings.append(f'<p class="soft">…and {check["not_kept"]} more that were counted but not kept</p>')
             extra = (f'<p class="soft">Could not see: {_e("; ".join(check["gaps"]))}</p>' if check['gaps'] else '')
             run = f'<p class="soft">Last run {_e(check["last_run"])} UTC</p>' if check.get('last_run') else ''
             nxt = f'<p>Run it: <code>{_e(check["next"])}</code></p>' if check.get('next') else ''

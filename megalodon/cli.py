@@ -478,6 +478,8 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--output", type=Path,
                         help="write the report to this file, mode 600, instead of printing it")
     report.add_argument("--hours", type=int, default=168, help="incidents of the last HOURS (default a week)")
+    report.add_argument("--all", action="store_true",
+                        help="list every kept finding of each check, not only the first 25")
     review = sub.add_parser(
         "review", help="go through the report's findings one at a time and choose what to do; a command runs only "
                        "after you confirm it")
@@ -3920,7 +3922,8 @@ def _record(args, code, reason=None):
         return
     from . import results
     try:
-        results.keep(name, _PRINTED.pop(name, None), code, reason=reason)
+        save = results.keep_after_watch if name in WATCHES_KEPT else results.keep
+        save(name, _PRINTED.pop(name, None), code, reason=reason)
     except OSError as exc:
         print(f"megalodon: this check's result was not kept for `megalodon report`: {exc}", file=sys.stderr)
 
@@ -3997,7 +4000,7 @@ def _report(args: argparse.Namespace) -> int:
         print("megalodon: --hours must be between 1 and 8784", file=sys.stderr)
         return 2
     try:
-        report = sr.build(hours=args.hours)
+        report = sr.build(hours=args.hours, every=args.all)
         content = (sr.page(report) if args.format == "html" else
                    json.dumps(report, indent=2, sort_keys=True) + "\n" if args.format == "json" else sr.text(report))
         if args.output:

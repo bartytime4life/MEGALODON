@@ -388,8 +388,8 @@ def test_the_totals_count_every_finding_not_only_those_shown(home):
     report = build()
     assert report["counts"]["HIGH"] == 40 and len(view(report, "secrets")["findings"]) == sr.SHOWN_PER_CHECK
     assert view(report, "secrets")["more"] == 15
-    assert "…and 15 more: megalodon secrets check" in sr.text(report)
-    assert "…and 15 more: <code>megalodon secrets check</code>" in sr.page(report)
+    assert "…and 15 more: megalodon report --all" in sr.text(report)
+    assert "…and 15 more: <code>megalodon report --all</code>" in sr.page(report)
 
 
 # ------------------------------------------------------------------ settings read as the modules that use them read them
@@ -637,3 +637,55 @@ def test_the_watch_keeps_what_a_check_found_before_its_alert_failed(home):
     results.keep("listeners", dict(findings=[_seen(22)], gaps=[]), 2, now=AT, reason="alerts unavailable")
     _keeper()(_seen(4444))
     assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:22", "tcp/0.0.0.0:4444"]
+
+
+def test_every_kept_finding_is_listed_read_only(home):
+    keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/var/www/{n}.env") for n in range(40)])
+    every = build(every=True)
+    assert len(view(every, "secrets")["findings"]) == 40 and view(every, "secrets")["more"] == 0
+
+
+def test_findings_counted_but_not_kept_are_said_so(home, monkeypatch):
+    monkeypatch.setattr(results, "MAX_BYTES", 100_000)
+    keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/srv/{n}" * 3) for n in range(2000)])
+    secrets = view(build(every=True), "secrets")
+    assert len(secrets["findings"]) == 500 and secrets["not_kept"] == 1500
+    assert "…and 1500 more that were counted but not kept" in sr.text(build(every=True))
+
+
+def test_the_report_command_lists_all_with_all(home, capsys):
+    keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/var/www/{n}.env") for n in range(30)])
+    assert run_cli(["report", "--all", "--format", "json"]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert len(view(printed, "secrets")["findings"]) == 30
+
+
+def test_a_check_keeps_what_the_watch_saw_of_things_since_gone(home, monkeypatch):
+    # The watch saw a listener that has since closed; a check cannot see it, and must not erase it.
+    from megalodon import listener_watch
+    _keeper()(_seen(4444))
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    assert run_cli(["listeners", "check"]) == 0
+    listeners = view(build(), "listeners")
+    assert [f["where"] for f in listeners["findings"]] == ["tcp/0.0.0.0:4444"]
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[_seen(22), _seen(4444)], gaps=[]))
+    run_cli(["listeners", "check"])
+    listeners = view(build(), "listeners")
+    assert [f["where"] for f in listeners["findings"]] == ["tcp/0.0.0.0:4444", "tcp/0.0.0.0:22"], "once each"
+    assert listeners["finding_count"] == 2
+    monkeypatch.setattr(listener_watch, "accept", lambda *a, **k: dict(action="accept"))
+    run_cli(["listeners", "accept"])
+    run_cli(["listeners", "check"])
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:22", "tcp/0.0.0.0:4444"]
+
+
+def test_a_check_keeps_the_watch_totals_beyond_those_kept(home, monkeypatch):
+    from megalodon import listener_watch
+    kept = _keeper()
+    kept(_seen(0, "HIGH"))
+    for n in range(1, results.MAX_FINDINGS + 1):
+        kept(_seen(n, "LOW"))
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    run_cli(["listeners", "check"])
+    report = build()
+    assert report["counts"]["HIGH"] == 1 and view(report, "listeners")["finding_count"] == results.MAX_FINDINGS + 1

@@ -132,5 +132,5 @@ def test_the_worst_comes_first_whatever_check_found_it(home, tmp_path):  # noqa:
 def test_findings_beyond_those_listed_are_pointed_to(home, tmp_path):  # noqa: F811
     keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/var/www/{n}.env") for n in range(30)])
     done, said, ran, asked = go(build(), ["q"], tmp_path)
-    assert any("5 more finding(s) were not listed here; all of them: megalodon secrets check" in line
+    assert any("5 more finding(s) were not listed here; all of them: megalodon report --all" in line
                for line in said)
