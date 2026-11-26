@@ -1,6 +1,6 @@
 # Windows and Linux platform baseline
 
-> **Current reading · November 26, 2026.** See the [source and acceptance map](current-state.md#november-26-source-and-acceptance-map), based on [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b). The September tables below are a historical baseline. Current hosted Windows and macOS fixture lanes are scoped synthetic evidence. Linux remains the operating reference.
+> **Current reading · November 26, 2026.** See the [source and acceptance map](current-state.md#november-26-source-and-acceptance-map). The September tables below are a historical baseline. Current hosted Windows and macOS fixture lanes are scoped synthetic evidence. Linux remains the operating reference.
 
 **Baseline v1 — immutable inspected configuration and delivery plan.**
 Repository state was observed at 2026-09-10T02:06:08Z against
