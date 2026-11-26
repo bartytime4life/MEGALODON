@@ -1888,8 +1888,11 @@ def _listeners_watch(args: argparse.Namespace, manifest: Path) -> int:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
             return 2
 
+    kept = _watch_keeper(args, "listeners")
+
     def emit(found):
         print(json.dumps(found, sort_keys=True), flush=True)
+        kept(found)
         if dispatcher is not None:
             from .alerts import HostNotice
             programs = ", ".join(p["path"] for p in found["programs"][:2]) or "program unknown"
@@ -2134,8 +2137,11 @@ def _webroot_watch(args: argparse.Namespace, manifest: Path) -> int:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
             return 2
 
+    kept = _watch_keeper(args, "webroot")
+
     def emit(found):
         print(json.dumps(found, sort_keys=True), flush=True)
+        kept(found)
         if dispatcher is not None:
             from .alerts import HostNotice
             dispatcher.submit([HostNotice(found["rule_id"], found["severity"], datetime.now(timezone.utc),
@@ -3919,6 +3925,27 @@ def _record(args, code, reason=None):
         print(f"megalodon: this check's result was not kept for `megalodon report`: {exc}", file=sys.stderr)
 
 
+# The live watches whose findings reach neither a check's kept result nor the response engine: what they see is kept
+# for `megalodon report` as they see it, until the next check, accept or baseline.
+WATCHES_KEPT = ("listeners", "webroot")
+
+
+def _watch_keeper(args, check):
+    if getattr(args, "manifest", None) is not None:
+        return lambda found: None
+    from . import results
+    seen = []
+
+    def keep(found):
+        seen.append(found)
+        del seen[:-results.MAX_FINDINGS]
+        try:
+            results.keep(check, dict(findings=list(seen), gaps=[], seen_by_watch=True), 1)
+        except OSError as exc:
+            print(f"megalodon: what the watch saw was not kept for `megalodon report`: {exc}", file=sys.stderr)
+    return keep
+
+
 class _Said:
     """sys.stderr, also keeping the last `megalodon: ...` line: why a check could not run, for the report."""
 
@@ -3944,7 +3971,15 @@ def _run_and_keep(args) -> int:
     """Run the command. A check whose result is kept is kept however it ends: with what it found, with why it
     could not run, or with the error it stopped on, so the report never shows an older result as current."""
     if _kept(args) is None:
-        return _dispatch(args)
+        code = _dispatch(args)
+        if (code == 0 and args.command in WATCHES_KEPT and getattr(args, "manifest", None) is None
+                and getattr(args, f"{args.command}_command", None) in ("accept", "baseline")):
+            from . import results
+            try:
+                results.forget_watch(args.command)
+            except OSError as exc:
+                print(f"megalodon: what the watch saw before is still in `megalodon report`: {exc}", file=sys.stderr)
+        return code
     said = _Said(sys.stderr)
     sys.stderr = said
     try:

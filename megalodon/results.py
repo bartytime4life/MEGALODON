@@ -88,6 +88,20 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
     return target / f'{check}.json'
 
 
+def forget_watch(check, *, folder=None):
+    """Remove `check`'s result if a live watch kept it: after `accept` or a new baseline, what the watch saw
+    before is no longer what to review. A result a check run kept is replaced by the next run instead."""
+    path = _folder(folder) / f'{check}.json'
+    try:
+        record = _read(path)
+    except (ResultError, OSError):
+        return False
+    if record and isinstance(record.get('result'), dict) and record['result'].get('seen_by_watch'):
+        os.unlink(path)
+        return True
+    return False
+
+
 def _read(path):
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
@@ -117,8 +131,10 @@ def latest(*, folder=None):
     for name in NAMES:
         try:
             record = _read(_folder(folder) / f'{name}.json')
-        except ResultError as exc:
-            found[name] = dict(check=name, error=str(exc))
+        except (ResultError, OSError) as exc:
+            # One result that cannot be read (a link, no permission) is that check's error, not the report's end.
+            found[name] = dict(check=name, error=str(exc) if isinstance(exc, ResultError)
+                               else f'{name}.json cannot be read: {exc.strerror or exc}')
             continue
         if record is not None:
             found[name] = record

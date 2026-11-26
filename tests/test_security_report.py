@@ -503,3 +503,84 @@ def test_totals_survive_a_result_too_large_to_keep_whole(home, monkeypatch):
     record = results.latest()["secrets"]
     assert record["truncated"] and len(record["result"]["findings"]) < 2000
     assert build()["counts"]["HIGH"] == 2000
+
+
+# ------------------------------------------------------------------ what a check found, however it says so
+
+def test_suspicious_persistence_entries_are_findings(home):
+    # A baseline made before signs were reviewed: the check lists suspicious existing entries and exits 1.
+    second_root = dict(category="account", location="toor", technique="T1136.001", severity="CRITICAL",
+                       signs=[dict(sign="second_uid_0", line=0)])
+    results.keep("persistence", dict(findings=[], suspicious=[second_root], gaps=[]), 1, now=AT)
+    report = build()
+    persistence = view(report, "persistence")
+    assert persistence["findings"][0]["rule_id"] == "PERSISTENCE_SUSPICIOUS"
+    assert persistence["findings"][0]["where"] == "toor" and persistence["finding_count"] == 1
+    assert report["verdict"] == "act" and report["counts"]["CRITICAL"] == 1
+
+
+def test_a_check_that_found_something_is_never_nothing_found(home):
+    results.keep("rootkit", dict(hidden=["pid 4242"], gaps=[]), 1, now=AT)     # a shape the report cannot list
+    rootkit = view(build(), "rootkit")
+    assert rootkit["status"] == "findings" and rootkit["findings"][0]["rule_id"] == "CHECK_REPORTED_SOMETHING"
+    assert rootkit["findings"][0]["choices"][0]["command"] == "megalodon rootkit check"
+
+
+def test_a_result_that_cannot_be_opened_is_that_checks_error(home, tmp_path):
+    keep("hardening", [])
+    folder = Path(results.DEFAULT_FOLDER).expanduser()
+    (tmp_path / "elsewhere.json").write_text("{}")
+    os.symlink(tmp_path / "elsewhere.json", folder / "boot.json")
+    report = build()
+    assert view(report, "boot")["status"] == "error" and "cannot be read" in view(report, "boot")["status_text"]
+    assert view(report, "hardening")["status"] == "clean", "every other check is still reported"
+
+
+def test_what_a_live_watch_sees_is_kept_until_accept(home, monkeypatch):
+    import argparse
+    from megalodon import cli, listener_watch
+    kept = cli._watch_keeper(argparse.Namespace(manifest=None), "listeners")
+    kept(dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:4444", programs=[]))
+    old = (NOW - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    record = results.latest()["listeners"]
+    results.keep("listeners", record["result"], 1, now=old)            # seen three days ago, gone since
+    listeners = view(build(), "listeners")
+    assert listeners["findings"][0]["where"] == "tcp/0.0.0.0:4444" and not listeners.get("stale")
+    assert "seen by the watch" in listeners["status_text"]
+    results.keep("listeners", None, 2, now=AT)
+    cli._watch_keeper(argparse.Namespace(manifest="/other.json"), "listeners")(dict(rule_id="X", severity="HIGH"))
+    assert results.latest()["listeners"]["ran"] is False, "a watch of another baseline keeps nothing"
+    kept(dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:4444", programs=[]))
+    monkeypatch.setattr(listener_watch, "accept", lambda *a, **k: dict(action="accept"))
+    assert run_cli(["listeners", "accept"]) == 0
+    assert "listeners" not in results.latest(), "reviewed and accepted: no longer to review"
+
+
+def test_a_check_result_is_not_removed_by_accept(home, monkeypatch):
+    from megalodon import listener_watch
+    keep("listeners", [dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:22")])
+    monkeypatch.setattr(listener_watch, "accept", lambda *a, **k: dict(action="accept"))
+    run_cli(["listeners", "accept"])
+    assert "listeners" in results.latest(), "the next check replaces it"
+
+
+@pytest.mark.parametrize("check, module, found", [
+    ("listeners", "listener_watch", dict(rule_id="NEW_LISTENER", severity="HIGH", listener="tcp/0.0.0.0:4444",
+                                         programs=[], techniques=[])),
+    ("webroot", "webroot_watch", dict(rule_id="WEB_SHELL_PATTERN", severity="HIGH", path="/var/www/up/x.php",
+                                      detail="d", summary="s", techniques=[])),
+])
+def test_the_watch_commands_keep_what_they_see(home, monkeypatch, check, module, found, capsys):
+    import importlib
+    watch = importlib.import_module(f"megalodon.{module}")
+
+    class Once:
+        def __init__(self, manifest, emit, **kw):
+            self.emit = emit
+
+        def run(self, stop, *a, **k):
+            self.emit(found)
+    monkeypatch.setattr(watch, "Watcher", Once)
+    run_cli([check, "watch"])
+    record = results.latest()[check]
+    assert record["result"]["seen_by_watch"] and record["result"]["findings"] == [found]

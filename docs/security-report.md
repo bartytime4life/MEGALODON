@@ -46,7 +46,10 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   `--manifest` checks another baseline, not this machine's state.
 * **The live watches.** Credentials, process ancestry, listeners, egress, the
   web root and devices run all the time once scheduled. The report says
-  whether their service is running; what they find reaches the incidents.
+  whether their service is running. The listener and web-root watches keep
+  what they see as they see it, listed under their check with when, until
+  the next `check`, `accept` or `baseline`; the others pass what they find to
+  the response engine, and it reaches the incidents.
 * **Incidents** of the last week (`--hours` to change), from the response
   engine's ledger and the enforcement journal, as `megalodon timeline` tells
   them.
@@ -57,6 +60,10 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   response policy that has changed since is reported as carrying nothing out.
   Without systemd the schedule is crontab lines you add yourself; the report
   cannot see them, and says so.
+* **Whatever form a finding takes**: suspicious entries a persistence baseline
+  recorded without review are findings too, and a check that exited with
+  findings this report cannot list is shown as such, never as nothing found.
+  A result file that cannot be opened is that one check's error.
 * **Never all clear on missing information**: incidents that cannot be read,
   a watch that stopped, a check that failed after finding something, or a
   check that could not look everywhere (an unmounted partition, processes it
@@ -143,8 +150,9 @@ Read a command before you run it all the same.
 * **One account's view.** Results are kept in the home of the account that
   ran the check. Run the report as the account the schedule runs as (root
   for the full schedule).
-* **Live watches report through incidents.** Their individual findings are
-  in the incidents, decided by the response engine, not listed per check.
+* **Most live watches report through incidents.** The credential, ancestry,
+  egress, device and container watches' findings are in the incidents,
+  decided by the response engine, not listed per check.
 * **The dashboard does not show it yet.** Open the HTML page instead.
 * **Choices are commands, not judgments.** "It was you" accepts what the
   check sees now; only you know whether a change was yours.

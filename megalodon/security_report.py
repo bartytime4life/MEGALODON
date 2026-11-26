@@ -128,6 +128,9 @@ EXTRA_MEANINGS = {
     'PERSISTENCE_CHANGED': 'Something already set to start by itself was changed, for example to run another '
                            'program.',
     'PERSISTENCE_REMOVED': 'Something that started by itself was removed.',
+    'PERSISTENCE_SUSPICIOUS': 'Something set to start by itself, or an account, carries signs of an intruder\'s. '
+                              'It was already there when the baseline was taken, so it is not a change: review it.',
+    'CHECK_REPORTED_SOMETHING': 'The check reported something this report cannot list. Run the check to see it.',
     'NEW_LISTENER': 'A program started listening for network connections.',
     'LISTENER_PROGRAM_CHANGED': 'A known port is now held by another program.',
     'LISTENER_EXPOSED': 'A listener that was reachable only from this machine is now reachable from the network.',
@@ -336,7 +339,11 @@ def _check_view(check, record, now, live_state=None, system=True):
         view.update(status='error', status_text=view['problem'])
         return view
     if record is None and live_state is not None:
-        view.update(status='watching', status_text='Watching all the time; what it finds is in the incidents below'
+        # The listener and web-root watches keep what they see as a result of their own (none yet, here); the others
+        # pass it to the response engine, whose incidents follow.
+        where = ('nothing seen since its last check or accept' if check in ('listeners', 'webroot')
+                 else 'what it finds is in the incidents below')
+        view.update(status='watching', status_text=f'Watching all the time; {where}'
                     if live_state == 'active' else 'Installed as a watch that runs all the time')
         return view
     if record is None:
@@ -353,6 +360,14 @@ def _check_view(check, record, now, live_state=None, system=True):
     gaps = result.get('gaps') if isinstance(result.get('gaps'), list) else []
     view['gaps'] = [readable(g) for g in gaps[:10]]
     findings = [f for f in result.get('findings', []) if isinstance(f, dict)]
+    listed = len(findings)
+    if check == 'persistence':
+        # Entries already present at the baseline that carry an intruder's signs: the check exits 1 for them too.
+        findings += [dict(f, change='suspicious') for f in result.get('suspicious', []) if isinstance(f, dict)]
+    if record.get('exit_code') == 1 and record.get('ran') and not findings:
+        # The check said it found something (exit 1) that this report does not know how to list: never "nothing".
+        findings = [dict(rule_id='CHECK_REPORTED_SOMETHING', severity='HIGH',
+                         detail=f'megalodon {check} check exited 1 (findings) with nothing this report can list')]
     if not record.get('ran') or record.get('exit_code') not in (0, 1):
         reason = record.get('reason') if isinstance(record.get('reason'), str) else ''
         # A check without a baseline says which command records one; that, not running it again, is the fix.
@@ -376,12 +391,16 @@ def _check_view(check, record, now, live_state=None, system=True):
             where=clean(where) if where else None, detail=readable(detail) if detail else None,
             meaning=_meaning(check, rule), choices=_choices(check, finding, rule, where)))
     view['findings'].sort(key=lambda f: RANK.index(f['severity']))
-    view['finding_count'] = record.get('findings', len(findings))
-    stale = age is not None and interval and age > 3 * interval
+    # Every finding the check kept (a cut result keeps fewer than it found), and those added above.
+    view['finding_count'] = max(record.get('findings', listed), listed) + len(findings) - listed
+    # A live watch keeps what it saw when it saw it; its age says when, not that a timer stopped.
+    watched = bool(result.get('seen_by_watch'))
+    stale = not watched and age is not None and interval and age > 3 * interval
     if view['findings']:
         worst = view['findings'][0]['severity']
         view.update(status='findings', worst=worst,
-                    status_text=f'{view["finding_count"]} to review, the worst {worst.lower()}')
+                    status_text=f'{view["finding_count"]} to review, the worst {worst.lower()}'
+                    + (f' — seen by the watch, the last at {record.get("at")}' if watched else ''))
     else:
         view.update(status='clean', status_text='Nothing found')
     if stale:
@@ -393,10 +412,13 @@ def _check_view(check, record, now, live_state=None, system=True):
     view['severities'] = {level: sum(1 for f in view['findings'] if f['severity'] == level) for level in RANK}
     saved = record.get('severities')
     if record.get('truncated') and isinstance(saved, dict):
+        # The saved counts cover the check's `findings`; entries added above (suspicious ones) come on top.
         view['severities'] = dict.fromkeys(RANK, 0)
         for level, count in saved.items():
             if isinstance(count, int) and count > 0:
                 view['severities'][_severity(level)] += count
+        for finding in findings[listed:]:
+            view['severities'][_severity(finding.get('severity'))] += 1
     view['findings'] = view['findings'][:SHOWN_PER_CHECK]
     # Every finding counts; only the first are listed. Say how many more there are, and where they all are.
     view['more'] = max(0, view.get('finding_count', 0) - len(view['findings']))
