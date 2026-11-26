@@ -460,6 +460,43 @@ def test_an_unchanged_archive_is_not_read_again_for_the_floor(machine, monkeypat
     assert read == [], "both caches vouch for the archives: nothing is hashed again"
 
 
+def test_a_failed_reviewed_archive_reread_reports_a_gap_and_retains_the_record(machine, monkeypatch):
+    root, folder, manifest = machine
+    archived = next(folder.glob(f"system@*-{1:016x}-*.journal"))
+    name = "/" + archived.relative_to(root).as_posix()
+    baseline = manifest.read_bytes()
+    file_id, reviewed = next(
+        (file_id, record) for file_id, record in json.loads(baseline)["journals"]["files"].items()
+        if record["path"] == name
+    )
+    progress = li.progress_path(manifest)
+    archived.chmod(0o600)
+    assert check(manifest, root, advance=True)[0] == set()
+    latest = json.loads(progress.read_text())["journals"]["files"][file_id]
+    assert latest["ctime_ns"] != reviewed["ctime_ns"]
+
+    digest = ji._digest
+
+    def unavailable(path):
+        if path == str(archived):
+            raise PermissionError("archive unavailable during verification")
+        return digest(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ji, "_digest", unavailable)
+        found, report = check(manifest, root, advance=True)
+
+    assert found == set()
+    assert report["journals"]["gaps"] == [name]
+    assert json.loads(progress.read_text())["journals"]["files"][file_id] == reviewed
+    assert manifest.read_bytes() == baseline
+
+    found, report = check(manifest, root, advance=True)
+    assert found == set()
+    assert report["journals"]["gaps"] == []
+    assert json.loads(progress.read_text())["journals"]["files"][file_id] == latest
+
+
 def _forge(manifest, root):
     options = dict(root=str(root))
     li._write(li.progress_path(manifest), dict(schema=li.SCHEMA, recorded_at="2026-11-26T00:00:00Z",

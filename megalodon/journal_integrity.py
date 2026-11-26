@@ -131,16 +131,14 @@ def vouched(record, reviewed, *, root='/'):
     anyone able to write the sensor's files could rewrite), an archive is held to ``reviewed`` only with the
     reviewed digest, if its inode, size and change times are still the reviewed ones, or with its content read
     again. An archive is never written again, so normally nothing is read. A file being written at the review has
-    no reviewed digest, so there is nothing to hold its content to, and nothing is read for it."""
+    no reviewed digest, so there is nothing to hold its content to, and nothing is read for it.
+    A failed re-read raises OSError so the caller can record the verification gap."""
     if 'sha256' not in record or not reviewed.get('sha256'):
         return record
-    if all(reviewed.get(key) == record.get(key) for key in CACHE_KEYS) and reviewed.get('sha256'):
+    if all(reviewed.get(key) == record.get(key) for key in CACHE_KEYS):
         return dict(record, sha256=reviewed['sha256'])
     path = record['path'] if root == '/' else os.path.join(root, record['path'].lstrip('/'))
-    try:
-        return dict(record, sha256=_digest(path))
-    except OSError:
-        return {key: value for key, value in record.items() if key != 'sha256'}
+    return dict(record, sha256=_digest(path))
 
 
 def _active(record):
