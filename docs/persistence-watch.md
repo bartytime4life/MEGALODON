@@ -30,7 +30,9 @@ megalodon persistence scan
   baseline, most severe first. It exits 1 when anything changed and 2 on an
   error. With `--alert`, a one-line summary also goes to the
   [off-machine alerts](off-machine-alerts.md) configured in the settings
-  file.
+  file, as `PERSISTENCE_CHANGE` at the most severe change's severity; the
+  response engine names each change `PERSISTENCE_ADDED`, `PERSISTENCE_CHANGED`
+  or `PERSISTENCE_REMOVED`.
 * **`accept`** records the current state as the new baseline once you have
   reviewed the changes, for example after a software update. It lists
   suspicious entries as `baseline` does.

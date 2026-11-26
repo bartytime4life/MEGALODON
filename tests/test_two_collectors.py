@@ -100,7 +100,7 @@ def test_every_heartbeat_reaches_both_collectors_and_one_down_does_not_stop_the_
     assert first.row("web-1")["last_sequence"] == second.row("web-1")["last_sequence"] == 1
     second.stop()
     code, result, err = send(tmp_path, config, monkeypatch, capsys)
-    assert code == 1, "a destination that could not be reached is a failure the schedule shows"
+    assert code == 2, "a destination that could not be reached is a failure the schedule shows (exit 1 is findings)"
     assert result["destinations"][0]["status"] == 200 and "error" in result["destinations"][1]
     assert first.row("web-1")["last_sequence"] == 2, "the first collector still got it"
     assert f"heartbeat 2 was not delivered to {second.url}/heartbeat" in err
@@ -218,7 +218,7 @@ def test_the_first_collector_down_does_not_stop_the_second(pair, tmp_path, monke
     config = machine(tmp_path, pair)
     first.stop()
     code, result, _err = send(tmp_path, config, monkeypatch, capsys)
-    assert code == 1 and "error" in result["destinations"][0] and result["destinations"][1]["status"] == 200
+    assert code == 2 and "error" in result["destinations"][0] and result["destinations"][1]["status"] == 200
     assert second.row("web-1")["last_sequence"] == 1
 
 

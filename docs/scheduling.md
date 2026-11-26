@@ -95,7 +95,10 @@ delay execution further. The calendar interval is not a recovery deadline.
 Checks run at low CPU and I/O priority, cannot gain privileges, and see
 `/usr`, `/boot` and `/etc` read-only. A check that exits 1 has found
 something. That is reported through `--alert`, and systemd does not count it
-as a failure. **Enforcement is different:** exit 1 means an action or a resume
+as a failure. Exit 2 is an error, and systemd counts it as one: a check that
+could not run, findings whose alert could not be sent (a `settings.toml`
+that does not parse, for example), a heartbeat that was not delivered, or an
+unexpected exception, whose traceback goes to the journal. **Enforcement is different:** exit 1 means an action or a resume
 failed, so the generated `megalodon-enforce` service leaves it unsuccessful.
 Its JSON output names the failure, and a failed resume remains eligible for
 the next recovery attempt. New enforcement can be disabled while timed-pause

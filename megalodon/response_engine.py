@@ -320,9 +320,9 @@ actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
 name = "sensor-tampering"
-rules = ["SENSOR_CODE_CHANGED", "SENSOR_CODE_REMOVED", "SCHEDULE_REMOVED", "SCHEDULE_CHANGED", "WATCH_DISABLED",
-         "WATCH_STOPPED", "ALERTS_CONFIG_CHANGED", "ALLOW_LIST_CHANGED", "HEARTBEAT_CONFIG_CHANGED",
-         "DETECTION_RULES_CHANGED", "CONFIG_REMOVED"]
+rules = ["SENSOR_CODE_CHANGED", "SENSOR_CODE_REMOVED", "SENSOR_CODE_ADDED", "SCHEDULE_REMOVED", "SCHEDULE_CHANGED",
+         "WATCH_DISABLED", "WATCH_STOPPED", "WATCH_OVERDUE", "ALERTS_CONFIG_CHANGED", "ALLOW_LIST_CHANGED",
+         "HEARTBEAT_CONFIG_CHANGED", "ENFORCEMENT_CHANGED", "DETECTION_RULES_CHANGED", "CONFIG_REMOVED"]
 min_severity = "HIGH"
 # Whoever is blinding the sensor may also be reading its alerts: preserve, and tell you elsewhere.
 actions = ["collect_evidence", "notify"]
@@ -376,7 +376,8 @@ actions = ["collect_evidence", "disable_persistence", "notify"]
 
 [[response.playbook]]
 name = "trojaned-program-or-wiped-log"
-rules = ["PACKAGE_MISMATCH", "PACKAGE_RECORD_CHANGED", "LOG_DELETED", "LOG_TRUNCATED", "LOG_REWRITTEN",
+rules = ["PACKAGE_MISMATCH", "PACKAGE_RECORD_CHANGED", "PROGRAM_ADDED", "PROGRAM_WRITABLE",
+         "LOG_DELETED", "LOG_TRUNCATED", "LOG_REWRITTEN",
          "JOURNAL_FILE_DELETED", "JOURNAL_ENTRIES_REMOVED", "JOURNAL_ARCHIVE_CHANGED",
          "CANARY_MODIFIED", "CANARY_REMOVED", "CANARY_READ"]
 min_severity = "HIGH"
@@ -564,11 +565,28 @@ def load_policy(path=DEFAULT_POLICY):
         quarantine_roots=roots, sources=dict(sources))
 
 
+def _toml_string(text):
+    """`text` as a TOML basic string. JSON's escapes are TOML's, except that JSON writes a character beyond the
+    Basic Multilingual Plane as two surrogate escapes, which TOML refuses, and leaves DEL alone, which TOML
+    forbids unescaped."""
+    out = json.dumps(text, ensure_ascii=False).replace('\x7f', '\\u007f')
+    out.encode('utf-8')          # a lone surrogate (an undecodable file name byte) cannot be written
+    return out
+
+
 def write_default_policy(path=DEFAULT_POLICY, *, replace=False):
     path = Path(path).expanduser()
     if path.exists() and not replace:
         raise ResponseError(f'{path} exists; edit it, or pass --replace to start again from the defaults')
-    _atomic_write(path, DEFAULT_POLICY_TEXT.encode('utf-8'))
+    # The network audit store as `megalodon run` started here creates it, written out in full: the scheduled pass
+    # runs from another folder, where the relative default names nothing.
+    text = DEFAULT_POLICY_TEXT
+    try:
+        text = text.replace('audit_db = "data/megalodon.db"',
+                            f'audit_db = {_toml_string(str(Path("data/megalodon.db").resolve()))}', 1)
+    except UnicodeEncodeError:
+        pass        # a folder name that is not UTF-8 cannot be written in TOML: the relative default stays
+    _atomic_write(path, text.encode('utf-8'))
     return dict(action='init', policy=str(path), playbooks=len(load_policy(path).playbooks),
                 note='Shadow mode: decisions are recorded, never carried out. Review the playbooks before use.')
 
@@ -644,7 +662,10 @@ def network_signals(db_path, cursor, now):
     """Unsuppressed network detections after `cursor`, read-only."""
     path = Path(db_path).expanduser()
     if not path.is_file():
-        raise ResponseError(f'no audit store at {path}')
+        hint = '' if path.is_absolute() else (
+            f' ({db_path} is looked for from {Path.cwd()}: set audit_db in the response policy to the full path of '
+            "the database `megalodon run` writes)")
+        raise ResponseError(f'no audit store at {path.resolve()}{hint}')
     connection = sqlite3.connect(f'{path.resolve().as_uri()}?mode=ro', uri=True, timeout=5)
     try:
         rows = connection.execute(

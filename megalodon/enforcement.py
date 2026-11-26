@@ -674,21 +674,37 @@ def _state(path):
         raise EnforcementError(f'{target} is not valid JSON') from None
 
 
+def _complete_lines(path, offset):
+    with open(path, 'rb') as stream:
+        stream.seek(offset)
+        data = stream.read(16 * 1024 * 1024)
+    return data[:data.rfind(b'\n') + 1]
+
+
 def _decisions(ledger, state):
     """Decisions appended to the ledger since the last run."""
     target = Path(ledger).expanduser()
     if not target.exists():
         return []
     info = target.stat()
-    offset = state.get('offset', 0) if state.get('inode') == info.st_ino and state.get('offset', 0) <= info.st_size \
-        else 0
-    with open(target, 'rb') as stream:
-        stream.seek(offset)
-        data = stream.read(16 * 1024 * 1024)
-    complete = data[:data.rfind(b'\n') + 1]
+    saved, offset = state.get('inode'), state.get('offset', 0)
+    earlier = b''
+    if saved == info.st_ino and offset <= info.st_size:
+        pass
+    else:
+        # The engine rotates a full ledger to `.1`: what it appended after the last run is at the end of that copy.
+        rotated = target.with_name(target.name + '.1')
+        try:
+            before = rotated.stat()
+            if saved is not None and before.st_ino == saved and offset <= before.st_size:
+                earlier = _complete_lines(rotated, offset)
+        except OSError:
+            pass
+        offset = 0
+    complete = _complete_lines(target, offset)
     state.update(inode=info.st_ino, offset=offset + len(complete))
     out = []
-    for line in complete.splitlines():
+    for line in (earlier + complete).splitlines():
         try:
             out.append(json.loads(line))
         except ValueError:
@@ -849,6 +865,14 @@ def _admit():
         raise EnforcementError('this process is in Stage 0: no effects are allowed') from None
 
 
+CONTAIN_FIRST = ('suspend_process', 'block_address')
+
+
+def _in_order(plans):
+    """A decision's plans with containment first, each group in the playbook's order."""
+    return sorted(plans, key=lambda plan: plan.get('action') not in CONTAIN_FIRST)
+
+
 def _run(*, policy, response_policy, ledger, journal, state_path, now, executor, dry_run, protected, rules=None):
     if rules is None:
         rules = engine.load_policy(response_policy)
@@ -871,7 +895,10 @@ def _run(*, policy, response_policy, ledger, journal, state_path, now, executor,
                   and e.get('action') not in ('collect_evidence', 'notify') and _parse(e['at']) >= hour_ago})
     applied, refused, records = [], [], []
     for decision in decisions:
-        for plan in decision.get('actions', []):
+        # Containment first: the process is paused, and the address blocked, before evidence is collected, which
+        # can take a while; a process encrypting files or holding a shell would otherwise go on meanwhile. The
+        # other actions keep the playbook's order.
+        for plan in _in_order(decision.get('actions', [])):
             if plan.get('status') != 'would_apply' or plan['action'] not in policy['actions']:
                 continue
             key = hashlib.sha256(json.dumps([decision['decided_at'], decision['signal']['key'], plan['action'],

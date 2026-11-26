@@ -184,7 +184,11 @@ def load_settings(path: str | Path | None = None) -> Settings:
     else:
         config_path = Path(path)
         with config_path.open("rb") as handle:
-            raw = tomllib.load(handle)
+            try:
+                raw = tomllib.load(handle)
+            except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+                # A settings file that does not parse is a settings error, as a bad value is: callers report it.
+                raise ValidationError(f"{config_path} is not valid TOML: {exc}") from None
 
     return _settings_from_mapping(raw)
 

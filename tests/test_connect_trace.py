@@ -416,7 +416,10 @@ def test_live_a_short_connection_is_named_by_the_program_that_made_it(tmp_path):
     reader = threading.Thread(target=read)
     reader.start()
     try:
-        subprocess.run([str(copy), '-c', f'import socket; socket.create_connection(("127.0.0.1", {port})).close()'],
+        # The connection is short; the program stays a moment after closing it, so the watch reads it from /proc
+        # however loaded the machine is (it exited at once before, and under load was sometimes gone by then).
+        subprocess.run([str(copy), '-c', f'import socket, time; socket.create_connection(("127.0.0.1", {port})).close()'
+                                         '; time.sleep(2)'],
                        env=dict(os.environ, PYTHONHOME=sys.base_prefix), check=True, timeout=30)
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline and not any(e['port'] == port for e in seen):

@@ -356,6 +356,47 @@ def _read(path):
     return value
 
 
+def progress_path(manifest):
+    """Where a check with ``advance`` records the logs as it last saw them: beside the reviewed baseline, which
+    then changes only at ``baseline`` and ``accept``. The tamper check watches the baseline; this file changes on
+    every scheduled check by design, so it is not trusted alone (see _floor)."""
+    path = Path(manifest).expanduser()
+    return path.with_name(f'{path.stem}-progress{path.suffix}')
+
+
+def _current(manifest):
+    """The record a check compares with: what the last check with ``advance`` recorded, else the baseline."""
+    progress = progress_path(manifest)
+    return (_read(progress), progress) if os.path.lexists(progress) else (_read(manifest), Path(manifest).expanduser())
+
+
+FLOOR_NOTE = ('Compared with the reviewed baseline: this is still the file the review saw, and no rotated copy holds '
+              'what it had. If it is rotated by copying and emptying it (copytruncate), or is a new log that was given '
+              "the old one's inode, review it and run accept.")
+
+
+def _floor(reviewed, new):
+    """The logs the reviewed baseline still speaks for: those that are the same file (device and inode) now.
+
+    The progress file changes on every scheduled check, so the tamper check does not watch it; it watches the
+    baseline. Anything able to write the sensor's files could rewrite the progress to match a log it cut back.
+    A log that is still the reviewed file can only have grown since the review, or its earlier content must be
+    in a rotated copy, so it is compared with the baseline as well, which no rewritten progress can hide. A log
+    rotated since (a new file) is followed by the progress alone: its recorded content may long be gone."""
+    logs = {name: record for name, record in reviewed['logs'].items()
+            if record.get('kind') == 'file' and isinstance(new['logs'].get(name), dict)
+            and (new['logs'][name].get('device'), new['logs'][name].get('inode'))
+            == (record.get('device'), record.get('inode'))}
+    return dict(reviewed, logs=logs)
+
+
+def _forget_progress(manifest):
+    try:
+        os.unlink(progress_path(manifest))
+    except FileNotFoundError:
+        pass
+
+
 def _journals(options, previous=None):
     return journal_integrity.snapshot(root=options.get('root', '/'), previous=previous)
 
@@ -372,6 +413,7 @@ def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, previous=None, **optio
     state = snapshot(**options)
     journals = _journals(options, (previous or {}).get('journals'))
     _write(path, dict(schema=SCHEMA, recorded_at=_now(), journals=journals, **state))
+    _forget_progress(path)
     return dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), logs=sorted(state['logs']),
                 gaps=state['gaps'], journals=_journal_summary(journals))
 
@@ -381,14 +423,31 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
     finding is then recorded as it is now, so the next check covers what was
     written since, and rotation does not pile up. A log with a finding keeps its
     old record, and is reported again until ``accept``."""
-    old = _read(manifest)
+    old, compared_with = _current(manifest)
     new = snapshot(**options)
     findings, rotated = compare(old, new, root=options.get('root', '/'))
     old_journals = old.get('journals') or {}
     journals = _journals(options, old_journals)
     journal_findings, explained = journal_integrity.compare(old_journals, journals)
+    reviewed_files = {}   # the reviewed record of each journal file found against the baseline
+    if compared_with != Path(manifest).expanduser():
+        # The reviewed baseline is the floor; see _floor. Journal files are named by a random ID, never reused,
+        # so every reviewed file still present is held to what the review saw.
+        reviewed = _read(manifest)
+        noticed = {item['log'] for item in findings}
+        for item in compare(_floor(reviewed, new), new, root=options.get('root', '/'))[0]:
+            if item['log'] not in noticed:
+                findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline',
+                                                       note=FLOOR_NOTE)))
+        held_files = {item['journal_file_id'] for item in journal_findings}
+        present = {file_id: record for file_id, record in (reviewed.get('journals') or {}).get('files', {}).items()
+                   if file_id in journals['files'] and file_id not in held_files}
+        for item in journal_integrity.compare(dict(files=present), journals)[0]:
+            journal_findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline')))
+            reviewed_files[item['journal_file_id']] = present[item['journal_file_id']]
     findings = sorted(findings + journal_findings, key=lambda item: (-RANK[item['severity']], item['log']))
     report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
+                  compared_with=str(compared_with),
                   baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
                   rotated=rotated, new_logs=sorted(set(new['logs']) - set(old['logs'])), gaps=new['gaps'],
                   journals=dict(_journal_summary(journals), explained=explained,
@@ -404,14 +463,17 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
         held = {item['journal_file_id'] for item in journal_findings} | {
             file_id for file_id, record in old_journals.get('files', {}).items() if record['path'] in journals['gaps']}
         files = {file_id: record for file_id, record in journals['files'].items() if file_id not in held}
-        files.update({file_id: old_journals['files'][file_id] for file_id in held})
-        _write(manifest, dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs, gaps=new['gaps'],
-                              journals=dict(journals, files=files)))
+        # A file found against the reviewed baseline may have left the progress (vacuumed, then brought back):
+        # it keeps the reviewed record, so it is reported until accept.
+        files.update({file_id: old_journals.get('files', {}).get(file_id) or reviewed_files[file_id]
+                      for file_id in held})
+        _write(progress_path(manifest), dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs,
+                                             gaps=new['gaps'], journals=dict(journals, files=files)))
         report.update(advanced=sorted(set(logs) - kept),
                       note='Logs without a finding were recorded as they are now. Run accept after reviewing.')
     return report
 
 
 def accept(manifest=DEFAULT_MANIFEST, **options):
-    old = _read(manifest)
+    old, _ = _current(manifest)
     return dict(baseline(manifest, replace=True, previous=old, **options), action='accept')

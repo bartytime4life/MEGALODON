@@ -645,7 +645,7 @@ def build_parser() -> argparse.ArgumentParser:
                        ("remove-url", "remove a heartbeat destination other than the first")):
         command = heartbeat_sub.add_parser(name, help=text)
         command.add_argument("url", help="the destination, as given to `heartbeat init`")
-    command = heartbeat_sub.add_parser("send", help="post one signed heartbeat (exit 1 if it could not be delivered)")
+    command = heartbeat_sub.add_parser("send", help="post one signed heartbeat (exit 2 if it could not be delivered)")
     command.add_argument("--print", action="store_true", dest="print_only",
                          help="print the heartbeat instead of posting it")
     command = heartbeat_sub.add_parser("monitor", help="on another machine: report heartbeats that went silent, "
@@ -1745,7 +1745,7 @@ def _logwatch(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f"{f['rule_id']} {f['log']}" for f in findings[:5])
             dispatcher.submit([HostNotice(
@@ -1802,7 +1802,7 @@ def _persistence(args: argparse.Namespace) -> int:
             dispatcher = dispatcher_for(settings.alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             top = findings[0]
             listed = "; ".join(f"{f['change']} {f['category']} {f['location']}" for f in findings[:5])
@@ -1842,7 +1842,7 @@ def _listeners(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             top = findings[0]
             listed = "; ".join(
@@ -2088,7 +2088,7 @@ def _webroot(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
@@ -2251,7 +2251,7 @@ def _ebpf(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
@@ -2305,7 +2305,7 @@ def _hardening(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
@@ -2341,7 +2341,7 @@ def _packages(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
@@ -2383,7 +2383,7 @@ def _secrets(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             # The details name places and kinds of secrets, never their values.
             listed = "; ".join(f["detail"] for f in findings[:5])
@@ -2524,7 +2524,7 @@ def _containers(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
@@ -2615,7 +2615,7 @@ def _boot(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
@@ -2649,7 +2649,7 @@ def _logins(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             dispatcher.submit([HostNotice(f["rule_id"], f["severity"], datetime.now(timezone.utc), f["detail"],
                                           tuple(f["techniques"]), f["summary"]) for f in findings[:10]])
@@ -2795,7 +2795,7 @@ def _tamper(args: argparse.Namespace) -> int:
     findings = result.get("findings", [])
     if args.tamper_command == "check" and args.alert and findings:
         if not _tamper_alert(args, findings, "MEGALODON's own code, schedule or configuration changed."):
-            return 1
+            return 2
     return 1 if findings else 0
 
 
@@ -2831,12 +2831,12 @@ def _heartbeat(args: argparse.Namespace) -> int:
             result = dict(sequence=body["sequence"], findings=len(body["findings"]))
             if len(delivered) == 1:
                 if "error" in delivered[0]:
-                    return 1
+                    return 2
                 result["status"] = delivered[0]["status"]
             else:
                 result["destinations"] = delivered
             print(json.dumps(result, sort_keys=True))
-            return 0 if all(200 <= d.get("status", 0) < 300 for d in delivered) else 1
+            return 0 if all(200 <= d.get("status", 0) < 300 for d in delivered) else 2
         key = read_secret(str(args.key_file))
         if args.input:
             with open(args.input, encoding="utf-8", errors="replace") as stream:
@@ -2875,7 +2875,7 @@ def _vulns(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(findings[0]["rule_id"], findings[0]["severity"], datetime.now(timezone.utc),
@@ -3038,7 +3038,7 @@ def _rootkit(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             listed = "; ".join(f["detail"] for f in findings[:5])
             dispatcher.submit([HostNotice(
@@ -3079,7 +3079,7 @@ def _binaries(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is not None:
             top = findings[0]
             listed = "; ".join(f"{f['rule_id']} {f['path']}" for f in findings[:5])
@@ -3179,7 +3179,7 @@ def _evidence(args: argparse.Namespace) -> int:
                 args.config or Path.home() / ".config/megalodon/settings.toml").alerts)
         except (ValidationError, OSError) as exc:
             print(f"megalodon: alerts unavailable: {exc}", file=sys.stderr)
-            return 1
+            return 2
         if dispatcher is None:
             print("megalodon: alerts are off in the settings; the digest was not sent", file=sys.stderr)
             return 1
@@ -3855,6 +3855,18 @@ def _live_apply_requested(argv: list[str]) -> bool:
         if argument.startswith("--a") and "--apply".startswith(argument):
             return True
     return False
+
+
+def entry(argv: list[str] | None = None) -> None:
+    """The `megalodon` command and `python -m megalodon`. Exit 1 means findings, 2 an error: the scheduler counts
+    exit 1 as a successful run that found something (SuccessExitStatus=1), so an unexpected error, which Python
+    would end with 1, exits 2. `main` still raises, for callers that run a command in-process."""
+    try:
+        main(argv)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        raise SystemExit(2) from None
 
 
 def main(argv: list[str] | None = None) -> None:

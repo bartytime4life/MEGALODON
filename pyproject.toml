@@ -19,7 +19,7 @@ geo = ["maxminddb>=2,<4"]
 knowledge = ["PyYAML>=6.0.3,<7"]
 
 [project.scripts]
-megalodon = "megalodon.cli:main"
+megalodon = "megalodon.cli:entry"
 megalodon-evaluate = "megalodon.evaluation:main"
 megalodon-local-manage = "megalodon.local_install:main"
 

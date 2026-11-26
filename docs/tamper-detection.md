@@ -89,10 +89,11 @@ megalodon heartbeat send
   - the local check's current findings;
   - an HMAC-SHA256 signature over all of it.
 
-  It exits 1 if the heartbeat could not be delivered. With more than one
-  destination, the same signed heartbeat goes to each. One that cannot be
-  reached is listed under `destinations` with its error and does not stop
-  the rest, but `send` still exits 1. `--print` prints the heartbeat
+  It exits 2 if the heartbeat could not be delivered, so the scheduled unit
+  shows a failure (the scheduler counts exit 1 as a run that found
+  something). With more than one destination, the same signed heartbeat
+  goes to each. One that cannot be reached is listed under `destinations`
+  with its error and does not stop the rest, but `send` still exits 2. `--print` prints the heartbeat
   instead.
 
 `megalodon schedule install` sends one every 5 minutes and runs the tamper
@@ -147,6 +148,12 @@ collect evidence and notify you of HIGH and CRITICAL findings.
   Watch the off-machine record, not only the local report.
 * **Upgrades change the code.** After upgrading MEGALODON, run
   `megalodon tamper accept`. Likewise, after `accept` in another watch,
-  `BASELINE_CHANGED` is expected.
+  `BASELINE_CHANGED` is expected. The scheduled `logwatch check --advance`
+  does not set it off: what it records as it goes is kept in
+  `log-integrity-progress.json`, which is not watched, and the reviewed
+  baseline changes only at `logwatch accept`. A rewritten progress file
+  cannot hide a log cut back in place: the log check still holds every log
+  that is the file you reviewed to the watched baseline
+  ([log integrity](log-integrity.md)).
 * **The heartbeat proves the sender holds the key and is running.** It does
   not prove the machine is uncompromised.

@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import inspect
 import json
+import re
 import os
 from pathlib import Path
 import stat
@@ -159,10 +160,11 @@ def test_backdoor_accounts_are_locked_but_never_root(paths):
 
 def test_quarantine_never_touches_system_files(paths):
     with open(paths["policy_path"], "a", encoding="utf-8") as out:
-        out.write('\n[[response.playbook]]\nname = "dropped-program"\nrules = ["PROGRAM_ADDED"]\n'
+        # A rule no default playbook decides, so this one does.
+        out.write('\n[[response.playbook]]\nname = "dropped-program"\nrules = ["PROGRAM_CHANGED"]\n'
                   'min_severity = "MEDIUM"\nactions = ["quarantine_file"]\n')
-    report = {"checked_at": "", "findings": [{"rule_id": "PROGRAM_ADDED", "severity": "HIGH", "path": "/usr/bin/x"},
-                                             {"rule_id": "PROGRAM_ADDED", "severity": "HIGH", "path": "/tmp/x"}]}
+    report = {"checked_at": "", "findings": [{"rule_id": "PROGRAM_CHANGED", "severity": "HIGH", "path": "/usr/bin/x"},
+                                             {"rule_id": "PROGRAM_CHANGED", "severity": "HIGH", "path": "/tmp/x"}]}
     re_.run(signals=re_.path_signals(report, "binaries", "path"), now=NOW, **paths)
     assert [actions(d)[0] for d in ledger(paths)] == [("quarantine_file", "/usr/bin/x", "refused"),
                                                      ("quarantine_file", "/tmp/x", "would_apply")]
@@ -180,7 +182,8 @@ def test_network_detections_are_read_once_from_the_audit_store(paths, tmp_path):
         service = MegalodonService(settings, store)
         for event in iter_sample(include_demo_threat=True):
             service.process(event)
-    edit_policy(paths, 'audit_db = "data/megalodon.db"', f'audit_db = "{settings.db_path}"')
+    written = re.search(r'^audit_db = .*$', paths["policy_path"].read_text(), re.M).group(0)
+    edit_policy(paths, written, f'audit_db = "{settings.db_path}"')
     edit_policy(paths, "process_review = true", "process_review = false")
     edit_policy(paths, 'ancestry_allow_file = "~/.config/megalodon/ancestry-allow.json"', 'ancestry_allow_file = ""')
     edit_policy(paths, "rootkit_check = true", "rootkit_check = false")
@@ -323,3 +326,36 @@ def test_a_host_finding_still_present_keeps_its_incident_open(paths):
     assert beacon["signal"]["rule_id"] == "BEACONING" and beacon["incident"]["corroborated"] is True
     assert ("block_address", C2, "would_apply") in actions(beacon)
     assert len(ledger(paths)) == 2, "the repeated host finding is not decided again"
+
+
+def test_init_writes_the_audit_store_in_full_and_a_missing_one_says_what_to_set(paths, tmp_path, monkeypatch):
+    # The scheduled pass runs from another folder than `megalodon run`: a relative path would name nothing there.
+    written = re.search(r'^audit_db = "(.*)"$', paths["policy_path"].read_text(), re.M).group(1)
+    assert Path(written).is_absolute() and written.endswith("data/megalodon.db")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(re_.ResponseError) as missing:
+        re_.network_signals("data/megalodon.db", 0, NOW)
+    assert str(tmp_path / "data/megalodon.db") in str(missing.value) and "set audit_db" in str(missing.value)
+    with pytest.raises(re_.ResponseError) as absolute:
+        re_.network_signals(str(tmp_path / "gone.db"), 0, NOW)
+    assert "set audit_db" not in str(absolute.value)
+
+
+@pytest.mark.parametrize("name", ["\U0001F600", 'a "quoted" \\ folder', "del\x7fhere", "tab\there"])
+def test_init_writes_any_folder_as_valid_toml(tmp_path, monkeypatch, name):
+    # json.dumps writes \U0001F600 as a surrogate pair, which TOML refuses; DEL must be escaped too.
+    folder = tmp_path / name
+    folder.mkdir()
+    monkeypatch.chdir(folder)
+    policy = tmp_path / "policy.toml"
+    re_.write_default_policy(policy)
+    assert re_.load_policy(policy).sources["audit_db"] == str(folder / "data/megalodon.db")
+
+
+def test_a_folder_name_that_is_not_utf8_keeps_the_relative_store(tmp_path, monkeypatch):
+    folder = os.path.join(os.fsencode(tmp_path), b"bad\xff")
+    os.mkdir(folder)
+    monkeypatch.chdir(folder)             # restores the original folder for the tests that follow
+    policy = tmp_path / "policy.toml"
+    re_.write_default_policy(policy)
+    assert re_.load_policy(policy).sources["audit_db"] == "data/megalodon.db"
