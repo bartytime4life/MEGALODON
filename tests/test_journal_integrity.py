@@ -277,7 +277,7 @@ def test_corrupt_files_are_listed_and_hashed(machine):
     found, report = check(manifest, root, advance=True)
     assert found == set()
     assert report["journals"]["corrupt"] == ["/var/log/journal/%s/system@0000-0000.journal~" % MACHINE]
-    stored = json.loads(manifest.read_text())["journals"]["files"]
+    stored = json.loads(li.progress_path(manifest).read_text())["journals"]["files"]
     assert len(next(r for r in stored.values() if r["dirty"])["sha256"]) == 64
 
 
@@ -369,3 +369,13 @@ def test_vacuuming_that_takes_the_newest_records_is_reported(machine):
     journal(folder / "system.journal", head=251, tail=252)
     rotated.unlink()
     assert ("JOURNAL_FILE_DELETED", "system.journal") in check(manifest, root)[0]
+
+
+def test_accept_reuses_the_digests_the_last_advancing_check_recorded(machine, monkeypatch):
+    # A file archived since the baseline is hashed by the check that first sees it; accept does not read it again.
+    root, folder, manifest = machine
+    archive(folder, 251, 300)
+    li.check(manifest, root=str(root), advance=True)
+    monkeypatch.setattr(ji, "_digest", lambda path: pytest.fail(f"{path} was read again"))
+    li.accept(manifest, root=str(root))
+    assert not li.progress_path(manifest).exists()

@@ -109,6 +109,14 @@ record, so it is reported at every check until you review it and run
 `accept`. A log that cannot be read keeps its record too, even when a rotated
 copy explains its absence, and is compared again once it can be read.
 
+The logs as a check with `--advance` last saw them are kept beside the
+baseline, in `~/.config/megalodon/log-integrity-progress.json` (mode 600),
+and the next check compares with that. The baseline itself changes only at
+`baseline` and `accept`, which also remove the progress file and start again
+from the logs as they are. So the [tamper check](tamper-detection.md), which
+watches the baseline, is not set off by every scheduled check, and still
+reports a baseline that was changed.
+
 ## What is stored
 
 For each log, the baseline stores its inode, device, size, owner, mode, a

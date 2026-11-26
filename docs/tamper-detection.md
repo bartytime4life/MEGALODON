@@ -147,6 +147,9 @@ collect evidence and notify you of HIGH and CRITICAL findings.
   Watch the off-machine record, not only the local report.
 * **Upgrades change the code.** After upgrading MEGALODON, run
   `megalodon tamper accept`. Likewise, after `accept` in another watch,
-  `BASELINE_CHANGED` is expected.
+  `BASELINE_CHANGED` is expected. The scheduled `logwatch check --advance`
+  does not set it off: what it records as it goes is kept in
+  `log-integrity-progress.json`, which is not watched, and the reviewed
+  baseline changes only at `logwatch accept`.
 * **The heartbeat proves the sender holds the key and is running.** It does
   not prove the machine is uncompromised.

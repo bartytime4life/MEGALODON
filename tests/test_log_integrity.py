@@ -239,12 +239,12 @@ def test_advance_keeps_the_record_of_a_log_with_a_finding(logs):
     first = li.check(manifest, advance=True, **options)
     assert {f["rule_id"] for f in first["findings"]} == {"LOG_TRUNCATED"}
     assert "/var/log/auth.log" not in first["advanced"] and "/var/log/syslog" in first["advanced"]
-    stored = json.loads(manifest.read_text())["logs"]
+    stored = json.loads(li.progress_path(manifest).read_text())["logs"]
     assert stored["/var/log/auth.log"]["size"] == len(LINES)
     assert stored["/var/log/syslog"]["size"] > len(LINES)
     again = li.check(manifest, advance=True, **options)
     assert {(f["rule_id"], f["log"]) for f in again["findings"]} == {("LOG_TRUNCATED", "/var/log/auth.log")}
-    assert manifest.stat().st_mode & 0o777 == 0o600
+    assert li.progress_path(manifest).stat().st_mode & 0o777 == 0o600
 
 
 def test_without_advance_check_writes_nothing(logs):
@@ -253,7 +253,7 @@ def test_without_advance_check_writes_nothing(logs):
     with open(folder / "syslog", "a", encoding="utf-8") as out:
         out.write("Nov 18 09:00:00 host service[1]: later entry\n")
     assert "advanced" not in li.check(manifest, **options)
-    assert manifest.read_bytes() == before
+    assert manifest.read_bytes() == before and not li.progress_path(manifest).exists()
 
 
 def test_an_unreadable_log_is_reported_and_keeps_its_record_when_advancing(logs, monkeypatch):
@@ -264,7 +264,7 @@ def test_an_unreadable_log_is_reported_and_keeps_its_record_when_advancing(logs,
     report = li.check(manifest, advance=True, **options)
     monkeypatch.setattr(li, "_identity", real)
     assert "/var/log/syslog" in report["gaps"] and "/var/log/syslog" not in report["advanced"]
-    assert "/var/log/syslog" in json.loads(manifest.read_text())["logs"]
+    assert "/var/log/syslog" in json.loads(li.progress_path(manifest).read_text())["logs"]
 
 
 def test_a_baseline_from_before_whole_content_digests_still_works(logs):
@@ -322,7 +322,7 @@ def test_cli_advance_and_the_schedule_uses_it(logs, monkeypatch, capsys):
     with pytest.raises(SystemExit) as exit_:
         main(["logwatch", "check", "--advance", "--manifest", str(manifest)])
     assert exit_.value.code == 0 and "/var/log/syslog" in json.loads(capsys.readouterr().out)["advanced"]
-    assert json.loads(manifest.read_text())["logs"]["/var/log/syslog"]["size"] > len(LINES)
+    assert json.loads(li.progress_path(manifest).read_text())["logs"]["/var/log/syslog"]["size"] > len(LINES)
     from megalodon import schedule
     job = next(job for job in schedule.JOBS if job.name == "logwatch")
     assert job.command == ("logwatch", "check", "--alert", "--advance")
@@ -354,3 +354,61 @@ def test_an_unreadable_log_explained_by_a_rotated_copy_keeps_its_record(logs, mo
     (folder / "auth.log.1").unlink()
     found, _ = rules(manifest, options)
     assert found == {("LOG_REWRITTEN", "/var/log/auth.log")}, "an edit made while it was unreadable is found"
+
+
+def test_advance_leaves_the_reviewed_baseline_alone(logs):
+    # The scheduled check advances every 15 minutes; the tamper check watches the baseline, which changes only at
+    # baseline and accept.
+    folder, options, manifest = logs
+    before = manifest.read_bytes()
+    with open(folder / "syslog", "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:00:00 host service[1]: later entry\n")
+    report = li.check(manifest, advance=True, **options)
+    assert "/var/log/syslog" in report["advanced"] and manifest.read_bytes() == before
+    assert report["compared_with"] == str(manifest)
+    progress = li.progress_path(manifest)
+    assert progress.name == "logs-progress.json" and progress.stat().st_mode & 0o777 == 0o600
+    assert li.progress_path(li.DEFAULT_MANIFEST).name == "log-integrity-progress.json"
+    # The next check compares with what the last one recorded: an appended line is not compared again.
+    again = li.check(manifest, **options)
+    assert again["compared_with"] == str(progress) and again["findings"] == []
+
+
+@pytest.mark.parametrize("step", ["accept", "baseline"])
+def test_accept_and_a_new_baseline_record_the_logs_and_start_again(logs, step):
+    folder, options, manifest = logs
+    with open(folder / "syslog", "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:00:00 host service[1]: later entry\n")
+    li.check(manifest, advance=True, **options)
+    if step == "accept":
+        li.accept(manifest, **options)
+    else:
+        li.baseline(manifest, replace=True, **options)
+    assert not li.progress_path(manifest).exists()
+    assert json.loads(manifest.read_text())["logs"]["/var/log/syslog"]["size"] > len(LINES)
+
+
+def test_a_progress_file_must_be_private_too(logs):
+    folder, options, manifest = logs
+    li.check(manifest, advance=True, **options)
+    os.chmod(li.progress_path(manifest), 0o644)
+    with pytest.raises(li.LogIntegrityError, match="mode-600"):
+        li.check(manifest, **options)
+
+
+def test_the_tamper_check_stays_quiet_while_the_log_check_advances(logs, tmp_path):
+    from megalodon import tamper
+    folder, options, _ = logs
+    config = tmp_path / "config"
+    manifest = config / "log-integrity.json"          # the name the tamper check watches
+    li.baseline(manifest, **options)
+    units, recorded = tmp_path / "units", tmp_path / "tamper.json"
+    units.mkdir()
+    tamper.baseline(recorded, config_dir=config, unit_dir=units, system=False)
+    with open(folder / "syslog", "a", encoding="utf-8") as out:
+        out.write("Nov 18 09:00:00 host service[1]: later entry\n")
+    li.check(manifest, advance=True, **options)
+    li.check(manifest, advance=True, **options)
+    assert tamper.check(recorded, runner=lambda *a: None)["findings"] == []
+    li.accept(manifest, **options)                       # a reviewed change to the baseline is still seen
+    assert [f["rule_id"] for f in tamper.check(recorded, runner=lambda *a: None)["findings"]] == ["BASELINE_CHANGED"]

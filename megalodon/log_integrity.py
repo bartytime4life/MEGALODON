@@ -356,6 +356,27 @@ def _read(path):
     return value
 
 
+def progress_path(manifest):
+    """Where a check with ``advance`` records the logs as it last saw them: beside the reviewed baseline, which
+    then changes only at ``baseline`` and ``accept``. The tamper check watches the baseline; this file changes on
+    every scheduled check by design."""
+    path = Path(manifest).expanduser()
+    return path.with_name(f'{path.stem}-progress{path.suffix}')
+
+
+def _current(manifest):
+    """The record a check compares with: what the last check with ``advance`` recorded, else the baseline."""
+    progress = progress_path(manifest)
+    return (_read(progress), progress) if os.path.lexists(progress) else (_read(manifest), Path(manifest).expanduser())
+
+
+def _forget_progress(manifest):
+    try:
+        os.unlink(progress_path(manifest))
+    except FileNotFoundError:
+        pass
+
+
 def _journals(options, previous=None):
     return journal_integrity.snapshot(root=options.get('root', '/'), previous=previous)
 
@@ -372,6 +393,7 @@ def baseline(manifest=DEFAULT_MANIFEST, *, replace=False, previous=None, **optio
     state = snapshot(**options)
     journals = _journals(options, (previous or {}).get('journals'))
     _write(path, dict(schema=SCHEMA, recorded_at=_now(), journals=journals, **state))
+    _forget_progress(path)
     return dict(schema=REPORT_SCHEMA, action='baseline', manifest=str(path), logs=sorted(state['logs']),
                 gaps=state['gaps'], journals=_journal_summary(journals))
 
@@ -381,7 +403,7 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
     finding is then recorded as it is now, so the next check covers what was
     written since, and rotation does not pile up. A log with a finding keeps its
     old record, and is reported again until ``accept``."""
-    old = _read(manifest)
+    old, compared_with = _current(manifest)
     new = snapshot(**options)
     findings, rotated = compare(old, new, root=options.get('root', '/'))
     old_journals = old.get('journals') or {}
@@ -389,6 +411,7 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
     journal_findings, explained = journal_integrity.compare(old_journals, journals)
     findings = sorted(findings + journal_findings, key=lambda item: (-RANK[item['severity']], item['log']))
     report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
+                  compared_with=str(compared_with),
                   baseline_recorded_at=old.get('recorded_at'), checked_at=_now(), findings=findings,
                   rotated=rotated, new_logs=sorted(set(new['logs']) - set(old['logs'])), gaps=new['gaps'],
                   journals=dict(_journal_summary(journals), explained=explained,
@@ -405,13 +428,13 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
             file_id for file_id, record in old_journals.get('files', {}).items() if record['path'] in journals['gaps']}
         files = {file_id: record for file_id, record in journals['files'].items() if file_id not in held}
         files.update({file_id: old_journals['files'][file_id] for file_id in held})
-        _write(manifest, dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs, gaps=new['gaps'],
-                              journals=dict(journals, files=files)))
+        _write(progress_path(manifest), dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs,
+                                             gaps=new['gaps'], journals=dict(journals, files=files)))
         report.update(advanced=sorted(set(logs) - kept),
                       note='Logs without a finding were recorded as they are now. Run accept after reviewing.')
     return report
 
 
 def accept(manifest=DEFAULT_MANIFEST, **options):
-    old = _read(manifest)
+    old, _ = _current(manifest)
     return dict(baseline(manifest, replace=True, previous=old, **options), action='accept')
