@@ -193,6 +193,7 @@ or source basis.
 | [Hardening drift: weaker protections and quiet ways to root](hardening-drift.md) | `docs/hardening-drift.md` |
 | [Package sources and signing keys: who may sign what gets installed](package-sources.md) | `docs/package-sources.md` |
 | [Exposed secrets: keys, tokens and passwords others can read](exposed-secrets.md) | `docs/exposed-secrets.md` |
+| [Security report: the whole machine, in plain language](security-report.md) | `docs/security-report.md` |
 | [Incident timeline: each incident's findings, decisions and actions in order](incident-timeline.md) | `docs/incident-timeline.md` |
 | [Command log: every started program, in a log that cannot be quietly rewritten](command-log.md) | `docs/command-log.md` |
 | [Evidence off the machine: the command log and evidence bundles copied to the fleet collector](evidence-shipping.md) | `docs/evidence-shipping.md` |

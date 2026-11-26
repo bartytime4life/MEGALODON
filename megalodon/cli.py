@@ -470,6 +470,14 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--config", type=Path,
                                  help="settings file for --alert (default ~/.config/megalodon/settings.toml)")
 
+    report = sub.add_parser(
+        "report", help="one security report for this machine in plain language: every check's latest result, "
+                       "incidents, how the protection is set up, and your choices for each finding")
+    report.add_argument("--format", choices=("text", "html", "json"), default="text",
+                        help="text for the terminal (default), html for a page to open, json for programs")
+    report.add_argument("--output", type=Path,
+                        help="write the report to this file, mode 600, instead of printing it")
+    report.add_argument("--hours", type=int, default=168, help="incidents of the last HOURS (default a week)")
     timeline = sub.add_parser(
         "timeline", help="each incident's findings, decisions and actions in order, from every check")
     timeline_sub = timeline.add_subparsers(dest="timeline_command", required=True)
@@ -1737,6 +1745,7 @@ def _logwatch(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.logwatch_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -1794,6 +1803,7 @@ def _persistence(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.persistence_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -1834,6 +1844,7 @@ def _listeners(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.listeners_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -1952,6 +1963,7 @@ def _ancestry(args: argparse.Namespace) -> int:
             print(f"megalodon: {exc}", file=sys.stderr)
             return 2
         print(json.dumps(report, indent=2, sort_keys=True))
+        _keep(args, report)
         for found in report["findings"][:10]:
             notify(found)
         return 1 if report["findings"] else 0
@@ -2054,6 +2066,7 @@ def _devices(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     for found in findings[:10]:
         notify(found)
@@ -2080,6 +2093,7 @@ def _webroot(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.webroot_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2219,6 +2233,7 @@ def _egress(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     for found in findings[:10]:
         notify(found)
@@ -2243,6 +2258,7 @@ def _ebpf(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.ebpf_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2297,6 +2313,7 @@ def _hardening(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.hardening_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2333,6 +2350,7 @@ def _packages(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.packages_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2375,6 +2393,7 @@ def _secrets(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.secrets_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2516,6 +2535,7 @@ def _containers(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.containers_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2607,6 +2627,7 @@ def _boot(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.boot_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2641,6 +2662,7 @@ def _logins(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.logins_command == "check" and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -2691,6 +2713,7 @@ def _credentials(args: argparse.Namespace) -> int:
         if args.credentials_command == "check":
             report = credentials.check(allow_path=allow_file)
             print(json.dumps(report, indent=2, sort_keys=True))
+            _keep(args, report)
             for found in report["findings"][:10]:
                 notify(found)
             return 1 if report["findings"] else 0
@@ -2792,6 +2815,7 @@ def _tamper(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(_sanitize_tamper_output(result), indent=2, sort_keys=True))
+    _keep(args, _sanitize_tamper_output(result))
     findings = result.get("findings", [])
     if args.tamper_command == "check" and args.alert and findings:
         if not _tamper_alert(args, findings, "MEGALODON's own code, schedule or configuration changed."):
@@ -2867,6 +2891,7 @@ def _vulns(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result["findings"]
     if args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -3030,6 +3055,7 @@ def _rootkit(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(report, indent=2, sort_keys=True))
+    _keep(args, report)
     findings = report["findings"]
     if args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -3071,6 +3097,7 @@ def _binaries(args: argparse.Namespace) -> int:
         print(f"megalodon: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
+    _keep(args, result)
     findings = result.get("findings", [])
     if args.binaries_command in ("verify", "check") and args.alert and findings:
         from .alerts import HostNotice, dispatcher_for
@@ -3857,6 +3884,58 @@ def _live_apply_requested(argv: list[str]) -> bool:
     return False
 
 
+_PRINTED: dict = {}
+
+
+def _kept(args):
+    """The check whose result `megalodon report` keeps for this run, or None: a `check` of the machine's own
+    baseline, as the scheduler runs it (a check of another baseline, given with --manifest, is not this machine's
+    state)."""
+    from . import results
+    if args.command not in results.NAMES or getattr(args, f"{args.command}_command", None) != "check":
+        return None
+    if getattr(args, "manifest", None) is not None:
+        return None
+    return args.command
+
+
+def _keep(args, result):
+    if _kept(args):
+        _PRINTED[args.command] = result
+
+
+def _record(args, code):
+    name = _kept(args)
+    if name is None:
+        return
+    from . import results
+    try:
+        results.keep(name, _PRINTED.pop(name, None), code)
+    except OSError as exc:
+        print(f"megalodon: this check's result was not kept for `megalodon report`: {exc}", file=sys.stderr)
+
+
+def _report(args: argparse.Namespace) -> int:
+    from . import security_report as sr
+    if not 1 <= args.hours <= 24 * 366:
+        print("megalodon: --hours must be between 1 and 8784", file=sys.stderr)
+        return 2
+    try:
+        report = sr.build(hours=args.hours)
+        content = (sr.page(report) if args.format == "html" else
+                   json.dumps(report, indent=2, sort_keys=True) + "\n" if args.format == "json" else sr.text(report))
+        if args.output:
+            sr.write(args.output, content)
+            print(json.dumps(dict(report=str(args.output.expanduser()), verdict=report["verdict"],
+                                  headline=report["headline"]), sort_keys=True))
+        else:
+            sys.stdout.write(content)
+    except OSError as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def entry(argv: list[str] | None = None) -> None:
     """The `megalodon` command and `python -m megalodon`. Exit 1 means findings, 2 an error: the scheduler counts
     exit 1 as a successful run that found something (SuccessExitStatus=1), so an unexpected error, which Python
@@ -3973,6 +4052,8 @@ def main(argv: list[str] | None = None) -> None:
         code = _packages(args)
     elif args.command == "secrets":
         code = _secrets(args)
+    elif args.command == "report":
+        code = _report(args)
     elif args.command == "timeline":
         code = _timeline(args)
     elif args.command == "commands":
@@ -4019,4 +4100,5 @@ def main(argv: list[str] | None = None) -> None:
         code = _firewall(args, "block")
     else:
         code = 2
+    _record(args, code)
     raise SystemExit(code)

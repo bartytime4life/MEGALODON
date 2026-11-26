@@ -62,3 +62,10 @@ def synthetic_runtime_binding(monkeypatch):
     """
     from megalodon import local_model_runtime
     monkeypatch.setattr(local_model_runtime, "binding_failure", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def _results_kept_aside(tmp_path_factory, monkeypatch):
+    """`megalodon CHECK check` keeps its latest result for `megalodon report`; in tests, never in the real home."""
+    from megalodon import results
+    monkeypatch.setattr(results, "DEFAULT_FOLDER", str(tmp_path_factory.mktemp("results")))
