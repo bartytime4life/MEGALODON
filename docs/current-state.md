@@ -2,8 +2,8 @@
 
 ## November 26 source and acceptance map
 
-**Source basis (America/Chicago)** — [`main@4b39b0820bfc527de88813f999ddefcea643d93c`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c),
-tree `bf9c557d8ec41ce4dd1ee026ff4d07ac791c64a3`, merged through [PR #917](https://github.com/bartytime4life/MEGALODON/pull/917).
+**Source basis (America/Chicago)** — [`main@e2bafb3f52d5d7f827557d83b43c81017f645a4b`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b),
+tree `ccf2d076c7c0f2b9fd56b5727770498176cdcffe`, merged through [PR #918](https://github.com/bartytime4life/MEGALODON/pull/918).
 All 1,393 tracked blobs were matched and the reconstructed Git tree reproduced
 the same tree ID. The [catalog](documentation-map.md) accounts for all 234
 tracked Markdown paths. The specification and security review define the
@@ -39,7 +39,7 @@ their own evidence.
 | --- | --- | --- |
 | [#902–#908](https://github.com/bartytime4life/MEGALODON/pull/908) | Bounded kernel-record use for short-lived process/connection observations and scheduler wiring, with unit and synthetic controls for attribution and dropped records. | Kernel/privilege variants, read failures, actual ring-buffer loss, and live workload under the installed service profile. |
 | [#909](https://github.com/bartytime4life/MEGALODON/pull/909), [#910](https://github.com/bartytime4life/MEGALODON/pull/910), [#912](https://github.com/bartytime4life/MEGALODON/pull/912) | Checks separate findings from execution or delivery errors. Enforcement orders containment before collection when both are authorized. Log/journal checks preserve the reviewed verification floor. An unreadable required archive digest remains a gap and is retried. | Native journald rotation and vacuum acceptance remain open. Scope includes reviewed logs that could be read and compared. [Log guide](log-integrity.md) |
-| [#911](https://github.com/bartytime4life/MEGALODON/pull/911), [#913](https://github.com/bartytime4life/MEGALODON/pull/913)–[#917](https://github.com/bartytime4life/MEGALODON/pull/917) | Guided review and coverage-aware reports. Listener/web-root history is retained per watch. Fixture regressions cover one-time migration, retries, order, file admission and lock refusal. | The migration lock is advisory. A report reflects saved results, accessible configuration and recorded gaps. Current tamper CLI prints an allowlisted summary/counts. [Draft #918](https://github.com/bartytime4life/MEGALODON/pull/918) proposes returning per-finding summaries and gaps to that command. |
+| [#911](https://github.com/bartytime4life/MEGALODON/pull/911), [#913](https://github.com/bartytime4life/MEGALODON/pull/913)–[#917](https://github.com/bartytime4life/MEGALODON/pull/917) | Guided review and coverage-aware reports. Listener/web-root history is retained per watch. Fixture regressions cover one-time migration, retries, order, file admission and lock refusal. | The migration lock is advisory. A report reflects saved results, accessible configuration and recorded gaps. [Merged #918](https://github.com/bartytime4life/MEGALODON/pull/918) restores tamper finding summaries, subjects, timestamps and gaps after the limited #916 output. [Tamper guide](tamper-detection.md) |
 
 ### Local audit evidence
 
@@ -51,16 +51,35 @@ their own evidence.
   individual candidates and 13 layered reviews, checked 841 evidence
   references and found zero provenance errors or permutation differences.
   The operational accuracy fields remain unset.
-- **Local test boundary.** The selected regression suite reported 1,298
-  passes, eight native skips and one `STORAGE_PATH:UNSAFE_ANCESTOR` failure
-  also reproduced at the untouched source. The full pinned baseline suite
+- **Local test boundary.** The selected regression suite, including the #918 output regression,
+  reported 1,299 passes, eight native skips and one `STORAGE_PATH:UNSAFE_ANCESTOR` failure
+  also reproduced at the untouched source. The full suite on the preceding #917 tree
   was non-green in this sandbox. Path-ancestry and permission restrictions
   dominated its failures and setup errors. The hosted checks below provide
   the separate CI results for the exact source.
 
-### Checks tied to this tree
+### Checks tied to the source and preceding tree
 
-All entries below are **OBSERVED GitHub results**. The November 26 push runs
+**OBSERVED** at the #918 tree. The final candidate
+`b00451b9682066c3edef9d8c55d6180b4d350ca2` matches the
+merged tree above. Its hosted runs passed [CI](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508274),
+[Linux browser](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508202),
+[CodeQL](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508332),
+[Stage 0 parity](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508233),
+[Qwen scoped acceptance](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508427),
+[host protection](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508512),
+[Windows synthetic core](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508280),
+[macOS synthetic sample](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508457),
+[Ubuntu rehearsal](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508196),
+[Linux installer](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508281),
+[installed-wheel recovery](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508226),
+and [release subjects](https://github.com/bartytime4life/MEGALODON/actions/runs/45881508542).
+These are hosted candidate checks with the same scope boundaries described
+below. The separate [merged-source host protection run](https://github.com/bartytime4life/MEGALODON/actions/runs/45882904676)
+also passed. See the [merged commit's checks](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b/checks)
+for subsequent push results.
+
+**OBSERVED** at the preceding #917 tree. The earlier November 26 push runs
 point to `4b39b0820bfc527de88813f999ddefcea643d93c`. PR #917's final head,
 `ed04179b157bc904abc479d77a81a53bcdbf75de`, has the identical Git tree. Its
 PR-only runs remain candidate runs, even though the source bytes match.
@@ -81,7 +100,7 @@ requires strict `test` status and records zero required approving reviews. The
 requests Copilot review for drafts. Branch-protection details returned 403 to
 this audit, so those rulesets are the verified read boundary. The project
 [owner lifecycle procedure](exact-head-owner-lifecycle.md) remains separate.
-The exact source head also had two failed and one cancelled lifecycle runs
+The #917 merge head also had two failed and one cancelled lifecycle runs
 triggered by issue comments. Those runs and the successful push checks establish
 different facts. No independent approval or release is inferred from them.
 

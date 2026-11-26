@@ -6,7 +6,7 @@
 ## November 26 evidence
 
 Use the [exact-head check index](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-26-source-and-acceptance-map)
-for observed push and candidate runs. The pinned source and PR #917's final
+for observed push and candidate runs. The pinned source and PR #918's final
 head share a Git tree. Windows/macOS synthetic coverage, Linux namespace
 packet tests, source/wheel parity, installed-wheel synthetic recovery and
 owner-host acceptance each have different evidence.

@@ -242,3 +242,36 @@ def test_removing_the_tamper_baseline_is_reported_on_and_off_the_machine(world, 
     beat(15)
     lost = tp.monitor(Receiver.bodies, key, now=NOW + timedelta(minutes=16))
     assert "TAMPER_BASELINE_LOST" in {f["rule_id"] for f in lost["findings"]}
+
+
+def test_check_prints_each_finding_by_rule_and_file_but_never_its_detail(world, tmp_path, monkeypatch, capsys):
+    from megalodon.cli import main
+
+    config = Path(world["config_dir"])
+    (config / "alerts").mkdir()
+    hook = config / "alerts/ntfy.url"
+    hook.write_text("https://ntfy.example/alerts-7f2c\n")
+    (config / "settings.toml").write_text('[alerts]\nenabled = true\n[[alerts.destination]]\nname = "phone"\n'
+                                          f'kind = "webhook"\nurl_file = "{hook}"\n')
+    manifest = tmp_path / "tamper.json"
+    tp.baseline(manifest, **world)
+    hook.write_text("https://attacker.example/sink\n")
+    (Path(world["package"]) / "cli.py").write_text("print('sensor')\nimport os  # blinded\n")
+    report = tp.check(manifest, runner=fake_systemctl({}), uptime=100.0, **world)
+    report["gaps"] = ["systemd could not be asked about the scheduled units: not found"]
+    monkeypatch.setattr(tp, "check", lambda manifest: report)
+    with pytest.raises(SystemExit) as exit_:
+        main(["tamper", "check", "--manifest", str(manifest)])
+    out = capsys.readouterr().out
+    printed = json.loads(out)
+    assert exit_.value.code == 1 and printed["findings_count"] == 2
+    assert [(f["rule_id"], f["severity"], f["subject"]) for f in printed["findings"]] == [
+        ("SENSOR_CODE_CHANGED", "CRITICAL", "code:cli.py"), ("ALERTS_CONFIG_CHANGED", "HIGH", f"config:secret:{hook}")]
+    assert all(f["summary"] == tp.RULES[f["rule_id"]][1] and "detail" not in f for f in printed["findings"])
+    assert "attacker" not in out and "7f2c" not in out and str(world["package"]) not in out, "no details, no contents"
+    assert printed["gaps"] == report["gaps"] and printed["checked_at"] == report["checked_at"]
+    assert printed["units_count"] == len(report["units"]) >= 1, "a check's units are a map of their states"
+    monkeypatch.setattr(tp, "check", lambda manifest: dict(report, findings=[], gaps=[]))
+    with pytest.raises(SystemExit) as exit_:
+        main(["tamper", "check", "--manifest", str(manifest)])
+    assert exit_.value.code == 0 and json.loads(capsys.readouterr().out)["findings"] == []

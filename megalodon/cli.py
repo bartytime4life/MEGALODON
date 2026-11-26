@@ -2812,6 +2812,22 @@ def _sanitize_tamper_output(value: object) -> object:
     return value
 
 
+def _tamper_findings_shown(findings: list) -> list[dict]:
+    """Each finding as `tamper check` prints it: its rule, severity and summary, and the file or unit it is
+    about. Its detail is left out, as it is in the kept result; `megalodon report` lists the same findings."""
+    from . import tamper
+
+    shown = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        rule = str(finding.get("rule_id") or "")
+        severity, summary = tamper.RULES.get(rule, (str(finding.get("severity") or ""), ""))
+        shown.append({"rule_id": rule, "severity": severity, "subject": str(finding.get("subject") or ""),
+                      "summary": summary})
+    return shown
+
+
 def _tamper(args: argparse.Namespace) -> int:
     from . import tamper
 
@@ -2834,9 +2850,16 @@ def _tamper(args: argparse.Namespace) -> int:
         "state_digest": sanitized_result.get("state_digest"),
         "code_files": sanitized_result.get("code_files"),
         "findings_count": len(result.get("findings", [])),
-        "units_count": len(result.get("units", [])) if isinstance(result.get("units"), list) else None,
+        # A baseline lists its units; a check maps each to its state.
+        "units_count": len(result["units"]) if isinstance(result.get("units"), (list, dict)) else None,
         "configs_count": len(result.get("configs", [])) if isinstance(result.get("configs"), list) else None,
     }
+    if isinstance(result.get("findings"), list):
+        output["findings"] = _tamper_findings_shown(result["findings"])
+    # What a check could not look at, and when: a check that could not ask systemd is not a clean one.
+    for name in ("baseline_recorded_at", "checked_at", "gaps", "note"):
+        if name in sanitized_result:
+            output[name] = sanitized_result[name]
     print(json.dumps(output, indent=2, sort_keys=True))
     _keep(args, sanitized_result)
     findings = result.get("findings", [])

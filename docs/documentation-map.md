@@ -1,6 +1,6 @@
 # Complete documentation catalog
 
-**234 tracked Markdown documents accounted for.** Inventory basis [`main@4b39b082`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c).
+**234 tracked Markdown documents accounted for.** Inventory basis [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b).
 Each tracked Markdown path appears once in the tables, including maintained
 guides, Wiki source, versioned contracts, proposals, templates and dated
 records. JSON receipts and benchmarks sit alongside their owning guides.

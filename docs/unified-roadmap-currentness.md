@@ -1,6 +1,6 @@
 # Unified roadmap: repository reconciliation
 
-> **Latest orientation · November 26, 2026.** See the [source and acceptance map](current-state.md#november-26-source-and-acceptance-map), based on [`main@4b39b082`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c). The sections below preserve dated proposal dispositions. Current Zeek selection, closed Qwen tracking, the UNBOUND release fence, and the partial Stage 0 boundary have separate acceptance gates.
+> **Latest orientation · November 26, 2026.** See the [source and acceptance map](current-state.md#november-26-source-and-acceptance-map), based on [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b). The sections below preserve dated proposal dispositions. Current Zeek selection, closed Qwen tracking, the UNBOUND release fence, and the partial Stage 0 boundary have separate acceptance gates.
 
 > Historical snapshot: OSSEC and Zabbix references below describe the prior
 > twelve-tool catalog. The later ten-tool catalog excluded both;

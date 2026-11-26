@@ -1,6 +1,6 @@
 # MEGALODON architecture security review
 
-> **Current source orientation · November 26, 2026.** Start with [current state and acceptance](docs/current-state.md#november-26-source-and-acceptance-map) at [`main@4b39b082`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c). The dated reviews below retain their original scope. The latest map identifies the protected effect paths, scoped Stage 0 and provider refusals, host reporting and coverage gaps, plus the remaining native, installed-host and independent acceptance evidence.
+> **Current source orientation · November 26, 2026.** Start with [current state and acceptance](docs/current-state.md#november-26-source-and-acceptance-map) at [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b). The dated reviews below retain their original scope. The latest map identifies the protected effect paths, scoped Stage 0 and provider refusals, host reporting and coverage gaps, plus the remaining native, installed-host and independent acceptance evidence.
 
 The current HUD labels returned Suricata context as **Sensor observations** and
 keeps it separate from the retained Findings queue. Guidance links only navigate;

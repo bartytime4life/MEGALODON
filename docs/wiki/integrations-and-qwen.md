@@ -49,7 +49,7 @@ The provider uses literal loopback. Local model code does not sandbox the separa
 
 ## Canonical Qwen Airlock is still held
 
-[The canonical record](https://github.com/bartytime4life/MEGALODON/blob/4b39b0820bfc527de88813f999ddefcea643d93c/config/model-bindings/qwen.unbound.json) remains **UNBOUND / NOT_RECORDED**.
+[The canonical record](https://github.com/bartytime4life/MEGALODON/blob/e2bafb3f52d5d7f827557d83b43c81017f645a4b/config/model-bindings/qwen.unbound.json) remains **UNBOUND / NOT_RECORDED**.
 The [release fence](https://github.com/bartytime4life/MEGALODON/blob/main/docs/qwen-runtime-unbound.md) has no BOUND path or
 operator override. Operational generation remains held across model families.
 Explicit catalog/selection and the fixed response diagnostic have separate,
@@ -57,8 +57,8 @@ limited scope. [#446](https://github.com/bartytime4life/MEGALODON/issues/446) wa
 Provider provenance, loaded-byte attestation, signed evaluation and accepted
 model execution remain distinct evidence requirements.
 
-[Runtime-gate tests](https://github.com/bartytime4life/MEGALODON/blob/4b39b0820bfc527de88813f999ddefcea643d93c/tests/test_qwen_runtime_gate.py) and
-[diagnostic tests](https://github.com/bartytime4life/MEGALODON/blob/4b39b0820bfc527de88813f999ddefcea643d93c/tests/test_ollama_model_test.py) distinguish these
+[Runtime-gate tests](https://github.com/bartytime4life/MEGALODON/blob/e2bafb3f52d5d7f827557d83b43c81017f645a4b/tests/test_qwen_runtime_gate.py) and
+[diagnostic tests](https://github.com/bartytime4life/MEGALODON/blob/e2bafb3f52d5d7f827557d83b43c81017f645a4b/tests/test_ollama_model_test.py) distinguish these
 entry points. The [October reconciliation](https://github.com/bartytime4life/MEGALODON/blob/2cb706039724d9ea0bda09cbd3c17698b15ba55c/docs/qwen-446-zero-effect-reconciliation-2026-10-07.md) and its original sentinel results remain historical; they do not lift the current release fence.
 
 ## Local host security and dated reference context

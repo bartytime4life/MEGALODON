@@ -59,7 +59,7 @@ It contains documentation-only addresses.
 
 ## What works today
 
-**Source basis** — [`main@4b39b082`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c), November 26, 2026 (America/Chicago).
+**Source basis** — [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b), November 26, 2026 (America/Chicago).
 MEGALODON brings together a Linux loopback workspace, bounded network
 analysis and separate host checks, watches and response workflows. The recent
 merged work adds coverage-aware host reporting, confirmed guided review,
@@ -69,7 +69,7 @@ scheduler wiring for optional Linux tracing.
 [Current capability and acceptance map](docs/current-state.md#november-26-source-and-acceptance-map) ties the claims to
 source, exact check runs and remaining evidence. Linux is the reference.
 Windows and macOS pass narrow synthetic workflow lanes at the identical
-PR #917 tree. Installed-PC operation, native producer and model acceptance,
+PR #918 tree. Installed-PC operation, native producer and model acceptance,
 and representative detection accuracy have separate evidence requirements.
 
 | Capability | Implemented behavior | Meaningful boundary |
@@ -586,10 +586,10 @@ entry point, not a replacement platform contract.
 | --- | --- | --- |
 | Linux workstation or headless host | Core metadata workflows, optional capture, separate offline analysis, and optional operator-reviewed local containment | Current reference implementation. CI uses Ubuntu 24.04 / Python 3.11; L1 proposes Ubuntu 24.04 x86-64 / Python 3.12. Neither validates every installed tool or host; legacy firewall CLI apply remains unsupported |
 | Other Linux distributions or architectures | Evaluate the same bounded workflows where prerequisites and safety checks hold | Not certified by the Ubuntu CI lane. Validate Python, filesystem/privilege behavior, tool paths, and each selected integration; do not remove guards to make a recipe run |
-| Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **Synthetic evaluation only.** The hosted synthetic-core lane passed at the PR #917 tree. Native capture, offline adapters, firewall, and installation acceptance are outside that lane |
+| Native Windows 11 x64 | W1: Python 3.13 synthetic sample/JSONL, SQLite, and loopback UI evaluation; separately operated companion tools | **Synthetic evaluation only.** The hosted synthetic-core lane passed at the PR #918 tree. Native capture, offline adapters, firewall, and installation acceptance are outside that lane |
 | A separately prepared Linux VM | Linux workflow inside the guest; W2 documents a Windows-host evaluation option | **PROPOSED configuration / guest validation required.** Not native host support, complete host-traffic visibility, or host-firewall authority; other host/guest pairings need their own evidence |
 | WSL2 | Development evaluation under the documented W2 limits | Not the hostile-capture isolation baseline or proof of Windows-host monitoring/enforcement |
-| macOS, BSD, and other native systems | Read the `other` catalog and identify future port/acceptance work | A hosted macOS M1 synthetic sample passed at the PR #917 tree. The catalog adds no general native support or network adapter acceptance for these platforms |
+| macOS, BSD, and other native systems | Read the `other` catalog and identify future port/acceptance work | A hosted macOS M1 synthetic sample passed at the PR #918 tree. The catalog adds no general native support or network adapter acceptance for these platforms |
 | Containers and unattended operation | Installed Linux HUD has a managed per-user service and optional login startup | See [local startup](docs/local-pc-setup.md#optional-start-the-installed-hud-at-login). Container deployment, system-wide unattended services, privilege, mounts, networking and isolation require separate review |
 
 The catalog distinguishes `implemented`, `optional`, `evaluation_only`,

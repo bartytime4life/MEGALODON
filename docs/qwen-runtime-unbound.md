@@ -1,6 +1,6 @@
 # Qwen runtime UNBOUND fence — issue #446
 
-At [`main@4b39b082`](https://github.com/bartytime4life/MEGALODON/commit/4b39b0820bfc527de88813f999ddefcea643d93c), the canonical record is still
+At [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b), the canonical record is still
 `UNBOUND` and the owner decision is `NOT_RECORDED`.
 [Issue #446](https://github.com/bartytime4life/MEGALODON/issues/446) was closed on November 2, 2026 Central time.
 The [current acceptance map](current-state.md#november-26-source-and-acceptance-map)
