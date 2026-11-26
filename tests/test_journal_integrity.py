@@ -425,3 +425,72 @@ def test_a_reviewed_archive_brought_back_changed_keeps_its_reviewed_record(machi
     assert check(manifest, root, advance=True)[0] == expected, "reported until accept"
     li.accept(manifest, root=str(root))
     assert check(manifest, root)[0] == set()
+
+
+def test_a_forged_digest_in_the_progress_cannot_vouch_for_an_archive(machine):
+    # The snapshot reuses a cached digest when an archive's inode, size and change times match the record it is
+    # given. A rewritten progress can give the archive's current times with the reviewed digest; the floor must
+    # take digests only from the reviewed baseline, or read the file again.
+    root, folder, manifest = machine
+    li.check(manifest, root=str(root), advance=True)
+    path = next(folder.glob(f"system@*-{1:016x}-*.journal"))
+    data = bytearray(path.read_bytes())
+    data[-1] ^= 0xFF                                      # the same size, different content
+    path.write_bytes(bytes(data))
+    reviewed = json.loads(manifest.read_text())["journals"]["files"]
+    options = dict(root=str(root))
+    journals = li._journals(options)
+    for file_id, record in journals["files"].items():
+        if "sha256" in record:
+            record["sha256"] = reviewed[file_id]["sha256"]   # what an intruder would write
+    li._write(li.progress_path(manifest), dict(schema=li.SCHEMA, recorded_at="2026-11-26T00:00:00Z",
+                                                journals=journals, **li.snapshot(**options)))
+    found, report = check(manifest, root, advance=True)
+    assert found == {("JOURNAL_ARCHIVE_CHANGED", path.name)}
+    assert check(manifest, root, advance=True)[0] == found, "reported until accept"
+
+
+def test_an_unchanged_archive_is_not_read_again_for_the_floor(machine, monkeypatch):
+    root, folder, manifest = machine
+    li.check(manifest, root=str(root), advance=True)
+    read = []
+    real = ji._digest
+    monkeypatch.setattr(ji, "_digest", lambda path: read.append(path) or real(path))
+    assert check(manifest, root, advance=True)[0] == set()
+    assert read == [], "both caches vouch for the archives: nothing is hashed again"
+
+
+def _forge(manifest, root):
+    options = dict(root=str(root))
+    li._write(li.progress_path(manifest), dict(schema=li.SCHEMA, recorded_at="2026-11-26T00:00:00Z",
+                                                journals=li._journals(options), **li.snapshot(**options)))
+
+
+def test_progress_cannot_forget_a_deleted_archive(machine):
+    root, folder, manifest = machine
+    li.check(manifest, root=str(root), advance=True)
+    middle = next(folder.glob(f"system@*-{101:016x}-*.journal"))
+    middle.unlink()                                       # not the oldest: not what vacuuming does
+    _forge(manifest, root)
+    found, report = check(manifest, root, advance=True)
+    assert found == {("JOURNAL_FILE_DELETED", middle.name)}
+    assert report["findings"][0]["detail"]["compared_with"] == "the reviewed baseline"
+    assert check(manifest, root, advance=True)[0] == found, "reported until accept"
+
+
+def test_vacuuming_after_the_review_stays_quiet_for_the_floor(machine):
+    # The oldest archives go first; the file being written at the review is archived, then vacuumed in turn.
+    root, folder, manifest = machine
+    li.check(manifest, root=str(root), advance=True)
+    for head in (1, 101):
+        next(folder.glob(f"system@*-{head:016x}-*.journal")).unlink()
+        assert check(manifest, root, advance=True)[0] == set()
+    active = folder / "system.journal"
+    active.rename(folder / f"system@{SEQUENCE.hex()}-{201:016x}-{1_700_000_000_000_000 + 201:016x}.journal")
+    data = bytearray(next(folder.glob(f"system@*-{201:016x}-*.journal")).read_bytes())
+    data[16] = ji.STATE_ARCHIVED
+    next(folder.glob(f"system@*-{201:016x}-*.journal")).write_bytes(bytes(data))
+    journal(active, head=251, tail=300)
+    assert check(manifest, root, advance=True)[0] == set()
+    next(folder.glob(f"system@*-{201:016x}-*.journal")).unlink()
+    assert check(manifest, root, advance=True)[0] == set(), "archived after the review, vacuumed: quiet"

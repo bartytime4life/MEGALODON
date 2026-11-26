@@ -119,19 +119,27 @@ reports a baseline that was changed.
 
 The progress file is not watched, so it is not trusted on its own: anything
 able to write MEGALODON's files could rewrite it to match a log it cut back.
-The reviewed baseline is the floor. A log that is still the same file (the
-same inode) as when you reviewed it can only have grown since, or its
-earlier content must be in a rotated copy, so every check also compares such
-a log with the baseline, and reports what the progress hid, with
-`compared_with: the reviewed baseline`. Journal files are held to the
-baseline the same way, by their file ID.
+The reviewed baseline is the floor. Every check also compares with the
+baseline, and reports what the progress hid, with
+`compared_with: the reviewed baseline`:
+
+* each log that is still the same file (the same inode) as when you
+  reviewed it: it can only have grown since, or its earlier content must be
+  in a rotated copy;
+* each log that is gone: a rotated copy must hold it;
+* each journal file still present, by its file ID, with its digest taken
+  from the review (while its inode, size and change times are the reviewed
+  ones) or read again, never from the progress;
+* each journal archive that is gone: journald deletes archives only by
+  vacuuming, oldest first.
 
 This has one cost. A log rotated by copying and emptying it in place
 (logrotate's `copytruncate`) stays the same file, so once no rotated copy
 holds what the baseline recorded, it is reported as truncated until you run
-`accept`. So is a new log that the file system gave the old one's inode. The
+`accept`. So is a new log that the file system gave the old one's inode,
+and a log no longer written at all once its rotated copies are deleted. The
 finding says so. A log rotated the usual way (a new file) is followed by the
-progress alone.
+progress alone, and so is a journal file that was being written at the review.
 
 ## What is stored
 

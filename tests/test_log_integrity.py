@@ -475,3 +475,33 @@ def test_a_copytruncate_log_is_reported_once_no_copy_holds_the_reviewed_content(
     assert "copytruncate" in report["findings"][0]["detail"]["note"], "the finding says what to do"
     li.accept(manifest, **options)
     assert li.check(manifest, advance=True, **options)["findings"] == []
+
+
+def test_progress_cannot_forget_a_deleted_log(logs):
+    folder, options, manifest = logs
+    li.check(manifest, advance=True, **options)
+    (folder / "auth.log").unlink()
+    _forge_progress(manifest, options)          # the log is no longer in it
+    report = li.check(manifest, advance=True, **options)
+    assert {(f["rule_id"], f["log"]) for f in report["findings"]} == {("LOG_DELETED", "/var/log/auth.log")}
+    assert li.check(manifest, advance=True, **options)["findings"], "reported until accept"
+
+
+def test_a_log_gone_into_a_rotated_copy_is_quiet_for_the_floor(logs):
+    folder, options, manifest = logs
+    li.check(manifest, advance=True, **options)
+    (folder / "auth.log").rename(folder / "auth.log.1")      # rotated; the new file is not made yet
+    assert li.check(manifest, advance=True, **options)["findings"] == []
+
+
+def test_the_floor_adds_nothing_for_a_log_unreadable_now(logs, monkeypatch):
+    # The comparison with the progress already reports it (and lists it among the gaps); the floor says nothing
+    # more about a log it cannot read.
+    folder, options, manifest = logs
+    li.check(manifest, advance=True, **options)
+    real = li._identity
+    monkeypatch.setattr(li, "_identity", lambda path, tries=3: "unreadable" if path.endswith("/auth.log")
+                        else real(path, tries))
+    report = li.check(manifest, advance=True, **options)
+    assert "/var/log/auth.log" in report["gaps"]
+    assert all("compared_with" not in f["detail"] for f in report["findings"])
