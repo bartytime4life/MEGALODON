@@ -36,9 +36,11 @@ def items(report):
     for incident in report['incidents']:
         found.append(dict(severity=incident['severity'],
                           heading=f'Incident {incident["incident"]}: {", ".join(incident["rules"])}',
-                          meaning=f'Findings from {", ".join(incident["checks"])} that the response engine joined '
-                                  'into one story' + (f'; {incident["actions_applied"]} action(s) were carried out'
-                                                      if incident['actions_applied'] else ''),
+                          meaning=' '.join(filter(None, [
+                              incident.get('meaning'),
+                              f'Findings from {", ".join(incident["checks"])} that the response engine joined into one '
+                              'story' + (f'; {incident["actions_applied"]} action(s) were carried out'
+                                         if incident['actions_applied'] else '')])),
                           detail=None, choices=incident['choices'], record=dict(incident=incident['incident'])))
     found.sort(key=lambda item: sr.RANK.index(item['severity']))
     return found

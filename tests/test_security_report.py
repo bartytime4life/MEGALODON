@@ -435,6 +435,33 @@ def test_policies_the_modules_would_refuse_are_reported(home):
     assert rows["heartbeat"]["ok"] is False and "cannot be sent" in rows["heartbeat"]["text"]
 
 
+def test_an_automated_campaign_is_explained_first_and_asks_for_action(home):
+    from megalodon import guided_review
+    from megalodon import response_engine as engine
+    engine.write_default_policy()
+    attacker = "203.0.114.9"
+
+    def attempt(n, rule):
+        when = (NOW - timedelta(minutes=10) + timedelta(seconds=5 * n)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return engine.Signal(f"network:{n}", "network", rule, "MEDIUM", when, rule,
+                             engine._entities(address=[attacker], peer=[attacker, f"192.168.1.{10 + n}"]))
+    kinds = ("ARP_SPOOFING", "BEACONING", "BRUTE_FORCE", "DATA_EXFILTRATION", "DECOY_TOUCH", "DGA_DOMAIN",
+             "HOST_SWEEP")
+    signals = [attempt(n, kinds[n % len(kinds)]) for n in range(8)]
+    signals.append(engine.Signal("logins:LOGIN_NEW_SOURCE:admin", "logins", "LOGIN_NEW_SOURCE", "HIGH", AT,
+                                 "admin logged in from a new network",
+                                 engine._entities(account=["admin"], address=[attacker])))
+    engine.run(signals=signals, now=NOW, protected=set())
+    built = build()
+    [incident] = built["incidents"]
+    assert incident["severity"] == "CRITICAL" and incident["rules"][0] == "AUTOMATED_CAMPAIGN"
+    assert len(incident["rules"]) == 6, "the campaign is never the rule cut off"
+    assert incident["meaning"] == sr.CAMPAIGN_MEANING + sr.LOGIN_IN_CAMPAIGN and built["verdict"] == "act"
+    assert sr.CAMPAIGN_MEANING in sr.text(built) and "AI agent" in sr.page(built)
+    [item] = [i for i in guided_review.items(built) if i["heading"].startswith("Incident")]
+    assert item["meaning"].startswith(sr.CAMPAIGN_MEANING)
+
+
 def test_unreadable_incidents_are_never_all_clear(home, monkeypatch):
     from megalodon import timeline
     for name in results.NAMES:

@@ -81,7 +81,10 @@ would otherwise go on meanwhile.
 2. **Correlate.** Findings that share an address, program, file, port,
    persistence location or account within `correlation_minutes` form one
    incident. An incident with findings from two different sources is
-   *corroborated*.
+   *corroborated*. One address trying many different kinds of attack within
+   minutes is also raised as an [automated campaign](automated-campaigns.md)
+   (`AUTOMATED_CAMPAIGN`), a finding of its own that joins the incident; it is
+   made from the others, so it never corroborates them.
 3. **Match.** The first playbook whose `rules` include the finding's rule,
    at or above `min_severity`, applies. A playbook can also require
    particular `sources` or `categories`, or `require_corroboration`.
@@ -176,6 +179,7 @@ Guards apply whatever the playbooks say:
 | sensor-tampering | HIGH and CRITICAL [tamper](tamper-detection.md) findings this machine's tamper check raises (those of the heartbeat monitor are raised off the machine) | Collect evidence, notify |
 | new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Cut off the USB device, notify: only you know whether you plugged it in, and `enforce undo` lets it back |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
+| automated-campaign | [`AUTOMATED_CAMPAIGN`](automated-campaigns.md): one address, many different kinds of attack within minutes | Collect evidence, block the address for 60 minutes, notify |
 | attacker-at-the-door | HIGH `BRUTE_FORCE`, `DECOY_TOUCH`, `SYN_FLOOD` | Block the source for 30 minutes, notify. `PORT_SCAN` and `HOST_SWEEP` are listed too, but are always MEDIUM, so they are alerted, not acted on |
 | command-and-control-or-exfiltration | HIGH `DATA_EXFILTRATION`, `IOC_MATCH`, `DNS_TUNNELING`, `DNS_TUNNEL_CHURN` | Only when corroborated: collect evidence, block for 60 minutes, notify. `BEACONING` and `DGA_DOMAIN` are listed too, but are always MEDIUM, so they are alerted, not acted on |
 | new-backdoor-account | CRITICAL account changes in the persistence watch | Collect evidence, lock the account, notify |

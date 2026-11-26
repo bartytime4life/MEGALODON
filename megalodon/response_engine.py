@@ -38,6 +38,8 @@ import stat
 import tempfile
 import tomllib
 
+from . import campaign as campaigns
+
 SCHEMA = 'megalodon-response-decision-v1'
 REPORT_SCHEMA = 'megalodon-response-run-v1'
 DEFAULT_POLICY = '~/.config/megalodon/response-policy.toml'
@@ -93,7 +95,9 @@ NAMESPACE_ADDRESS = re.compile(r'([0-9A-Fa-f:.]{2,45})@(net:\[[0-9]{1,20}\])')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
-           'packages', 'secrets', 'memory', 'canary', 'ingest')
+           'packages', 'secrets', 'memory', 'canary', 'ingest', 'campaign')
+# Sources made from other findings, not sensors of their own: they never count as a second, independent source.
+DERIVED_SOURCES = frozenset({'campaign'})
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
@@ -157,6 +161,18 @@ packages_manifest = "~/.config/megalodon/packages.json"
 # Keys, tokens and passwords others can read (`megalodon secrets baseline`).
 secrets_manifest = "~/.config/megalodon/secrets.json"
 canary_manifest = ""
+
+[response.campaign]
+# One address trying many different attacks within minutes (scans, password guesses, decoys, login bursts) is an
+# automated campaign: an attack tool, or an AI agent driving one. It is raised as AUTOMATED_CAMPAIGN when, within
+# window_seconds, there are min_attempts different attempts of min_kinds different kinds; it is CRITICAL with
+# broad_kinds kinds or when two sensors saw it. Raised again for the same address after cooldown_minutes.
+enabled = true
+window_seconds = 600
+min_attempts = 8
+min_kinds = 3
+broad_kinds = 5
+cooldown_minutes = 30
 
 [[response.playbook]]
 name = "reverse-shell"
@@ -342,6 +358,14 @@ min_severity = "HIGH"
 actions = ["collect_evidence", "notify"]
 
 [[response.playbook]]
+name = "automated-campaign"
+rules = ["AUTOMATED_CAMPAIGN"]
+min_severity = "HIGH"
+# The address behind a machine-speed campaign: what it touched is kept, you are told, and it is shut out for an hour.
+actions = ["collect_evidence", "block_address", "notify"]
+block_minutes = 60
+
+[[response.playbook]]
 name = "attacker-at-the-door"
 rules = ["BRUTE_FORCE", "HOST_SWEEP", "DECOY_TOUCH", "SYN_FLOOD", "PORT_SCAN"]
 min_severity = "HIGH"
@@ -425,6 +449,7 @@ class Policy:
     never_touch_accounts: frozenset = frozenset()
     quarantine_roots: tuple = DEFAULT_QUARANTINE_ROOTS
     sources: dict = field(default_factory=dict)
+    campaign: campaigns.Settings = campaigns.Settings()
 
 
 def _strings(value, name, limit=256):
@@ -516,7 +541,7 @@ def load_policy(path=DEFAULT_POLICY):
     table = document['response']
     known = {'mode', 'correlation_minutes', 'max_actions_per_hour', 'max_actions_per_target_per_day',
              'max_block_minutes', 'never_touch_addresses', 'never_touch_programs', 'never_touch_accounts',
-             'quarantine_roots', 'sources', 'playbook'}
+             'quarantine_roots', 'sources', 'playbook', 'campaign'}
     if set(table) - known:
         raise ResponseError('response has unsupported settings: ' + ', '.join(sorted(set(table) - known)))
     mode = table.get('mode', 'shadow')
@@ -562,7 +587,28 @@ def load_policy(path=DEFAULT_POLICY):
         never_touch_addresses=addresses,
         never_touch_programs=frozenset(_strings(table.get('never_touch_programs', []), 'never_touch_programs')),
         never_touch_accounts=frozenset(_strings(table.get('never_touch_accounts', []), 'never_touch_accounts')),
-        quarantine_roots=roots, sources=dict(sources))
+        quarantine_roots=roots, sources=dict(sources), campaign=_campaign(table.get('campaign', {})))
+
+
+def _campaign(table):
+    """[response.campaign]: when one address trying many kinds of attack is an automated campaign."""
+    if not isinstance(table, dict):
+        raise ResponseError('response.campaign must be a table')
+    unknown = set(table) - {'enabled', *campaigns.BOUNDS}
+    if unknown:
+        raise ResponseError('response.campaign has unsupported settings: ' + ', '.join(sorted(unknown)))
+    enabled = table.get('enabled', True)
+    if not isinstance(enabled, bool):
+        raise ResponseError('response.campaign.enabled must be true or false')
+    values = {}
+    for name, (low, high) in campaigns.BOUNDS.items():
+        value = table.get(name, getattr(campaigns.Settings, name))
+        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+            raise ResponseError(f'response.campaign.{name} must be an integer from {low} to {high}')
+        values[name] = value
+    if values['broad_kinds'] < values['min_kinds']:
+        raise ResponseError('response.campaign.broad_kinds must be at least min_kinds')
+    return campaigns.Settings(enabled=enabled, **values)
 
 
 def _toml_string(text):
@@ -1215,6 +1261,10 @@ def _targets(action, signal, incident):
     return sorted(signal.entities.get(entity, ()))[:8]
 
 
+def _campaign_signal(key, severity, observed_at, summary, address):
+    return Signal(key, campaigns.SOURCE, campaigns.RULE_ID, severity, observed_at, summary, _entities(address=[address]))
+
+
 def decide(policy, state, signals, now, *, guards=None, observations=None):
     """Shadow decisions for the signals not decided in the last day.
 
@@ -1227,6 +1277,10 @@ def decide(policy, state, signals, now, *, guards=None, observations=None):
     for key in [k for k, at in seen.items() if datetime.fromisoformat(at.replace('Z', '+00:00')) < cutoff]:
         del seen[key]
     current = list({s.key: s for s in signals}.values())
+    # One address trying many kinds of attack at machine speed is a campaign: raised from the new findings, it joins
+    # their incident through the address and is decided like any other finding.
+    current += campaigns.observe(state, [s for s in current if s.key not in seen], now, policy.campaign,
+                                 _campaign_signal, exclude=guards.protected)
     # Every current observation keeps its incident alive; only new ones are decided.
     merges = []
     assigned = correlate(state, current, now, policy.correlation_minutes, merges)
@@ -1246,7 +1300,7 @@ def decide(policy, state, signals, now, *, guards=None, observations=None):
                          and (not p.categories or signal.category in p.categories)), None)
         if playbook is None:
             continue
-        corroborated = len(incident['sources']) >= 2
+        corroborated = len(set(incident['sources']) - DERIVED_SOURCES) >= 2
         plans = []
         for action in playbook.actions:
             targets = _targets(action, signal, incident)

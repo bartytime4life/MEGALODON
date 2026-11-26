@@ -66,6 +66,28 @@ def test_service_records_threat_findings_and_targets_the_response_party(tmp_path
     assert targets == ["203.0.113.9", PUBLIC]
 
 
+def test_one_packet_crossing_four_rules_at_once_is_recorded_not_a_failed_run(tmp_path):
+    # A sweep's 24th host that is a decoy, reached on a scan's 20th port as a flood's 100th SYN: four rules at once.
+    # The audit store once refused more than three, so one such packet, crafted or not, stopped the sensor.
+    from dataclasses import replace
+    from megalodon.rule_catalog import ALL_RULE_IDS
+    from megalodon.storage import MAX_DETECTIONS_PER_EVENT
+    hosts = [f"192.168.7.{n}" for n in range(1, 25)]
+    start = now()
+    events = [PacketEvent(start + timedelta(milliseconds=20 * i), "203.0.113.9", hosts[i % 23], "TCP",
+                          src_port=40000 + i, dst_port=1000 + i % 19, tcp_flags=frozenset({"SYN"}), byte_count=60)
+              for i in range(99)]
+    events.append(PacketEvent(start + timedelta(milliseconds=1980), "203.0.113.9", hosts[-1], "TCP", src_port=41000,
+                              dst_port=5000, tcp_flags=frozenset({"SYN"}), byte_count=60))
+    settings = replace(Settings(db_path=tmp_path / "audit.db"), threat=ThreatDetectionSettings(decoy_addresses=(hosts[-1],)))
+    found = run_through(settings, events)
+    assert sorted(f.rule_id for f in found[-4:]) == ["DECOY_TOUCH", "HOST_SWEEP", "PORT_SCAN", "SYN_FLOOD"]
+    assert len({f.detected_at for f in found[-4:]}) == 1, "all four on the same packet"
+    with Store(settings.db_path) as store:
+        assert store.summary()["detections"] == len(found)
+    assert MAX_DETECTIONS_PER_EVENT == len(ALL_RULE_IDS), "each rule fires at most once per packet"
+
+
 def test_failed_persistence_rolls_back_threat_state(tmp_path):
     settings = Settings(db_path=tmp_path / "audit.db")
     events = brute_events(now())

@@ -21,7 +21,7 @@ from megalodon.cli import main
 from megalodon.config import Settings
 from megalodon.models import ActionRecord, DetectionResult, PacketEvent
 from megalodon.service import MegalodonService
-from megalodon.storage import IngestionRunError, Store
+from megalodon.storage import MAX_DETECTIONS_PER_EVENT, IngestionRunError, Store
 
 
 STAMP = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -294,7 +294,8 @@ def test_event_bundle_rejects_unbounded_or_oversized_collections_before_write(
             (forbidden_iterable(), []),
             (DeceptiveList([_detection(event)]), [_action(event)]),
             ([_detection(event)], []),
-            ([_detection(event)] * 4, [_action(event)] * 4),
+            ([_detection(event)] * (MAX_DETECTIONS_PER_EVENT + 1),
+             [_action(event)] * (MAX_DETECTIONS_PER_EVENT + 1)),
         )
         for detections, actions in invalid:
             with pytest.raises(

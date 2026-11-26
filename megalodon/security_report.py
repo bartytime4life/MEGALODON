@@ -602,6 +602,20 @@ def _enforcement(response_digest=None):
 
 # ------------------------------------------------------------------ incidents
 
+CAMPAIGN_MEANING = ('One address tried many different kinds of attack within minutes, faster and more widely than a '
+                    'person at a keyboard does: an attack tool, or an AI agent driving one. `megalodon timeline show` '
+                    'lists each attempt, in order.')
+LOGIN_IN_CAMPAIGN = ' A login was part of the same incident: check whether the attacker got in.'
+
+
+def _incident_meaning(rules):
+    """What an incident means in plain words, when its findings say more than their rule names do."""
+    if 'AUTOMATED_CAMPAIGN' not in rules:
+        return None
+    from .login_watch import RULES as LOGIN_RULES
+    return CAMPAIGN_MEANING + (LOGIN_IN_CAMPAIGN if any(r in LOGIN_RULES for r in rules) else '')
+
+
 def _incidents(hours, now):
     from . import timeline
     try:
@@ -610,10 +624,12 @@ def _incidents(hours, now):
         return [], f'Incidents could not be read: {clean(exc)}'
     rows = []
     for item in found[:15]:
+        # A campaign is what the incident is: listed first, so it is never one of the rules cut off.
+        rules = sorted(item.get('rules', []), key=lambda r: r != 'AUTOMATED_CAMPAIGN')
         rows.append(dict(incident=clean(item['incident'], 40), severity=_severity(item['severity']),
                          first=item.get('first'), last=item.get('last'),
                          checks=[clean(s, 40) for s in item.get('sources', [])],
-                         rules=[clean(r, 60) for r in item.get('rules', [])[:6]],
+                         rules=[clean(r, 60) for r in rules[:6]], meaning=_incident_meaning(rules),
                          involved={clean(k, 20): [clean(v, 120) for v in values[:3]]
                                    for k, values in item.get('entities', {}).items()},
                          actions_applied=item.get('actions_applied', 0), undone=item.get('undone', 0),
@@ -735,6 +751,8 @@ def text(report):
             done = f', {item["actions_applied"]} action(s) carried out' if item['actions_applied'] else ''
             out.append(f'  {item["severity"]:<8} {item["incident"]}: {", ".join(item["rules"])} '
                        f'(seen by {", ".join(item["checks"])}){done}')
+            if item.get('meaning'):
+                out.append(f'           {item["meaning"]}')
             for choice in item['choices']:
                 out.append(f'                · {choice["label"]}: {choice["command"]}')
     out += ['', 'HOW YOU ARE PROTECTED']
@@ -822,6 +840,7 @@ def page(report):
             f'{i["severity"]}</span> <strong>{_e(", ".join(i["rules"]))}</strong> '
             f'<span class="soft">— seen by {_e(", ".join(i["checks"]))}, {_e(i["first"])} to {_e(i["last"])}'
             + (f', {i["actions_applied"]} action(s) carried out' if i['actions_applied'] else '') + '</span>'
+            + (f'<p>{_e(i["meaning"])}</p>' if i.get('meaning') else '')
             + ''.join(_choice_html(c) for c in i['choices']) + '</div></div>' for i in report['incidents'])
         gap = f'<p class="soft">{_e(report["incident_gap"])}</p>' if report['incident_gap'] else ''
         incidents = '<h2>Incidents: findings joined into one story, last week</h2>' + gap + rows
