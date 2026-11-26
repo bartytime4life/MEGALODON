@@ -398,6 +398,8 @@ def _check_view(check, record, now, live_state=None, system=True):
             if isinstance(count, int) and count > 0:
                 view['severities'][_severity(level)] += count
     view['findings'] = view['findings'][:SHOWN_PER_CHECK]
+    # Every finding counts; only the first are listed. Say how many more there are, and where they all are.
+    view['more'] = max(0, view.get('finding_count', 0) - len(view['findings']))
     return view
 
 
@@ -654,6 +656,10 @@ def text(report):
                     out.append(f'                {finding["meaning"]}')
                 for choice in finding['choices']:
                     out.append(f'                · {choice["label"]}: {choice["command"]}')
+            if check.get('more'):
+                out.append(f'       …and {check["more"]} more: {command("megalodon", check["check"], "check")}')
+            if check.get('gaps'):
+                out.append(f'       Could not see: {"; ".join(check["gaps"])}')
     if report['incidents'] or report['incident_gap']:
         out += ['', 'INCIDENTS (findings the response engine joined, last week)']
         if report['incident_gap']:
@@ -728,6 +734,9 @@ def page(report):
                 findings.append(f'<div class="finding"><span class="sev {f["severity"]}">{f["severity"]}</span> '
                                 f'{_e(f["rule_id"])}{where}{meaning}{detail}'
                                 + ''.join(_choice_html(c) for c in f['choices']) + '</div>')
+            if check.get('more'):
+                findings.append(f'<p class="soft">…and {check["more"]} more: '
+                                f'<code>{_e(command("megalodon", check["check"], "check"))}</code></p>')
             extra = (f'<p class="soft">Could not see: {_e("; ".join(check["gaps"]))}</p>' if check['gaps'] else '')
             run = f'<p class="soft">Last run {_e(check["last_run"])} UTC</p>' if check.get('last_run') else ''
             nxt = f'<p>Run it: <code>{_e(check["next"])}</code></p>' if check.get('next') else ''

@@ -387,6 +387,9 @@ def test_the_totals_count_every_finding_not_only_those_shown(home):
     keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/var/www/{n}.env") for n in range(40)])
     report = build()
     assert report["counts"]["HIGH"] == 40 and len(view(report, "secrets")["findings"]) == sr.SHOWN_PER_CHECK
+    assert view(report, "secrets")["more"] == 15
+    assert "…and 15 more: megalodon secrets check" in sr.text(report)
+    assert "…and 15 more: <code>megalodon secrets check</code>" in sr.page(report)
 
 
 # ------------------------------------------------------------------ settings read as the modules that use them read them
@@ -487,6 +490,7 @@ def test_what_a_check_could_not_look_at_is_not_all_clear(home, monkeypatch):
     _all_ran_clean(monkeypatch)
     keep("boot", [], gaps=["the EFI system partition is not mounted"])
     report = build()
+    assert "Could not see: the EFI system partition is not mounted" in sr.text(report)
     assert report["verdict"] == "gaps"
     step = next(s for s in report["next_steps"] if "EFI system partition" in s["text"])
     assert step["command"] == "megalodon boot check"
