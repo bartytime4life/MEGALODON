@@ -117,6 +117,11 @@ JOBS = (
     Job('boot', 'MEGALODON boot integrity check', ('boot', 'check', '--alert'), 'hourly',
         manifest='~/.config/megalodon/boot.json', baseline=('boot', 'baseline'), cron='23 * * * *', interval=3600),
     # The port test briefly binds every free port; scheduled runs leave it out.
+    # One plain-language page of every check's latest result, the incidents and the setup, each finding with your
+    # choices (`megalodon report`): it runs no check itself, so it costs nothing.
+    Job('report', 'MEGALODON security report', ('report', '--format', 'html', '--output',
+                                                 '~/.local/state/megalodon/report.html'), '*-*-* 07:47:00',
+        cron='47 7 * * *', interval=86400),
     Job('rootkit', 'MEGALODON rootkit cross-checks', ('rootkit', 'check', '--skip-ports', '--alert'), 'hourly',
         cron='41 * * * *', interval=3600),
     # The live watches answer each finding as it is seen; their enforcement run is a whole run, so they can
