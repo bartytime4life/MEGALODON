@@ -234,7 +234,9 @@ def _choices(check, finding, rule, where):
     evidence = finding.get('evidence') if isinstance(finding.get('evidence'), dict) else {}
     program = finding.get('program') or evidence.get('program')
     if check == 'ancestry':
-        service = (evidence.get('service') or {}).get('program')
+        # An application service is allowed as its runtime and what it runs, as the watch matches it.
+        running = evidence.get('service') if isinstance(evidence.get('service'), dict) else {}
+        service = running.get('allow_as') or running.get('program')
         if service and evidence.get('program'):
             out.append(_choice('expected', 'This service may start this program: allow it',
                                'megalodon', 'ancestry', 'allow', service, evidence['program']))
@@ -324,11 +326,14 @@ def _check_view(check, record, now, live_state=None, system=True):
     info = CHECKS[check]
     view = dict(check=check, title=info['title'], group=info['group'], why=info['why'],
                 live=bool(info.get('live')), findings=[], gaps=[])
-    if live_state is not None and live_state not in ('active', 'installed'):
-        view.update(status='error', status_text=f'Its watch is installed but not running (systemd: '
-                                                f'{clean(live_state, 40)})',
+    stopped = live_state is not None and live_state not in ('active', 'installed')
+    if stopped:
+        # Reported whatever the saved result holds: what an earlier check found still counts.
+        view.update(problem=f'Its watch is installed but not running (systemd: {clean(live_state, 40)})',
                     next=command('sudo', 'systemctl', 'start', f'megalodon-{check}.service') if system
                     else command('systemctl', '--user', 'start', f'megalodon-{check}.service'))
+    if record is None and stopped:
+        view.update(status='error', status_text=view['problem'])
         return view
     if record is None and live_state is not None:
         view.update(status='watching', status_text='Watching all the time; what it finds is in the incidents below'
@@ -347,15 +352,21 @@ def _check_view(check, record, now, live_state=None, system=True):
     result = record.get('result') if isinstance(record.get('result'), dict) else {}
     gaps = result.get('gaps') if isinstance(result.get('gaps'), list) else []
     view['gaps'] = [readable(g) for g in gaps[:10]]
+    findings = [f for f in result.get('findings', []) if isinstance(f, dict)]
     if not record.get('ran') or record.get('exit_code') not in (0, 1):
         reason = record.get('reason') if isinstance(record.get('reason'), str) else ''
         # A check without a baseline says which command records one; that, not running it again, is the fix.
         first = re.search(rf'; run megalodon {re.escape(check)} (baseline|learn)$', reason)
-        view.update(status='error', status_text=f'Could not run: {clean(reason, 300)}' if reason
-                    else 'Could not run the last time it was started',
+        problem = f'Could not run: {clean(reason, 300)}' if reason else 'Could not run the last time it was started'
+        if findings:
+            # It found something, then failed (an alert that could not be sent): the findings still count.
+            problem = (f'Its last run found what follows, then failed: {clean(reason, 300)}' if reason
+                       else 'Its last run found what follows, then failed')
+        view.update(problem=problem if not stopped else f'{view["problem"]}; {problem[0].lower()}{problem[1:]}',
                     next=command('megalodon', check, first.group(1)) if first else command('megalodon', check, 'check'))
-        return view
-    findings = [f for f in result.get('findings', []) if isinstance(f, dict)]
+        if not findings:
+            view.update(status='error', status_text=view['problem'])
+            return view
     for finding in findings:
         rule = _rule(check, finding)
         where = _where(finding)
@@ -375,6 +386,8 @@ def _check_view(check, record, now, live_state=None, system=True):
         view.update(status='clean', status_text='Nothing found')
     if stale:
         view.update(stale=True, status_text=view['status_text'] + f' — but its last run was {_ago(age)} ago')
+    if view.get('problem'):
+        view['status_text'] += f' — {view["problem"][0].lower()}{view["problem"][1:]}'
     view['findings'] = view['findings'][:SHOWN_PER_CHECK]
     return view
 
@@ -509,7 +522,7 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
     incidents, incident_gap = _incidents(hours, now)
     setup = _setup(system)
     counts = {level: sum(1 for c in checks for f in c['findings'] if f['severity'] == level) for level in RANK}
-    broken = [c for c in checks if c['status'] in ('error', 'never_run') or c.get('stale')]
+    broken = [c for c in checks if c['status'] in ('error', 'never_run') or c.get('stale') or c.get('problem')]
     serious = counts['CRITICAL'] + counts['HIGH'] + sum(1 for i in incidents if i['severity'] in
                                                          ('CRITICAL', 'HIGH'))
     if serious:
@@ -535,7 +548,7 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
                                'schedule them, or run one by hand',
                           command='sudo megalodon schedule install --yes --take-baselines'))
     for check in broken:
-        if check['status'] == 'error' or check.get('stale'):
+        if check['status'] == 'error' or check.get('stale') or check.get('problem'):
             steps.append(dict(text=f'{check["title"]}: {check["status_text"]}',
                               command=check.get('next') or command('megalodon', check['check'], 'check')))
     return dict(schema=SCHEMA, generated_at=now.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -545,7 +558,7 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
                 coverage=dict(checks=len(checks),
                               ran=sum(1 for c in checks if c['status'] in ('clean', 'findings', 'watching')),
                               never_run=sum(1 for c in checks if c['status'] == 'never_run'),
-                              errors=sum(1 for c in checks if c['status'] == 'error'),
+                              errors=sum(1 for c in checks if c['status'] == 'error' or c.get('problem')),
                               stale=sum(1 for c in checks if c.get('stale'))))
 
 

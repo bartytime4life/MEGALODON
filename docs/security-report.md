@@ -67,6 +67,11 @@ Each check is shown as:
 A check whose last run is more than three of its scheduled intervals old is
 marked out of date: its timer may have stopped.
 
+What a check found still counts when something else went wrong: a run that
+found something and then failed (an alert it could not send), or a live
+watch that has stopped, shows its findings and says what went wrong, and
+that problem is among the next steps.
+
 ## Your choices for each finding
 
 Every finding lists what you can do, each as the exact command. Nothing is

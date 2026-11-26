@@ -324,3 +324,60 @@ def test_the_schedule_writes_the_page_every_morning():
     assert job.calendar == "*-*-* 07:47:00" and job.interval == 86400 and not job.root_only
     args = build_parser().parse_args(list(job.command))
     assert (args.format, str(args.output)) == ("html", "~/.local/state/megalodon/report.html")
+
+
+# ------------------------------------------------------------------ findings survive a failed alert or a stopped watch
+
+def test_findings_of_a_run_that_also_failed_are_kept(home):
+    # A check that found something and then could not send its alert exits 2: its findings must still count.
+    finding = dict(change="added", category="cron", location="/etc/cron.d/x", severity="HIGH")
+    results.keep("persistence", dict(findings=[finding], gaps=[]), 2, now=AT,
+                 reason="alerts unavailable: the settings file does not parse")
+    report = build()
+    persistence = view(report, "persistence")
+    assert persistence["status"] == "findings" and persistence["findings"][0]["rule_id"] == "PERSISTENCE_ADDED"
+    assert report["verdict"] == "act" and report["counts"]["HIGH"] == 1
+    assert "alerts unavailable" in persistence["problem"]
+    assert any("alerts unavailable" in step["text"] for step in report["next_steps"])
+
+
+def test_findings_of_a_live_check_whose_watch_stopped_are_kept(home, monkeypatch, tmp_path):
+    from megalodon import schedule
+    units = tmp_path / "units"
+    units.mkdir()
+    monkeypatch.setattr(schedule, "unit_dir", lambda system: units)
+    (units / "megalodon-egress.service").write_text(schedule.MARKER)
+    keep("egress", [dict(rule_id="NEW_OUTBOUND_PROGRAM", severity="HIGH", program="/tmp/x", address="9.9.9.9")])
+
+    def systemctl(system, *args):
+        return subprocess.CompletedProcess(args, 0, "UnitFileState=enabled\nActiveState=failed\n", "")
+    report = sr.build(now=NOW, system=False, runner=systemctl)
+    egress = view(report, "egress")
+    assert egress["findings"] and report["verdict"] == "act"
+    assert "not running" in egress["problem"]
+    assert any(step["command"] == "systemctl --user start megalodon-egress.service" for step in report["next_steps"])
+
+
+def test_an_interpreted_service_is_allowed_by_what_it_runs(home):
+    # The ancestry allow list matches an application service by its runtime and what it runs (`allow_as`).
+    keep("ancestry", [dict(rule_id="SERVICE_SPAWNED_SHELL", severity="HIGH", evidence=dict(
+        program="/bin/sh", service=dict(program="/usr/bin/python3", allow_as="/usr/bin/python3 /srv/app.py")))])
+    choices = view(build(), "ancestry")["findings"][0]["choices"]
+    allow = next(c for c in choices if c["choice"] == "expected")
+    assert allow["argv"] == ["megalodon", "ancestry", "allow", "/usr/bin/python3 /srv/app.py", "/bin/sh"]
+
+
+def test_a_clean_result_does_not_hide_a_stopped_watch(home, monkeypatch, tmp_path):
+    from megalodon import schedule
+    units = tmp_path / "units"
+    units.mkdir()
+    monkeypatch.setattr(schedule, "unit_dir", lambda system: units)
+    (units / "megalodon-egress.service").write_text(schedule.MARKER)
+    keep("egress", [])
+
+    def systemctl(system, *args):
+        return subprocess.CompletedProcess(args, 0, "UnitFileState=enabled\nActiveState=failed\n", "")
+    report = sr.build(now=NOW, system=False, runner=systemctl)
+    egress = view(report, "egress")
+    assert egress["status"] == "clean" and "not running" in egress["status_text"]
+    assert report["verdict"] != "clear" and report["coverage"]["errors"] >= 1
