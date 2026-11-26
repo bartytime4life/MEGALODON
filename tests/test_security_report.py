@@ -765,3 +765,38 @@ def test_a_watch_log_others_could_write_is_not_trusted(home):
     assert listeners["findings"] == [] and "cannot be read" in listeners["problem"]
     with pytest.raises(results.ResultError):
         results.add_seen("listeners", _seen(1))
+
+
+def test_watch_findings_kept_the_earlier_way_are_moved_not_lost(home, monkeypatch):
+    # Before the watch's own log, its findings were kept in the check's result, marked seen_by_watch. The first
+    # check after the upgrade must not replace them before they are reviewed.
+    from megalodon import listener_watch
+    results.keep("listeners", dict(findings=[_seen(4444)], gaps=[], seen_by_watch=True), 1, now=AT)
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    run_cli(["listeners", "check"])
+    assert [f["where"] for f in view(build(), "listeners")["findings"]] == ["tcp/0.0.0.0:4444"]
+    assert results.seen("listeners")["at"] == AT, "kept with when it was seen"
+
+
+def test_moved_watch_findings_keep_their_counts(home, monkeypatch):
+    from megalodon import listener_watch
+    path = results.keep("listeners", dict(findings=[_seen(1, "LOW")], gaps=[], seen_by_watch=True), 1, now=AT)
+    record = json.loads(path.read_text())
+    record.update(findings=3, severities={"HIGH": 1, "LOW": 2}, truncated=True)    # one HIGH no longer kept in full
+    path.write_text(json.dumps(record))
+    os.chmod(path, 0o600)
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    run_cli(["listeners", "check"])
+    report = build()
+    assert report["counts"]["HIGH"] == 1 and report["counts"]["LOW"] == 2
+    assert view(report, "listeners")["finding_count"] == 3
+
+
+def test_what_only_a_check_found_goes_when_a_later_check_no_longer_finds_it(home, monkeypatch):
+    # A check reports what is there now: its own result is replaced, not moved into the watch's log.
+    from megalodon import listener_watch
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[_seen(22)], gaps=[]))
+    run_cli(["listeners", "check"])
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    run_cli(["listeners", "check"])
+    assert view(build(), "listeners")["findings"] == [] and results.seen("listeners") is None

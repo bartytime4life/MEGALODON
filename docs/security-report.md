@@ -55,7 +55,9 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   script the watch saw may be gone, and a check cannot see it again. A check,
   failed or not, only replaces its own result; `accept` or a new baseline
   clears both. The latest 500 are listed and every one is counted; a flood is
-  bounded, and the count then says "at least". The other watches pass what
+  bounded, and the count then says "at least". Findings an earlier version
+  kept in the check's result are moved into the log, with when, before a
+  check replaces that result. The other watches pass what
   they find to the response engine, and it reaches the incidents.
 * **Incidents** of the last week (`--hours` to change), from the response
   engine's ledger and the enforcement journal, as `megalodon timeline` tells

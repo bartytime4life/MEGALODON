@@ -73,6 +73,8 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
             data = json.dumps(record, sort_keys=True, default=str)
     target = _folder(folder)
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if check in SEEN_CHECKS:
+        _move_watch_record(check, folder)
     handle, temporary = tempfile.mkstemp(prefix=f'.{check}-', dir=target)
     try:
         os.fchmod(handle, 0o600)
@@ -113,8 +115,11 @@ def add_seen(check, found, *, folder=None, now=None):
     """Append what a live watch just saw to its log (one line, O_APPEND: atomic, and nothing is read first)."""
     if check not in SEEN_CHECKS:
         raise ResultError(f'{check} is not a watch whose findings are kept')
-    target = _folder(folder)
-    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _folder(folder).mkdir(mode=0o700, parents=True, exist_ok=True)
+    return _append_seen(check, dict(at=now or _now(), finding=found), folder)
+
+
+def _append_seen(check, entry, folder=None):
     fd = os.open(seen_path(check, folder), os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
                  0o600)
     try:
@@ -123,13 +128,37 @@ def add_seen(check, found, *, folder=None, now=None):
             raise ResultError(f'{check}-seen.jsonl must be a mode-600 file owned by you')
         if info.st_size >= MAX_SEEN_BYTES:
             return False
-        entry = dict(at=now or _now(), finding=found)
-        if info.st_size >= _SEEN_FULL:
-            entry = dict(at=entry['at'], severity=str(found.get('severity') or '').upper())
+        if info.st_size >= _SEEN_FULL and 'finding' in entry:
+            entry = dict(at=entry['at'], severity=str(entry['finding'].get('severity') or '').upper())
         os.write(fd, (json.dumps(entry, sort_keys=True, default=str) + '\n').encode())
         return True
     finally:
         os.close(fd)
+
+
+def _move_watch_record(check, folder=None):
+    """Findings a watch kept, before its own log, in the check's result (marked seen_by_watch): moved to the log,
+    with when, before a check replaces that result. They were not reviewed, so they are not dropped."""
+    try:
+        prior = _read(_folder(folder) / f'{check}.json')
+    except (ResultError, OSError):
+        return 0
+    if not (prior and isinstance(prior.get('result'), dict) and prior['result'].get('seen_by_watch')):
+        return 0
+    at = prior.get('at') or _now()
+    kept = [f for f in prior['result'].get('findings', []) if isinstance(f, dict)]
+    moved = sum(1 for f in kept if _append_seen(check, dict(at=at, finding=f), folder))
+    # Those it counted but no longer kept in full: their severities, so the count stays.
+    listed = {}
+    for f in kept:
+        level = str(f.get('severity') or '').upper()
+        listed[level] = listed.get(level, 0) + 1
+    for level, count in (prior.get('severities') or {}).items():
+        for _ in range(max(0, int(count) - listed.get(level, 0)) if isinstance(count, int) else 0):
+            if not _append_seen(check, dict(at=at, severity=level), folder):
+                return moved
+            moved += 1
+    return moved
 
 
 def seen(check, *, folder=None):
