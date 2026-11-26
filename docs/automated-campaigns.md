@@ -17,7 +17,9 @@ It is **CRITICAL** when the attempts span `broad_kinds` kinds or more, or were s
 and the login records, for example): breadth no single scanner produces. Otherwise it is HIGH.
 
 Attempts are placed by when they happened, not when a pass read them, so findings read late, or across several
-passes, are counted the same.
+passes, are counted the same. Every window that holds a new attempt is looked at, not only the latest: a backlog
+read at once can hold a campaign that ended before its newest finding. When several qualify, the most severe is
+raised, and of equals the latest.
 
 This machine's own addresses, its gateways and its DNS servers are never followed: a finding piped in names both
 ends, and the end under attack is not the attacker.
@@ -59,7 +61,7 @@ In the response policy (`megalodon respond init` writes them out):
 [response.campaign]
 enabled = true
 window_seconds = 600      # 60 to 86400
-min_attempts = 8          # 2 to 1000: different attempts within the window
+min_attempts = 8          # 2 to 256: different attempts within the window
 min_kinds = 3             # 2 to 100: different kinds of attack among them
 broad_kinds = 5           # 2 to 100, at least min_kinds: CRITICAL from this many kinds
 cooldown_minutes = 30     # 1 to 1440: before the same address is raised again
@@ -69,8 +71,8 @@ An address is raised again within `cooldown_minutes` only if its campaign become
 table uses these values. A policy written before this table existed also needs the `automated-campaign` playbook
 added before campaigns are decided. Until then they are still recorded, and reach the timeline and the report.
 
-The engine follows up to 1024 addresses and their last 256 attempts each. An address with nothing new for a day is
-forgotten.
+The engine follows up to 1024 addresses and their last 256 different attempts each; an attempt repeated is kept
+once, at its latest, so repeats never push the others out. An address with nothing new for a day is forgotten.
 
 ## Limits
 

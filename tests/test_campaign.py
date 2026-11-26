@@ -107,6 +107,60 @@ def test_it_counts_across_passes_by_when_attempts_happened_not_when_they_were_re
     assert len(campaigns(paths)) == 1
 
 
+def test_a_campaign_in_a_late_backlog_is_found_though_later_findings_came_with_it(paths):
+    run(paths, sweep() + [attempt(99, "PORT_SCAN", HOSTS[19], 3600)], now=NOW + timedelta(hours=2))
+    [decision] = campaigns(paths)
+    assert "8 different attacks of 3 kinds in 42 s" in decision["signal"]["summary"]
+    assert decision["signal"]["observed_at"] == at(42), "the campaign is placed where it happened"
+
+
+def test_a_raise_after_a_short_cooldown_is_a_finding_of_its_own(paths):
+    text = paths["policy_path"].read_text()
+    paths["policy_path"].write_text(text.replace("cooldown_minutes = 30", "cooldown_minutes = 1"))
+    run(paths, sweep(), now=NOW + timedelta(minutes=1))
+    run(paths, [attempt(50, "PORT_SCAN", HOSTS[15], 160)], now=NOW + timedelta(minutes=3))
+    assert len(campaigns(paths)) == 2, "the same window start and severity, but a new raise"
+
+
+def test_repeats_never_push_out_the_different_attempts_kept(paths):
+    # The same attempt again and again, once a second after the others: more of it than the attempts kept.
+    repeats = [attempt(1000 + n, "PORT_SCAN", HOSTS[0], 40 + n) for n in range(campaign.MAX_ATTEMPTS + 100)]
+    run(paths, sweep(count=7) + repeats, now=NOW + timedelta(minutes=7))
+    assert campaigns(paths) == []
+    run(paths, [attempt(60, "PORT_SCAN", HOSTS[18], 400)], now=NOW + timedelta(minutes=8))
+    [decision] = campaigns(paths)
+    assert "8 different attacks of 3 kinds" in decision["signal"]["summary"], "repeats are one attempt"
+
+
+def test_of_several_campaigns_in_one_backlog_the_worst_then_the_latest_is_raised(paths):
+    kinds = ("PORT_SCAN", "BRUTE_FORCE", "HOST_SWEEP", "DECOY_TOUCH", "SYN_FLOOD")
+    early_critical = sweep(count=10, kinds=kinds)
+    later_high = sweep(start=3000)
+    run(paths, early_critical + later_high, now=NOW + timedelta(hours=2))
+    [decision] = campaigns(paths)
+    assert decision["signal"]["severity"] == "CRITICAL" and decision["signal"]["observed_at"] == at(54)
+    paths = dict(paths, state_path=Path(paths["state_path"]).with_name("other-state.json"),
+                 ledger=Path(paths["ledger"]).with_name("other-ledger.jsonl"))
+    run(paths, sweep() + sweep(start=3000), now=NOW + timedelta(hours=2))
+    [decision] = campaigns(paths)
+    assert decision["signal"]["observed_at"] == at(3042), "of two equal campaigns, the latest"
+
+
+def test_a_late_earlier_finding_does_not_raise_again_a_campaign_already_raised(paths):
+    run(paths, sweep(start=3000), now=NOW + timedelta(hours=1))
+    assert len(campaigns(paths)) == 1
+    # Read after the cooldown, from long before that campaign's window: it is in no campaign of its own.
+    run(paths, [attempt(90, "PORT_SCAN", HOSTS[12], 1000)], now=NOW + timedelta(hours=2))
+    assert len(campaigns(paths)) == 1
+
+
+def test_the_summary_counts_an_attempt_repeated_within_the_window_once(paths):
+    again = [attempt(500 + n, "PORT_SCAN", HOSTS[0], 1 + n) for n in range(5)]
+    run(paths, sweep() + again)
+    [decision] = campaigns(paths)
+    assert decision["signal"]["summary"].startswith(f"{ATTACKER}: 8 different attacks of 3 kinds")
+
+
 def test_two_sensors_or_many_kinds_make_it_critical(paths):
     run(paths, sweep(count=6) + [login(1, 40), login(2, 41, user="root")])
     [decision] = campaigns(paths)
@@ -154,6 +208,7 @@ def test_it_can_be_tuned_or_turned_off(paths):
 @pytest.mark.parametrize("old,new,message", [
     ("min_attempts = 8", "min_attempts = 1", "min_attempts must be an integer from 2"),
     ("min_attempts = 8", "min_attempts = true", "min_attempts must be an integer"),
+    ("min_attempts = 8", "min_attempts = 257", "min_attempts must be an integer from 2 to 256"),  # more than kept
     ("broad_kinds = 5", "broad_kinds = 2", "broad_kinds must be at least min_kinds"),
     ("enabled = true\nwindow", 'enabled = "yes"\nwindow', "enabled must be true or false"),
     ("cooldown_minutes = 30", "cooldown_minutes = 30\nthreshold = 3", "unsupported settings: threshold"),

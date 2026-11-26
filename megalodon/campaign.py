@@ -45,7 +45,7 @@ class Settings:
     cooldown_minutes: int = 30
 
 
-BOUNDS = dict(window_seconds=(60, 86400), min_attempts=(2, 1000), min_kinds=(2, 100), broad_kinds=(2, 100),
+BOUNDS = dict(window_seconds=(60, 86400), min_attempts=(2, MAX_ATTEMPTS), min_kinds=(2, 100), broad_kinds=(2, 100),
               cooldown_minutes=(1, 1440))
 
 
@@ -87,7 +87,7 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
     if not settings.enabled:
         return []
     book = state.setdefault('campaigns', {})
-    touched = set()
+    touched, new = set(), {}
     for signal in signals:
         if signal.source == SOURCE or signal.rule_id == RULE_ID:
             continue
@@ -95,42 +95,88 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
         for address in sorted(signal.entities.get('address', ())):
             if address in exclude or not _followed(address):
                 continue
-            entry = book.setdefault(address, dict(attempts=[], raised_at=None, raised_severity=None))
-            entry['attempts'].append([_iso(at), signal.rule_id, signal.source, _target(signal, address)])
+            book.setdefault(address, dict(attempts=[], raised_at=None, raised_severity=None))
+            new.setdefault(address, []).append([_iso(at), signal.rule_id, signal.source, _target(signal, address)])
             touched.add(address)
     raised = []
     for address in sorted(touched):
         entry = book[address]
-        attempts = sorted(entry['attempts'])
-        latest = _time(attempts[-1][0], now)
-        start = latest - timedelta(seconds=settings.window_seconds)
-        attempts = [a for a in attempts if _time(a[0], now) >= start][-MAX_ATTEMPTS:]
-        entry['attempts'] = attempts
-        found = _assess(attempts, settings)
+        # Every window holding a new attempt, not only the latest: findings read late can hold a campaign that ended
+        # before the newest. A window of earlier attempts only was assessed when they arrived.
+        marked = sorted([(a, False) for a in entry['attempts']] + [(a, True) for a in new[address]])
+        attempts = [a for a, _ in marked]
+        found = _worst_window(attempts, [fresh for _, fresh in marked], settings)
+        entry['attempts'] = _kept(attempts, settings)
         if found is None:
             continue
-        severity, summary = found
+        severity, summary, last_at = found
         last = entry.get('raised_at')
         quiet = last is None or _time(last, now) <= now - timedelta(minutes=settings.cooldown_minutes)
         rising = entry.get('raised_severity') == 'HIGH' and severity == 'CRITICAL'
         if not (quiet or rising):
             continue
         entry.update(raised_at=_iso(now), raised_severity=severity)
-        raised.append(make_signal(f'{SOURCE}:{address}:{attempts[0][0]}:{severity}', severity, attempts[-1][0],
+        # Each raise is a finding of its own: a key of its own, or the engine's daily dedupe would drop a repeat.
+        raised.append(make_signal(f'{SOURCE}:{address}:{_iso(now)}:{severity}', severity, last_at,
                                   f'{address}: {summary}', address))
     _prune(book, now)
     return raised
 
 
+def _worst_window(attempts, fresh, settings):
+    """The most severe window of `window_seconds` that holds a `fresh` attempt and is a campaign, the latest of
+    equals; or None."""
+    width = timedelta(seconds=settings.window_seconds)
+    times = [_time(a[0], None) for a in attempts]
+    keys, rules, sources = {}, {}, {}
+    fresh_in = 0
+
+    def add(counter, key, step):
+        counter[key] = counter.get(key, 0) + step
+        if not counter[key]:
+            del counter[key]
+    best, first = None, 0
+    for last, (_, rule, source, target) in enumerate(attempts):
+        for counter, key in ((keys, (rule, target)), (rules, rule), (sources, source)):
+            add(counter, key, 1)
+        fresh_in += fresh[last]
+        while times[last] - times[first] > width:
+            _, old_rule, old_source, old_target = attempts[first]
+            for counter, key in ((keys, (old_rule, old_target)), (rules, old_rule), (sources, old_source)):
+                add(counter, key, -1)
+            fresh_in -= fresh[first]
+            first += 1
+        if not fresh_in or len(keys) < settings.min_attempts or len(rules) < settings.min_kinds:
+            continue
+        critical = len(rules) >= settings.broad_kinds or len(sources) >= 2
+        if best is None or critical >= best[0]:
+            best = (critical, first, last)
+    if best is None:
+        return None
+    window = attempts[best[1]:best[2] + 1]
+    severity, summary = _assess(window, settings)
+    return severity, summary, window[-1][0]
+
+
+def _kept(attempts, settings):
+    """What a later window can still use: the last window's attempts, each distinct one at its latest time only (an
+    earlier copy is inside any window the later one is), the newest MAX_ATTEMPTS of them."""
+    if not attempts:
+        return []
+    start = _time(attempts[-1][0], None) - timedelta(seconds=settings.window_seconds)
+    latest = {}
+    for attempt in attempts:
+        if _time(attempt[0], None) >= start:
+            latest[(attempt[1], attempt[3])] = attempt
+    return sorted(latest.values())[-MAX_ATTEMPTS:]
+
+
 def _assess(attempts, settings):
+    """The severity and summary of a window `_worst_window` found to be a campaign."""
     distinct = {}
     for at, rule, source, target in attempts:
         distinct.setdefault((rule, target), (at, rule, source))
-    if len(distinct) < settings.min_attempts:
-        return None
     kinds = sorted({rule for _, rule, _ in distinct.values()})
-    if len(kinds) < settings.min_kinds:
-        return None
     sensors = sorted({source for _, _, source in distinct.values()})
     first, last = attempts[0][0], attempts[-1][0]
     span = max((_time(last, None) - _time(first, None)).total_seconds(), 1.0)
