@@ -114,6 +114,16 @@ def test_a_campaign_in_a_late_backlog_is_found_though_later_findings_came_with_i
     assert decision["signal"]["observed_at"] == at(42), "the campaign is placed where it happened"
 
 
+def test_a_campaign_whose_findings_arrive_out_of_order_across_passes_is_found(paths):
+    burst = sweep()
+    # Half of it, with a later finding read in the same pass; then the other half, read late.
+    run(paths, burst[:4] + [attempt(99, "PORT_SCAN", HOSTS[19], 3600)], now=NOW + timedelta(hours=1, minutes=1))
+    assert campaigns(paths) == []
+    run(paths, burst[4:], now=NOW + timedelta(hours=1, minutes=2))
+    [decision] = campaigns(paths)
+    assert "8 different attacks of 3 kinds in 42 s" in decision["signal"]["summary"]
+
+
 def test_a_raise_after_a_short_cooldown_is_a_finding_of_its_own(paths):
     text = paths["policy_path"].read_text()
     paths["policy_path"].write_text(text.replace("cooldown_minutes = 30", "cooldown_minutes = 1"))

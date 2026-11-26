@@ -71,7 +71,8 @@ An address is raised again within `cooldown_minutes` only if its campaign become
 table uses these values. A policy written before this table existed also needs the `automated-campaign` playbook
 added before campaigns are decided. Until then they are still recorded, and reach the timeline and the report.
 
-The engine follows up to 1024 addresses and their last 256 different attempts each; an attempt repeated is kept
+The engine follows up to 512 addresses, and for each the last 256 different attempts from up to a day before its
+newest, so findings that arrive out of order, across passes, still complete a campaign. An attempt repeated is kept
 once, at its latest, so repeats never push the others out. An address with nothing new for a day is forgotten.
 
 ## Limits

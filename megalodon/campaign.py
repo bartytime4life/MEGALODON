@@ -29,9 +29,10 @@ import statistics
 
 RULE_ID = 'AUTOMATED_CAMPAIGN'
 SOURCE = 'campaign'
-MAX_ADDRESSES = 1024          # addresses followed at once; the least recently active is dropped first
+MAX_ADDRESSES = 512           # addresses followed at once; the least recently active is dropped first
 MAX_ATTEMPTS = 256            # attempts kept per address, newest kept
-KEEP_HOURS = 24               # an address with nothing newer than this is forgotten
+KEEP_HOURS = 24               # attempts this much older than an address's newest are dropped; so is an address
+                              # with nothing newer than this
 SUMMARY_ROOM = 300 - 47       # a finding's summary is kept to 300 characters; an address and ': ' take up to 47
 
 
@@ -159,11 +160,12 @@ def _worst_window(attempts, fresh, settings):
 
 
 def _kept(attempts, settings):
-    """What a later window can still use: the last window's attempts, each distinct one at its latest time only (an
-    earlier copy is inside any window the later one is), the newest MAX_ATTEMPTS of them."""
+    """What a later pass can still use: each distinct attempt at its latest time only (an earlier copy is inside any
+    window the later one is), from up to KEEP_HOURS before the newest, the newest MAX_ATTEMPTS of them. Not only
+    the newest window: findings can arrive out of order, and the rest of an earlier campaign can still come."""
     if not attempts:
         return []
-    start = _time(attempts[-1][0], None) - timedelta(seconds=settings.window_seconds)
+    start = _time(attempts[-1][0], None) - timedelta(hours=KEEP_HOURS)
     latest = {}
     for attempt in attempts:
         if _time(attempt[0], None) >= start:
