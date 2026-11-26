@@ -1,5 +1,12 @@
 # Qwen runtime UNBOUND fence — issue #446
 
+At [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b), the canonical record is still
+`UNBOUND` and the owner decision is `NOT_RECORDED`.
+[Issue #446](https://github.com/bartytime4life/MEGALODON/issues/446) was closed on November 2, 2026 Central time.
+The [current acceptance map](current-state.md#november-26-source-and-acceptance-map)
+links the scoped zero-effect and parity results and records the outstanding
+model acceptance evidence.
+
 This release has no accepted owner model binding. `megalodon/local_model_runtime.py`
 therefore returns `OWNER_MODEL_BINDING_NOT_RECORDED` without reading files,
 consulting a provider, acquiring a process lock or starting a worker. The release

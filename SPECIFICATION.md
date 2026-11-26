@@ -1,6 +1,6 @@
 # MEGALODON MVP specification and proposed platform extension
 
-> **Documentation orientation — November 17, 2026 (America/Chicago) / merged source `dee4027a8541335f43460d6bef37024606f4bfdf`:** Start with [current state and evidence boundaries](docs/current-state.md#november-17-maintained-source-and-review-candidate) and the [field guide](docs/README.md). Dated contracts and acceptance records below keep their original scope. Core telemetry reads, legacy CLI plans, protected Linux HUD actions, and the separate snapshot viewer are different interfaces. This note grants no new operational authority.
+> **Documentation orientation · November 26, 2026.** Start with [current state and acceptance](docs/current-state.md#november-26-source-and-acceptance-map) at [`main@e2bafb3`](https://github.com/bartytime4life/MEGALODON/commit/e2bafb3f52d5d7f827557d83b43c81017f645a4b). The contract sections below retain their original dates and scope. The current source implements separate metadata reads, protected Linux HUD workflows, host-report and review commands, opt-in enforcement and external delivery, and a partial Stage 0 application fence.
 
 ## Offline security science and refresh recovery — November 17, 2026 candidate
 

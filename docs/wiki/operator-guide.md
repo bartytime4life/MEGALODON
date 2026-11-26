@@ -1,6 +1,6 @@
 # Operator Guide
 
-> Maintained orientation: [current source and review candidate](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md), including finite host protection and the [offline security-science lab](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-science-lab.md). Older pinned links below retain their dated scope.
+> [Current capabilities, checks and remaining acceptance](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md#november-26-source-and-acceptance-map) · November 26, 2026. Pinned examples below keep their original dates.
 
 > Historical November 11 operator navigation basis: `main@418fa54474f3f77d0758e94aab5735a516d8c43b` (November 11, 2026, America/Chicago). [Current state and limits](https://github.com/bartytime4life/MEGALODON/blob/main/docs/current-state.md) distinguishes code, host operation and acceptance. Historical evidence retains its own source pins.
 
@@ -85,6 +85,14 @@ in the returned page.
 reference-refresh workflows. Audit suggestions, changed files, baseline state
 and cached indicator matches remain separate from qualified network findings.
 See [the current host-security guide](https://github.com/bartytime4life/MEGALODON/blob/main/docs/host-security.md).
+
+## Review host findings
+
+[Host report and guided review](https://github.com/bartytime4life/MEGALODON/blob/main/docs/security-report.md) covers
+`megalodon report` and `megalodon review`. The report displays saved findings,
+check failures and coverage gaps where available. It can render successfully with a
+verdict requiring action. Guided review requests confirmation before a supported
+command. Check the account and the last observation time before acting.
 
 ## Recovery evidence and current technical detail
 

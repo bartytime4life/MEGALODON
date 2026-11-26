@@ -24,7 +24,8 @@ you have. Every guide keeps source, uncertainty, and authority visible.
 | Explore useful applications | [Practical walkthroughs](wiki/practical-applications.md) | [Technical deep dive](wiki/technical-deep-dive.md) |
 | Audit configuration or file changes | [Host security](host-security.md) | [Background tools](background-tools.md) |
 | Understand local AI | [Integrations and local AI](wiki/integrations-and-qwen.md) | [Model selection](local-model-selection.md) |
-| Make a report or recover data | [Recording and reports](efficient-recording-reports.md) | [Recovery contract](sqlite-recovery-contract.md) |
+| Read the host security report and review a finding | [Host report and guided review](security-report.md) | [Watches and collection gaps](scheduling.md) |
+| Read telemetry history or recover a database | [Recording and reports](efficient-recording-reports.md) | [SQLite recovery contract](sqlite-recovery-contract.md) |
 | Evaluate the engineering | [Case studies](wiki/engineering-case-studies.md) | [Evidence index](wiki/evidence-index.md) |
 | Contribute a bounded change | [Contribution guide](../CONTRIBUTING.md) | [Development and validation](wiki/development-and-validation.md) |
 
@@ -60,17 +61,13 @@ compromise. See [security boundaries](wiki/security-boundaries.md).
 
 ## Know which document governs
 
-[Current state and limits](current-state.md) leads with the November 17 merged
-source and its separate [repo/app review candidate](repo-app-review-2026-11-17.md).
-The latter adds interactive security science and refresh recovery; the merged
-baseline includes host protection and the qualified Playwright upgrade.
-The [November 11 refresh record](documentation-refresh-2026-11-11.md) retains its
-source, candidate-check and publication scope. Earlier November 9 and October
-orientations retain their dates. The [reconciliation record](documentation-refresh-2026-10-22.md)
-explains how the supplied September architecture/research plans relate to it. [The complete documentation catalog](documentation-map.md)
-accounts for every tracked Markdown document, including versioned contracts,
-proposals, templates, and preserved history. Catalog inclusion is not technical
-acceptance or a claim that every historical paragraph is current.
+[Current state and acceptance](current-state.md#november-26-source-and-acceptance-map)
+maps each subsystem to its implementation, hosted checks and missing operational
+evidence. [The documentation catalog](documentation-map.md) indexes every
+tracked Markdown path, including contracts, proposals, templates and historical
+records. The [November 11 refresh](documentation-refresh-2026-11-11.md) and
+[October reconciliation](documentation-refresh-2026-10-22.md) keep their own
+source pins and evidence.
 
 For intended behavior, read [SPECIFICATION.md](../SPECIFICATION.md) and
 [SECURITY_REVIEW.md](../SECURITY_REVIEW.md), including their scope notes. For what

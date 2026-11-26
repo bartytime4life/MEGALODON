@@ -1,6 +1,6 @@
 # Windows and Linux platform baseline
 
-> **Current reading — November 11, 2026:** The v1 tables below preserve their September source pin. For the guided Linux HUD at merged `main@418fa54`, the twelve-entry catalog, current Setup navigation, UNBOUND model hold and remaining platform gates, use [current state](current-state.md#november-11-source-orientation) and [local setup](local-pc-setup.md). Historical “no converter/watcher/scheduler” statements do not describe every current interface. New UI and numerical regression checks supply no native Windows/macOS parity or producer acceptance.
+> **Current reading · November 26, 2026.** See the [source and acceptance map](current-state.md#november-26-source-and-acceptance-map). The September tables below are a historical baseline. Current hosted Windows and macOS fixture lanes are scoped synthetic evidence. Linux remains the operating reference.
 
 **Baseline v1 — immutable inspected configuration and delivery plan.**
 Repository state was observed at 2026-09-10T02:06:08Z against
