@@ -387,3 +387,80 @@ def test_the_totals_count_every_finding_not_only_those_shown(home):
     keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/var/www/{n}.env") for n in range(40)])
     report = build()
     assert report["counts"]["HIGH"] == 40 and len(view(report, "secrets")["findings"]) == sr.SHOWN_PER_CHECK
+
+
+# ------------------------------------------------------------------ settings read as the modules that use them read them
+
+def _enforce_on(home, actions='["block_address"]', playbooks='["dropped-tool-phoning-home"]'):
+    from megalodon import enforcement, response_engine as engine
+    engine.write_default_policy()
+    enforcement.init()
+    path = home / ".config/megalodon/enforce.toml"
+    text = path.read_text()
+    text = text.replace("enabled = false", "enabled = true").replace("actions = []", f"actions = {actions}")
+    path.write_text(text.replace("playbooks = []", f"playbooks = {playbooks}"))
+    return path
+
+
+def test_enforcement_that_is_on_is_reported_as_on(home):
+    _enforce_on(home)
+    row = {r["item"]: r for r in build()["setup"]}["enforcement"]
+    assert row["ok"] is True and row["text"].startswith("On for block_address in 1 playbook(s)")
+
+
+def test_enforcement_pinned_to_another_response_policy_does_nothing(home):
+    _enforce_on(home)
+    policy = home / ".config/megalodon/response-policy.toml"
+    policy.write_text(policy.read_text() + "\n# edited after it was pinned\n")
+    report = build()
+    row = {r["item"]: r for r in report["setup"]}["enforcement"]
+    assert row["ok"] is False and "not the one it pinned" in row["text"]
+    assert any(step["command"] == "megalodon enforce init --replace" for step in report["next_steps"])
+
+
+def test_policies_the_modules_would_refuse_are_reported(home):
+    config = home / ".config/megalodon"
+    (config / "response-policy.toml").write_text("[response]\nnot_a_setting = 1\n")
+    os.chmod(config / "response-policy.toml", 0o600)
+    (config / "enforce.toml").write_text("[enforcement]\nenabled = true\n")
+    os.chmod(config / "enforce.toml", 0o600)
+    (config / "heartbeat.json").write_text("{}")
+    os.chmod(config / "heartbeat.json", 0o600)
+    rows = {r["item"]: r for r in build()["setup"]}
+    assert rows["response"]["ok"] is False and "cannot be used" in rows["response"]["text"]
+    assert rows["enforcement"]["ok"] is False and "cannot be used" in rows["enforcement"]["text"]
+    assert rows["heartbeat"]["ok"] is False and "cannot be sent" in rows["heartbeat"]["text"]
+
+
+def test_unreadable_incidents_are_never_all_clear(home, monkeypatch):
+    from megalodon import timeline
+    for name in results.NAMES:
+        keep(name, [])
+    monkeypatch.setattr(sr, "_setup", lambda system: [])
+
+    def unreadable(**kw):
+        raise OSError("the ledger is not readable")
+    assert build()["verdict"] == "clear", "the control: everything ran clean"
+    monkeypatch.setattr(timeline, "incidents", unreadable)
+    report = build()
+    assert report["verdict"] == "gaps" and "Incidents could not be read" in report["incident_gap"]
+    assert any(step["command"] == "megalodon timeline list" for step in report["next_steps"])
+
+
+def test_enforcement_with_no_playbook_carries_nothing_out(home):
+    _enforce_on(home, playbooks="[]")
+    row = {r["item"]: r for r in build()["setup"]}["enforcement"]
+    assert row["ok"] is None and row["text"].startswith("Off:")
+
+
+def test_without_systemd_the_schedule_is_not_called_missing(home, monkeypatch, tmp_path):
+    from megalodon import schedule
+    monkeypatch.setattr(schedule, "unit_dir", lambda system: tmp_path / "no-units")
+    monkeypatch.setattr(schedule, "has_systemd", lambda: False)
+    row = {r["item"]: r for r in build()["setup"]}["schedule"]
+    assert row["ok"] is None and "crontab" in row["text"]
+    assert all("schedule install" not in step["command"] for step in build()["next_steps"]), \
+        "install refuses without systemd: the steps say plan"
+    monkeypatch.setattr(schedule, "has_systemd", lambda: True)
+    row = {r["item"]: r for r in build()["setup"]}["schedule"]
+    assert row["ok"] is False and row["fix"] == "sudo megalodon schedule plan"

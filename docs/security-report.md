@@ -52,7 +52,14 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   them.
 * **The setup**: which scheduled jobs are installed, which still need a
   baseline, the alert settings, the response and enforcement policies, and
-  the heartbeat.
+  the heartbeat. Each is read by the module that uses it, so a policy that
+  module would refuse is reported as not working, and enforcement pinned to a
+  response policy that has changed since is reported as carrying nothing out.
+  Without systemd the schedule is crontab lines you add yourself; the report
+  cannot see them, and says so.
+* **Never all clear on missing information**: incidents that cannot be read,
+  a watch that stopped, or a check that failed after finding something keep
+  the verdict from "all clear".
 
 Each check is shown as:
 

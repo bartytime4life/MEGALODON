@@ -411,10 +411,18 @@ def _setup(system):
     installed = [j.name for j in schedule.JOBS
                  if any((units / name).exists() for name in schedule.units(j, ['m'], system))]
     wanted = [j.name for j in schedule.JOBS if system or not j.root_only]
-    rows.append(dict(item='schedule', ok=len(installed) > 0,
-                     text=(f'{len(installed)} of {len(wanted)} jobs are installed' if installed else
-                           'No job is scheduled: checks run only when you start them'),
-                     fix=None if installed else 'sudo megalodon schedule plan'))
+    if installed:
+        rows.append(dict(item='schedule', ok=True, text=f'{len(installed)} of {len(wanted)} jobs are installed',
+                         fix=None))
+    elif not schedule.has_systemd():
+        # Without systemd the schedule is crontab lines you add yourself; whether you did cannot be seen here.
+        rows.append(dict(item='schedule', ok=None,
+                         text='Without systemd, the schedule is the crontab lines `megalodon schedule plan` prints; '
+                              'whether they are added cannot be seen here. Each check says when it last ran.',
+                         fix='megalodon schedule plan'))
+    else:
+        rows.append(dict(item='schedule', ok=False, text='No job is scheduled: checks run only when you start them',
+                         fix='sudo megalodon schedule plan'))
     missing = []
     try:
         plan = schedule.plan(system=system, launcher=['megalodon'])
@@ -426,22 +434,52 @@ def _setup(system):
                          text=('Every scheduled job has what it needs' if not missing else
                                f'{len(missing)} scheduled jobs need a baseline or setting up first: ' +
                                ', '.join(name for name, _ in missing[:8]) + ('…' if len(missing) > 8 else '')),
-                         fix=None if not missing else 'sudo megalodon schedule install --yes --take-baselines'))
+                         fix=None if not missing else _install_command()))
     rows.append(_alerts())
-    rows.append(_file_row('response', '~/.config/megalodon/response-policy.toml',
-                          'The response engine has a policy', 'The response engine has no policy',
-                          'megalodon respond init'))
-    rows.append(_enforcement())
-    rows.append(_file_row('heartbeat', '~/.config/megalodon/heartbeat.json',
-                          'A signed heartbeat goes off the machine, so silence is noticed',
-                          'No heartbeat: if MEGALODON is stopped, no one is told',
-                          'megalodon heartbeat init --url https://your-monitor.example/ping'))
+    response, digest = _response()
+    rows.append(response)
+    rows.append(_enforcement(digest))
+    rows.append(_heartbeat())
     return rows
 
 
-def _file_row(item, path, yes, no, fix):
-    present = Path(path).expanduser().exists()
-    return dict(item=item, ok=present, text=yes if present else no, fix=None if present else fix)
+def _install_command():
+    """The command that schedules the checks here: systemd installs them; without it, `plan` prints the crontab
+    lines and baseline commands to run yourself (`install` refuses there)."""
+    from . import schedule
+    return ('sudo megalodon schedule install --yes --take-baselines' if schedule.has_systemd()
+            else 'megalodon schedule plan')
+
+
+# Each setting is read by the module that uses it, so the report says what that module will do with it.
+
+def _response():
+    from . import response_engine as engine
+    path = Path(engine.DEFAULT_POLICY).expanduser()
+    if not path.exists():
+        return dict(item='response', ok=False, text='The response engine has no policy',
+                    fix='megalodon respond init'), None
+    try:
+        policy = engine.load_policy(path)
+    except (engine.ResponseError, OSError) as exc:
+        return dict(item='response', ok=False, text=f'The response policy cannot be used, so nothing is decided: '
+                                                     f'{clean(exc)}', fix='megalodon respond init --replace'), None
+    return dict(item='response', ok=True, text='The response engine has a policy', fix=None), policy.digest
+
+
+def _heartbeat():
+    from . import tamper
+    path = Path(tamper.DEFAULT_HEARTBEAT).expanduser()
+    if not path.exists():
+        return dict(item='heartbeat', ok=False, text='No heartbeat: if MEGALODON is stopped, no one is told',
+                    fix='megalodon heartbeat init --url https://your-monitor.example/ping')
+    try:
+        tamper._read(path, tamper.HEARTBEAT_SCHEMA + '-config', 'heartbeat configuration')
+    except (tamper.TamperError, OSError) as exc:
+        return dict(item='heartbeat', ok=False, text=f'The heartbeat cannot be sent: {clean(exc)}',
+                    fix='megalodon heartbeat init --replace --url https://your-monitor.example/ping')
+    return dict(item='heartbeat', ok=True, text='A signed heartbeat goes off the machine, so silence is noticed',
+                fix=None)
 
 
 def _alerts():
@@ -463,22 +501,29 @@ def _alerts():
                 fix='megalodon alerts test')
 
 
-def _enforcement():
-    import tomllib
-    path = Path('~/.config/megalodon/enforce.toml').expanduser()
+def _enforcement(response_digest=None):
+    from . import enforcement
+    path = Path(enforcement.DEFAULT_POLICY).expanduser()
     if not path.exists():
         return dict(item='enforcement', ok=None, text='Nothing is carried out automatically: decisions are only '
                                                       'recorded', fix='megalodon enforce init')
     try:
-        policy = tomllib.loads(path.read_text(encoding='utf-8')).get('enforcement', {})
-    except (OSError, ValueError) as exc:
-        return dict(item='enforcement', ok=False, text=f'The enforcement policy cannot be read: {clean(exc)}')
-    if not policy.get('enabled') or not policy.get('actions'):
+        policy = enforcement.load_policy(path)
+    except (enforcement.EnforcementError, OSError) as exc:
+        return dict(item='enforcement', ok=False, text=f'The enforcement policy cannot be used, so nothing is '
+                                                        f'carried out: {clean(exc)}', fix='megalodon enforce init')
+    if not policy['enabled'] or not policy['actions'] or not policy['playbooks']:
         return dict(item='enforcement', ok=None, text='Off: decisions are recorded and nothing is carried out '
                                                       'automatically. That is your choice to change.',
                     fix='edit ~/.config/megalodon/enforce.toml (docs/enforcement.md)')
+    if response_digest != policy['digest']:
+        # Enforcement acts only on decisions made under the response policy it pinned.
+        return dict(item='enforcement', ok=False,
+                    text='Enforcement is on, but the response policy is not the one it pinned, so nothing is carried '
+                         'out. Review the response policy, then pin it again.',
+                    fix='megalodon enforce init --replace')
     return dict(item='enforcement', ok=True,
-                text=f'On for {", ".join(map(str, policy["actions"]))} in {len(policy.get("playbooks", []))} '
+                text=f'On for {", ".join(sorted(policy["actions"]))} in {len(policy["playbooks"])} '
                      f'playbook(s); each can be undone', fix='megalodon enforce list')
 
 
@@ -531,7 +576,7 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
         verdict, headline = 'act', 'Act now: there are serious findings to look at.'
     elif counts['MEDIUM'] or incidents:
         verdict, headline = 'review', 'Review: some findings need a look, none of them serious.'
-    elif broken or any(r['ok'] is False for r in setup):
+    elif broken or incident_gap or any(r['ok'] is False for r in setup):
         verdict, headline = 'gaps', 'Nothing found, but parts of the protection are not running.'
     else:
         verdict, headline = 'clear', 'All clear: every check ran and found nothing.'
@@ -543,12 +588,15 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
     for row in setup:
         if row['ok'] is False and row.get('fix'):
             steps.append(dict(text=row['text'], command=row['fix']))
+    if incident_gap:
+        # The incidents are where the live watches report: unread, they may hide what the watches found.
+        steps.append(dict(text=incident_gap, command=command('megalodon', 'timeline', 'list')))
     never = [c for c in checks if c['status'] == 'never_run']
     if never:
         steps.append(dict(text=f'{len(never)} checks have not run yet ('
                                f'{", ".join(c["title"].lower() for c in never[:4])}{"…" if len(never) > 4 else ""}): '
                                'schedule them, or run one by hand',
-                          command='sudo megalodon schedule install --yes --take-baselines'))
+                          command=_install_command()))
     for check in broken:
         if check['status'] == 'error' or check.get('stale') or check.get('problem'):
             steps.append(dict(text=f'{check["title"]}: {check["status_text"]}',
