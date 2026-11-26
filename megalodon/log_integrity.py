@@ -429,6 +429,7 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
     old_journals = old.get('journals') or {}
     journals = _journals(options, old_journals)
     journal_findings, explained = journal_integrity.compare(old_journals, journals)
+    reviewed_files = {}   # the reviewed record of each journal file found against the baseline
     if compared_with != Path(manifest).expanduser():
         # The reviewed baseline is the floor; see _floor. Journal files are named by a random ID, never reused,
         # so every reviewed file still present is held to what the review saw.
@@ -443,6 +444,7 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
                    if file_id in journals['files'] and file_id not in held_files}
         for item in journal_integrity.compare(dict(files=present), journals)[0]:
             journal_findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline')))
+            reviewed_files[item['journal_file_id']] = present[item['journal_file_id']]
     findings = sorted(findings + journal_findings, key=lambda item: (-RANK[item['severity']], item['log']))
     report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
                   compared_with=str(compared_with),
@@ -461,7 +463,10 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
         held = {item['journal_file_id'] for item in journal_findings} | {
             file_id for file_id, record in old_journals.get('files', {}).items() if record['path'] in journals['gaps']}
         files = {file_id: record for file_id, record in journals['files'].items() if file_id not in held}
-        files.update({file_id: old_journals['files'][file_id] for file_id in held})
+        # A file found against the reviewed baseline may have left the progress (vacuumed, then brought back):
+        # it keeps the reviewed record, so it is reported until accept.
+        files.update({file_id: old_journals.get('files', {}).get(file_id) or reviewed_files[file_id]
+                      for file_id in held})
         _write(progress_path(manifest), dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs,
                                              gaps=new['gaps'], journals=dict(journals, files=files)))
         report.update(advanced=sorted(set(logs) - kept),

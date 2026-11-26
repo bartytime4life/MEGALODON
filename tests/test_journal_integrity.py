@@ -405,3 +405,23 @@ def test_progress_cannot_hide_damage_to_a_journal_file_the_review_recorded(machi
     assert check(manifest, root, advance=True)[0] == {expected}, "reported until accept"
     li.accept(manifest, root=str(root))
     assert check(manifest, root)[0] == set()
+
+
+def test_a_reviewed_archive_brought_back_changed_keeps_its_reviewed_record(machine):
+    # Vacuumed after the review, the archive leaves the progress; a changed copy restored under its file ID is
+    # found against the reviewed baseline, and the advancing check must hold the reviewed record, not crash.
+    root, folder, manifest = machine
+    li.check(manifest, root=str(root), advance=True)
+    path = next(folder.glob(f"system@*-{1:016x}-*.journal"))
+    original = path.read_bytes()
+    path.unlink()
+    found, report = check(manifest, root, advance=True)
+    assert found == set() and report["journals"]["explained"][0]["reason"] == "vacuumed (oldest first)"
+    changed = bytearray(original)
+    changed[-1] ^= 0xFF
+    path.write_bytes(bytes(changed))
+    expected = {("JOURNAL_ARCHIVE_CHANGED", path.name)}
+    assert check(manifest, root, advance=True)[0] == expected
+    assert check(manifest, root, advance=True)[0] == expected, "reported until accept"
+    li.accept(manifest, root=str(root))
+    assert check(manifest, root)[0] == set()
