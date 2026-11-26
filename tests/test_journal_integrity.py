@@ -494,3 +494,23 @@ def test_vacuuming_after_the_review_stays_quiet_for_the_floor(machine):
     assert check(manifest, root, advance=True)[0] == set()
     next(folder.glob(f"system@*-{201:016x}-*.journal")).unlink()
     assert check(manifest, root, advance=True)[0] == set(), "archived after the review, vacuumed: quiet"
+
+
+def test_a_file_archived_after_the_review_is_read_once(machine, monkeypatch):
+    # Being written at the review, it has no reviewed digest, so the floor has nothing to hold its content to:
+    # once archived, it is read when first seen, and then comes from the cache.
+    root, folder, manifest = machine
+    li.check(manifest, root=str(root), advance=True)
+    active = folder / "system.journal"
+    archived = folder / f"system@{SEQUENCE.hex()}-{201:016x}-{1_700_000_000_000_000 + 201:016x}.journal"
+    active.rename(archived)
+    data = bytearray(archived.read_bytes())
+    data[16] = ji.STATE_ARCHIVED
+    archived.write_bytes(bytes(data))
+    journal(active, head=251, tail=300)
+    read = []
+    real = ji._digest
+    monkeypatch.setattr(ji, "_digest", lambda path: read.append(path) or real(path))
+    for _ in range(3):
+        assert check(manifest, root, advance=True)[0] == set()
+    assert read == [str(archived)], "read once, when it was first seen archived"
