@@ -147,8 +147,9 @@ def _locked(check, folder=None):
 
 
 def _append_seen(check, entry, folder=None):
-    fd = os.open(seen_path(check, folder), os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
-                 0o600)
+    # Nonblocking, so a pipe put in the log's place is refused (then by its type), not waited on.
+    fd = os.open(seen_path(check, folder),
+                 os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o600)
     try:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
@@ -175,12 +176,9 @@ def _move_watch_record(check, folder=None):
     at = prior.get('at') or _now()
     # A mark of what was moved: a result moved once (before a failed write) is not moved again.
     mark = hashlib.sha256(json.dumps(prior, sort_keys=True, default=str).encode()).hexdigest()
-    try:
-        with open(seen_path(check, folder), encoding='utf-8', errors='replace') as stream:
-            if any(f'"moved": "{mark}"' in line for line in stream):
-                return 0
-    except FileNotFoundError:
-        pass
+    log = _read_seen(seen_path(check, folder))      # as safely as the report reads it: no links, pipes or excess
+    if log and f'"moved": "{mark}"' in log[0]:
+        return 0
     kept = [f for f in prior['result'].get('findings', []) if isinstance(f, dict)]
     moved = sum(1 for f in kept if _append_seen(check, dict(at=at, finding=f), folder))
     # Those it counted but no longer kept in full: their severities, so the count stays.
@@ -197,9 +195,9 @@ def _move_watch_record(check, folder=None):
     return moved
 
 
-def seen(check, *, folder=None):
-    """What the watch saw since the last accept: the latest MAX_FINDINGS in full, every one counted; or None."""
-    path = seen_path(check, folder)
+def _read_seen(path):
+    """(text, size) of a watch's log, or None when there is none. Only a mode-600 regular file you own is read,
+    never through a link or as a pipe, and only a little past MAX_SEEN_BYTES of it."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     except FileNotFoundError:
@@ -216,8 +214,17 @@ def seen(check, *, folder=None):
             raw += chunk
     finally:
         os.close(fd)
+    return raw.decode('utf-8', 'replace'), info.st_size
+
+
+def seen(check, *, folder=None):
+    """What the watch saw since the last accept: the latest MAX_FINDINGS in full, every one counted; or None."""
+    log = _read_seen(seen_path(check, folder))
+    if log is None:
+        return None
+    text, size = log
     entries = []
-    for line in raw.decode('utf-8', 'replace').splitlines():
+    for line in text.splitlines():
         try:
             entry = json.loads(line)
         except ValueError:
@@ -239,7 +246,7 @@ def seen(check, *, folder=None):
     if not total:
         return None
     return dict(findings=findings[-MAX_FINDINGS:], total=total, severities=severities, at=last,
-                at_least=info.st_size >= MAX_SEEN_BYTES)
+                at_least=size >= MAX_SEEN_BYTES)
 
 
 def forget(check, *, folder=None):

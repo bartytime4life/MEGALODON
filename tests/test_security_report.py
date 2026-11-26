@@ -848,6 +848,48 @@ def test_results_loads_without_fcntl_and_a_watch_refuses_to_keep_unlocked(home, 
     assert (results._folder() / "devices.json").exists()
 
 
+@pytest.mark.parametrize("kind", ["fifo", "link"])
+def test_moving_earlier_watch_findings_opens_the_log_as_safely_as_the_report(home, tmp_path, kind):
+    # The move's check for its mark must not follow a link or wait on a pipe, as seen() and the append do not.
+    import sys
+    results.keep("listeners", dict(findings=[_seen(4444)], gaps=[], seen_by_watch=True), 1, now=AT)
+    log = results.seen_path("listeners")
+    if kind == "fifo":
+        os.mkfifo(log, 0o600)
+    else:
+        import hashlib    # a link to a file holding the mark of this result: following it would skip the move
+        prior = json.loads((results._folder() / "listeners.json").read_text())
+        mark = hashlib.sha256(json.dumps(prior, sort_keys=True, default=str).encode()).hexdigest()
+        (tmp_path / "elsewhere").write_text(json.dumps(dict(at=AT, moved=mark)) + "\n")
+        os.chmod(tmp_path / "elsewhere", 0o600)                         # refused for being a link, not its mode
+        log.symlink_to(tmp_path / "elsewhere")
+    code = ("import megalodon.results as r\n"
+            f"r.DEFAULT_FOLDER = {str(results._folder())!r}\n"
+            "try:\n    r.keep('listeners', dict(findings=[], gaps=[]), 0)\n"
+            "except OSError as exc:\n    print(type(exc).__name__)\n")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=30,
+                         cwd=Path(results.__file__).parent.parent, env=dict(os.environ, HOME=str(home)))
+    assert out.returncode == 0 and out.stdout.strip() in ("ResultError", "OSError"), (out.stdout, out.stderr)
+    assert json.loads((results._folder() / "listeners.json").read_text())["result"]["seen_by_watch"]
+    watch = ("import megalodon.results as r\n"
+             f"r.DEFAULT_FOLDER = {str(results._folder())!r}\n"
+             "try:\n    r.add_seen('listeners', dict(severity='HIGH', listener='tcp/0.0.0.0:1'))\n"
+             "except OSError as exc:\n    print(type(exc).__name__)\n")
+    out = subprocess.run([sys.executable, "-c", watch], capture_output=True, text=True, timeout=30,
+                         cwd=Path(results.__file__).parent.parent)
+    assert out.returncode == 0 and out.stdout.strip() in ("ResultError", "OSError"), (out.stdout, out.stderr)
+
+
+def test_the_watch_log_is_read_only_a_little_past_its_bound(home, monkeypatch):
+    results.add_seen("listeners", _seen(1), now=AT)
+    line = (json.dumps(dict(at=AT, severity="LOW")) + "\n").encode()
+    with open(results.seen_path("listeners"), "ab") as stream:
+        stream.write(line * ((3 << 20) // len(line)))                  # 3 MiB of findings
+    monkeypatch.setattr(results, "MAX_SEEN_BYTES", 1)
+    log = results.seen("listeners")
+    assert log["at_least"] and 0 < log["total"] <= ((1 << 20) // len(line)) + 2     # one read of 1 MiB, no more
+
+
 def test_moved_findings_do_not_push_out_newer_ones(home, monkeypatch):
     from megalodon import listener_watch
     old = (NOW - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
