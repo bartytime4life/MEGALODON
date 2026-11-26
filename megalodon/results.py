@@ -13,7 +13,10 @@ nothing here decides or changes anything.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -74,7 +77,15 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
     target = _folder(folder)
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     if check in SEEN_CHECKS:
-        _move_watch_record(check, folder)
+        # Moving what an earlier version kept and replacing the result are one step: two checks at once, or one
+        # run again after a failed write, move it once.
+        with _locked(check, folder):
+            _move_watch_record(check, folder)
+            return _write(check, data, target)
+    return _write(check, data, target)
+
+
+def _write(check, data, target):
     handle, temporary = tempfile.mkstemp(prefix=f'.{check}-', dir=target)
     try:
         os.fchmod(handle, 0o600)
@@ -119,6 +130,17 @@ def add_seen(check, found, *, folder=None, now=None):
     return _append_seen(check, dict(at=now or _now(), finding=found), folder)
 
 
+@contextmanager
+def _locked(check, folder=None):
+    """An exclusive lock for `check`'s result, held across reading, moving and replacing it."""
+    fd = os.open(_folder(folder) / f'.{check}.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
 def _append_seen(check, entry, folder=None):
     fd = os.open(seen_path(check, folder), os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
                  0o600)
@@ -146,6 +168,14 @@ def _move_watch_record(check, folder=None):
     if not (prior and isinstance(prior.get('result'), dict) and prior['result'].get('seen_by_watch')):
         return 0
     at = prior.get('at') or _now()
+    # A mark of what was moved: a result moved once (before a failed write) is not moved again.
+    mark = hashlib.sha256(json.dumps(prior, sort_keys=True, default=str).encode()).hexdigest()
+    try:
+        with open(seen_path(check, folder), encoding='utf-8', errors='replace') as stream:
+            if any(f'"moved": "{mark}"' in line for line in stream):
+                return 0
+    except FileNotFoundError:
+        pass
     kept = [f for f in prior['result'].get('findings', []) if isinstance(f, dict)]
     moved = sum(1 for f in kept if _append_seen(check, dict(at=at, finding=f), folder))
     # Those it counted but no longer kept in full: their severities, so the count stays.
@@ -156,8 +186,9 @@ def _move_watch_record(check, folder=None):
     for level, count in (prior.get('severities') or {}).items():
         for _ in range(max(0, int(count) - listed.get(level, 0)) if isinstance(count, int) else 0):
             if not _append_seen(check, dict(at=at, severity=level), folder):
-                return moved
+                break
             moved += 1
+    _append_seen(check, dict(at=at, moved=mark), folder)
     return moved
 
 
@@ -180,14 +211,19 @@ def seen(check, *, folder=None):
             raw += chunk
     finally:
         os.close(fd)
-    findings, severities, total, last = [], {}, 0, None
+    entries = []
     for line in raw.decode('utf-8', 'replace').splitlines():
         try:
             entry = json.loads(line)
         except ValueError:
             continue                    # a line cut short by a full disk or a crash
-        if not isinstance(entry, dict):
-            continue
+        if isinstance(entry, dict) and ('finding' in entry or 'severity' in entry):     # not a mark of a move
+            entries.append(entry)
+    # In the order they were seen, not written: findings moved from an earlier version are older than what the
+    # watch may have appended before the first check.
+    entries.sort(key=lambda entry: str(entry.get('at') or ''))
+    findings, severities, total, last = [], {}, 0, None
+    for entry in entries:
         finding = entry.get('finding')
         level = str((finding.get('severity') if isinstance(finding, dict) else entry.get('severity')) or '').upper()
         severities[level] = severities.get(level, 0) + 1

@@ -800,3 +800,47 @@ def test_what_only_a_check_found_goes_when_a_later_check_no_longer_finds_it(home
     monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
     run_cli(["listeners", "check"])
     assert view(build(), "listeners")["findings"] == [] and results.seen("listeners") is None
+
+
+def test_moving_earlier_watch_findings_twice_counts_them_once(home, monkeypatch):
+    # A check that moved them and then failed to write its own result is run again: they are not moved twice.
+    results.keep("listeners", dict(findings=[_seen(4444)], gaps=[], seen_by_watch=True), 1, now=AT)
+    real = results.os.replace
+
+    def fails_once(*a, **k):
+        monkeypatch.setattr(results.os, "replace", real)
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(results.os, "replace", fails_once)
+    with pytest.raises(OSError):
+        results.keep("listeners", dict(findings=[], gaps=[]), 0)
+    results.keep("listeners", dict(findings=[], gaps=[]), 0)
+    assert results.seen("listeners")["total"] == 1
+
+
+def test_two_checks_at_once_move_earlier_watch_findings_once(home):
+    import threading
+    results.keep("listeners", dict(findings=[_seen(4444)], gaps=[], seen_by_watch=True), 1, now=AT)
+    start = threading.Barrier(2)
+
+    def check():
+        start.wait()
+        results.keep("listeners", dict(findings=[], gaps=[]), 0)
+    threads = [threading.Thread(target=check) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results.seen("listeners")["total"] == 1
+
+
+def test_moved_findings_do_not_push_out_newer_ones(home, monkeypatch):
+    from megalodon import listener_watch
+    old = (NOW - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    results.keep("listeners", dict(findings=[_seen(n, "LOW") for n in range(results.MAX_FINDINGS)], gaps=[],
+                                   seen_by_watch=True), 1, now=old)
+    results.add_seen("listeners", _seen(9999, "HIGH"), now=AT)       # the upgraded watch, before any check
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    run_cli(["listeners", "check"])
+    log = results.seen("listeners")
+    assert log["findings"][-1]["listener"] == "tcp/0.0.0.0:9999" and log["at"] == AT
+    assert any(f["where"] == "tcp/0.0.0.0:9999" for f in view(build(every=True), "listeners")["findings"])
