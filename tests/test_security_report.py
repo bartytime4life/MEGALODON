@@ -381,3 +381,9 @@ def test_a_clean_result_does_not_hide_a_stopped_watch(home, monkeypatch, tmp_pat
     egress = view(report, "egress")
     assert egress["status"] == "clean" and "not running" in egress["status_text"]
     assert report["verdict"] != "clear" and report["coverage"]["errors"] >= 1
+
+
+def test_the_totals_count_every_finding_not_only_those_shown(home):
+    keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/var/www/{n}.env") for n in range(40)])
+    report = build()
+    assert report["counts"]["HIGH"] == 40 and len(view(report, "secrets")["findings"]) == sr.SHOWN_PER_CHECK

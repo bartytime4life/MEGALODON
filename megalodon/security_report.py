@@ -388,6 +388,8 @@ def _check_view(check, record, now, live_state=None, system=True):
         view.update(stale=True, status_text=view['status_text'] + f' — but its last run was {_ago(age)} ago')
     if view.get('problem'):
         view['status_text'] += f' — {view["problem"][0].lower()}{view["problem"][1:]}'
+    # Counted before only the first are kept for the page: the totals count every finding read.
+    view['severities'] = {level: sum(1 for f in view['findings'] if f['severity'] == level) for level in RANK}
     view['findings'] = view['findings'][:SHOWN_PER_CHECK]
     return view
 
@@ -521,7 +523,7 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
     checks = [_check_view(name, kept.get(name), now, live.get(name), system) for name in CHECKS]
     incidents, incident_gap = _incidents(hours, now)
     setup = _setup(system)
-    counts = {level: sum(1 for c in checks for f in c['findings'] if f['severity'] == level) for level in RANK}
+    counts = {level: sum(c.get('severities', {}).get(level, 0) for c in checks) for level in RANK}
     broken = [c for c in checks if c['status'] in ('error', 'never_run') or c.get('stale') or c.get('problem')]
     serious = counts['CRITICAL'] + counts['HIGH'] + sum(1 for i in incidents if i['severity'] in
                                                          ('CRITICAL', 'HIGH'))
