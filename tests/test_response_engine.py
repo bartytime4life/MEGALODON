@@ -355,10 +355,7 @@ def test_init_writes_any_folder_as_valid_toml(tmp_path, monkeypatch, name):
 def test_a_folder_name_that_is_not_utf8_keeps_the_relative_store(tmp_path, monkeypatch):
     folder = os.path.join(os.fsencode(tmp_path), b"bad\xff")
     os.mkdir(folder)
-    os.chdir(folder)
-    try:
-        policy = tmp_path / "policy.toml"
-        re_.write_default_policy(policy)
-        assert re_.load_policy(policy).sources["audit_db"] == "data/megalodon.db"
-    finally:
-        os.chdir(tmp_path)
+    monkeypatch.chdir(folder)             # restores the original folder for the tests that follow
+    policy = tmp_path / "policy.toml"
+    re_.write_default_policy(policy)
+    assert re_.load_policy(policy).sources["audit_db"] == "data/megalodon.db"
