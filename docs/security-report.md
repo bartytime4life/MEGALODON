@@ -3,7 +3,7 @@
 `megalodon report` puts everything MEGALODON knows about this machine on one
 page, written for the person who owns it rather than for a security analyst:
 
-- **a verdict**: act now, review, parts not running, or all clear;
+- **a verdict**: act now, review, parts not running (or not looked at), or all clear;
 - **what to do next**, most important first, each step with its command;
 - **every check**, grouped as break-ins and backdoors, tampering and
   integrity, and weak spots, with what it watches and what it last found;
@@ -58,8 +58,10 @@ The report runs no check itself, so it is quick and changes nothing. It reads:
   Without systemd the schedule is crontab lines you add yourself; the report
   cannot see them, and says so.
 * **Never all clear on missing information**: incidents that cannot be read,
-  a watch that stopped, or a check that failed after finding something keep
-  the verdict from "all clear".
+  a watch that stopped, a check that failed after finding something, or a
+  check that could not look everywhere (an unmounted partition, processes it
+  could not read) keep the verdict from "all clear", and each is among the
+  next steps. Any finding at all, LOW and INFO included, is "review".
 
 Each check is shown as:
 

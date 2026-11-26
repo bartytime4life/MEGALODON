@@ -52,8 +52,13 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
     if check not in NAMES:
         raise ResultError(f'{check} is not a check whose results are kept')
     findings = _findings(result)
+    # Counted before a very large result is cut, so the report's totals stay exact.
+    severities = {}
+    for finding in findings:
+        level = str(finding.get('severity') or '').upper() if isinstance(finding, dict) else ''
+        severities[level] = severities.get(level, 0) + 1
     record = dict(schema=SCHEMA, check=check, at=now or _now(), exit_code=exit_code,
-                  ran=result is not None, findings=len(findings), result=result)
+                  ran=result is not None, findings=len(findings), severities=severities, result=result)
     if reason:
         record['reason'] = str(reason)[:500]
     data = json.dumps(record, sort_keys=True, default=str)

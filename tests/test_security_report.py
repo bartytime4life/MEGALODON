@@ -170,7 +170,7 @@ def test_a_result_far_older_than_its_schedule_is_out_of_date(home):
 
 
 @pytest.mark.parametrize("worst, verdict", [("CRITICAL", "act"), ("HIGH", "act"), ("MEDIUM", "review"),
-                                            ("LOW", "gaps")])
+                                            ("LOW", "review"), ("INFO", "review")])
 def test_the_verdict_follows_the_worst_finding(home, worst, verdict):
     keep("hardening", [dict(rule_id="X", severity=worst, subject="s")])
     assert build()["verdict"] == verdict
@@ -464,3 +464,38 @@ def test_without_systemd_the_schedule_is_not_called_missing(home, monkeypatch, t
     monkeypatch.setattr(schedule, "has_systemd", lambda: True)
     row = {r["item"]: r for r in build()["setup"]}["schedule"]
     assert row["ok"] is False and row["fix"] == "sudo megalodon schedule plan"
+
+
+# ------------------------------------------------------------------ all clear only when nothing at all was found or missed
+
+def _all_ran_clean(monkeypatch):
+    for name in results.NAMES:
+        keep(name, [])
+    monkeypatch.setattr(sr, "_setup", lambda system: [])
+
+
+def test_low_findings_are_not_all_clear(home, monkeypatch):
+    _all_ran_clean(monkeypatch)
+    assert build()["verdict"] == "clear", "the control"
+    keep("hardening", [dict(rule_id="X", severity="LOW", subject="s")])
+    report = build()
+    assert report["verdict"] == "review" and report["counts"]["LOW"] == 1
+    assert not report["headline"].startswith("All clear")
+
+
+def test_what_a_check_could_not_look_at_is_not_all_clear(home, monkeypatch):
+    _all_ran_clean(monkeypatch)
+    keep("boot", [], gaps=["the EFI system partition is not mounted"])
+    report = build()
+    assert report["verdict"] == "gaps"
+    step = next(s for s in report["next_steps"] if "EFI system partition" in s["text"])
+    assert step["command"] == "megalodon boot check"
+
+
+def test_totals_survive_a_result_too_large_to_keep_whole(home, monkeypatch):
+    monkeypatch.setattr(results, "MAX_BYTES", 200_000)
+    keep("secrets", [dict(rule_id="SECRET_IN_WEB_ROOT", severity="HIGH", path=f"/var/www/{n}", detail="x" * 2200)
+                     for n in range(2000)])
+    record = results.latest()["secrets"]
+    assert record["truncated"] and len(record["result"]["findings"]) < 2000
+    assert build()["counts"]["HIGH"] == 2000

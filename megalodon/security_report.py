@@ -388,8 +388,15 @@ def _check_view(check, record, now, live_state=None, system=True):
         view.update(stale=True, status_text=view['status_text'] + f' — but its last run was {_ago(age)} ago')
     if view.get('problem'):
         view['status_text'] += f' — {view["problem"][0].lower()}{view["problem"][1:]}'
-    # Counted before only the first are kept for the page: the totals count every finding read.
+    # Counted before only the first are kept for the page: the totals count every finding read, and for a result
+    # too large to keep whole, every finding the check made.
     view['severities'] = {level: sum(1 for f in view['findings'] if f['severity'] == level) for level in RANK}
+    saved = record.get('severities')
+    if record.get('truncated') and isinstance(saved, dict):
+        view['severities'] = dict.fromkeys(RANK, 0)
+        for level, count in saved.items():
+            if isinstance(count, int) and count > 0:
+                view['severities'][_severity(level)] += count
     view['findings'] = view['findings'][:SHOWN_PER_CHECK]
     return view
 
@@ -570,14 +577,18 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
     setup = _setup(system)
     counts = {level: sum(c.get('severities', {}).get(level, 0) for c in checks) for level in RANK}
     broken = [c for c in checks if c['status'] in ('error', 'never_run') or c.get('stale') or c.get('problem')]
+    # A check that ran but could not look somewhere (an unmounted partition, processes it could not read) did not
+    # see everything: that is not all clear.
+    unseen = [c for c in checks if c.get('gaps') and c['status'] in ('clean', 'findings')]
     serious = counts['CRITICAL'] + counts['HIGH'] + sum(1 for i in incidents if i['severity'] in
                                                          ('CRITICAL', 'HIGH'))
     if serious:
         verdict, headline = 'act', 'Act now: there are serious findings to look at.'
-    elif counts['MEDIUM'] or incidents:
+    elif counts['MEDIUM'] or counts['LOW'] or counts['INFO'] or incidents:
         verdict, headline = 'review', 'Review: some findings need a look, none of them serious.'
-    elif broken or incident_gap or any(r['ok'] is False for r in setup):
-        verdict, headline = 'gaps', 'Nothing found, but parts of the protection are not running.'
+    elif broken or incident_gap or unseen or any(r['ok'] is False for r in setup):
+        verdict, headline = 'gaps', ('Nothing found, but parts of the protection are not running, or could not look '
+                                     'everywhere.')
     else:
         verdict, headline = 'clear', 'All clear: every check ran and found nothing.'
     steps = []
@@ -588,6 +599,10 @@ def build(*, hours=168, now=None, system=None, folder=None, runner=None):
     for row in setup:
         if row['ok'] is False and row.get('fix'):
             steps.append(dict(text=row['text'], command=row['fix']))
+    for check in unseen:
+        shown = '; '.join(check['gaps'][:3]) + ('…' if len(check['gaps']) > 3 else '')
+        steps.append(dict(text=f'{check["title"]}: could not look at everything: {shown}',
+                          command=check.get('next') or command('megalodon', check['check'], 'check')))
     if incident_gap:
         # The incidents are where the live watches report: unread, they may hide what the watches found.
         steps.append(dict(text=incident_gap, command=command('megalodon', 'timeline', 'list')))
