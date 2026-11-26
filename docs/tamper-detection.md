@@ -89,10 +89,11 @@ megalodon heartbeat send
   - the local check's current findings;
   - an HMAC-SHA256 signature over all of it.
 
-  It exits 1 if the heartbeat could not be delivered. With more than one
-  destination, the same signed heartbeat goes to each. One that cannot be
-  reached is listed under `destinations` with its error and does not stop
-  the rest, but `send` still exits 1. `--print` prints the heartbeat
+  It exits 2 if the heartbeat could not be delivered, so the scheduled unit
+  shows a failure (the scheduler counts exit 1 as a run that found
+  something). With more than one destination, the same signed heartbeat
+  goes to each. One that cannot be reached is listed under `destinations`
+  with its error and does not stop the rest, but `send` still exits 2. `--print` prints the heartbeat
   instead.
 
 `megalodon schedule install` sends one every 5 minutes and runs the tamper
