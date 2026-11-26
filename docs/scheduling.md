@@ -63,12 +63,15 @@ process, socket and file. Otherwise they are user units in
 | commands | always running (root) | `commands record --trace-execs`, after `megalodon commands init --key-file ...`; a program gone at once keeps its arguments ([command log](command-log.md)) |
 | credentials | always running | `credentials watch --alert --respond --trace-execs` ([credential access watch](credential-watch.md); as root it names every reader, also one gone at once; each finding is decided at once) |
 | container-escapes | always running (root, eBPF) | `containers watch --alert --respond`: each program started on the host from a container, as it starts, decided at once ([container watch](container-watch.md#escapes-as-they-start-containers-watch)). Left out where eBPF cannot run; the 15-minute `containers check` covers those machines, and without systemd too |
-| egress | always running | `egress watch --alert --respond`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md); each finding is decided at once) |
+| egress | always running | `egress watch --alert --respond --trace-connects`, after `megalodon egress learn --minutes 60` ([egress watch](egress-watch.md); each finding is decided at once; a connection too short for a scan is named by its program) |
 | ransomware | always running | `ransomware watch --respond`, after `megalodon ransomware init --dir FOLDER ...`; each finding is decided and enforced as it is raised ([ransomware watch](ransomware-watch.md#answer-it-at-once)) |
 
-**The exec trace.** `--trace-execs` loads the
+**The exec and connect traces.** `--trace-execs` loads the
 [exec trace](credential-watch.md#naming-readers-gone-at-once-watch---trace-execs)
-(eBPF), so a program gone before a watch reads it is still seen. Where it
+(eBPF), so a program gone before a watch reads it is still seen;
+`--trace-connects` loads the egress watch's
+[connect trace](egress-watch.md#naming-the-program-watch---trace-connects),
+so a connection too short for a scan is named by its program. Where it
 cannot be loaded (no root, no kernel type information, before Linux 5.8, not
 x86-64 or arm64), each of those watches says why on standard error and goes
 on as without it. The container escape watch has no such fallback:
@@ -77,13 +80,13 @@ If it cannot be loaded anyway, it exits 2 and is restarted every 10
 seconds, as the other watches are, and the tamper check reports it
 stopped. Each
 service has a mount namespace of its own (`ProtectSystem=full`), whose
-copies of the host's mounts have other IDs. So the trace names each
+copies of the host's mounts have other IDs. So the traces name each
 program from init's mount table too. No other table is read: a program in
 a mount namespace of its own (a container's, or one it made, which can put
 any folder at `/usr/bin`) keeps a partial path, `…/`, as before. Each job
-that loads it is allowed 64 MiB of locked memory, which kernels before
-5.11 count BPF maps against. Each loads its own copy, with an 8 MiB ring
-buffer: four, as root.
+that loads one is allowed 64 MiB of locked memory, which kernels before
+5.11 count BPF maps against. Each loads its own copy: as root, four exec
+traces with an 8 MiB ring buffer each, and the connect trace with 1 MiB.
 
 Timers add a random delay of up to a minute, so that machines set up the same
 way do not all run at once, and they catch up after the machine was off.

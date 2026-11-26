@@ -144,7 +144,10 @@ JOBS = (
     Job('ransomware', 'MEGALODON ransomware watch, answered at once', ('ransomware', 'watch', '--respond'),
         manifest='~/.config/megalodon/ransomware.json', setup='megalodon ransomware init --dir /home --dir /srv',
         writable=('/etc', '-/usr/local/lib/systemd/system')),
-    Job('egress', 'MEGALODON outgoing-program watch, answered at once', ('egress', 'watch', '--alert', '--respond'),
+    # With --trace-connects, a connection too short for a scan is named by its program (eBPF), so a dropped tool
+    # in a temporary folder is OUTBOUND_FROM_TEMPORARY, not a destination alone; without eBPF, it goes on without.
+    Job('egress', 'MEGALODON outgoing-program watch, answered at once',
+        ('egress', 'watch', '--alert', '--respond', '--trace-connects'), ebpf='optional',
         manifest='~/.config/megalodon/egress.json', setup='megalodon egress learn --minutes 60',
         writable=('/etc', '-/usr/local/lib/systemd/system'),
         cron='*/5 * * * *', cron_command=('egress', 'check', '--alert')),

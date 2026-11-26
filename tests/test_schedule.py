@@ -147,6 +147,8 @@ def _service(name, system=True):
     ("ancestry", "m ancestry watch --alert --respond --trace-execs"),
     ("commands", "m commands record --trace-execs"),
     ("credentials", "m credentials watch --alert --respond --trace-execs"),
+    # A connection too short for a scan, named by its program: a dropped tool is OUTBOUND_FROM_TEMPORARY.
+    ("egress", "m egress watch --alert --respond --trace-connects"),
 ])
 def test_the_watches_that_go_on_without_ebpf_trace_execs(name, command):
     # Each takes started programs from the kernel's record where eBPF loads, and the process events where not.
