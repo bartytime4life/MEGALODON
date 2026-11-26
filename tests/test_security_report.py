@@ -800,3 +800,104 @@ def test_what_only_a_check_found_goes_when_a_later_check_no_longer_finds_it(home
     monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
     run_cli(["listeners", "check"])
     assert view(build(), "listeners")["findings"] == [] and results.seen("listeners") is None
+
+
+def test_moving_earlier_watch_findings_twice_counts_them_once(home, monkeypatch):
+    # A check that moved them and then failed to write its own result is run again: they are not moved twice.
+    results.keep("listeners", dict(findings=[_seen(4444)], gaps=[], seen_by_watch=True), 1, now=AT)
+    real = results.os.replace
+
+    def fails_once(*a, **k):
+        monkeypatch.setattr(results.os, "replace", real)
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(results.os, "replace", fails_once)
+    with pytest.raises(OSError):
+        results.keep("listeners", dict(findings=[], gaps=[]), 0)
+    results.keep("listeners", dict(findings=[], gaps=[]), 0)
+    assert results.seen("listeners")["total"] == 1
+
+
+def test_two_checks_at_once_move_earlier_watch_findings_once(home):
+    import threading
+    results.keep("listeners", dict(findings=[_seen(4444)], gaps=[], seen_by_watch=True), 1, now=AT)
+    start = threading.Barrier(2)
+
+    def check():
+        start.wait()
+        results.keep("listeners", dict(findings=[], gaps=[]), 0)
+    threads = [threading.Thread(target=check) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results.seen("listeners")["total"] == 1
+
+
+def test_results_loads_without_fcntl_and_a_watch_refuses_to_keep_unlocked(home, monkeypatch):
+    # Windows has no fcntl: the module must still load, and a watch's result is not kept without the lock.
+    import sys
+    code = "import sys; sys.modules['fcntl'] = None; import megalodon.results as r; print(r.fcntl)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         cwd=Path(results.__file__).parent.parent)
+    assert out.returncode == 0 and out.stdout.strip() == "None", out.stderr
+    monkeypatch.setattr(results, "fcntl", None)
+    with pytest.raises(results.ResultError, match="file locking"):
+        results.keep("listeners", dict(findings=[_seen(4444)], gaps=[]), 1, now=AT)
+    assert not (results._folder() / "listeners.json").exists()
+    results.keep("devices", dict(findings=[], gaps=[]), 0)            # a check that takes no lock still keeps
+    assert (results._folder() / "devices.json").exists()
+
+
+@pytest.mark.parametrize("kind", ["fifo", "link"])
+def test_moving_earlier_watch_findings_opens_the_log_as_safely_as_the_report(home, tmp_path, kind):
+    # The move's check for its mark must not follow a link or wait on a pipe, as seen() and the append do not.
+    import sys
+    results.keep("listeners", dict(findings=[_seen(4444)], gaps=[], seen_by_watch=True), 1, now=AT)
+    log = results.seen_path("listeners")
+    if kind == "fifo":
+        os.mkfifo(log, 0o600)
+    else:
+        import hashlib    # a link to a file holding the mark of this result: following it would skip the move
+        prior = json.loads((results._folder() / "listeners.json").read_text())
+        mark = hashlib.sha256(json.dumps(prior, sort_keys=True, default=str).encode()).hexdigest()
+        (tmp_path / "elsewhere").write_text(json.dumps(dict(at=AT, moved=mark)) + "\n")
+        os.chmod(tmp_path / "elsewhere", 0o600)                         # refused for being a link, not its mode
+        log.symlink_to(tmp_path / "elsewhere")
+    code = ("import megalodon.results as r\n"
+            f"r.DEFAULT_FOLDER = {str(results._folder())!r}\n"
+            "try:\n    r.keep('listeners', dict(findings=[], gaps=[]), 0)\n"
+            "except OSError as exc:\n    print(type(exc).__name__)\n")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=30,
+                         cwd=Path(results.__file__).parent.parent, env=dict(os.environ, HOME=str(home)))
+    assert out.returncode == 0 and out.stdout.strip() in ("ResultError", "OSError"), (out.stdout, out.stderr)
+    assert json.loads((results._folder() / "listeners.json").read_text())["result"]["seen_by_watch"]
+    watch = ("import megalodon.results as r\n"
+             f"r.DEFAULT_FOLDER = {str(results._folder())!r}\n"
+             "try:\n    r.add_seen('listeners', dict(severity='HIGH', listener='tcp/0.0.0.0:1'))\n"
+             "except OSError as exc:\n    print(type(exc).__name__)\n")
+    out = subprocess.run([sys.executable, "-c", watch], capture_output=True, text=True, timeout=30,
+                         cwd=Path(results.__file__).parent.parent)
+    assert out.returncode == 0 and out.stdout.strip() in ("ResultError", "OSError"), (out.stdout, out.stderr)
+
+
+def test_the_watch_log_is_read_only_a_little_past_its_bound(home, monkeypatch):
+    results.add_seen("listeners", _seen(1), now=AT)
+    line = (json.dumps(dict(at=AT, severity="LOW")) + "\n").encode()
+    with open(results.seen_path("listeners"), "ab") as stream:
+        stream.write(line * ((3 << 20) // len(line)))                  # 3 MiB of findings
+    monkeypatch.setattr(results, "MAX_SEEN_BYTES", 1)
+    log = results.seen("listeners")
+    assert log["at_least"] and 0 < log["total"] <= ((1 << 20) // len(line)) + 2     # one read of 1 MiB, no more
+
+
+def test_moved_findings_do_not_push_out_newer_ones(home, monkeypatch):
+    from megalodon import listener_watch
+    old = (NOW - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    results.keep("listeners", dict(findings=[_seen(n, "LOW") for n in range(results.MAX_FINDINGS)], gaps=[],
+                                   seen_by_watch=True), 1, now=old)
+    results.add_seen("listeners", _seen(9999, "HIGH"), now=AT)       # the upgraded watch, before any check
+    monkeypatch.setattr(listener_watch, "check", lambda *a, **k: dict(findings=[], gaps=[]))
+    run_cli(["listeners", "check"])
+    log = results.seen("listeners")
+    assert log["findings"][-1]["listener"] == "tcp/0.0.0.0:9999" and log["at"] == AT
+    assert any(f["where"] == "tcp/0.0.0.0:9999" for f in view(build(every=True), "listeners")["findings"])

@@ -13,7 +13,13 @@ nothing here decides or changes anything.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
+try:
+    import fcntl
+except ImportError:  # Windows: only the Linux-only watches take the lock
+    fcntl = None
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -74,7 +80,15 @@ def keep(check, result, exit_code, *, folder=None, now=None, reason=None):
     target = _folder(folder)
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     if check in SEEN_CHECKS:
-        _move_watch_record(check, folder)
+        # Moving what an earlier version kept and replacing the result are one step: two checks at once, or one
+        # run again after a failed write, move it once.
+        with _locked(check, folder):
+            _move_watch_record(check, folder)
+            return _write(check, data, target)
+    return _write(check, data, target)
+
+
+def _write(check, data, target):
     handle, temporary = tempfile.mkstemp(prefix=f'.{check}-', dir=target)
     try:
         os.fchmod(handle, 0o600)
@@ -119,9 +133,23 @@ def add_seen(check, found, *, folder=None, now=None):
     return _append_seen(check, dict(at=now or _now(), finding=found), folder)
 
 
+@contextmanager
+def _locked(check, folder=None):
+    """An exclusive lock for `check`'s result, held across reading, moving and replacing it."""
+    if fcntl is None:
+        raise ResultError(f'keeping the {check} result needs file locking (fcntl), which this system lacks')
+    fd = os.open(_folder(folder) / f'.{check}.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
 def _append_seen(check, entry, folder=None):
-    fd = os.open(seen_path(check, folder), os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
-                 0o600)
+    # Nonblocking, so a pipe put in the log's place is refused (then by its type), not waited on.
+    fd = os.open(seen_path(check, folder),
+                 os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o600)
     try:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
@@ -146,6 +174,11 @@ def _move_watch_record(check, folder=None):
     if not (prior and isinstance(prior.get('result'), dict) and prior['result'].get('seen_by_watch')):
         return 0
     at = prior.get('at') or _now()
+    # A mark of what was moved: a result moved once (before a failed write) is not moved again.
+    mark = hashlib.sha256(json.dumps(prior, sort_keys=True, default=str).encode()).hexdigest()
+    log = _read_seen(seen_path(check, folder))      # as safely as the report reads it: no links, pipes or excess
+    if log and f'"moved": "{mark}"' in log[0]:
+        return 0
     kept = [f for f in prior['result'].get('findings', []) if isinstance(f, dict)]
     moved = sum(1 for f in kept if _append_seen(check, dict(at=at, finding=f), folder))
     # Those it counted but no longer kept in full: their severities, so the count stays.
@@ -156,14 +189,15 @@ def _move_watch_record(check, folder=None):
     for level, count in (prior.get('severities') or {}).items():
         for _ in range(max(0, int(count) - listed.get(level, 0)) if isinstance(count, int) else 0):
             if not _append_seen(check, dict(at=at, severity=level), folder):
-                return moved
+                break
             moved += 1
+    _append_seen(check, dict(at=at, moved=mark), folder)
     return moved
 
 
-def seen(check, *, folder=None):
-    """What the watch saw since the last accept: the latest MAX_FINDINGS in full, every one counted; or None."""
-    path = seen_path(check, folder)
+def _read_seen(path):
+    """(text, size) of a watch's log, or None when there is none. Only a mode-600 regular file you own is read,
+    never through a link or as a pipe, and only a little past MAX_SEEN_BYTES of it."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     except FileNotFoundError:
@@ -180,14 +214,28 @@ def seen(check, *, folder=None):
             raw += chunk
     finally:
         os.close(fd)
-    findings, severities, total, last = [], {}, 0, None
-    for line in raw.decode('utf-8', 'replace').splitlines():
+    return raw.decode('utf-8', 'replace'), info.st_size
+
+
+def seen(check, *, folder=None):
+    """What the watch saw since the last accept: the latest MAX_FINDINGS in full, every one counted; or None."""
+    log = _read_seen(seen_path(check, folder))
+    if log is None:
+        return None
+    text, size = log
+    entries = []
+    for line in text.splitlines():
         try:
             entry = json.loads(line)
         except ValueError:
             continue                    # a line cut short by a full disk or a crash
-        if not isinstance(entry, dict):
-            continue
+        if isinstance(entry, dict) and ('finding' in entry or 'severity' in entry):     # not a mark of a move
+            entries.append(entry)
+    # In the order they were seen, not written: findings moved from an earlier version are older than what the
+    # watch may have appended before the first check.
+    entries.sort(key=lambda entry: str(entry.get('at') or ''))
+    findings, severities, total, last = [], {}, 0, None
+    for entry in entries:
         finding = entry.get('finding')
         level = str((finding.get('severity') if isinstance(finding, dict) else entry.get('severity')) or '').upper()
         severities[level] = severities.get(level, 0) + 1
@@ -198,7 +246,7 @@ def seen(check, *, folder=None):
     if not total:
         return None
     return dict(findings=findings[-MAX_FINDINGS:], total=total, severities=severities, at=last,
-                at_least=info.st_size >= MAX_SEEN_BYTES)
+                at_least=size >= MAX_SEEN_BYTES)
 
 
 def forget(check, *, folder=None):
