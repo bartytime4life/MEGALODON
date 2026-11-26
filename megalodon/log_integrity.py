@@ -413,13 +413,22 @@ def _journal_floor(reviewed, journals, held, root):
     present = {file_id: record for file_id, record in files.items() if file_id in journals['files'] and file_id not in held}
     gone = {file_id: record for file_id, record in files.items()
             if file_id not in journals['files'] and file_id not in held and not journal_integrity._active(record)}
-    current = dict(journals, files=dict(journals['files'], **{
-        file_id: journal_integrity.vouched(journals['files'][file_id], record, root=root)
-        for file_id, record in present.items()}))
+    current_files = journals['files'].copy()
+    unverified_archives = {}
+    for file_id, reviewed_record in present.items():
+        observed = current_files[file_id]
+        try:
+            current_files[file_id] = journal_integrity.vouched(observed, reviewed_record, root=root)
+        except OSError:
+            # Header comparisons are still possible, but the cached digest cannot vouch for this archive.
+            current_files[file_id] = observed.copy()
+            current_files[file_id].pop('sha256')
+            unverified_archives[file_id] = reviewed_record
+    current = dict(journals, files=current_files)
     ordered = dict(journals, files={file_id: record for file_id, record in journals['files'].items()
                                     if not (file_id in files and journal_integrity._active(files[file_id]))})
     base = reviewed.get('journals') or {}
-    return [(dict(base, files=present), current), (dict(base, files=gone), ordered)]
+    return [(dict(base, files=present), current), (dict(base, files=gone), ordered)], unverified_archives
 
 
 def _forget_progress(manifest):
@@ -462,6 +471,7 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
     journals = _journals(options, old_journals)
     journal_findings, explained = journal_integrity.compare(old_journals, journals)
     reviewed_files = {}   # the reviewed record of each journal file found against the baseline
+    unverified_archives = {}
     if compared_with != Path(manifest).expanduser():
         # The reviewed baseline is the floor; see _floor. Journal files are named by a random ID, never reused,
         # so every reviewed file still present is held to what the review saw.
@@ -472,10 +482,12 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
                 findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline',
                                                        note=FLOOR_NOTE)))
         held_files = {item['journal_file_id'] for item in journal_findings}
-        for floor, current in _journal_floor(reviewed, journals, held_files, options.get('root', '/')):
+        comparisons, unverified_archives = _journal_floor(reviewed, journals, held_files, options.get('root', '/'))
+        for floor, current in comparisons:
             for item in journal_integrity.compare(floor, current)[0]:
                 journal_findings.append(dict(item, detail=dict(item['detail'], compared_with='the reviewed baseline')))
                 reviewed_files[item['journal_file_id']] = floor['files'][item['journal_file_id']]
+        journals['gaps'].extend(journals['files'][file_id]['path'] for file_id in unverified_archives)
     findings = sorted(findings + journal_findings, key=lambda item: (-RANK[item['severity']], item['log']))
     report = dict(schema=REPORT_SCHEMA, action='check', manifest=str(Path(manifest).expanduser()),
                   compared_with=str(compared_with),
@@ -492,11 +504,13 @@ def check(manifest=DEFAULT_MANIFEST, *, advance=False, **options):
         logs.update({name: old['logs'][name] for name in kept if name in old['logs']})
         # Journal files are kept by file ID, the same way: one with a finding, or unreadable now.
         held = {item['journal_file_id'] for item in journal_findings} | {
-            file_id for file_id, record in old_journals.get('files', {}).items() if record['path'] in journals['gaps']}
+            file_id for file_id, record in old_journals.get('files', {}).items()
+            if record['path'] in journals['gaps']} | unverified_archives.keys()
         files = {file_id: record for file_id, record in journals['files'].items() if file_id not in held}
         # A file found against the reviewed baseline may have left the progress (vacuumed, then brought back):
-        # it keeps the reviewed record, so it is reported until accept.
-        files.update({file_id: old_journals.get('files', {}).get(file_id) or reviewed_files[file_id]
+        # it keeps the reviewed record, as does an archive whose required digest could not be read.
+        files.update({file_id: unverified_archives.get(file_id) or old_journals.get('files', {}).get(file_id)
+                      or reviewed_files[file_id]
                       for file_id in held})
         _write(progress_path(manifest), dict(schema=SCHEMA, recorded_at=report['checked_at'], logs=logs,
                                              gaps=new['gaps'], journals=dict(journals, files=files)))
