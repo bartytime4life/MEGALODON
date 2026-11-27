@@ -162,3 +162,28 @@ def test_every_address_that_made_an_attempt_is_remembered_across_passes():
     assert observe(signals, state) == [], "two addresses: not yet a network's campaign"
     [raised] = observe([attempt(40, KINDS[2], HOSTS[20], 80, c)], state, now=NOW + timedelta(minutes=6))
     assert raised.entities["address"] == {a, b, c}, "a, whose attempts b made before and after it, counts"
+
+
+def test_one_attack_repeated_from_many_addresses_never_crowds_out_different_ones():
+    state = {}
+    seven = [attempt(n, KINDS[n % 3], HOSTS[n], n * 2, f"{NET}.{n + 1}") for n in range(7)]
+    same = [attempt(100 + n, "PORT_SCAN", HOSTS[0], 20 + n % 200, f"{NET}.{n + 1}") for n in range(254)]
+    assert observe(seven + same, state) == []
+    kept = state["campaign_networks"][f"{NET}.0/24"]["attempts"]
+    assert len({(a[1], a[3]) for a in kept}) == 7 and len(kept) <= campaign.MAX_ATTEMPTS
+    [raised] = observe([attempt(999, KINDS[2], HOSTS[25], 250, f"{NET}.9")], state,
+                       now=NOW + timedelta(minutes=6))
+    assert "8 different attacks" in raised.summary
+
+
+def test_an_address_ignored_or_protected_since_is_no_longer_counted_nor_named():
+    a, b, c, d = (f"{NET}.{n}" for n in (11, 12, 13, 14))
+    # b and d make seven different attacks; a repeats one of them.
+    first = [attempt(n, KINDS[n % 3], HOSTS[n], n * 5, (b, d)[n % 2]) for n in range(7)] + [
+        attempt(20, KINDS[0], HOSTS[0], 40, a)]
+    for later in (dict(ignore_addresses=(f"{a}/32",)), dict(exclude=frozenset({a}))):
+        state = {}
+        observe(first, state)
+        [raised] = observe([attempt(50, KINDS[1], HOSTS[20], 60, c)], state, now=NOW + timedelta(minutes=6), **later)
+        assert a not in raised.entities["address"] and raised.entities["address"] == {b, c, d}
+        assert a not in {x[4] for x in state["campaign_networks"][f"{NET}.0/24"]["attempts"]}
