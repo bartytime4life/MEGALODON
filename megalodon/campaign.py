@@ -31,6 +31,7 @@ RULE_ID = 'AUTOMATED_CAMPAIGN'
 LURE_RULE = 'LURE_FOLLOWED'       # a login tried as an agent lure's account: the evidence an AI agent is at work
 SOURCE = 'campaign'
 MAX_ADDRESSES = 512           # addresses followed at once; the least recently active is dropped first
+MAX_NETWORKS = 256            # networks followed at once, the same way
 MAX_ATTEMPTS = 256            # different attempts kept per address, newest kept, with room for repeats
 PER_ATTEMPT = 16              # times one attempt is kept at most
 KEEP_HOURS = 24               # attempts this much older than an address's newest are dropped; so is an address
@@ -47,10 +48,17 @@ class Settings:
     broad_kinds: int = 5
     cooldown_minutes: int = 30
     ignore_addresses: tuple = ()      # networks, as text: the owner's own scanners
+    # One campaign spread over several addresses of one network (an attacker rotating through a cloud range or a
+    # provider's block) is judged as one too, when at least min_addresses of them took part.
+    networks: bool = True
+    min_addresses: int = 3
+    network_prefix_v4: int = 24
+    network_prefix_v6: int = 64
 
 
 BOUNDS = dict(window_seconds=(60, 86400), min_attempts=(2, MAX_ATTEMPTS), min_kinds=(2, 100), broad_kinds=(2, 100),
-              cooldown_minutes=(1, 1440))
+              cooldown_minutes=(1, 1440), min_addresses=(2, 64), network_prefix_v4=(8, 32),
+              network_prefix_v6=(16, 128))
 
 
 def _time(text, default):
@@ -89,6 +97,13 @@ def _followed(address):
     return not (parsed.is_loopback or parsed.is_unspecified or parsed.is_multicast)
 
 
+def _network(address, settings):
+    """The network an address is judged with: its /24 (IPv4) or /64 (IPv6) by default."""
+    parsed = ipaddress.ip_address(address)
+    prefix = settings.network_prefix_v4 if parsed.version == 4 else settings.network_prefix_v6
+    return str(ipaddress.ip_network(f'{parsed}/{prefix}', strict=False))
+
+
 def _target(signal, address):
     """What one attempt was aimed at: every entity of the finding but the attacker's own address. The other end
     counts whichever role it was given ('peer' from the network store, 'address' when both ends are piped in)."""
@@ -118,39 +133,57 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
             book.setdefault(address, dict(attempts=[], raised_at=None, raised_severity=None, raised_lured=False))
             new.setdefault(address, []).append([_iso(at), signal.rule_id, signal.source, _target(signal, address)])
             touched.add(address)
-    raised = []
-    for address in sorted(touched):
-        entry = book[address]
-        # Every window holding a new attempt, not only the latest: findings read late can hold a campaign that ended
-        # before the newest. A window of earlier attempts only was assessed when they arrived.
-        marked = sorted([(a, False) for a in entry['attempts']] + [(a, True) for a in new[address]])
-        attempts = [a for a, _ in marked]
-        found = _worst_window(attempts, [fresh for _, fresh in marked], settings)
-        entry['attempts'] = _kept(attempts, settings)
-        if found is None:
-            continue
-        severity, summary, last_at, lured = found
-        last = entry.get('raised_at')
-        quiet = last is None or _time(last, now) <= now - timedelta(minutes=settings.cooldown_minutes)
-        # Raised again within the cooldown only when it says more: CRITICAL after HIGH, or an AI agent after neither.
-        rising = ((entry.get('raised_severity') == 'HIGH' and severity == 'CRITICAL')
-                  or (lured and not entry.get('raised_lured')))
-        if not (quiet or rising):
-            continue
-        entry.update(raised_at=_iso(now), raised_severity=severity, raised_lured=lured)
-        # Each raise is a finding of its own: a key of its own, or the engine's daily dedupe would drop a repeat.
-        raised.append(make_signal(f'{SOURCE}:{address}:{_iso(now)}:{severity}', severity, last_at,
-                                  f'{address}: {summary}', address))
-    _prune(book, now)
+    raised = [signal for address in sorted(touched)
+              for signal in _raise(book, address, new[address], now, settings, make_signal, 1)]
+    _prune(book, now, MAX_ADDRESSES)
+    if settings.networks:
+        # The same attempts, by network: each kept with the address it came from, so a window counts how many of
+        # its addresses took part. Different attempts are still one rule against one target, whoever made them.
+        nets, fresh = state.setdefault('campaign_networks', {}), {}
+        for address in sorted(touched):
+            for at, rule, source, target in new[address]:
+                fresh.setdefault(_network(address, settings), []).append([at, rule, source, target, address])
+        for network in sorted(fresh):
+            nets.setdefault(network, dict(attempts=[], raised_at=None, raised_severity=None, raised_lured=False))
+            raised += _raise(nets, network, fresh[network], now, settings, make_signal, settings.min_addresses)
+        _prune(nets, now, MAX_NETWORKS)
     return raised
 
 
-def _worst_window(attempts, fresh, settings):
+def _raise(book, name, new, now, settings, make_signal, min_addresses):
+    """The campaign signal `name` (an address, or a network with at least `min_addresses` of its addresses) has
+    just become, with its `new` attempts, if any; its book entry is brought up to date."""
+    entry = book[name]
+    # Every window holding a new attempt, not only the latest: findings read late can hold a campaign that ended
+    # before the newest. A window of earlier attempts only was assessed when they arrived.
+    marked = sorted([(a, False) for a in entry['attempts']] + [(a, True) for a in new])
+    attempts = [a for a, _ in marked]
+    found = _worst_window(attempts, [fresh for _, fresh in marked], settings, min_addresses)
+    entry['attempts'] = _kept(attempts, settings)
+    if found is None:
+        return []
+    severity, summary, last_at, lured, addresses = found
+    last = entry.get('raised_at')
+    quiet = last is None or _time(last, now) <= now - timedelta(minutes=settings.cooldown_minutes)
+    # Raised again within the cooldown only when it says more: CRITICAL after HIGH, or an AI agent after neither.
+    rising = ((entry.get('raised_severity') == 'HIGH' and severity == 'CRITICAL')
+              or (lured and not entry.get('raised_lured')))
+    if not (quiet or rising):
+        return []
+    entry.update(raised_at=_iso(now), raised_severity=severity, raised_lured=lured)
+    # Each raise is a finding of its own: a key of its own, or the engine's daily dedupe would drop a repeat. A
+    # network's names the addresses that took part, never the network itself: they, not their neighbours, attacked.
+    return [make_signal(f'{SOURCE}:{name}:{_iso(now)}:{severity}', severity, last_at, f'{name}: {summary}',
+                        addresses or [name])]
+
+
+def _worst_window(attempts, fresh, settings, min_addresses=1):
     """The most severe window of `window_seconds` that holds a `fresh` attempt and is a campaign, of those the one
-    that followed a lure, and the latest of equals: (severity, summary, last attempt's time, lured); or None."""
+    that followed a lure, and the latest of equals: (severity, summary, last attempt's time, lured, the addresses
+    that took part, for a network's attempts); or None. A network's window needs `min_addresses` of them."""
     width = timedelta(seconds=settings.window_seconds)
     times = [_time(a[0], None) for a in attempts]
-    keys, rules, sources = {}, {}, {}
+    keys, rules, sources, actors = {}, {}, {}, {}
     fresh_in = 0
 
     def add(counter, key, step):
@@ -158,17 +191,20 @@ def _worst_window(attempts, fresh, settings):
         if not counter[key]:
             del counter[key]
     best, first = None, 0
-    for last, (_, rule, source, target) in enumerate(attempts):
-        for counter, key in ((keys, (rule, target)), (rules, rule), (sources, source)):
+    def parts(attempt):
+        _, rule, source, target = attempt[:4]
+        return ((keys, (rule, target)), (rules, rule), (sources, source), (actors, attempt[4] if len(attempt) > 4 else None))
+    for last, attempt in enumerate(attempts):
+        for counter, key in parts(attempt):
             add(counter, key, 1)
         fresh_in += fresh[last]
         while times[last] - times[first] > width:
-            _, old_rule, old_source, old_target = attempts[first]
-            for counter, key in ((keys, (old_rule, old_target)), (rules, old_rule), (sources, old_source)):
+            for counter, key in parts(attempts[first]):
                 add(counter, key, -1)
             fresh_in -= fresh[first]
             first += 1
-        if not fresh_in or len(keys) < settings.min_attempts or len(rules) < settings.min_kinds:
+        if (not fresh_in or len(keys) < settings.min_attempts or len(rules) < settings.min_kinds
+                or len(actors) < min_addresses):
             continue
         # Ranked as _assess will judge it: a followed lure makes it CRITICAL, and of CRITICAL windows the one that
         # followed a lure says the most, that an AI agent is driving it.
@@ -179,8 +215,9 @@ def _worst_window(attempts, fresh, settings):
     if best is None:
         return None
     window = attempts[best[1]:best[2] + 1]
-    severity, summary = _assess(window, settings)
-    return severity, summary, window[-1][0], best[0][1]
+    addresses = sorted({a[4] for a in window if len(a) > 4})
+    severity, summary = _assess(window, settings, len(addresses))
+    return severity, summary, window[-1][0], best[0][1], addresses
 
 
 def _kept(attempts, settings):
@@ -199,7 +236,8 @@ def _kept(attempts, settings):
     seen = {}
     for attempt in attempts:
         if _time(attempt[0], None) >= start:
-            seen.setdefault((attempt[1], attempt[3]), []).append(attempt)
+            # One attempt is a rule against a target, and for a network, from one of its addresses.
+            seen.setdefault((attempt[1], attempt[3], *attempt[4:5]), []).append(attempt)
     latest, earlier = [], []
     for times in seen.values():
         thinned = [times[0]]
@@ -217,10 +255,11 @@ def _kept(attempts, settings):
     return sorted(latest + (sorted(earlier)[-room:] if room else []))
 
 
-def _assess(attempts, settings):
-    """The severity and summary of a window `_worst_window` found to be a campaign."""
+def _assess(attempts, settings, addresses=0):
+    """The severity and summary of a window `_worst_window` found to be a campaign; of a network's, from how many
+    of its `addresses`."""
     distinct = {}
-    for at, rule, source, target in attempts:
+    for at, rule, source, target in (a[:4] for a in attempts):
         distinct.setdefault((rule, target), (at, rule, source))
     kinds = sorted({rule for _, rule, _ in distinct.values()})
     sensors = sorted({source for _, _, source in distinct.values()})
@@ -234,7 +273,8 @@ def _assess(attempts, settings):
     lured = LURE_RULE in kinds
     severity = 'CRITICAL' if lured or len(kinds) >= settings.broad_kinds or len(sensors) >= 2 else 'HIGH'
     pace = len(distinct) * 60 / span
-    head = (f'{len(distinct)} different attacks of {len(kinds)} kinds in {int(span)} s ({pace:.1f} a minute), '
+    head = ((f'{addresses} addresses, ' if addresses else '')
+            + f'{len(distinct)} different attacks of {len(kinds)} kinds in {int(span)} s ({pace:.1f} a minute), '
             f'seen by {", ".join(sensors)}'
             + (f'; next kind after {statistics.median(pivots):.0f} s (median)' if pivots else '') + ': ')
     tail = ('. It followed an agent lure: an AI agent is driving it.' if lured
@@ -247,12 +287,12 @@ def _assess(attempts, settings):
     return severity, summary
 
 
-def _prune(book, now):
+def _prune(book, now, most):
     cutoff = now - timedelta(hours=KEEP_HOURS)
     for address in [a for a, e in book.items() if not e.get('attempts')
                     or _time(e['attempts'][-1][0], now) < cutoff]:
         del book[address]
-    if len(book) > MAX_ADDRESSES:
+    if len(book) > most:
         by_latest = sorted(book, key=lambda a: book[a]['attempts'][-1][0])
-        for address in by_latest[:len(book) - MAX_ADDRESSES]:
+        for address in by_latest[:len(book) - most]:
             del book[address]
