@@ -66,7 +66,10 @@ The report reads saved results and local setup status. It runs no watch checks o
   they find to the response engine, and it reaches the incidents.
 * **Incidents** of the last week (`--hours` to change), from the response
   engine's ledger and the enforcement journal, as `megalodon timeline` tells
-  them.
+  them. An incident that is an [automated campaign](automated-campaigns.md), a
+  followed [agent lure](host-tripwires.md#agent-lures-catching-an-ai-agent-at-work),
+  or both ("An AI-driven attack") is listed with those first and says what it
+  means in plain words.
 * **The setup**: which scheduled jobs are installed, which still need a
   baseline, the alert settings, the response and enforcement policies, and
   the heartbeat. Each is read by the module that uses it, so a policy that

@@ -606,14 +606,24 @@ CAMPAIGN_MEANING = ('One address tried many different kinds of attack within min
                     'person at a keyboard does: an attack tool, or an AI agent driving one. `megalodon timeline show` '
                     'lists each attempt, in order.')
 LOGIN_IN_CAMPAIGN = ' A login was part of the same incident: check whether the attacker got in.'
+LURE_MEANING = ('Something read a note planted for automated agents (an agent lure) and tried the account it names, '
+                'which no one else knows: the clearest sign MEGALODON has of an AI agent at work. '
+                '`megalodon timeline show` says how soon after the note was read.')
+AI_CAMPAIGN_MEANING = ('An AI-driven attack: one address tried many different kinds of attack within minutes, and it '
+                       'followed a note planted for automated agents, trying the account the note names. '
+                       '`megalodon timeline show` lists each attempt, in order.')
+# What an incident is, listed before the findings it was made of, so the six shown never cut it off.
+LEAD_RULES = ('AUTOMATED_CAMPAIGN', 'LURE_FOLLOWED')
 
 
 def _incident_meaning(rules):
     """What an incident means in plain words, when its findings say more than their rule names do."""
-    if 'AUTOMATED_CAMPAIGN' not in rules:
+    campaign, lured = 'AUTOMATED_CAMPAIGN' in rules, 'LURE_FOLLOWED' in rules
+    if not (campaign or lured):
         return None
     from .login_watch import RULES as LOGIN_RULES
-    return CAMPAIGN_MEANING + (LOGIN_IN_CAMPAIGN if any(r in LOGIN_RULES for r in rules) else '')
+    meaning = AI_CAMPAIGN_MEANING if campaign and lured else CAMPAIGN_MEANING if campaign else LURE_MEANING
+    return meaning + (LOGIN_IN_CAMPAIGN if any(r in LOGIN_RULES for r in rules) else '')
 
 
 def _incidents(hours, now):
@@ -625,7 +635,7 @@ def _incidents(hours, now):
     rows = []
     for item in found[:15]:
         # A campaign is what the incident is: listed first, so it is never one of the rules cut off.
-        rules = sorted(item.get('rules', []), key=lambda r: r != 'AUTOMATED_CAMPAIGN')
+        rules = sorted(item.get('rules', []), key=lambda r: LEAD_RULES.index(r) if r in LEAD_RULES else len(LEAD_RULES))
         rows.append(dict(incident=clean(item['incident'], 40), severity=_severity(item['severity']),
                          first=item.get('first'), last=item.get('last'),
                          checks=[clean(s, 40) for s in item.get('sources', [])],

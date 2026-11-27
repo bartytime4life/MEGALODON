@@ -114,6 +114,9 @@ AUTH_LOGS = ('/var/log/auth.log', '/var/log/secure')
 AUTH_FIRST_HOURS = 24
 # Auth-log findings taken in one pass, as the network store's rows are; the rest are taken the next.
 MAX_AUTH_SIGNALS = 5_000
+# A lure's account tried within this long of the lure being read: an agent, which acts on text in seconds.
+LURE_MACHINE_SECONDS = 120
+LURE_ACCEPTED = ' The login was accepted: the account exists, so check it and who has it at once.'
 PROCESS_SEVERITY = {'STDIO_SHELL_ON_NETWORK': 'HIGH', 'SHELL_HOLDS_SOCKET': 'HIGH', 'PIPED_TO_SHELL': 'HIGH',
                     'EXECUTABLE_IN_MEMORY': 'HIGH', 'STDIO_ON_NETWORK': 'MEDIUM', 'EXECUTABLE_DELETED': 'MEDIUM',
                     'EXECUTABLE_IN_TEMPORARY': 'MEDIUM'}
@@ -377,6 +380,15 @@ name = "automated-campaign"
 rules = ["AUTOMATED_CAMPAIGN"]
 min_severity = "HIGH"
 # The address behind a machine-speed campaign: what it touched is kept, you are told, and it is shut out for an hour.
+actions = ["collect_evidence", "block_address", "notify"]
+block_minutes = 60
+
+[[response.playbook]]
+name = "lure-followed"
+rules = ["LURE_FOLLOWED"]
+min_severity = "HIGH"
+# A login tried as the account an agent lure names (`megalodon canary plant --lure`): something read a note written
+# for automated agents and acted on it. No one else knows the account.
 actions = ["collect_evidence", "block_address", "notify"]
 block_minutes = 60
 
@@ -863,7 +875,24 @@ def _auth_at(finding):
     return _iso(when if when.tzinfo else when.replace(tzinfo=timezone.utc))
 
 
-def auth_signals(report, cursor=None):
+def _lure_summary(address, user, lure, at):
+    """What a lure followed means, with how soon after the lure was read: an agent acts on text in seconds."""
+    name = Path(lure['path']).name if lure else 'an agent lure'
+    head = f'{address} tried {user}, the account {name} names'
+    read = lure.get('read_at') if lure else None
+    if not read:
+        return head + ': something read a note written for automated agents and acted on it.'
+    gap = (datetime.fromisoformat(at.replace('Z', '+00:00'))
+           - datetime.fromisoformat(read.replace('Z', '+00:00'))).total_seconds()
+    if gap < 0:
+        return head + ': something read a note written for automated agents and acted on it.'
+    if gap <= LURE_MACHINE_SECONDS:
+        return (head + f', {int(gap)} s after it was read: an AI agent reading text and acting on it, '
+                       'at machine speed.')
+    return head + f', {int(gap // 60)} min after it was read: something read the note and acted on it.'
+
+
+def auth_signals(report, cursor=None, lures=None):
     """Findings from `megalodon auth-review` over the auth log newer than `cursor`, and the new cursor.
 
     The log is read whole each pass, so the same findings come back: `cursor` is the latest finding's time and the
@@ -893,10 +922,22 @@ def auth_signals(report, cursor=None):
             latest, keys = at, set()
         if at == latest:
             keys.add(key)
-        signals.append(Signal(key, 'auth', rule[:64], _severity(f.get('severity')), at,
-                              str(f.get('message', ''))[:300],
+        summary, files = str(f.get('message', ''))[:300], []
+        if rule == 'LURE_FOLLOWED':
+            # The lure's file links this attempt to the lure's own read finding: one incident, both halves.
+            lure = next((v for k, v in (lures or {}).items()
+                         if k.casefold() == str(evidence.get('user', '')).casefold()), None)
+            summary = _lure_summary(evidence.get('source'), evidence.get('user'), lure, at)
+            files = [lure['path']] if lure else []
+        # A lure account let in exists after all: it is a real account now, to be checked, and so linked.
+        accepted = rule == 'LURE_FOLLOWED' and evidence.get('accepted') is True
+        if accepted:
+            summary = summary[:300 - len(LURE_ACCEPTED)] + LURE_ACCEPTED
+        signals.append(Signal(key, 'auth', rule[:64], _severity(f.get('severity')), at, summary,
                               _entities(address=[evidence.get('source')] if rule in NETWORK_RULES else [],
-                                        account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES else [])))
+                                        account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES or accepted
+                                        else [],
+                                        file=files)))
     # Every key at the cursor's second: one dropped would be decided again once the daily dedupe forgets it.
     return signals, dict(at=latest, keys=sorted(keys))
 
@@ -1158,11 +1199,15 @@ def collect(policy, state, now, *, root='/'):
             gaps += [f'{setting.removesuffix("_manifest")}: {gap}' for gap in report.get('gaps', [])]
         except (getattr(module, error_name), OSError) as exc:
             gaps.append(f'{setting.removesuffix("_manifest")}: {exc}')
+    lures = {}          # agent lures' accounts: {account: dict(path, read_at)}
     if sources.get('canary_manifest'):
         from . import canary
         try:
-            report = canary.check(str(Path(sources['canary_manifest']).expanduser()))
+            manifest = str(Path(sources['canary_manifest']).expanduser())
+            report = canary.check(manifest)
             signals += path_signals(dict(report, checked_at=_iso(now)), 'canary', 'path')
+            read = {f['path']: f.get('read_at') for f in report['findings'] if f['rule_id'] == 'CANARY_READ'}
+            lures = {account: dict(path=path, read_at=read.get(path)) for account, path in canary.lures(manifest).items()}
         except (ValueError, OSError) as exc:
             gaps.append(f'canary: {exc}')
     if sources.get('auth_log'):
@@ -1173,9 +1218,9 @@ def collect(policy, state, now, *, root='/'):
             cursor = state.get('auth_cursor') or dict(at=_iso(now - timedelta(hours=AUTH_FIRST_HOURS)))
             fresh = []
             # Every finding as it is made, not the report's first 500: those the cursor has not passed yet.
-            auth_review.review(auth_review.read_lines(path), source=path,
+            auth_review.review(auth_review.read_lines(path), source=path, lure_users=lures,
                                on_finding=lambda f: fresh.append(f) if _auth_at(f) >= cursor['at'] else None)
-            found, state['auth_cursor'] = auth_signals(dict(findings=fresh), cursor)
+            found, state['auth_cursor'] = auth_signals(dict(findings=fresh), cursor, lures)
             signals += found
         except (ValidationError, OSError) as exc:
             gaps.append(f'auth: {exc}')

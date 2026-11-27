@@ -177,6 +177,9 @@ def build_parser() -> argparse.ArgumentParser:
                               help="manifest path outside the bait directory")
     canary_plant.add_argument("--count", type=_bounded_cli_integer("count", 1, 5), default=3)
     canary_plant.add_argument("--replace", action="store_true", help="overwrite an existing manifest")
+    canary_plant.add_argument("--lure", action="store_true",
+                              help="also plant an agent lure: a note to AI agents naming an account that does not "
+                                   "exist; a login tried as it is LURE_FOLLOWED. Not in folders your own AI tools use")
     for name, text in (("check", "report removed, changed or read canaries (exit 1 when tripped)"),
                        ("rearm", "after review, reset canaries so new reads are detected")):
         command = canary_sub.add_parser(name, help=text)
@@ -914,6 +917,8 @@ def build_parser() -> argparse.ArgumentParser:
     auth.add_argument("--emit-watchlist", type=Path,
                       help="write attacking addresses to an owner-private IOC watchlist file")
     auth.add_argument("--replace", action="store_true", help="overwrite an existing watchlist output")
+    auth.add_argument("--lures", type=Path,
+                      help="canary manifest whose agent lures' accounts are watched (LURE_FOLLOWED)")
 
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
@@ -1686,7 +1691,7 @@ def _canary(args: argparse.Namespace) -> int:
     try:
         if args.canary_command == "plant":
             result = canary.plant(str(args.dir), str(args.manifest), count=args.count,
-                                  replace=args.replace)
+                                  replace=args.replace, lure=args.lure)
         elif args.canary_command == "check":
             result = canary.check(str(args.manifest))
         else:
@@ -3377,8 +3382,10 @@ def _auth_review(args: argparse.Namespace) -> int:
     from .watchlist import parse_indicator, render, write_private
 
     try:
+        from .canary import lures
+        accounts = lures(str(args.lures)) if args.lures else {}
         report, reviewer = review(read_lines(args.input), source=args.input,
-                                  zone=timezone.utc if args.utc else None)
+                                  zone=timezone.utc if args.utc else None, lure_users=accounts)
         if args.emit_watchlist is not None:
             entries = [(parse_indicator(address), label)
                        for address, label in reviewer.attacker_sources()]

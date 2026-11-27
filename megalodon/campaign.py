@@ -28,6 +28,7 @@ import ipaddress
 import statistics
 
 RULE_ID = 'AUTOMATED_CAMPAIGN'
+LURE_RULE = 'LURE_FOLLOWED'       # a login tried as an agent lure's account: the evidence an AI agent is at work
 SOURCE = 'campaign'
 MAX_ADDRESSES = 512           # addresses followed at once; the least recently active is dropped first
 MAX_ATTEMPTS = 256            # different attempts kept per address, newest kept, with room for repeats
@@ -114,7 +115,7 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
         for address in _actors(signal):
             if address in exclude or not _followed(address) or _within(address, ignored):
                 continue
-            book.setdefault(address, dict(attempts=[], raised_at=None, raised_severity=None))
+            book.setdefault(address, dict(attempts=[], raised_at=None, raised_severity=None, raised_lured=False))
             new.setdefault(address, []).append([_iso(at), signal.rule_id, signal.source, _target(signal, address)])
             touched.add(address)
     raised = []
@@ -128,13 +129,15 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
         entry['attempts'] = _kept(attempts, settings)
         if found is None:
             continue
-        severity, summary, last_at = found
+        severity, summary, last_at, lured = found
         last = entry.get('raised_at')
         quiet = last is None or _time(last, now) <= now - timedelta(minutes=settings.cooldown_minutes)
-        rising = entry.get('raised_severity') == 'HIGH' and severity == 'CRITICAL'
+        # Raised again within the cooldown only when it says more: CRITICAL after HIGH, or an AI agent after neither.
+        rising = ((entry.get('raised_severity') == 'HIGH' and severity == 'CRITICAL')
+                  or (lured and not entry.get('raised_lured')))
         if not (quiet or rising):
             continue
-        entry.update(raised_at=_iso(now), raised_severity=severity)
+        entry.update(raised_at=_iso(now), raised_severity=severity, raised_lured=lured)
         # Each raise is a finding of its own: a key of its own, or the engine's daily dedupe would drop a repeat.
         raised.append(make_signal(f'{SOURCE}:{address}:{_iso(now)}:{severity}', severity, last_at,
                                   f'{address}: {summary}', address))
@@ -143,8 +146,8 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
 
 
 def _worst_window(attempts, fresh, settings):
-    """The most severe window of `window_seconds` that holds a `fresh` attempt and is a campaign, the latest of
-    equals; or None."""
+    """The most severe window of `window_seconds` that holds a `fresh` attempt and is a campaign, of those the one
+    that followed a lure, and the latest of equals: (severity, summary, last attempt's time, lured); or None."""
     width = timedelta(seconds=settings.window_seconds)
     times = [_time(a[0], None) for a in attempts]
     keys, rules, sources = {}, {}, {}
@@ -167,14 +170,17 @@ def _worst_window(attempts, fresh, settings):
             first += 1
         if not fresh_in or len(keys) < settings.min_attempts or len(rules) < settings.min_kinds:
             continue
-        critical = len(rules) >= settings.broad_kinds or len(sources) >= 2
-        if best is None or critical >= best[0]:
-            best = (critical, first, last)
+        # Ranked as _assess will judge it: a followed lure makes it CRITICAL, and of CRITICAL windows the one that
+        # followed a lure says the most, that an AI agent is driving it.
+        lured = LURE_RULE in rules
+        rank = (lured or len(rules) >= settings.broad_kinds or len(sources) >= 2, lured)
+        if best is None or rank >= best[0]:
+            best = (rank, first, last)
     if best is None:
         return None
     window = attempts[best[1]:best[2] + 1]
     severity, summary = _assess(window, settings)
-    return severity, summary, window[-1][0]
+    return severity, summary, window[-1][0], best[0][1]
 
 
 def _kept(attempts, settings):
@@ -224,12 +230,15 @@ def _assess(attempts, settings):
     ordered = sorted(distinct.values())
     pivots = [(_time(b[0], None) - _time(a[0], None)).total_seconds()
               for a, b in zip(ordered, ordered[1:]) if a[1] != b[1]]
-    severity = 'CRITICAL' if len(kinds) >= settings.broad_kinds or len(sensors) >= 2 else 'HIGH'
+    # A followed agent lure among the attempts: something read a note to AI agents and acted on it.
+    lured = LURE_RULE in kinds
+    severity = 'CRITICAL' if lured or len(kinds) >= settings.broad_kinds or len(sensors) >= 2 else 'HIGH'
     pace = len(distinct) * 60 / span
     head = (f'{len(distinct)} different attacks of {len(kinds)} kinds in {int(span)} s ({pace:.1f} a minute), '
             f'seen by {", ".join(sensors)}'
             + (f'; next kind after {statistics.median(pivots):.0f} s (median)' if pivots else '') + ': ')
-    tail = '. Machine speed: an attack tool or an AI agent, not a person.'
+    tail = ('. It followed an agent lure: an AI agent is driving it.' if lured
+            else '. Machine speed: an attack tool or an AI agent, not a person.')
     # As many of the kinds as fit what the ledger keeps of a summary, with room for the address before it.
     listed = list(kinds)
     while listed and len(head + ', '.join(listed) + ', ...' + tail) > SUMMARY_ROOM:
