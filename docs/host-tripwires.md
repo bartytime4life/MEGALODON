@@ -71,7 +71,16 @@ it gives is a random marker, never a real one.
 For whoever reached the machine over the web instead, the note also names a page of this site: a random path
 (`/ops-` and ten letters or digits) with a code. It is given as a path and a code in a sentence, not as a link, and
 no page links to it, so a crawler that follows links never asks for it. Planted in a folder your web server
-serves, the note is found by an agent browsing the site too.
+serves, the note is found by an agent browsing the site too:
+
+```bash
+megalodon canary plant --dir /var/www/site/old-admin --manifest ~/.config/megalodon/canary.json --lure --web-readable
+```
+
+Every bait file is the owner's alone (mode 600), so a web server running as its own user (`www-data`, `nginx`)
+could not serve the note, and no browsing agent would learn its page. `--web-readable` makes the lure's note, and
+only it, readable by others (mode 644); the folder must let the server in too. Its mode is recorded as planted, so
+it is never reported as changed. A local user reading it then trips `CANARY_READ`, as for any bait.
 
 What it tells apart:
 

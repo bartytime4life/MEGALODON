@@ -268,10 +268,16 @@ def load_manifest(path: str) -> dict[str, Any]:
 
 
 def plant(directory: str, manifest_path: str, *, count: int = 3, replace: bool = False,
-          lure: bool = False) -> dict[str, Any]:
-    """Create ``count`` bait files in an existing directory and record them; with ``lure``, an agent lure too."""
+          lure: bool = False, web_readable: bool = False) -> dict[str, Any]:
+    """Create ``count`` bait files in an existing directory and record them; with ``lure``, an agent lure too.
+
+    Every file is the owner's alone (mode 600), so a web server running as another user could not serve the lure's
+    note, and a browsing agent would never learn its page. ``web_readable`` makes the lure's note, and only it,
+    readable by others (mode 644), for a folder the web server serves. Its mode is recorded as planted."""
     if type(count) is not int or not 1 <= count <= len(TEMPLATES):
         raise ValidationError(f"canary count must be between 1 and {len(TEMPLATES)}")
+    if web_readable and not lure:
+        raise ValidationError("web_readable applies to an agent lure's note: plant one with lure")
     directory = os.path.abspath(directory)
     try:
         info = os.stat(directory, follow_symlinks=False)
@@ -299,6 +305,8 @@ def plant(directory: str, manifest_path: str, *, count: int = 3, replace: bool =
             path = os.path.join(directory, name)
             descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW | _CLOEXEC, 0o600)
             created.append(path)
+            if name == LURE_NAME and web_readable:
+                os.fchmod(descriptor, 0o644)        # whatever the umask: the web server must be able to serve it
             with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 stream.write(template(_token()))
             info = _arm(path)

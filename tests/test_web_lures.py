@@ -241,3 +241,26 @@ def test_web_review_exits_one_when_a_lures_page_was_asked_for(planted, tmp_path,
     [finding] = json.loads(capsys.readouterr().out)["findings"]
     assert done.value.code == 1 and finding["evidence"] == dict(source=ATTACKER, page=page, method="GET",
                                                                 requested=page)
+
+
+def test_a_web_readable_lure_can_be_served_by_another_user_and_is_not_seen_as_changed(tmp_path, capsys):
+    from megalodon.cli import main
+    bait = tmp_path / "www"
+    bait.mkdir()
+    before = os.umask(0o077)                                     # whatever the umask
+    try:
+        result = canary.plant(str(bait), str(tmp_path / "c.json"), count=2, lure=True, web_readable=True)
+    finally:
+        os.umask(before)
+    modes = {Path(path).name: oct(os.stat(path).st_mode & 0o777) for path in result["planted"]}
+    assert modes.pop(canary.LURE_NAME) == "0o644", "the web server, another user, must be able to read the note"
+    assert set(modes.values()) == {"0o600"}, "the other bait stays the owner's alone"
+    assert not [f for f in canary.check(str(tmp_path / "c.json"))["findings"] if f["rule_id"] == "CANARY_MODIFIED"]
+    with pytest.raises(ValidationError, match="agent lure"):
+        canary.plant(str(bait), str(tmp_path / "d.json"), count=1, web_readable=True)
+    with pytest.raises(SystemExit) as done:
+        main(["canary", "plant", "--dir", str(bait), "--manifest", str(tmp_path / "e.json"), "--web-readable"])
+    assert done.value.code == 2 and "agent lure" in capsys.readouterr().err
+    (tmp_path / "www2").mkdir()
+    planted = canary.plant(str(tmp_path / "www2"), str(tmp_path / "f.json"), count=1, lure=True)
+    assert oct(os.stat(planted["planted"][-1]).st_mode & 0o777) == "0o600", "without it, the owner's alone"

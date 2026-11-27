@@ -180,6 +180,9 @@ def build_parser() -> argparse.ArgumentParser:
     canary_plant.add_argument("--lure", action="store_true",
                               help="also plant an agent lure: a note to AI agents naming an account that does not "
                                    "exist; a login tried as it is LURE_FOLLOWED. Not in folders your own AI tools use")
+    canary_plant.add_argument("--web-readable", action="store_true",
+                              help="with --lure: make the lure's note readable by others (mode 644), so a web "
+                                   "server running as another user can serve it from a folder it serves")
     for name, text in (("check", "report removed, changed or read canaries (exit 1 when tripped)"),
                        ("rearm", "after review, reset canaries so new reads are detected")):
         command = canary_sub.add_parser(name, help=text)
@@ -1705,7 +1708,7 @@ def _canary(args: argparse.Namespace) -> int:
     try:
         if args.canary_command == "plant":
             result = canary.plant(str(args.dir), str(args.manifest), count=args.count,
-                                  replace=args.replace, lure=args.lure)
+                                  replace=args.replace, lure=args.lure, web_readable=args.web_readable)
         elif args.canary_command == "check":
             result = canary.check(str(args.manifest))
         else:
