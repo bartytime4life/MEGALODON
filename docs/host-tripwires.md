@@ -144,6 +144,11 @@ journal. `--journal` reads its auth and authpriv messages, which `auth.log` hold
 It says so in `gaps` when the journal holds no files, or shows only your own messages. Reading auth logs
 usually requires membership in the `adm` group; the journal, `adm` or `systemd-journal`.
 
+To check `--journal` against this machine's own journal, run
+`MEGALODON_TEST_LIVE_JOURNAL=1 python -m pytest tests/test_live_journal.py`. It writes three neutral messages tagged
+with a random marker (under the auth, authpriv and daemon facilities), which stay in the journal like any logged
+line, and checks that the first two are read, in this format and in UTC, and the third is not.
+
 | Finding | Severity | Default trigger |
 | --- | --- | --- |
 | `AUTH_SUCCESS_AFTER_FAILURES` | CRITICAL | A login succeeded from an address with ≥ 5 failures in the previous hour |
