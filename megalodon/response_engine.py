@@ -204,6 +204,13 @@ broad_kinds = 5
 cooldown_minutes = 30
 # Your own scanners and test machines (addresses or networks): never counted toward a campaign.
 ignore_addresses = []
+# One campaign spread over several addresses of one network (a /24, or an IPv6 /64), as an attacker rotating
+# through a cloud range does: judged as one when at least min_addresses of them took part. It names those
+# addresses, never the network, so only they are blocked. false judges each address alone.
+networks = true
+min_addresses = 3
+network_prefix_v4 = 24
+network_prefix_v6 = 64
 
 [[response.playbook]]
 name = "reverse-shell"
@@ -643,12 +650,14 @@ def _campaign(table):
     """[response.campaign]: when one address trying many kinds of attack is an automated campaign."""
     if not isinstance(table, dict):
         raise ResponseError('response.campaign must be a table')
-    unknown = set(table) - {'enabled', 'ignore_addresses', *campaigns.BOUNDS}
+    unknown = set(table) - {'enabled', 'networks', 'ignore_addresses', *campaigns.BOUNDS}
     if unknown:
         raise ResponseError('response.campaign has unsupported settings: ' + ', '.join(sorted(unknown)))
-    enabled = table.get('enabled', True)
+    enabled, networks = table.get('enabled', True), table.get('networks', True)
     if not isinstance(enabled, bool):
         raise ResponseError('response.campaign.enabled must be true or false')
+    if not isinstance(networks, bool):
+        raise ResponseError('response.campaign.networks must be true or false')
     values = {}
     for name, (low, high) in campaigns.BOUNDS.items():
         value = table.get(name, getattr(campaigns.Settings, name))
@@ -662,7 +671,7 @@ def _campaign(table):
                        for a in _strings(table.get('ignore_addresses', []), 'response.campaign.ignore_addresses'))
     except ValueError:
         raise ResponseError('response.campaign.ignore_addresses contains an invalid address or network') from None
-    return campaigns.Settings(enabled=enabled, ignore_addresses=ignore, **values)
+    return campaigns.Settings(enabled=enabled, networks=networks, ignore_addresses=ignore, **values)
 
 
 def _toml_string(text):
@@ -1496,8 +1505,10 @@ def _targets(action, signal, incident):
     return sorted(signal.entities.get(entity, ()))[:8]
 
 
-def _campaign_signal(key, severity, observed_at, summary, address):
-    return Signal(key, campaigns.SOURCE, campaigns.RULE_ID, severity, observed_at, summary, _entities(address=[address]))
+def _campaign_signal(key, severity, observed_at, summary, addresses):
+    """A campaign: of one address, or of the addresses of one network that took part."""
+    addresses = [addresses] if isinstance(addresses, str) else list(addresses)
+    return Signal(key, campaigns.SOURCE, campaigns.RULE_ID, severity, observed_at, summary, _entities(address=addresses))
 
 
 def decide(policy, state, signals, now, *, guards=None, observations=None):

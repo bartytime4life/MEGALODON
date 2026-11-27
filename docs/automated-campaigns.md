@@ -31,6 +31,20 @@ one address a finding names. A finding that names several addresses and no sourc
 under attack is never taken for the attacker. This machine's own addresses, its gateways and its DNS servers are
 never followed: a gateway stands for everyone behind it, and none of them may be blocked.
 
+### Spread over one network
+
+An attacker can rotate through the addresses of one cloud range or provider block, each staying below the thresholds.
+So each network (a /24, or an IPv6 /64) is judged the same way as an address, over its addresses' findings together,
+when at least `min_addresses` of them (three by default) took part. A different attempt is still one rule against one
+target: the same attempt made from many addresses counts once. The campaign is about the network, for example:
+
+```
+203.0.113.0/24: 4 addresses, 9 different attacks of 3 kinds in 64 s (8.4 a minute), seen by network; ...
+```
+
+It names the addresses that took part, never the network, so the `automated-campaign` playbook would block those
+addresses (up to eight), not their neighbours. An address that is a campaign on its own is raised as well, by itself.
+
 ## What you see
 
 The campaign is a finding of its own, about the attacker's address. It joins the incident of the findings it was
@@ -73,6 +87,10 @@ min_kinds = 3             # 2 to 100: different kinds of attack among them
 broad_kinds = 5           # 2 to 100, at least min_kinds: CRITICAL from this many kinds
 cooldown_minutes = 30     # 1 to 1440: before the same address is raised again
 ignore_addresses = []     # your own scanners and test machines: addresses or networks
+networks = true           # also judge each network over its addresses together
+min_addresses = 3         # 2 to 64: addresses of one network that must take part
+network_prefix_v4 = 24    # 8 to 32: the size of an IPv4 network
+network_prefix_v6 = 64    # 16 to 128: the size of an IPv6 network
 ```
 
 An address is raised again within `cooldown_minutes` only if its campaign becomes CRITICAL, or first follows a lure.
@@ -80,7 +98,7 @@ A policy without the
 table uses these values. A policy written before this table existed also needs the `automated-campaign` playbook
 added before campaigns are decided. Until then they are still recorded, and reach the timeline and the report.
 
-The engine follows up to 512 addresses, and for each the last 256 different attempts from up to a day before its
+The engine follows up to 512 addresses and 256 networks, and for each the last 256 different attempts from up to a day before its
 newest, so findings that arrive out of order, across passes, still complete a campaign. An attempt seen again and
 again is kept at just enough of its times that every window still holds it when it did (at most 16 times, the
 latest), and repeats are dropped before any different attempt is. An address with nothing new for a day is
@@ -100,5 +118,8 @@ forgotten.
   fixtures only, not on a deployed sensor, and so never drive a response. The web server's access log is read only for
   an agent lure's page (`web_log`): a request for it counts, as a sensor of its own, and other web attacks count
   only as far as the network rules see them.
-* **One address at a time.** A campaign spread over many addresses, each staying below the thresholds, is not joined
-  into one.
+* **One network at a time.** A campaign spread over addresses of one network is joined into one; one spread over
+  unrelated networks (residential proxies, a botnet) is not, since a public server sees background scans from
+  thousands of unrelated addresses, and joining them all would raise a campaign every day. A busy shared range
+  (a large cloud provider's /24) can hold unrelated attackers, who would be joined: `min_addresses`,
+  `network_prefix_v4` and `ignore_addresses` narrow it, and `networks = false` turns it off.
