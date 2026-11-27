@@ -34,10 +34,14 @@ _request_context = threading.local()
 _priority_lock = threading.Lock()
 _active_priority = None
 _active_owner = None
+_active_operator_event = None
 _manual_waiters = 0
 OPERATOR_OWNER = 'hud-operator'
-_operator_events: set[threading.Event] = set()
+_operator_events: dict[threading.Event, str | None] = {}
 _operator_lock = threading.Lock()
+_OPERATOR_ID_BUDGET = 128
+_OPERATOR_CANCEL_GRACE_SECONDS = 60
+_operator_ids: OrderedDict[str, tuple[str, float]] = OrderedDict()
 _TOOL_CHOICE = re.compile(r'megalodon(?:\.[a-z_]{1,32}){1,4}')
 
 
@@ -49,11 +53,24 @@ def cancel_current(owner=None) -> None:
 
 
 @contextmanager
-def operator_request():
-    """Mark this thread's model calls as one cancellable HUD operator request."""
+def operator_request(*, request_id: str | None = None):
+    """Mark one HUD operation; an optional ID scopes browser cancellation."""
+    _operator_request_id(request_id)
     event = threading.Event()
     with _operator_lock:
-        _operator_events.add(event)
+        _prune_operator_ids()
+        if len(_operator_events) >= _OPERATOR_ID_BUDGET:
+            raise AIProviderError('POLICY_REJECTION')
+        if request_id is not None:
+            previous_id = _operator_ids.get(request_id)
+            if previous_id is not None and previous_id[0] != 'cancelled':
+                raise AIProviderError('POLICY_REJECTION')
+            if previous_id is None and len(_operator_ids) >= _OPERATOR_ID_BUDGET:
+                raise AIProviderError('POLICY_REJECTION')
+            if previous_id is not None:
+                event.set()
+            _operator_ids[request_id] = ('active', time.monotonic())
+        _operator_events[event] = request_id
     previous = getattr(_request_context, 'operator', None)
     _request_context.operator = event
     try:
@@ -61,17 +78,46 @@ def operator_request():
     finally:
         _request_context.operator = previous
         with _operator_lock:
-            _operator_events.discard(event)
+            _operator_events.pop(event, None)
+            if request_id is not None:
+                _operator_ids[request_id] = ('finished', time.monotonic())
 
 
-def cancel_operator() -> bool:
-    """Stop HUD operator requests only; background explanations keep their slot rules."""
+def _operator_request_id(value):
+    if value is not None and (type(value) is not str or re.fullmatch(r'[a-f0-9]{32}', value) is None):
+        raise AIProviderError('POLICY_REJECTION')
+
+
+def _prune_operator_ids():
+    cutoff = time.monotonic() - _OPERATOR_CANCEL_GRACE_SECONDS
+    for identifier, (state, at) in list(_operator_ids.items()):
+        if state != 'active' and at <= cutoff:
+            del _operator_ids[identifier]
+
+
+def cancel_operator(*, request_id: str | None = None) -> bool:
+    """Flag matching active HUD requests; omitted IDs retain legacy broad cancel.
+
+    A missing/finished exact ID never targets another operation. One bounded
+    128-ID registry retains pre-cancel and completed IDs for 60 seconds, without
+    evicting unexpired entries. The boolean acknowledges active matches only,
+    never proof inference ended or arbitrarily delayed work is absent.
+    """
+    _operator_request_id(request_id)
     with _operator_lock:
-        events = list(_operator_events)
-    for event in events:
-        event.set()
-    if events:
-        cancel_current(owner=OPERATOR_OWNER)
+        _prune_operator_ids()
+        if (request_id is not None and request_id not in _operator_ids
+                and len(_operator_ids) < _OPERATOR_ID_BUDGET):
+            _operator_ids[request_id] = ('cancelled', time.monotonic())
+        events = [event for event, identifier in _operator_events.items()
+                  if request_id is None or identifier == request_id]
+        for event in events:
+            event.set()
+        # Match the active event under the generation lock's state lock. A
+        # completed request must not interrupt a newer HUD operator's call.
+        with _priority_lock:
+            if _active_operator_event in events:
+                _active_cancel.set()
     return bool(events)
 
 
@@ -557,7 +603,7 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
             entry.update(fields);_observations.move_to_end(key)
             while len(_observations)>16:_observations.popitem(last=False)
     stamp=lambda:datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
-    global _active_priority, _active_owner, _manual_waiters
+    global _active_priority, _active_owner, _active_operator_event, _manual_waiters
     if priority not in {'manual','background'}:raise AIProviderError('POLICY_REJECTION')
     if type(load_only) is not bool or (load_only and (priority != 'background' or owner != 'hud-model-ready')):
         raise AIProviderError('POLICY_REJECTION')
@@ -580,7 +626,7 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
     with _priority_lock:
         if wait:_manual_waiters-=1
         if acquired:
-            _active_priority=priority;_active_owner=owner
+            _active_priority=priority;_active_owner=owner;_active_operator_event=operator
             _active_cancel.clear()
             # Checked under the same lock cancel_operator() uses, so a cancel
             # between two calls of one operator request cannot be lost.
@@ -611,7 +657,7 @@ def generate(settings: AISettings, prompt: str, *, max_tokens: int = 256, respon
             record(running=False)
         _request_context.cancel=None
         with _priority_lock:
-            _active_priority=None;_active_owner=None
+            _active_priority=None;_active_owner=None;_active_operator_event=None
         _generation_lock.release()
     if not load_only:
         record(last_attempt_at=stamp(),last_response_at=stamp(),error_code=None,duration_ms=round((time.monotonic()-start)*1000))

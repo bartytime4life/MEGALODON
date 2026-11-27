@@ -788,9 +788,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     or not _token_matches(token_values[0], self.ai_operator_token)):
                 self._send_json({"error": "explicit local AI check required"}, status=403)
                 return
-            from .ai_provider import operator_request
-            with operator_request():
-                value = status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=True)
+            from .ai_provider import AIProviderError, operator_request
+            try:
+                request_id = self._ai_request_id()
+            except ValueError:
+                self._send_json({'error': 'invalid AI request identity'}, status=400)
+                return
+            try:
+                with operator_request(request_id=request_id):
+                    value = status(self.support_config.settings.ai if self.support_config is not None else self.ai_settings, probe=True)
+            except AIProviderError as exc:
+                self._send_json({'error_code': exc.code}, status=503)
+                return
             self._send_json(value)
             return
         if route.path == "/api/setup":
@@ -1530,24 +1539,48 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 and not self.headers.get_all("Transfer-Encoding", [])
                 and not self.headers.get_all("Content-Encoding", []))
 
+    def _ai_request_id(self):
+        """Optional compatibility header; new HUD operations always bind an ID."""
+        values = self.headers.get_all('X-Megalodon-AI-Request', [])
+        if not values:
+            return None
+        if len(values) != 1 or re.fullmatch(r'[a-f0-9]{32}', values[0]) is None:
+            raise ValueError('Invalid AI request identity')
+        return values[0]
+
     def _ai_cancel(self) -> None:
         """Stop this HUD's operator model request; reachable while /api/ai/ask runs."""
         if not self._ai_operator_envelope():
             self._send_json({"error": "AI operator authorization required"}, status=403)
             return
-        if self.headers.get_all("Content-Length", []) != ["2"]:
+        lengths = self.headers.get_all("Content-Length", [])
+        if (len(lengths) != 1 or not re.fullmatch(r'[0-9]{1,2}', lengths[0])
+                or not 2 <= int(lengths[0]) <= 96):
             self._send_json({"error": "invalid AI request length"}, status=400)
             return
         self.connection.settimeout(2)
         try:
-            body = self.rfile.read(2)
-        except OSError:
-            body = b""
-        if body != b"{}":
+            from .ai_provider import _strict_pairs, cancel_operator
+            body = self.rfile.read(int(lengths[0]))
+            if len(body) != int(lengths[0]):
+                raise ValueError('Incomplete AI cancel request')
+            if body == b"{}":
+                # Compatibility only: older clients explicitly cancel all HUD
+                # operator requests. New browser code never uses this form.
+                cancelled = cancel_operator()
+                result = {"schema": "megalodon-ai-cancel-v1", "cancelled": cancelled}
+            else:
+                value = json.loads(body.decode('utf-8'), object_pairs_hook=_strict_pairs)
+                if (type(value) is not dict or set(value) != {'request_id'}
+                        or type(value['request_id']) is not str
+                        or re.fullmatch(r'[a-f0-9]{32}', value['request_id']) is None):
+                    raise ValueError('Invalid AI cancel request')
+                result = {"schema": "megalodon-ai-cancel-v1", "request_id": value['request_id'],
+                          "cancelled": cancel_operator(request_id=value['request_id'])}
+        except (OSError, ValueError, UnicodeError):
             self._send_json({"error": "invalid AI cancel request"}, status=400)
             return
-        from .ai_provider import cancel_operator
-        self._send_json({"schema": "megalodon-ai-cancel-v1", "cancelled": cancel_operator()})
+        self._send_json(result)
 
     def _ai_ask(self) -> None:
         if (not (self.support_config.settings.ai if self.support_config is not None else self.ai_settings).enabled
@@ -1579,7 +1612,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise ValueError("AI audit path unavailable")
             from .managed_receipts import ManagedReceipts
             from .ai_provider import operator_request
-            with operator_request(), (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
+            with operator_request(request_id=self._ai_request_id()), (ManagedReceipts(self.evidence) if self.evidence is not None and self.evidence.enabled else ReceiptStore(self.ai_receipt_path)) as receipts:
                 answer = ask(body["question"], Broker(
                     self.store, receipts, self.support_config.settings.ai if self.support_config is not None else self.ai_settings, self.ai_blocking,
                     knowledge=self.knowledge,intelligence=self.intelligence))
