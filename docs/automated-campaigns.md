@@ -83,7 +83,9 @@ forgotten.
 ## Limits
 
 * **It measures pace and breadth, not who is typing.** An AI agent, an attack framework and a scripted scanner are
-  all automated, and are answered the same way. The detector does not claim to tell them apart.
+  all automated, and are answered the same way. The detector does not claim to tell them apart. What does is an
+  [agent lure](host-tripwires.md#agent-lures-catching-an-ai-agent-at-work): a note only something that reads and
+  acts on text follows. A followed lure (`LURE_FOLLOWED`) from the same address joins the campaign's incident.
 * **A scanner you run yourself is a campaign too,** unless its address or network is in `ignore_addresses`, or in
   the network detector's allow list, whose findings never reach the response engine.
 * **It sees what the sensors report.** It counts the network detections, failed logins and password spraying from

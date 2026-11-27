@@ -20,7 +20,9 @@ Findings (all heuristics for review, never a verdict):
 ``SUDO_DENIED``                 HIGH      a user not in sudoers tried sudo;
 ``PRIVILEGE_GRANT``             HIGH      an account joined a privileged group;
 ``SUDO_FAILURES``               MEDIUM    repeated wrong sudo passwords;
-``ACCOUNT_CREATED``             MEDIUM    a new local account appeared.
+``ACCOUNT_CREATED``             MEDIUM    a new local account appeared;
+``LURE_FOLLOWED``               CRITICAL  a login was tried as an agent lure's account (``canary plant --lure``):
+                                          something read a note written for automated agents and acted on it.
 
 Usernames come from attackers and are untrusted text: they are bounded,
 stripped of control characters and only ever reported as data.
@@ -54,15 +56,15 @@ PRIVILEGED_GROUPS = frozenset({"sudo", "wheel", "admin", "root", "adm", "docker"
 SEVERITY = {
     "AUTH_SUCCESS_AFTER_FAILURES": "CRITICAL", "AUTH_FAILURE_BURST": "HIGH",
     "PASSWORD_SPRAY": "HIGH", "SUDO_DENIED": "HIGH", "PRIVILEGE_GRANT": "HIGH",
-    "SUDO_FAILURES": "MEDIUM", "ACCOUNT_CREATED": "MEDIUM",
+    "SUDO_FAILURES": "MEDIUM", "ACCOUNT_CREATED": "MEDIUM", "LURE_FOLLOWED": "CRITICAL",
 }
 _RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
-NETWORK_RULES = frozenset({"AUTH_FAILURE_BURST", "PASSWORD_SPRAY", "AUTH_SUCCESS_AFTER_FAILURES"})
+NETWORK_RULES = frozenset({"AUTH_FAILURE_BURST", "PASSWORD_SPRAY", "AUTH_SUCCESS_AFTER_FAILURES", "LURE_FOLLOWED"})
 ATTACK = {
     "AUTH_SUCCESS_AFTER_FAILURES": ["T1110", "T1078"], "AUTH_FAILURE_BURST": ["T1110.001"],
     "PASSWORD_SPRAY": ["T1110.003"], "SUDO_DENIED": ["T1548.003"],
     "SUDO_FAILURES": ["T1548.003"], "PRIVILEGE_GRANT": ["T1098"],
-    "ACCOUNT_CREATED": ["T1136.001"],
+    "ACCOUNT_CREATED": ["T1136.001"], "LURE_FOLLOWED": ["T1078", "T1552.001"],
 }
 
 _MONTHS = {m: i for i, m in enumerate(
@@ -194,11 +196,13 @@ class _Clock:
 
 class AuthReviewer:
     def __init__(self, settings: AuthReviewSettings | None = None, *,
-                 reference: datetime | None = None, zone=None, on_finding=None) -> None:
+                 reference: datetime | None = None, zone=None, on_finding=None, lure_users=()) -> None:
         self.settings = settings or AuthReviewSettings()
         # Called with every finding as it is made, before the report's display cap: a reader that must see all of
         # them (the response engine) takes them here, not from the bounded report.
         self.on_finding = on_finding
+        # Agent lures' accounts: any login tried as one is LURE_FOLLOWED, whatever came before it.
+        self.lure_users = frozenset(_clean_user(str(user)).casefold() for user in lure_users)
         reference = reference or datetime.now(timezone.utc)
         self.clock = _Clock(reference.astimezone(zone) if zone else reference.astimezone(),
                             zone or reference.astimezone().tzinfo)
@@ -305,6 +309,8 @@ class AuthReviewer:
 
     def _accepted(self, when: datetime, address: str, user: str, method: str) -> None:
         self.stats["successful_logins"] += 1
+        # Accepted as a lure's account: the account exists after all, and someone has it.
+        self._lure(when, address, user, "accepted: the account exists, so check it at once")
         settings = self.settings
         state = self.failures.get(address)
         if state is None:
@@ -321,8 +327,16 @@ class AuthReviewer:
                  "prior_failures": prior, "usernames_tried": state.users_shown()},
             )
 
+    def _lure(self, when: datetime, address: str, user: str, outcome: str) -> None:
+        if user.casefold() not in self.lure_users:
+            return
+        self._emit("LURE_FOLLOWED", f"{address}:{user.casefold()}", when, address,
+                   f"{address} tried to log in as {user}, the account an agent lure names ({outcome}).",
+                   {"source": address, "user": user, "outcome": outcome})
+
     def _failure(self, when: datetime, address: str, user: str) -> None:
         settings = self.settings
+        self._lure(when, address, user, "refused")
         self.stats["failed_logins"] += 1
         self.failures_by_source[address] += 1
         state = self.failures.pop(address, None) or _SourceState()
@@ -508,7 +522,8 @@ def read_lines(path: str) -> Iterable[bytes]:
 
 
 def review(lines: Iterable[bytes], *, source: str, settings: AuthReviewSettings | None = None,
-           reference: datetime | None = None, zone=None, on_finding=None) -> tuple[dict[str, Any], AuthReviewer]:
-    reviewer = AuthReviewer(settings, reference=reference, zone=zone, on_finding=on_finding)
+           reference: datetime | None = None, zone=None, on_finding=None,
+           lure_users=()) -> tuple[dict[str, Any], AuthReviewer]:
+    reviewer = AuthReviewer(settings, reference=reference, zone=zone, on_finding=on_finding, lure_users=lure_users)
     reviewer.feed(lines)
     return reviewer.report(source), reviewer

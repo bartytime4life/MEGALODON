@@ -57,6 +57,38 @@ outside the bait directory; `plant` refuses otherwise.
 `check` exits **1** when anything tripped, 0 when clean and 2 on an error, so
 it can run from cron or a systemd timer and alert on a non-zero exit.
 
+### Agent lures: catching an AI agent at work
+
+```bash
+megalodon canary plant --dir /srv/decoy --manifest ~/.config/megalodon/canary.json --lure
+```
+
+`--lure` adds `OPERATIONS-NOTE.txt`. It is a note written as instructions to automated agents and AI assistants:
+confirm your access by signing in over SSH as a verification account. The account is random (`svc-` and six
+letters or digits), appears in no wordlist, and `plant` checks that this machine has no such account. The password
+it gives is a random marker, never a real one.
+
+What it tells apart:
+
+* **Scanners and password-guessing tools** do not read sentences, and never try the account.
+* **A person** rarely acts on such a note, and not within seconds.
+* **An AI agent driving an attack** reads files to decide what to do next, takes the note as a lead, and tries
+  the account.
+
+So a login tried as the lure's account is reported as `LURE_FOLLOWED` (CRITICAL): something read a note written for
+automated agents and acted on it. It is found in the auth log, by `megalodon auth-review --lures MANIFEST` or by the
+response engine with both `canary_manifest` and `auth_log` set. A refused attempt is enough; an accepted one also
+means the account exists after all, so check it at once.
+
+The response engine links the attempt to the lure's own `CANARY_READ` finding in one incident. When the read time
+is known, it says how soon the account was tried. Within two minutes, the summary says so plainly: "an AI agent
+reading text and acting on it, at machine speed". The `lure-followed` playbook would collect evidence, block the
+address for an hour and notify you.
+
+**Keep lures out of folders your own AI assistants work in.** A coding assistant or chat agent reading your files
+would follow the note too. Plant lures in decoy folders that only an intruder has reason to read: a fake backup
+share, a web root's old admin folder, a home directory no one uses.
+
 ### How read detection works and where it is blind
 
 After planting, each file's access time is set two days before its
