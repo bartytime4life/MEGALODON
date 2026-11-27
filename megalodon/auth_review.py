@@ -523,6 +523,59 @@ def read_lines(path: str) -> Iterable[bytes]:
             yield line
 
 
+JOURNALCTL = ("/usr/bin/journalctl", "/bin/journalctl")
+JOURNAL_FACILITIES = ("SYSLOG_FACILITY=4", "SYSLOG_FACILITY=10")      # auth and authpriv: what auth.log holds
+JOURNAL_TIMEOUT = 120
+
+
+def read_journal(since: datetime, notes: list[str]) -> list[bytes]:
+    """The systemd journal's auth and authpriv messages since ``since``, as lines ``review`` reads, bounded as a log
+    file is. journalctl only reads. What it warns of (no journal files; only this user's own messages) is added to
+    ``notes``: the review is then partial, not failed."""
+    import subprocess
+    import tempfile
+    import threading
+    program = next((path for path in JOURNALCTL if os.path.isfile(path)), None)
+    if program is None:
+        raise ValidationError("the journal cannot be read: journalctl is not installed")
+    argv = [program, "--no-pager", "--utc", "-o", "short-iso-precise", f"--since=@{int(since.timestamp())}",
+            *JOURNAL_FACILITIES]
+    env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "SYSTEMD_COLORS": "0", "SYSTEMD_PAGER": "", "SYSTEMD_LESS": ""}
+    with tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=errors, env=env,
+                                   close_fds=True)
+        timer = threading.Timer(JOURNAL_TIMEOUT, process.kill)
+        timer.start()
+        lines: list[bytes] = []
+        total = 0
+        try:
+            for line in process.stdout:
+                total += len(line)
+                if total > MAX_INPUT_BYTES:
+                    raise ValidationError("the journal's auth messages exceed the 64 MiB limit")
+                lines.append(line)
+        finally:
+            if total > MAX_INPUT_BYTES:
+                process.kill()
+            process.stdout.close()
+            code = process.wait()
+            timer.cancel()
+        errors.seek(0)
+        said = errors.read(4096).decode("utf-8", "replace")
+    if code != 0:
+        if code < 0:
+            raise ValidationError(f"journalctl did not finish within {JOURNAL_TIMEOUT} s")
+        first = next((line.strip() for line in said.splitlines() if line.strip()), f"exit status {code}")
+        raise ValidationError(f"the journal cannot be read: {first[:200]}")
+    if "No journal files were found" in said:
+        notes.append("the journal holds no files here: journald keeps none, or keeps them where this user cannot "
+                     "see them")
+    elif "not seeing messages from other users and the system" in said:
+        notes.append("the journal shows only this user's own messages, not logins: run as root, or in the adm or "
+                     "systemd-journal group")
+    return lines
+
+
 def review(lines: Iterable[bytes], *, source: str, settings: AuthReviewSettings | None = None,
            reference: datetime | None = None, zone=None, on_finding=None,
            lure_users=()) -> tuple[dict[str, Any], AuthReviewer]:

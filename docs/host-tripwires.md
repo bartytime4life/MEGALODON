@@ -114,11 +114,13 @@ megalodon auth-review --input /var/log/auth.log
 ```
 
 ```bash
-journalctl _COMM=sshd _COMM=sudo -o short-iso --since "24 hours ago" | megalodon auth-review --input -
+megalodon auth-review --journal --hours 24
 ```
 
-Use `/var/log/secure` on RHEL-family systems. Reading auth logs usually
-requires membership in the `adm` group.
+Use `/var/log/secure` on RHEL-family systems, and `--journal` on systems that keep logins only in the systemd
+journal. `--journal` reads its auth and authpriv messages, which `auth.log` holds where kept, with `journalctl`.
+It says so in `gaps` when the journal holds no files, or shows only your own messages. Reading auth logs
+usually requires membership in the `adm` group; the journal, `adm` or `systemd-journal`.
 
 | Finding | Severity | Default trigger |
 | --- | --- | --- |
@@ -139,8 +141,9 @@ alerting.
 
 ### The response engine reads it too
 
-With `auth_log` set in the response policy (`megalodon respond init` sets it to the log this system keeps), every
-response pass reviews the log and decides the findings newer than the last it read. Failed-login bursts and password
+With `auth_log` set in the response policy (`megalodon respond init` sets it to the log this system keeps, or to
+`"journal"` where there is none and journald runs), every response pass reviews the log and decides the findings
+newer than the last it read. Failed-login bursts and password
 spraying go to the `attacker-at-the-door` playbook, a login after many failures to `guessed-login`, and all of them
 count toward an [automated campaign](automated-campaigns.md) from the same address. See the
 [response engine](response-engine.md).
@@ -158,7 +161,7 @@ connection to or from those addresses raises `IOC_MATCH` in the network view.
 
 ### Parsing details and limits
 
-- **Input formats:** classic syslog (`Nov 17 22:01:02 host sshd[1]: …`), high-precision ISO-8601 and `journalctl -o short-iso`.
+- **Input formats:** classic syslog (`Nov 17 22:01:02 host sshd[1]: …`), high-precision ISO-8601 and `journalctl -o short-iso` (and `short-iso-precise`, which `--journal` reads).
 - **Classic timestamps:** these carry no year or zone, so this computer's local time and the current year are assumed (a December line read in January rolls back a year). Pass `--utc` when the log was written in UTC.
 - **Counting:** one connection that logs both `Invalid user X` and `Failed password for invalid user X` counts once. Repeated password guesses on one connection each count.
 - **Untrusted usernames:** attackers choose them, so they are bounded to 64 printable characters and only reported as data.
