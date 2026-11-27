@@ -90,9 +90,12 @@ def tried():
             else:
                 pytest.fail("sshd did not start")
             # One password attempt as the lure's account, with a password made up here: the attempt the lure watches for.
+            # `-F /dev/null`: none of this machine's own client settings (BatchMode, a proxy, a shared connection)
+            # may skip the attempt or send it anywhere but this sshd.
             attempt = subprocess.run(
-                ["sshpass", "-p", secrets.token_hex(8), "ssh", "-p", str(port), "-o", "StrictHostKeyChecking=no",
-                 "-o", "UserKnownHostsFile=/dev/null", "-o", "PreferredAuthentications=password",
+                ["sshpass", "-p", secrets.token_hex(8), "ssh", "-F", "/dev/null", "-p", str(port),
+                 "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+                 "-o", "PreferredAuthentications=password",
                  "-o", "PubkeyAuthentication=no", "-o", "NumberOfPasswordPrompts=1", "-o", "ConnectTimeout=10",
                  "-o", "LogLevel=ERROR", f"{account}@127.0.0.1", "true"],
                 stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
