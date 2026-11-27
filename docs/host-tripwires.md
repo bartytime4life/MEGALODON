@@ -82,6 +82,12 @@ could not serve the note, and no browsing agent would learn its page. `--web-rea
 only it, readable by others (mode 644); the folder must let the server in too. Its mode is recorded as planted, so
 it is never reported as changed. A local user reading it then trips `CANARY_READ`, as for any bait.
 
+To check web lures against a real nginx, run `MEGALODON_TEST_LIVE_NGINX=1 python -m pytest tests/test_live_nginx.py`
+as root on a machine with nginx. It runs nginx from a temporary folder on a free loopback port, its workers as
+`nobody`, and checks that only a `--web-readable` note is served, that nginx's own access log is read, and that
+a request for the lure's page in it is `LURE_FOLLOWED`, decided by the response engine. nginx is stopped and the
+folder removed after.
+
 What it tells apart:
 
 * **Scanners and password-guessing tools** do not read sentences, and never try the account.
