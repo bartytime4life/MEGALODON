@@ -128,3 +128,74 @@ def test_a_followed_lure_is_decided_and_joins_the_lure_read_in_one_incident(plan
     observed = [json.loads(line) for line in re_.observations_path(ledger).read_text().splitlines()]
     incidents = {o["signal"]["rule_id"]: o["incident"] for o in observed if o["kind"] == "finding"}
     assert incidents["LURE_FOLLOWED"] == incidents["CANARY_READ"], "the read and the attempt are one story"
+
+
+# ------------------------------------------------------------------ attribution: an AI agent, with the evidence
+
+from megalodon import campaign as campaigns                            # noqa: E402
+
+START = datetime(2026, 11, 27, 12, 0, tzinfo=timezone.utc)
+
+
+def _attempt(n, rule, seconds, source="network"):
+    return re_.Signal(f"{source}:{n}", source, rule, "MEDIUM", (START + timedelta(seconds=seconds)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"), rule, re_._entities(address=[ATTACKER], peer=[ATTACKER, f"192.168.1.{n}"]))
+
+
+def _burst(count=8, start=0):
+    return [_attempt(start + n, ("PORT_SCAN", "BRUTE_FORCE", "HOST_SWEEP")[n % 3], start + 5 * n) for n in range(count)]
+
+
+def _followed(seconds):
+    return re_.Signal("auth:LURE_FOLLOWED:x", "auth", "LURE_FOLLOWED", "CRITICAL",
+                      (START + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ"), "lure",
+                      re_._entities(address=[ATTACKER], file=["/srv/decoy/OPERATIONS-NOTE.txt"]))
+
+
+def test_a_campaign_that_followed_a_lure_is_ai_driven_and_critical():
+    [raised] = campaigns.observe({}, _burst(7) + [_followed(40)], START + timedelta(minutes=2), campaigns.Settings(),
+                                 re_._campaign_signal)
+    assert raised.severity == "CRITICAL" and raised.summary.endswith("It followed an agent lure: an AI agent is driving it.")
+    assert len(raised.summary) <= 300 and "LURE_FOLLOWED" in raised.summary
+    [plain] = campaigns.observe({}, _burst(8), START + timedelta(minutes=2), campaigns.Settings(), re_._campaign_signal)
+    assert plain.severity == "HIGH" and plain.summary.endswith("an attack tool or an AI agent, not a person.")
+
+
+def test_a_lure_followed_after_a_campaign_was_raised_raises_it_again_as_ai_driven():
+    state = {}
+    [first] = campaigns.observe(state, _burst(8), START + timedelta(minutes=1), campaigns.Settings(), re_._campaign_signal)
+    [again] = campaigns.observe(state, [_followed(50)], START + timedelta(minutes=2), campaigns.Settings(),
+                                re_._campaign_signal)
+    assert (first.severity, again.severity) == ("HIGH", "CRITICAL") and "AI agent is driving it" in again.summary
+
+
+def test_the_report_names_an_ai_driven_attack_and_a_followed_lure_plainly(tmp_path, monkeypatch):
+    from megalodon import guided_review
+    from megalodon import security_report as sr
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / "home/.config/megalodon").mkdir(parents=True)
+    re_.write_default_policy()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    near = [re_.Signal(s.key, s.source, s.rule_id, s.severity,
+                       (datetime.fromisoformat(s.observed_at.replace("Z", "+00:00")) - START + now
+                        - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"), s.summary, s.entities)
+            for s in _burst(7) + [_followed(40)]]
+    re_.run(signals=near, now=now, protected=set())
+    built = sr.build(now=now, system=False)
+    [incident] = built["incidents"]
+    assert incident["rules"][:2] == ["AUTOMATED_CAMPAIGN", "LURE_FOLLOWED"] and incident["severity"] == "CRITICAL"
+    assert incident["meaning"] == sr.AI_CAMPAIGN_MEANING and built["verdict"] == "act"
+    assert sr.AI_CAMPAIGN_MEANING in sr.text(built) and "An AI-driven attack" in sr.page(built)
+    [item] = [i for i in guided_review.items(built) if i["heading"].startswith("Incident")]
+    assert item["meaning"].startswith(sr.AI_CAMPAIGN_MEANING)
+    assert sr._incident_meaning(["LURE_FOLLOWED", "CANARY_READ"]) == sr.LURE_MEANING
+    assert sr._incident_meaning(["LURE_FOLLOWED", "LOGIN_NEW_SOURCE"]).endswith(sr.LOGIN_IN_CAMPAIGN)
+
+
+def test_a_lure_makes_a_campaign_critical_even_from_one_sensor():
+    guessing = re_.Signal("auth:AUTH_FAILURE_BURST:x", "auth", "AUTH_FAILURE_BURST", "HIGH",
+                          START.strftime("%Y-%m-%dT%H:%M:%SZ"), "burst", re_._entities(address=[ATTACKER]))
+    few = campaigns.Settings(min_attempts=2, min_kinds=2)
+    [raised] = campaigns.observe({}, [guessing, _followed(10)], START + timedelta(minutes=1), few,
+                                 re_._campaign_signal)
+    assert raised.severity == "CRITICAL" and "seen by auth;" in raised.summary

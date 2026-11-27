@@ -28,6 +28,7 @@ import ipaddress
 import statistics
 
 RULE_ID = 'AUTOMATED_CAMPAIGN'
+LURE_RULE = 'LURE_FOLLOWED'       # a login tried as an agent lure's account: the evidence an AI agent is at work
 SOURCE = 'campaign'
 MAX_ADDRESSES = 512           # addresses followed at once; the least recently active is dropped first
 MAX_ATTEMPTS = 256            # different attempts kept per address, newest kept, with room for repeats
@@ -224,12 +225,15 @@ def _assess(attempts, settings):
     ordered = sorted(distinct.values())
     pivots = [(_time(b[0], None) - _time(a[0], None)).total_seconds()
               for a, b in zip(ordered, ordered[1:]) if a[1] != b[1]]
-    severity = 'CRITICAL' if len(kinds) >= settings.broad_kinds or len(sensors) >= 2 else 'HIGH'
+    # A followed agent lure among the attempts: something read a note to AI agents and acted on it.
+    lured = LURE_RULE in kinds
+    severity = 'CRITICAL' if lured or len(kinds) >= settings.broad_kinds or len(sensors) >= 2 else 'HIGH'
     pace = len(distinct) * 60 / span
     head = (f'{len(distinct)} different attacks of {len(kinds)} kinds in {int(span)} s ({pace:.1f} a minute), '
             f'seen by {", ".join(sensors)}'
             + (f'; next kind after {statistics.median(pivots):.0f} s (median)' if pivots else '') + ': ')
-    tail = '. Machine speed: an attack tool or an AI agent, not a person.'
+    tail = ('. It followed an agent lure: an AI agent is driving it.' if lured
+            else '. Machine speed: an attack tool or an AI agent, not a person.')
     # As many of the kinds as fit what the ledger keeps of a summary, with room for the address before it.
     listed = list(kinds)
     while listed and len(head + ', '.join(listed) + ', ...' + tail) > SUMMARY_ROOM:

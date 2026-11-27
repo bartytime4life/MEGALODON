@@ -16,6 +16,11 @@ each address it keeps the last `window_seconds` of what was reported about it, a
 It is **CRITICAL** when the attempts span `broad_kinds` kinds or more, or were seen by two sensors or more (the network
 and the login records, for example): breadth no single scanner produces. Otherwise it is HIGH.
 
+When a followed [agent lure](host-tripwires.md#agent-lures-catching-an-ai-agent-at-work) (`LURE_FOLLOWED`) from the same
+address is among the attempts, the campaign is CRITICAL and its summary ends "It followed an agent lure: an AI agent
+is driving it." That is evidence, not pace alone: the address read a note written for automated agents and acted on
+it. A campaign raised as HIGH is raised again when a lure is followed.
+
 Attempts are placed by when they happened, not when a pass read them, so findings read late, or across several
 passes, are counted the same. Every window that holds a new attempt is looked at, not only the latest: a backlog
 read at once can hold a campaign that ended before its newest finding. When several qualify, the most severe is
