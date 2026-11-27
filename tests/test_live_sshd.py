@@ -1,18 +1,25 @@
-"""The SSH agent lure against a real sshd: opt-in, with MEGALODON_TEST_LIVE_SSHD=1, as root on a machine where
-journald runs and sshd, ssh and sshpass are installed.
+"""Login review against a real sshd: opt-in, with MEGALODON_TEST_LIVE_SSHD=1, as root on a machine where journald
+runs and sshd, ssh and sshpass are installed.
 
-Plants an agent lure, runs sshd in the foreground from a temporary folder on a free loopback port (a throwaway host
-key, passwords only, no PAM), and tries one password login as the lure's account, which this machine does not have.
-sshd's own messages about it go through syslog to the journal, where they stay like any logged line; the test reads
-them back with journalctl and checks auth-review and the response engine on them. sshd is stopped and the folder
-removed after. Nothing is sent off this machine.
+sshd runs in the foreground from a temporary folder on a free loopback port, with a throwaway host key and no PAM.
+sshd's own messages go through syslog to the journal, where they stay like any logged line; the tests read them back
+with journalctl and check auth-review and the response engine on them. Two things are tried:
+
+* the SSH agent lure: one password login as the lure's account, which this machine does not have;
+* a login let in after refused ones: five wrong passwords for `nobody`, then a login as `nobody` with a throwaway key
+  that only this sshd accepts. `nobody`'s shell refuses to run anything, so the login does nothing.
+
+The clients read none of this machine's SSH settings. sshd is stopped and the folders removed after. No account,
+password or key of this machine is used or changed, and nothing is sent off this machine.
 """
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
+import pwd
 import secrets
 import shutil
 import socket
@@ -27,9 +34,15 @@ from megalodon import canary
 from megalodon import response_engine as re_
 
 SSHD, LOG_SOCKET = "/usr/sbin/sshd", "/dev/log"
+GUESSED = "nobody"                  # an account every system has, whose shell runs nothing
+FAILURES = auth_review.AuthReviewSettings().success_min_failures
 
 
 def _usable():
+    try:
+        pwd.getpwnam(GUESSED)
+    except KeyError:
+        return False
     return (os.path.isfile(SSHD) and all(shutil.which(tool) for tool in ("ssh", "sshpass", "ssh-keygen", "logger"))
             and os.path.exists(LOG_SOCKET) and os.path.exists("/run/systemd/journal/socket")
             and hasattr(os, "geteuid") and os.geteuid() == 0)
@@ -38,7 +51,7 @@ def _usable():
 pytestmark = pytest.mark.skipif(
     os.environ.get("MEGALODON_TEST_LIVE_SSHD") != "1" or not _usable(),
     reason="explicit live sshd check: needs MEGALODON_TEST_LIVE_SSHD=1, root, a running journald with /dev/log, "
-           "and sshd, ssh and sshpass")
+           "sshd, ssh and sshpass, and the nobody account")
 
 CONFIG = """Port {port}
 ListenAddress 127.0.0.1
@@ -47,13 +60,17 @@ PidFile {base}/sshd.pid
 UsePAM no
 PasswordAuthentication yes
 KbdInteractiveAuthentication no
-PubkeyAuthentication no
+PubkeyAuthentication {pubkey}
+AuthorizedKeysFile {keys}
 PermitRootLogin no
-AuthorizedKeysFile none
 StrictModes no
 SyslogFacility AUTH
 LogLevel INFO
 """
+# Newer sshd refuses an address for a while after failed logins; the guessed login must still reach it.
+NO_PENALTIES = "PerSourcePenalties no\n"
+CLIENT = ["ssh", "-F", "/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+          "-o", "ConnectTimeout=10", "-o", "LogLevel=ERROR"]
 
 
 def _port():
@@ -63,57 +80,146 @@ def _port():
 
 
 @pytest.fixture(scope="module")
-def tried():
+def privsep():
+    """sshd's privilege separation folder, made for the run if this machine has none, and removed after."""
+    made = not os.path.isdir("/run/sshd")
+    if made:
+        os.makedirs("/run/sshd", mode=0o755)
+    try:
+        yield
+    finally:
+        if made:
+            shutil.rmtree("/run/sshd", ignore_errors=True)
+
+
+@contextlib.contextmanager
+def _sshd(base, *, keys=None):
+    """sshd on a free loopback port, run from `base`; with `keys`, it accepts those keys too."""
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(base / "host_key")], check=True,
+                   timeout=60)
+    port = _port()
+    config = base / "sshd_config"
+    config.write_text(CONFIG.format(port=port, base=base, pubkey="yes" if keys else "no", keys=keys or "none"))
+    with open(config, "a") as more:
+        more.write(NO_PENALTIES)
+    if subprocess.run([SSHD, "-t", "-f", str(config)], capture_output=True, timeout=60).returncode:
+        config.write_text(config.read_text().replace(NO_PENALTIES, ""))   # an sshd that has no such setting
+    server = subprocess.Popen([SSHD, "-D", "-f", str(config)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(100):
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+                break
+            except OSError:
+                time.sleep(0.05)
+        else:
+            pytest.fail("sshd did not start")
+        yield port
+    finally:
+        server.terminate()
+        server.wait(timeout=30)
+
+
+def _password(port, user):
+    """One password login as `user`, with a password made up here."""
+    return subprocess.run(
+        ["sshpass", "-p", secrets.token_hex(8), *CLIENT, "-p", str(port), "-o", "PreferredAuthentications=password",
+         "-o", "PubkeyAuthentication=no", "-o", "NumberOfPasswordPrompts=1", f"{user}@127.0.0.1", "true"],
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+
+
+def _journal(start, wanted, done):
+    """The journal's auth lines written since `start` that `wanted` keeps, once `done` holds of them."""
+    def since_start(line):
+        # journalctl is asked from the second before; each line's own time, to the microsecond, keeps out a run
+        # just before this one.
+        try:
+            return datetime.fromisoformat(line.split(b" ", 1)[0].decode()) >= start
+        except ValueError:
+            return False
+    lines = []
+    for _ in range(50):                     # sshd and journald write a moment later
+        lines = [line for line in auth_review.read_journal(start - timedelta(seconds=2), [])
+                 if since_start(line) and wanted(line)]
+        if done(lines):
+            break
+        time.sleep(0.2)
+    return lines
+
+
+def _policy(tmp_path, manifest=""):
+    policy = tmp_path / "policy.toml"
+    re_.write_default_policy(policy)
+    text = policy.read_text()
+    for name in ("process_review", "rootkit_check"):
+        text = text.replace(f"{name} = true", f"{name} = false")
+    keep = {"canary_manifest": manifest, "auth_log": "journal", "web_log": ""}
+    lines = []
+    for line in text.splitlines():
+        name = line.split("=")[0].strip()
+        if name in keep:
+            line = f"{name} = {json.dumps(keep[name])}"
+        elif name.endswith(("_manifest", "_file", "_db")):
+            line = f'{name} = ""'
+        lines.append(line)
+    policy.write_text("\n".join(lines) + "\n")
+    return policy
+
+
+def _decide(tmp_path, manifest=""):
+    ledger = tmp_path / "ledger.jsonl"
+    result = re_.run(policy_path=_policy(tmp_path, manifest), ledger=ledger, state_path=tmp_path / "state.json",
+                     protected=set(), now=datetime.now(timezone.utc))
+    return result, [json.loads(line) for line in ledger.read_text().splitlines()]
+
+
+@pytest.fixture(scope="module")
+def tried(privsep):
     base = Path(tempfile.mkdtemp(prefix="megalodon-live-sshd-", dir="/tmp"))
-    made_privsep = not os.path.isdir("/run/sshd")
     try:
         bait = base / "bait"
         bait.mkdir()
         manifest = base / "canary.json"
         [account] = canary.plant(str(bait), str(manifest), count=1, lure=True)["lure_accounts"]
-        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(base / "host_key")], check=True,
-                       timeout=60)
-        port = _port()
-        (base / "sshd_config").write_text(CONFIG.format(port=port, base=base))
-        if made_privsep:
-            os.makedirs("/run/sshd", mode=0o755)
-        before = datetime.now(timezone.utc) - timedelta(seconds=2)
-        server = subprocess.Popen([SSHD, "-D", "-f", str(base / "sshd_config")], stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        try:
-            for _ in range(100):
-                try:
-                    socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
-                    break
-                except OSError:
-                    time.sleep(0.05)
-            else:
-                pytest.fail("sshd did not start")
-            # One password attempt as the lure's account, with a password made up here: the attempt the lure watches for.
-            # `-F /dev/null`: none of this machine's own client settings (BatchMode, a proxy, a shared connection)
-            # may skip the attempt or send it anywhere but this sshd.
-            attempt = subprocess.run(
-                ["sshpass", "-p", secrets.token_hex(8), "ssh", "-F", "/dev/null", "-p", str(port),
-                 "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
-                 "-o", "PreferredAuthentications=password",
-                 "-o", "PubkeyAuthentication=no", "-o", "NumberOfPasswordPrompts=1", "-o", "ConnectTimeout=10",
-                 "-o", "LogLevel=ERROR", f"{account}@127.0.0.1", "true"],
-                stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
-            lines = []
-            for _ in range(50):                 # sshd and journald write a moment later
-                lines = [line for line in auth_review.read_journal(before, []) if account.encode() in line]
-                if any(b"Failed password" in line for line in lines):
-                    break
-                time.sleep(0.2)
-        finally:
-            server.terminate()
-            server.wait(timeout=30)
-        yield dict(account=account, manifest=manifest, lines=lines, refused=attempt.returncode != 0, base=base,
-                   bait=bait)
+        start = datetime.now(timezone.utc)
+        with _sshd(base) as port:
+            # One password attempt as the lure's account: the attempt the lure watches for.
+            attempt = _password(port, account)
+            lines = _journal(start, lambda line: account.encode() in line,
+                             lambda lines: any(b"Failed password" in line for line in lines))
+        yield dict(account=account, manifest=manifest, lines=lines, refused=attempt.returncode != 0)
     finally:
         shutil.rmtree(base, ignore_errors=True)
-        if made_privsep:
-            shutil.rmtree("/run/sshd", ignore_errors=True)
+
+
+@pytest.fixture(scope="module")
+def guessed(privsep):
+    """Five wrong passwords for `nobody`, then a login as `nobody` with a key only this sshd accepts."""
+    base = Path(tempfile.mkdtemp(prefix="megalodon-live-sshd-", dir="/tmp"))
+    try:
+        # sshd reads the accepted keys as `nobody`: the folder and the file are set readable outright, whatever the
+        # umask. The key is made here, for this sshd alone.
+        base.chmod(0o755)
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(base / "client_key")], check=True,
+                       timeout=60)
+        keys = base / "authorized_keys"
+        shutil.copyfile(base / "client_key.pub", keys)
+        keys.chmod(0o644)
+        start = datetime.now(timezone.utc)
+        with _sshd(base, keys=keys) as port:
+            refused = [_password(port, GUESSED) for _ in range(FAILURES)]
+            let_in = subprocess.run(
+                [*CLIENT, "-p", str(port), "-i", str(base / "client_key"), "-o", "IdentitiesOnly=yes",
+                 "-o", "PreferredAuthentications=publickey", "-o", "PasswordAuthentication=no",
+                 f"{GUESSED}@127.0.0.1", "true"],
+                stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            ours = f" for {GUESSED} from 127.0.0.1 port ".encode()
+            lines = _journal(start, lambda line: ours in line,
+                             lambda lines: any(b"Accepted publickey" in line for line in lines))
+        yield dict(lines=lines, refused=[r.returncode != 0 for r in refused], let_in=let_in)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
 
 
 def test_sshd_refused_the_lure_account_and_logged_it_to_the_journal(tried):
@@ -140,30 +246,52 @@ def test_each_of_sshds_messages_alone_reports_the_lure_followed(tried, form):
 
 
 def test_the_response_engine_decides_it_from_the_real_journal(tried, tmp_path):
-    policy = tmp_path / "policy.toml"
-    re_.write_default_policy(policy)
-    text = policy.read_text()
-    for name in ("process_review", "rootkit_check"):
-        text = text.replace(f"{name} = true", f"{name} = false")
-    keep = {"canary_manifest": str(tried["manifest"]), "auth_log": "journal", "web_log": ""}
-    lines = []
-    for line in text.splitlines():
-        name = line.split("=")[0].strip()
-        if name in keep:
-            line = f"{name} = {json.dumps(keep[name])}"
-        elif name.endswith(("_manifest", "_file", "_db")):
-            line = f'{name} = ""'
-        lines.append(line)
-    policy.write_text("\n".join(lines) + "\n")
-    ledger = tmp_path / "ledger.jsonl"
-    result = re_.run(policy_path=policy, ledger=ledger, state_path=tmp_path / "state.json", protected=set(),
-                     now=datetime.now(timezone.utc))
+    result, decided = _decide(tmp_path, str(tried["manifest"]))
     assert not [gap for gap in result["gaps"] if gap.startswith(("auth", "canary"))], result["gaps"]
-    decided = [json.loads(line) for line in ledger.read_text().splitlines()]
     [decision] = [d for d in decided if d["signal"]["rule_id"] == "LURE_FOLLOWED"
                   and tried["account"] in d["signal"]["summary"]]
     assert decision["playbook"] == "lure-followed" and decision["signal"]["source"] == "auth"
     assert decision["signal"]["summary"].startswith(
         f"127.0.0.1 tried {tried['account']}, the account {canary.LURE_NAME} names")
+    assert [a["status"] for a in decision["actions"] if a["action"] == "block_address"] == ["refused"], (
+        "a loopback address is never blocked")
+
+
+def test_sshd_refused_the_wrong_passwords_and_let_the_key_in(guessed):
+    assert guessed["refused"] == [True] * FAILURES
+    assert sum(b"Failed password for " in line for line in guessed["lines"]) == FAILURES
+    [accepted] = [line for line in guessed["lines"] if b"Accepted publickey for " in line]
+    assert b"sshd" in accepted
+    # Let in, and then refused by the account's shell: nothing ran.
+    assert guessed["let_in"].returncode != 0
+
+
+def test_auth_review_reports_the_login_let_in_after_refused_ones(guessed):
+    report, reviewer = auth_review.review(guessed["lines"], source="journal")
+    assert reviewer.stats["unrecognized_lines"] == 0
+    assert (reviewer.stats["failed_logins"], reviewer.stats["successful_logins"]) == (FAILURES, 1)
+    [finding] = [f for f in report["findings"] if f["rule_id"] == "AUTH_SUCCESS_AFTER_FAILURES"]
+    assert finding["severity"] == "CRITICAL"
+    evidence = finding["evidence"]
+    assert (evidence["source"], evidence["user"], evidence["method"], evidence["prior_failures"]) == (
+        "127.0.0.1", GUESSED, "publickey", FAILURES)
+
+
+def test_one_refused_login_fewer_is_not_reported(guessed):
+    """The same real lines with the first refused login left out: below the threshold, so nothing to report."""
+    first = next(i for i, line in enumerate(guessed["lines"]) if b"Failed password for " in line)
+    report, reviewer = auth_review.review(guessed["lines"][:first] + guessed["lines"][first + 1:], source="journal")
+    assert (reviewer.stats["failed_logins"], reviewer.stats["successful_logins"]) == (FAILURES - 1, 1)
+    assert not [f for f in report["findings"] if f["rule_id"] == "AUTH_SUCCESS_AFTER_FAILURES"]
+
+
+def test_the_response_engine_decides_the_guessed_login_from_the_real_journal(guessed, tmp_path):
+    result, decided = _decide(tmp_path)
+    assert not [gap for gap in result["gaps"] if gap.startswith("auth")], result["gaps"]
+    [decision] = [d for d in decided if d["signal"]["rule_id"] == "AUTH_SUCCESS_AFTER_FAILURES"
+                  and f"Login as {GUESSED} via publickey" in d["signal"]["summary"]]
+    assert decision["playbook"] == "guessed-login" and decision["signal"]["source"] == "auth"
+    assert decision["signal"]["severity"] == "CRITICAL"
+    assert GUESSED in decision["signal"]["entities"]["account"], "the account let in is linked"
     assert [a["status"] for a in decision["actions"] if a["action"] == "block_address"] == ["refused"], (
         "a loopback address is never blocked")
