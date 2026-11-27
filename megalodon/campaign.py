@@ -144,7 +144,10 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
             for at, rule, source, target in new[address]:
                 fresh.setdefault(_network(address, settings), []).append([at, rule, source, target, address])
         for network in sorted(fresh):
-            nets.setdefault(network, dict(attempts=[], raised_at=None, raised_severity=None, raised_lured=False))
+            entry = nets.setdefault(network, dict(attempts=[], raised_at=None, raised_severity=None,
+                                                  raised_lured=False))
+            # An address protected or ignored since its attempts were kept is no longer counted, nor named.
+            entry['attempts'] = [a for a in entry['attempts'] if a[4] not in exclude and not _within(a[4], ignored)]
             raised += _raise(nets, network, fresh[network], now, settings, make_signal, settings.min_addresses)
         _prune(nets, now, MAX_NETWORKS)
     return raised
@@ -238,21 +241,30 @@ def _kept(attempts, settings):
         if _time(attempt[0], None) >= start:
             # One attempt is a rule against a target, and for a network, from one of its addresses.
             seen.setdefault((attempt[1], attempt[3], *attempt[4:5]), []).append(attempt)
-    latest, earlier = [], []
-    for times in seen.values():
+    groups = {}
+    for key, times in seen.items():
         thinned = [times[0]]
         for here, after in zip(times[1:-1], times[2:]):
             if _time(after[0], None) - _time(thinned[-1][0], None) > width:
                 thinned.append(here)
         if len(times) > 1:
             thinned.append(times[-1])
-        thinned = thinned[-PER_ATTEMPT:]
-        latest.append(thinned[-1])
-        earlier += thinned[:-1]
+        groups.setdefault(key[:2], []).append(thinned[-PER_ATTEMPT:])
+    # Different attacks first, the newest time of each; then, for a network, the latest time of each other address
+    # that made one; then earlier times. However many addresses repeat one attack, it takes one place of the first.
+    latest, others, earlier = [], [], []
+    for timelines in groups.values():
+        lasts = sorted(timeline[-1] for timeline in timelines)
+        latest.append(lasts[-1])
+        others += lasts[:-1]
+        earlier += [attempt for timeline in timelines for attempt in timeline[:-1]]
     latest = sorted(latest)[-MAX_ATTEMPTS:]
-    # Room for earlier times is left only when no different attempt was dropped, so all of them are of kept ones.
+    # Room for the rest is left only when no different attempt was dropped, so all of it is of kept ones.
     room = MAX_ATTEMPTS - len(latest)
-    return sorted(latest + (sorted(earlier)[-room:] if room else []))
+    rest = sorted(others)[-room:] if room else []
+    room -= len(rest)
+    rest += sorted(earlier)[-room:] if room else []
+    return sorted(latest + rest)
 
 
 def _assess(attempts, settings, addresses=0):
