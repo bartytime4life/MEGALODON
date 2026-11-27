@@ -180,6 +180,9 @@ def build_parser() -> argparse.ArgumentParser:
     canary_plant.add_argument("--lure", action="store_true",
                               help="also plant an agent lure: a note to AI agents naming an account that does not "
                                    "exist; a login tried as it is LURE_FOLLOWED. Not in folders your own AI tools use")
+    canary_plant.add_argument("--web-readable", action="store_true",
+                              help="with --lure: make the lure's note readable by others (mode 644), so a web "
+                                   "server running as another user can serve it from a folder it serves")
     for name, text in (("check", "report removed, changed or read canaries (exit 1 when tripped)"),
                        ("rearm", "after review, reset canaries so new reads are detected")):
         command = canary_sub.add_parser(name, help=text)
@@ -924,6 +927,15 @@ def build_parser() -> argparse.ArgumentParser:
     auth.add_argument("--replace", action="store_true", help="overwrite an existing watchlist output")
     auth.add_argument("--lures", type=Path,
                       help="canary manifest whose agent lures' accounts are watched (LURE_FOLLOWED)")
+
+    web = sub.add_parser(
+        "web-review",
+        help="review a web server access log for requests for an agent lure's page (exit 1 if any)",
+    )
+    web.add_argument("--input", required=True,
+                     help="access log path (e.g. /var/log/nginx/access.log), or - for stdin")
+    web.add_argument("--lures", type=Path, required=True,
+                     help="canary manifest whose agent lures' pages are watched (LURE_FOLLOWED)")
 
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
@@ -1696,7 +1708,7 @@ def _canary(args: argparse.Namespace) -> int:
     try:
         if args.canary_command == "plant":
             result = canary.plant(str(args.dir), str(args.manifest), count=args.count,
-                                  replace=args.replace, lure=args.lure)
+                                  replace=args.replace, lure=args.lure, web_readable=args.web_readable)
         elif args.canary_command == "check":
             result = canary.check(str(args.manifest))
         else:
@@ -3415,6 +3427,24 @@ def _auth_review(args: argparse.Namespace) -> int:
     return 1 if report["severity_counts"]["CRITICAL"] or report["severity_counts"]["HIGH"] else 0
 
 
+def _web_review(args: argparse.Namespace) -> int:
+    from .canary import web_lures
+    from .validation import ValidationError
+    from .web_review import read_lines, review
+
+    try:
+        pages = web_lures(str(args.lures))
+        if not pages:
+            raise ValidationError("the canary manifest's lures name no page: plant one with "
+                                  "`megalodon canary plant --lure`")
+        report, _ = review(read_lines(args.input), source=args.input, lure_pages=pages)
+    except (ValidationError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 1 if report["findings"] else 0
+
+
 def _detectors() -> int:
     from .detector_registry import registry_document as core_registry
     from .threat_detector import registry_document as threat_registry
@@ -4164,6 +4194,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         code = _canary(args)
     elif args.command == "auth-review":
         code = _auth_review(args)
+    elif args.command == "web-review":
+        code = _web_review(args)
     elif args.command == "yara":
         code = _yara(args)
     elif args.command == "alerts":

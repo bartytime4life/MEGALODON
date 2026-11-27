@@ -95,7 +95,7 @@ NAMESPACE_ADDRESS = re.compile(r'([0-9A-Fa-f:.]{2,45})@(net:\[[0-9]{1,20}\])')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
-           'packages', 'secrets', 'memory', 'canary', 'ingest', 'campaign', 'auth')
+           'packages', 'secrets', 'memory', 'canary', 'ingest', 'campaign', 'auth', 'web')
 # Sources made from other findings, not sensors of their own: they never count as a second, independent source.
 DERIVED_SOURCES = frozenset({'campaign'})
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
@@ -187,6 +187,9 @@ canary_manifest = ""
 # "journal" reads the systemd journal instead, for systems that keep logins only there. Reading either usually
 # needs membership in the adm group (the journal: adm or systemd-journal).
 auth_log = ""
+# The web server's access log (nginx's or Apache's), read for requests for the page an agent lure names, and nothing
+# else. Needs canary_manifest with a lure. `respond init` writes the log this system keeps, if any; "" turns it off.
+web_log = ""
 
 [response.campaign]
 # One address trying many different attacks within minutes (scans, password guesses, decoys, login bursts) is an
@@ -397,8 +400,8 @@ block_minutes = 60
 name = "lure-followed"
 rules = ["LURE_FOLLOWED"]
 min_severity = "HIGH"
-# A login tried as the account an agent lure names (`megalodon canary plant --lure`): something read a note written
-# for automated agents and acted on it. No one else knows the account.
+# A login tried as the account an agent lure names (`megalodon canary plant --lure`), or a request for the page it
+# names: something read a note written for automated agents and acted on it. No one else knows either.
 actions = ["collect_evidence", "block_address", "notify"]
 block_minutes = 60
 
@@ -615,7 +618,7 @@ def load_policy(path=DEFAULT_POLICY):
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
                'credential_allow_file', 'logins_manifest', 'boot_manifest', 'ebpf_manifest', 'containers_manifest',
                'hardening_manifest', 'packages_manifest', 'secrets_manifest', 'memory_sweep',
-               'canary_manifest', 'auth_log'}
+               'canary_manifest', 'auth_log', 'web_log'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports', 'memory_sweep')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -689,6 +692,9 @@ def write_default_policy(path=DEFAULT_POLICY, *, replace=False):
         from .auth_review import JOURNALCTL
         log = JOURNAL if any(os.path.isfile(program) for program in JOURNALCTL) else ''
     text = text.replace('auth_log = ""', f'auth_log = {_toml_string(log)}', 1)
+    from . import web_review
+    web = next((log for log in web_review.WEB_LOGS if os.path.isfile(log)), '')
+    text = text.replace('web_log = ""', f'web_log = {_toml_string(web)}', 1)
     _atomic_write(path, text.encode('utf-8'))
     return dict(action='init', policy=str(path), playbooks=len(load_policy(path).playbooks),
                 note='Shadow mode: decisions are recorded, never carried out. Review the playbooks before use.')
@@ -888,10 +894,11 @@ def _auth_at(finding):
     return _iso(when if when.tzinfo else when.replace(tzinfo=timezone.utc))
 
 
-def _lure_summary(address, user, lure, at):
+def _lure_summary(address, user, lure, at, *, page=None):
     """What a lure followed means, with how soon after the lure was read: an agent acts on text in seconds."""
     name = Path(lure['path']).name if lure else 'an agent lure'
-    head = f'{address} tried {user}, the account {name} names'
+    head = (f'{address} asked this site for {page}, the page {name} names' if page
+            else f'{address} tried {user}, the account {name} names')
     read = lure.get('read_at') if lure else None
     if not read:
         return head + ': something read a note written for automated agents and acted on it.'
@@ -905,23 +912,22 @@ def _lure_summary(address, user, lure, at):
     return head + f', {int(gap // 60)} min after it was read: something read the note and acted on it.'
 
 
-def auth_signals(report, cursor=None, lures=None):
-    """Findings from `megalodon auth-review` over the auth log newer than `cursor`, and the new cursor.
+def _log_signals(report, cursor, source, cooldown_seconds, describe):
+    """Findings from a review of a log read whole each pass (the auth log, a web log) newer than `cursor`, as
+    signals from `source`, and the new cursor. `describe(rule, finding, evidence, at)` gives each one's summary
+    and entities.
 
-    The log is read whole each pass, so the same findings come back: `cursor` is the latest finding's time and the
-    keys of the findings at that time, so none is decided twice, even after the engine's daily dedupe forgets it.
-    auth-review holds back a repeat of a finding within its cooldown, but only within one read; a read that starts
-    elsewhere (the journal's, which moves with the cursor, or a rotated log's) repeats at other times. So `cursor`
-    also keeps when each finding was last decided, and a repeat within the cooldown after it is held back as
-    auth-review would have held it back in one whole read.
-    An address the attacker used is linked; the usernames it tried are not, since every attacker tries `root`, and
-    linking on them would join unrelated attackers into one incident. A real local account is linked.
+    The same findings come back each pass: `cursor` is the latest finding's time and the keys of the findings at
+    that time, so none is decided twice, even after the engine's daily dedupe forgets it. A review holds back a
+    repeat of a finding within its cooldown, but only within one read; a read that starts elsewhere (the journal's,
+    which moves with the cursor, or a rotated log's) repeats at other times. So `cursor` also keeps when each
+    finding was last decided, and a repeat within the cooldown after it is held back as the review would have held
+    it back in one whole read.
     """
-    from .auth_review import NETWORK_RULES, AuthReviewSettings
     cursor = cursor if isinstance(cursor, dict) else {}
     after, done = str(cursor.get('at') or ''), set(cursor.get('keys') or ())
     signals, latest, keys = [], after, set(done)
-    cooldown = timedelta(seconds=AuthReviewSettings().cooldown_seconds)
+    cooldown = timedelta(seconds=cooldown_seconds)
     recent = cursor.get('recent') if isinstance(cursor.get('recent'), dict) else {}
     recent = {str(k): str(v) for k, v in recent.items()}
 
@@ -935,21 +941,39 @@ def auth_signals(report, cursor=None, lures=None):
         if len(signals) >= MAX_AUTH_SIGNALS:
             break                   # the rest next pass: the cursor stops at the last one taken
         evidence = f.get('evidence') if isinstance(f.get('evidence'), dict) else {}
-        # auth-review's own identity of the finding (address and account, account and group) and its own time, to
-        # the fraction: two accounts in one second, or one account joining two groups, are two findings.
+        # The review's own identity of the finding (address and account, account and group, address and page) and
+        # its own time, to the fraction: two accounts in one second, or one account joining two groups, are two.
         identity = f.get('identity') or f"{f.get('subject', '')}:{evidence.get('user', '')}"
-        key = f"auth:{rule}:{str(identity)[:192]}:{str(f.get('observed_at'))[:40]}"
+        key = f"{source}:{rule}:{str(identity)[:192]}:{str(f.get('observed_at'))[:40]}"
         if at < after or (at == after and key in done):
             continue
         same = f"{rule}:{str(identity)[:192]}"
         last = recent.get(same)
         if last and last < at and moment(at) - moment(last) < cooldown:
-            continue                # a repeat auth-review would have held back in one whole read
+            continue                # a repeat the review would have held back in one whole read
         recent[same] = at
         if at > latest:
             latest, keys = at, set()
         if at == latest:
             keys.add(key)
+        summary, entities = describe(rule, f, evidence, at)
+        signals.append(Signal(key, source, rule[:64], _severity(f.get('severity')), at, summary, entities))
+    # Every key at the cursor's second: one dropped would be decided again once the daily dedupe forgets it.
+    # Of those last decided, only what a repeat could still fall within the cooldown of; the most recent first.
+    horizon = _iso(moment(latest) - cooldown) if latest else ''
+    kept = sorted(((v, k) for k, v in recent.items() if v >= horizon), reverse=True)[:MAX_AUTH_RECENT]
+    return signals, dict(at=latest, keys=sorted(keys), recent={k: v for v, k in sorted(kept)})
+
+
+def auth_signals(report, cursor=None, lures=None):
+    """Findings from `megalodon auth-review` over the auth log newer than `cursor`, and the new cursor.
+
+    An address the attacker used is linked; the usernames it tried are not, since every attacker tries `root`, and
+    linking on them would join unrelated attackers into one incident. A real local account is linked.
+    """
+    from .auth_review import NETWORK_RULES, AuthReviewSettings
+
+    def describe(rule, f, evidence, at):
         summary, files = str(f.get('message', ''))[:300], []
         if rule == 'LURE_FOLLOWED':
             # The lure's file links this attempt to the lure's own read finding: one incident, both halves.
@@ -961,16 +985,24 @@ def auth_signals(report, cursor=None, lures=None):
         accepted = rule == 'LURE_FOLLOWED' and evidence.get('accepted') is True
         if accepted:
             summary = summary[:300 - len(LURE_ACCEPTED)] + LURE_ACCEPTED
-        signals.append(Signal(key, 'auth', rule[:64], _severity(f.get('severity')), at, summary,
-                              _entities(address=[evidence.get('source')] if rule in NETWORK_RULES else [],
-                                        account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES or accepted
-                                        else [],
-                                        file=files)))
-    # Every key at the cursor's second: one dropped would be decided again once the daily dedupe forgets it.
-    # Of those last decided, only what a repeat could still fall within the cooldown of; the most recent first.
-    horizon = _iso(moment(latest) - cooldown) if latest else ''
-    kept = sorted(((v, k) for k, v in recent.items() if v >= horizon), reverse=True)[:MAX_AUTH_RECENT]
-    return signals, dict(at=latest, keys=sorted(keys), recent={k: v for v, k in sorted(kept)})
+        return summary, _entities(address=[evidence.get('source')] if rule in NETWORK_RULES else [],
+                                  account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES or accepted else [],
+                                  file=files)
+    return _log_signals(report, cursor, 'auth', AuthReviewSettings().cooldown_seconds, describe)
+
+
+def web_signals(report, cursor=None, lures=None):
+    """Requests for an agent lure's page, from `megalodon web-review` over a web access log, newer than `cursor`,
+    and the new cursor. The address that asked is linked, and so is the lure's file: its read and the request are
+    one incident."""
+    from .web_review import COOLDOWN_SECONDS
+
+    def describe(rule, f, evidence, at):
+        page = str(evidence.get('page', ''))[:64]
+        lure = (lures or {}).get(page)
+        return (_lure_summary(evidence.get('source'), None, lure, at, page=page),
+                _entities(address=[evidence.get('source')], file=[lure['path']] if lure else []))
+    return _log_signals(report, cursor, 'web', COOLDOWN_SECONDS, describe)
 
 
 def login_signals(report):
@@ -1231,6 +1263,7 @@ def collect(policy, state, now, *, root='/'):
         except (getattr(module, error_name), OSError) as exc:
             gaps.append(f'{setting.removesuffix("_manifest")}: {exc}')
     lures = {}          # agent lures' accounts: {account: dict(path, read_at)}
+    pages = {}          # and their pages: {page: dict(path, read_at)}
     if sources.get('canary_manifest'):
         from . import canary
         try:
@@ -1239,6 +1272,7 @@ def collect(policy, state, now, *, root='/'):
             signals += path_signals(dict(report, checked_at=_iso(now)), 'canary', 'path')
             read = {f['path']: f.get('read_at') for f in report['findings'] if f['rule_id'] == 'CANARY_READ'}
             lures = {account: dict(path=path, read_at=read.get(path)) for account, path in canary.lures(manifest).items()}
+            pages = {page: dict(path=path, read_at=read.get(path)) for page, path in canary.web_lures(manifest).items()}
         except (ValueError, OSError) as exc:
             gaps.append(f'canary: {exc}')
     if sources.get('auth_log'):
@@ -1266,6 +1300,22 @@ def collect(policy, state, now, *, root='/'):
             signals += found
         except (ValidationError, OSError) as exc:
             gaps.append(f'auth: {exc}')
+    if sources.get('web_log') and pages:
+        from . import web_review
+        from .validation import ValidationError
+        try:
+            path = str(Path(sources['web_log']).expanduser())
+            cursor = state.get('web_cursor') or dict(at=_iso(now - timedelta(hours=AUTH_FIRST_HOURS)))
+            fresh = []
+            web_review.review(web_review.read_lines(path), source=path, lure_pages=pages,
+                              on_finding=lambda f: fresh.append(f) if _auth_at(f) >= cursor['at'] else None)
+            found, state['web_cursor'] = web_signals(dict(findings=fresh), cursor, pages)
+            signals += found
+        except (ValidationError, OSError) as exc:
+            gaps.append(f'web: {exc}')
+    elif sources.get('web_log') and sources.get('canary_manifest') and lures:
+        gaps.append('web: the canary manifest\'s lures name no page (planted before pages were named): plant a lure '
+                    'again with `megalodon canary plant --lure` for the web log to watch')
     return signals, gaps
 
 
@@ -1597,7 +1647,7 @@ def run(*, policy_path=DEFAULT_POLICY, ledger=DEFAULT_LEDGER, state_path=DEFAULT
     # state the last one wrote, so neither loses the other's incidents, seen findings or rate counts.
     with _StateLock(state_path):
         state = _read_state(state_path)
-        for cursor in ('cursor', 'auth_cursor'):        # how far the network store and the auth log were read
+        for cursor in ('cursor', 'auth_cursor', 'web_cursor'):   # how far the network store and the logs were read
             if cursor in collected:
                 state[cursor] = collected[cursor]
         observed = []
