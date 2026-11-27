@@ -79,7 +79,9 @@ would otherwise go on meanwhile.
      `/var/log/secure` when the system keeps one): [login review](host-tripwires.md#login-review-auth-review)'s failed
      login bursts, password spraying, logins that succeeded after many failures, sudo
      misuse and new or privileged accounts. Each pass reads the log and decides only
-     findings newer than the last it read; a first pass looks back a day. Reading the
+     findings newer than the last it read, every one of them, not only the 500
+     `auth-review` shows; up to 5000 a pass, the rest the next. A first pass looks
+     back a day. Reading the
      log usually needs membership in the `adm` group. The usernames an attacker tried
      never link incidents (every attacker tries `root`); the address does, and so does
      a real local account.
