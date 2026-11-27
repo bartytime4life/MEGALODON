@@ -121,27 +121,21 @@ def _sshd(base, *, keys=None):
         server.wait(timeout=30)
 
 
-def _password(port, user):
-    """One password login as `user`, with a password made up here."""
+def _password(port, user, source="127.0.0.1"):
+    """One password login as `user` from the loopback address `source`, with a password made up here."""
     return subprocess.run(
-        ["sshpass", "-p", secrets.token_hex(8), *CLIENT, "-p", str(port), "-o", "PreferredAuthentications=password",
-         "-o", "PubkeyAuthentication=no", "-o", "NumberOfPasswordPrompts=1", f"{user}@127.0.0.1", "true"],
+        ["sshpass", "-p", secrets.token_hex(8), *CLIENT, "-b", source, "-p", str(port),
+         "-o", "PreferredAuthentications=password", "-o", "PubkeyAuthentication=no", "-o", "NumberOfPasswordPrompts=1",
+         f"{user}@127.0.0.1", "true"],
         stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
 
 
 def _journal(start, wanted, done):
-    """The journal's auth lines written since `start` that `wanted` keeps, once `done` holds of them."""
-    def since_start(line):
-        # journalctl is asked from the second before; each line's own time, to the microsecond, keeps out a run
-        # just before this one.
-        try:
-            return datetime.fromisoformat(line.split(b" ", 1)[0].decode()) >= start
-        except ValueError:
-            return False
+    """The journal's auth lines since about `start` that `wanted` keeps, once `done` holds of them. What `wanted`
+    keeps is this run's own (a lure account, a source address), whatever else the journal holds."""
     lines = []
     for _ in range(50):                     # sshd and journald write a moment later
-        lines = [line for line in auth_review.read_journal(start - timedelta(seconds=2), [])
-                 if since_start(line) and wanted(line)]
+        lines = [line for line in auth_review.read_journal(start - timedelta(seconds=2), []) if wanted(line)]
         if done(lines):
             break
         time.sleep(0.2)
@@ -167,11 +161,19 @@ def _policy(tmp_path, manifest=""):
     return policy
 
 
-def _decide(tmp_path, manifest=""):
-    ledger = tmp_path / "ledger.jsonl"
-    result = re_.run(policy_path=_policy(tmp_path, manifest), ledger=ledger, state_path=tmp_path / "state.json",
-                     protected=set(), now=datetime.now(timezone.utc))
-    return result, [json.loads(line) for line in ledger.read_text().splitlines()]
+def _decide(tmp_path, start, manifest=""):
+    """One engine pass over the journal, its log cursor at `start`: what a run before this one left in the journal
+    is read as the context it is, never decided again, so it can neither stand in for this run's nor be a second."""
+    ledger, state = tmp_path / "ledger.jsonl", tmp_path / "state.json"
+    since = start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with os.fdopen(os.open(state, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as seeded:
+        json.dump({"auth_cursor": {"at": since}}, seeded)
+    result = re_.run(policy_path=_policy(tmp_path, manifest), ledger=ledger, state_path=state, protected=set(),
+                     now=datetime.now(timezone.utc))
+    decided = [json.loads(line) for line in ledger.read_text().splitlines()]
+    assert all(d["signal"]["observed_at"] >= since for d in decided if d["signal"]["source"] == "auth"), (
+        "only this run's")
+    return result, decided
 
 
 @pytest.fixture(scope="module")
@@ -188,14 +190,17 @@ def tried(privsep):
             attempt = _password(port, account)
             lines = _journal(start, lambda line: account.encode() in line,
                              lambda lines: any(b"Failed password" in line for line in lines))
-        yield dict(account=account, manifest=manifest, lines=lines, refused=attempt.returncode != 0)
+        yield dict(account=account, manifest=manifest, lines=lines, refused=attempt.returncode != 0, start=start)
     finally:
         shutil.rmtree(base, ignore_errors=True)
 
 
 @pytest.fixture(scope="module")
 def guessed(privsep):
-    """Five wrong passwords for `nobody`, then a login as `nobody` with a key only this sshd accepts."""
+    """Five wrong passwords for `nobody`, then a login as `nobody` with a key only this sshd accepts, all from a
+    loopback address of this run's own. A login let in is reported once an hour for its address and account, and an
+    earlier run's failures would count too: from 127.0.0.1 every time, a run within the hour of another would show
+    nothing new."""
     base = Path(tempfile.mkdtemp(prefix="megalodon-live-sshd-", dir="/tmp"))
     try:
         # sshd reads the accepted keys as `nobody`: the folder and the file are set readable outright, whatever the
@@ -206,18 +211,20 @@ def guessed(privsep):
         keys = base / "authorized_keys"
         shutil.copyfile(base / "client_key.pub", keys)
         keys.chmod(0o644)
+        source = f"127.{secrets.randbelow(254) + 1}.{secrets.randbelow(256)}.{secrets.randbelow(254) + 1}"
         start = datetime.now(timezone.utc)
         with _sshd(base, keys=keys) as port:
-            refused = [_password(port, GUESSED) for _ in range(FAILURES)]
+            refused = [_password(port, GUESSED, source) for _ in range(FAILURES)]
             let_in = subprocess.run(
-                [*CLIENT, "-p", str(port), "-i", str(base / "client_key"), "-o", "IdentitiesOnly=yes",
+                [*CLIENT, "-b", source, "-p", str(port), "-i", str(base / "client_key"), "-o", "IdentitiesOnly=yes",
                  "-o", "PreferredAuthentications=publickey", "-o", "PasswordAuthentication=no",
                  f"{GUESSED}@127.0.0.1", "true"],
                 stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
-            ours = f" for {GUESSED} from 127.0.0.1 port ".encode()
+            ours = f" for {GUESSED} from {source} port ".encode()
             lines = _journal(start, lambda line: ours in line,
                              lambda lines: any(b"Accepted publickey" in line for line in lines))
-        yield dict(lines=lines, refused=[r.returncode != 0 for r in refused], let_in=let_in)
+        yield dict(lines=lines, refused=[r.returncode != 0 for r in refused], let_in=let_in, start=start,
+                   source=source)
     finally:
         shutil.rmtree(base, ignore_errors=True)
 
@@ -246,7 +253,7 @@ def test_each_of_sshds_messages_alone_reports_the_lure_followed(tried, form):
 
 
 def test_the_response_engine_decides_it_from_the_real_journal(tried, tmp_path):
-    result, decided = _decide(tmp_path, str(tried["manifest"]))
+    result, decided = _decide(tmp_path, tried["start"], str(tried["manifest"]))
     assert not [gap for gap in result["gaps"] if gap.startswith(("auth", "canary"))], result["gaps"]
     [decision] = [d for d in decided if d["signal"]["rule_id"] == "LURE_FOLLOWED"
                   and tried["account"] in d["signal"]["summary"]]
@@ -274,7 +281,7 @@ def test_auth_review_reports_the_login_let_in_after_refused_ones(guessed):
     assert finding["severity"] == "CRITICAL"
     evidence = finding["evidence"]
     assert (evidence["source"], evidence["user"], evidence["method"], evidence["prior_failures"]) == (
-        "127.0.0.1", GUESSED, "publickey", FAILURES)
+        guessed["source"], GUESSED, "publickey", FAILURES)
 
 
 def test_one_refused_login_fewer_is_not_reported(guessed):
@@ -286,10 +293,11 @@ def test_one_refused_login_fewer_is_not_reported(guessed):
 
 
 def test_the_response_engine_decides_the_guessed_login_from_the_real_journal(guessed, tmp_path):
-    result, decided = _decide(tmp_path)
+    result, decided = _decide(tmp_path, guessed["start"])
     assert not [gap for gap in result["gaps"] if gap.startswith("auth")], result["gaps"]
     [decision] = [d for d in decided if d["signal"]["rule_id"] == "AUTH_SUCCESS_AFTER_FAILURES"
-                  and f"Login as {GUESSED} via publickey" in d["signal"]["summary"]]
+                  and d["signal"]["summary"].startswith(
+                      f"Login as {GUESSED} via publickey succeeded from {guessed['source']} after {FAILURES} failed")]
     assert decision["playbook"] == "guessed-login" and decision["signal"]["source"] == "auth"
     assert decision["signal"]["severity"] == "CRITICAL"
     assert GUESSED in decision["signal"]["entities"]["account"], "the account let in is linked"

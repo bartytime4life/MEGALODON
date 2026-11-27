@@ -112,11 +112,11 @@ To check login review against a real sshd, run `MEGALODON_TEST_LIVE_SSHD=1 pytho
 as root on a machine where journald runs and sshd, ssh and sshpass are installed. It runs sshd from a temporary folder
 on a free loopback port and makes two tries, with clients that read none of this machine's SSH settings. First, it
 plants a lure and tries one password login as the lure's account; sshd's own lines, read back from the journal, must
-be `LURE_FOLLOWED`, decided by the response engine. Second, it gives five wrong passwords for `nobody`, then logs in
-as `nobody` with a throwaway key that only this sshd accepts; that must be `AUTH_SUCCESS_AFTER_FAILURES`, decided by
-the `guessed-login` playbook. `nobody`'s shell runs nothing, so the login does nothing, and no account, password or
-key of this machine is used or changed. sshd's lines about these tries stay in the journal; sshd is stopped and the
-folders removed after.
+be `LURE_FOLLOWED`, decided by the response engine. Second, from a loopback address of the run's own, it gives five
+wrong passwords for `nobody`, then logs in as `nobody` with a throwaway key that only this sshd accepts; that must be
+`AUTH_SUCCESS_AFTER_FAILURES`, decided by the `guessed-login` playbook. `nobody`'s shell runs nothing, so the login
+does nothing, and no account, password or key of this machine is used or changed. sshd's lines about these tries stay
+in the journal; sshd is stopped and the folders removed after.
 
 **Keep lures out of folders your own AI assistants work in.** A coding assistant or chat agent reading your files
 would follow the note too. Plant lures in decoy folders that only an intruder has reason to read: a fake backup
