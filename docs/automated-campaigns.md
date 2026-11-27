@@ -67,6 +67,7 @@ min_attempts = 8          # 2 to 256: different attempts within the window
 min_kinds = 3             # 2 to 100: different kinds of attack among them
 broad_kinds = 5           # 2 to 100, at least min_kinds: CRITICAL from this many kinds
 cooldown_minutes = 30     # 1 to 1440: before the same address is raised again
+ignore_addresses = []     # your own scanners and test machines: addresses or networks
 ```
 
 An address is raised again within `cooldown_minutes` only if its campaign becomes CRITICAL. A policy without the
@@ -83,11 +84,12 @@ forgotten.
 
 * **It measures pace and breadth, not who is typing.** An AI agent, an attack framework and a scripted scanner are
   all automated, and are answered the same way. The detector does not claim to tell them apart.
-* **A scanner you run yourself is a campaign too.** Put its address in the network detector's allow list. Findings
-  about allowlisted sources never reach the response engine.
-* **It sees what the sensors report.** It counts the network detections and the findings of the host checks that
-  name an address, such as logins. Failed logins from `megalodon auth review` are not a response engine source, and
-  nor are Suricata's alerts. There is no web request log sensor, so web attacks count only as far as the network
-  rules see them.
+* **A scanner you run yourself is a campaign too,** unless its address or network is in `ignore_addresses`, or in
+  the network detector's allow list, whose findings never reach the response engine.
+* **It sees what the sensors report.** It counts the network detections, failed logins and password spraying from
+  the auth log (with `auth_log` set), and the findings of the host checks that name an address, such as logins.
+  Suricata's alerts are not counted: they are stored as external evidence that this project has qualified on
+  fixtures only, not on a deployed sensor, and so never drive a response. There is no web request log sensor, so web
+  attacks count only as far as the network rules see them.
 * **One address at a time.** A campaign spread over many addresses, each staying below the thresholds, is not joined
   into one.

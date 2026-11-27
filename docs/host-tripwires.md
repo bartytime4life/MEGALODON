@@ -104,6 +104,14 @@ Each finding repeats at most once per hour for the same subject. The command
 exits **1** when any HIGH or CRITICAL finding exists, so it can drive
 alerting.
 
+### The response engine reads it too
+
+With `auth_log` set in the response policy (`megalodon respond init` sets it to the log this system keeps), every
+response pass reviews the log and decides the findings newer than the last it read. Failed-login bursts and password
+spraying go to the `attacker-at-the-door` playbook, a login after many failures to `guessed-login`, and all of them
+count toward an [automated campaign](automated-campaigns.md) from the same address. See the
+[response engine](response-engine.md).
+
 ### Feed attackers into the network watchlist
 
 ```bash
