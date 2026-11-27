@@ -48,7 +48,8 @@ def no_reports(monkeypatch):
 
 @linux
 def test_a_deleted_running_program_is_recovered_and_the_bundle_is_sealed(tmp_path, bundle_dir, no_reports):
-    program = tmp_path / "dropped-tool"
+    # Keep the applet name for multicall sleep; its temporary/deleted path is the evidence.
+    program = tmp_path / "sleep"
     shutil.copy("/bin/sleep", program)
     original = sha256(program)
     child = subprocess.Popen([str(program), "30"])
