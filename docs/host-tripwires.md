@@ -108,6 +108,13 @@ is known, it says how soon the account was tried or the page asked for. Within t
 reading text and acting on it, at machine speed". The `lure-followed` playbook would collect evidence, block the
 address for an hour and notify you.
 
+To check the SSH lure against a real sshd, run `MEGALODON_TEST_LIVE_SSHD=1 python -m pytest tests/test_live_sshd.py`
+as root on a machine where journald runs and sshd, ssh and sshpass are installed. It plants a lure, runs sshd from a
+temporary folder on a free loopback port, tries one password login as the lure's account (a client that reads none of
+this machine's SSH settings), and checks that sshd's own lines, read back from the journal, are `LURE_FOLLOWED`,
+decided by the response engine. sshd's lines about that one attempt stay in the journal; sshd is stopped and the
+folder removed after.
+
 **Keep lures out of folders your own AI assistants work in.** A coding assistant or chat agent reading your files
 would follow the note too. Plant lures in decoy folders that only an intruder has reason to read: a fake backup
 share, a web root's old admin folder, a home directory no one uses.
