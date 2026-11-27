@@ -606,11 +606,12 @@ CAMPAIGN_MEANING = ('One address tried many different kinds of attack within min
                     'person at a keyboard does: an attack tool, or an AI agent driving one. `megalodon timeline show` '
                     'lists each attempt, in order.')
 LOGIN_IN_CAMPAIGN = ' A login was part of the same incident: check whether the attacker got in.'
-LURE_MEANING = ('Something read a note planted for automated agents (an agent lure) and tried the account it names, '
+LURE_MEANING = ('Something read a note planted for automated agents (an agent lure) and tried the account or asked '
+                'for the page it names, '
                 'which no one else knows: the clearest sign MEGALODON has of an AI agent at work. '
                 '`megalodon timeline show` says how soon after the note was read.')
 AI_CAMPAIGN_MEANING = ('An AI-driven attack: one address tried many different kinds of attack within minutes, and it '
-                       'followed a note planted for automated agents, trying the account the note names. '
+                       'followed a note planted for automated agents, trying the account or the page it names. '
                        '`megalodon timeline show` lists each attempt, in order.')
 # What an incident is, listed before the findings it was made of, so the six shown never cut it off.
 LEAD_RULES = ('AUTOMATED_CAMPAIGN', 'LURE_FOLLOWED')

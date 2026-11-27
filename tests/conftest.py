@@ -86,3 +86,14 @@ def _no_journald():
     response_engine.JOURNALD_RUNNING = "/nonexistent/megalodon-test/journald"
     yield
     response_engine.JOURNALD_RUNNING = before
+
+
+@pytest.fixture(autouse=True)
+def _no_web_server_logs():
+    """`respond init` writes the web server's access log this machine keeps. In tests it keeps none, so no test reads
+    this machine's web logs, unless it gives one."""
+    from megalodon import web_review
+    before = web_review.WEB_LOGS
+    web_review.WEB_LOGS = ()
+    yield
+    web_review.WEB_LOGS = before

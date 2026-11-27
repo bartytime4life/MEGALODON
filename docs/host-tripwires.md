@@ -68,6 +68,11 @@ confirm your access by signing in over SSH as a verification account. The accoun
 letters or digits), appears in no wordlist, and `plant` checks that this machine has no such account. The password
 it gives is a random marker, never a real one.
 
+For whoever reached the machine over the web instead, the note also names a page of this site: a random path
+(`/ops-` and ten letters or digits) with a code. It is given as a path and a code in a sentence, not as a link, and
+no page links to it, so a crawler that follows links never asks for it. Planted in a folder your web server
+serves, the note is found by an agent browsing the site too.
+
 What it tells apart:
 
 * **Scanners and password-guessing tools** do not read sentences, and never try the account.
@@ -75,20 +80,26 @@ What it tells apart:
 * **An AI agent driving an attack** reads files to decide what to do next, takes the note as a lead, and tries
   the account.
 
-So a login tried as the lure's account is reported as `LURE_FOLLOWED` (CRITICAL): something read a note written for
-automated agents and acted on it. It is found in the auth log, by `megalodon auth-review --lures MANIFEST` or by the
-response engine with both `canary_manifest` and `auth_log` set. A refused attempt is enough; an accepted one also
+So a login tried as the lure's account, or a request for its page, is reported as `LURE_FOLLOWED` (CRITICAL):
+something read a note written for automated agents and acted on it. A login is found in the auth log, by
+`megalodon auth-review --lures MANIFEST` or by the response engine with both `canary_manifest` and `auth_log` set. A
+request for the page is found in the web server's access log, by `megalodon web-review --input LOG --lures MANIFEST`
+or by the response engine with both `canary_manifest` and `web_log` set, whatever the server answered. A refused attempt is enough; an accepted one also
 means the account exists after all, so check it at once. An accepted one is reported even right after refused ones,
 and the response engine's summary says it was accepted and links the account.
 
 The response engine links the attempt to the lure's own `CANARY_READ` finding in one incident. When the read time
-is known, it says how soon the account was tried. Within two minutes, the summary says so plainly: "an AI agent
+is known, it says how soon the account was tried or the page asked for. Within two minutes, the summary says so plainly: "an AI agent
 reading text and acting on it, at machine speed". The `lure-followed` playbook would collect evidence, block the
 address for an hour and notify you.
 
 **Keep lures out of folders your own AI assistants work in.** A coding assistant or chat agent reading your files
 would follow the note too. Plant lures in decoy folders that only an intruder has reason to read: a fake backup
 share, a web root's old admin folder, a home directory no one uses.
+
+Lures planted before pages were named have none; plant a lure again for the web log to watch one. The access log
+is read in nginx's and Apache's default formats (`combined` and `common`), and only for a lure's page: this is not a
+general web attack detector. Behind a reverse proxy, the address the server logged is the proxy's.
 
 ### How read detection works and where it is blind
 

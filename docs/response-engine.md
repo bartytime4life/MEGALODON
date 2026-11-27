@@ -90,7 +90,11 @@ would otherwise go on meanwhile.
      holds no files, or shows only the engine's own user's messages, is a gap). `journalctl` is run only to read; the
      engine never runs a program to act. The usernames an attacker tried
      never link incidents (every attacker tries `root`); the address does, and so does
-     a real local account.
+     a real local account;
+   * the web server's access log (`web_log`, which `respond init` sets to nginx's or Apache's when the system
+     keeps one), read only for requests for the page an [agent lure](host-tripwires.md#agent-lures-catching-an-ai-agent-at-work)
+     names, so it needs `canary_manifest` with a lure. Read like the auth log: whole, each pass, deciding only what
+     is new, and holding back the same address asking again within an hour.
 
    Each check needs its baseline. A source that can't be read is listed
    under `gaps`.
@@ -196,7 +200,7 @@ Guards apply whatever the playbooks say:
 | new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Cut off the USB device, notify: only you know whether you plugged it in, and `enforce undo` lets it back |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
 | automated-campaign | [`AUTOMATED_CAMPAIGN`](automated-campaigns.md): one address, many different kinds of attack within minutes | Collect evidence, block the address for 60 minutes, notify |
-| lure-followed | `LURE_FOLLOWED`: a login was tried as the account an [agent lure](host-tripwires.md#agent-lures-catching-an-ai-agent-at-work) names | Collect evidence, block the address for 60 minutes, notify. Needs `canary_manifest` and `auth_log` |
+| lure-followed | `LURE_FOLLOWED`: a login was tried as the account an [agent lure](host-tripwires.md#agent-lures-catching-an-ai-agent-at-work) names, or its page was asked for | Collect evidence, block the address for 60 minutes, notify. Needs `canary_manifest`, and `auth_log` or `web_log` |
 | guessed-login | `AUTH_SUCCESS_AFTER_FAILURES`: a login succeeded from an address that had just failed many times | Collect evidence, block the address for 60 minutes, notify. The account is a real person's, so it is not locked: change its password |
 | attacker-at-the-door | HIGH `BRUTE_FORCE`, `DECOY_TOUCH`, `SYN_FLOOD`, `AUTH_FAILURE_BURST`, `PASSWORD_SPRAY` | Block the source for 30 minutes, notify. `PORT_SCAN` and `HOST_SWEEP` are listed too, but are always MEDIUM, so they are alerted, not acted on |
 | command-and-control-or-exfiltration | HIGH `DATA_EXFILTRATION`, `IOC_MATCH`, `DNS_TUNNELING`, `DNS_TUNNEL_CHURN` | Only when corroborated: collect evidence, block for 60 minutes, notify. `BEACONING` and `DGA_DOMAIN` are listed too, but are always MEDIUM, so they are alerted, not acted on |

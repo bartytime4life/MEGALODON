@@ -925,6 +925,15 @@ def build_parser() -> argparse.ArgumentParser:
     auth.add_argument("--lures", type=Path,
                       help="canary manifest whose agent lures' accounts are watched (LURE_FOLLOWED)")
 
+    web = sub.add_parser(
+        "web-review",
+        help="review a web server access log for requests for an agent lure's page (exit 1 if any)",
+    )
+    web.add_argument("--input", required=True,
+                     help="access log path (e.g. /var/log/nginx/access.log), or - for stdin")
+    web.add_argument("--lures", type=Path, required=True,
+                     help="canary manifest whose agent lures' pages are watched (LURE_FOLLOWED)")
+
     run = sub.add_parser("run", help="process metadata events")
     run.add_argument("--config", help="explicit TOML settings file; safe built-in defaults are used when omitted")
     run.add_argument("--source", choices=("sample", "jsonl", "scapy"), default=None)
@@ -3415,6 +3424,24 @@ def _auth_review(args: argparse.Namespace) -> int:
     return 1 if report["severity_counts"]["CRITICAL"] or report["severity_counts"]["HIGH"] else 0
 
 
+def _web_review(args: argparse.Namespace) -> int:
+    from .canary import web_lures
+    from .validation import ValidationError
+    from .web_review import read_lines, review
+
+    try:
+        pages = web_lures(str(args.lures))
+        if not pages:
+            raise ValidationError("the canary manifest's lures name no page: plant one with "
+                                  "`megalodon canary plant --lure`")
+        report, _ = review(read_lines(args.input), source=args.input, lure_pages=pages)
+    except (ValidationError, OSError) as exc:
+        print(f"megalodon: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 1 if report["findings"] else 0
+
+
 def _detectors() -> int:
     from .detector_registry import registry_document as core_registry
     from .threat_detector import registry_document as threat_registry
@@ -4164,6 +4191,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         code = _canary(args)
     elif args.command == "auth-review":
         code = _auth_review(args)
+    elif args.command == "web-review":
+        code = _web_review(args)
     elif args.command == "yara":
         code = _yara(args)
     elif args.command == "alerts":

@@ -97,7 +97,8 @@ forgotten.
 * **It sees what the sensors report.** It counts the network detections, failed logins and password spraying from
   the auth log (with `auth_log` set), and the findings of the host checks that name an address, such as logins.
   Suricata's alerts are not counted: they are stored as external evidence that this project has qualified on
-  fixtures only, not on a deployed sensor, and so never drive a response. There is no web request log sensor, so web
-  attacks count only as far as the network rules see them.
+  fixtures only, not on a deployed sensor, and so never drive a response. The web server's access log is read only for
+  an agent lure's page (`web_log`): a request for it counts, as a sensor of its own, and other web attacks count
+  only as far as the network rules see them.
 * **One address at a time.** A campaign spread over many addresses, each staying below the thresholds, is not joined
   into one.
