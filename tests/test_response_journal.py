@@ -172,3 +172,72 @@ def test_a_quiet_servers_journal_is_never_read_further_back_than_two_days(paths,
     since = int((NOW + timedelta(days=30) - timedelta(hours=re_.AUTH_FIRST_HOURS + re_.JOURNAL_CONTEXT_HOURS))
                 .timestamp())
     assert f"--since=@{since}" in journal["seen"]()["argv"]
+
+
+def _attempts(monkeypatch, end):
+    """One failed login a minute from a day before NOW until `end()`, given to the real auth-review as values from
+    wherever a pass starts reading: no log text."""
+    start = NOW - timedelta(days=1)
+    monkeypatch.setattr(auth_review, "read_journal", lambda since, notes: [since])
+
+    def review(lines, *, source, on_finding=None, lure_users=(), **_):
+        reviewer = auth_review.AuthReviewer(on_finding=on_finding, lure_users=lure_users)
+        t = max(start, lines[0].replace(second=0, microsecond=0))
+        while t <= end():
+            if t >= lines[0]:
+                reviewer._failure(t, ATTACKER, f"user{t.minute % 7}")
+            t += timedelta(minutes=1)
+        return reviewer.report(source), reviewer
+    monkeypatch.setattr(auth_review, "review", review)
+
+
+def _decided(paths):
+    path = Path(paths["ledger"])
+    return [json.loads(line)["signal"] for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def test_a_journal_read_again_from_elsewhere_decides_nothing_new(paths, monkeypatch):
+    _attempts(monkeypatch, lambda: NOW)                         # nothing logged after NOW
+    run(paths, now=NOW + timedelta(minutes=5))
+    first = len(_decided(paths))
+    assert first
+    for minutes in (10, 15, 20, 90):                            # each pass starts reading somewhere else
+        run(paths, now=NOW + timedelta(minutes=minutes))
+    assert len(_decided(paths)) == first, "the same attempts, read from another start, are not decided again"
+
+
+def test_an_attack_that_goes_on_is_still_decided_about_hourly(paths, monkeypatch):
+    clock = {"now": NOW}
+    _attempts(monkeypatch, lambda: clock["now"])
+    for minutes in range(5, 6 * 60, 5):                         # six hours of passes, five minutes apart
+        clock["now"] = NOW + timedelta(minutes=minutes)
+        run(paths, now=clock["now"])
+    later = [s for s in _decided(paths) if s["observed_at"] > re_._iso(NOW)]
+    per_rule = {}
+    for s in later:
+        per_rule.setdefault(s["rule_id"], []).append(s["observed_at"])
+    assert per_rule and all(5 <= len(times) <= 7 for times in per_rule.values()), per_rule
+    for times in per_rule.values():
+        gaps = [datetime.fromisoformat(b.replace("Z", "+00:00")) - datetime.fromisoformat(a.replace("Z", "+00:00"))
+                for a, b in zip(times, times[1:])]
+        assert all(timedelta(hours=1) <= g < timedelta(hours=2) for g in gaps), gaps
+
+
+def test_what_was_decided_is_kept_only_as_long_as_a_repeat_could_fall_within_it(monkeypatch):
+    def burst(seconds, address):
+        return dict(rule_id="AUTH_FAILURE_BURST", severity="HIGH", observed_at=(NOW + timedelta(seconds=seconds))
+                    .isoformat(), subject=address, message="placeholder", evidence=dict(source=address),
+                    identity=address)
+    _, cursor = re_.auth_signals(dict(findings=[burst(0, "198.51.100.1")]), None)
+    for seconds, decided in ((40 * 60, False), (59 * 60, False), (61 * 60, True)):
+        signals, _ = re_.auth_signals(dict(findings=[burst(seconds, "198.51.100.1")]), cursor)
+        assert bool(signals) is decided, f"a repeat {seconds // 60} min after it, within the hour: held back"
+    _, cursor = re_.auth_signals(dict(findings=[burst(0, "198.51.100.1"), burst(4000, "198.51.100.2")]), None)
+    assert list(cursor["recent"]) == ["AUTH_FAILURE_BURST:198.51.100.2"], "the first is past any repeat's cooldown"
+    signals, _ = re_.auth_signals(dict(findings=[burst(4100, "198.51.100.2"), burst(4100, "198.51.100.3")]), cursor)
+    assert [s.entities["address"] for s in signals] == [{"198.51.100.3"}]
+    monkeypatch.setattr(re_, "MAX_AUTH_RECENT", 2)
+    _, cursor = re_.auth_signals(dict(findings=[burst(n, f"198.51.100.{n + 10}") for n in range(5)]), None)
+    assert sorted(cursor["recent"]) == ["AUTH_FAILURE_BURST:198.51.100.13", "AUTH_FAILURE_BURST:198.51.100.14"]
+    signals, _ = re_.auth_signals(dict(findings=[burst(10, "198.51.100.1")]), dict(at=re_._iso(NOW), keys=[]))
+    assert len(signals) == 1, "a cursor from before this was kept still works"

@@ -82,7 +82,9 @@ would otherwise go on meanwhile.
      login bursts, password spraying, logins that succeeded after many failures, sudo
      misuse and new or privileged accounts. Each pass reads the log and decides only
      findings newer than the last it read, every one of them, not only the 500
-     `auth-review` shows; up to 5000 a pass, the rest the next. A first pass looks
+     `auth-review` shows; up to 5000 a pass, the rest the next. A repeat of a finding within auth-review's hour of
+     cooldown after it was decided is held back across passes too, as it is within one read, however the read
+     starts (the journal's moves with each pass; a rotated log's starts anew). A first pass looks
      back a day. Reading the
      log usually needs membership in the `adm` group (the journal: `adm` or `systemd-journal`; a journal that
      holds no files, or shows only the engine's own user's messages, is a gap). `journalctl` is run only to read; the

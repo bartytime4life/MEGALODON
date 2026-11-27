@@ -121,6 +121,8 @@ JOURNALD_RUNNING = '/run/systemd/journal'
 JOURNAL_CONTEXT_HOURS = 24
 # Auth-log findings taken in one pass, as the network store's rows are; the rest are taken the next.
 MAX_AUTH_SIGNALS = 5_000
+# The findings decided within auth-review's cooldown, kept across passes: at most this many.
+MAX_AUTH_RECENT = 10_000
 # A lure's account tried within this long of the lure being read: an agent, which acts on text in seconds.
 LURE_MACHINE_SECONDS = 120
 LURE_ACCEPTED = ' The login was accepted: the account exists, so check it and who has it at once.'
@@ -908,13 +910,23 @@ def auth_signals(report, cursor=None, lures=None):
 
     The log is read whole each pass, so the same findings come back: `cursor` is the latest finding's time and the
     keys of the findings at that time, so none is decided twice, even after the engine's daily dedupe forgets it.
+    auth-review holds back a repeat of a finding within its cooldown, but only within one read; a read that starts
+    elsewhere (the journal's, which moves with the cursor, or a rotated log's) repeats at other times. So `cursor`
+    also keeps when each finding was last decided, and a repeat within the cooldown after it is held back as
+    auth-review would have held it back in one whole read.
     An address the attacker used is linked; the usernames it tried are not, since every attacker tries `root`, and
     linking on them would join unrelated attackers into one incident. A real local account is linked.
     """
-    from .auth_review import NETWORK_RULES
+    from .auth_review import NETWORK_RULES, AuthReviewSettings
     cursor = cursor if isinstance(cursor, dict) else {}
     after, done = str(cursor.get('at') or ''), set(cursor.get('keys') or ())
     signals, latest, keys = [], after, set(done)
+    cooldown = timedelta(seconds=AuthReviewSettings().cooldown_seconds)
+    recent = cursor.get('recent') if isinstance(cursor.get('recent'), dict) else {}
+    recent = {str(k): str(v) for k, v in recent.items()}
+
+    def moment(text):
+        return datetime.fromisoformat(text.replace('Z', '+00:00'))
     timed = sorted(((_auth_at(f), n, f) for n, f in enumerate(report.get('findings', []))), key=lambda t: t[:2])
     for at, _, f in timed:
         rule = f.get('rule_id')
@@ -929,6 +941,11 @@ def auth_signals(report, cursor=None, lures=None):
         key = f"auth:{rule}:{str(identity)[:192]}:{str(f.get('observed_at'))[:40]}"
         if at < after or (at == after and key in done):
             continue
+        same = f"{rule}:{str(identity)[:192]}"
+        last = recent.get(same)
+        if last and last < at and moment(at) - moment(last) < cooldown:
+            continue                # a repeat auth-review would have held back in one whole read
+        recent[same] = at
         if at > latest:
             latest, keys = at, set()
         if at == latest:
@@ -950,7 +967,10 @@ def auth_signals(report, cursor=None, lures=None):
                                         else [],
                                         file=files)))
     # Every key at the cursor's second: one dropped would be decided again once the daily dedupe forgets it.
-    return signals, dict(at=latest, keys=sorted(keys))
+    # Of those last decided, only what a repeat could still fall within the cooldown of; the most recent first.
+    horizon = _iso(moment(latest) - cooldown) if latest else ''
+    kept = sorted(((v, k) for k, v in recent.items() if v >= horizon), reverse=True)[:MAX_AUTH_RECENT]
+    return signals, dict(at=latest, keys=sorted(keys), recent={k: v for v, k in sorted(kept)})
 
 
 def login_signals(report):
