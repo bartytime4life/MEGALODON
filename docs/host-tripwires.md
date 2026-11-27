@@ -99,7 +99,9 @@ share, a web root's old admin folder, a home directory no one uses.
 
 Lures planted before pages were named have none; plant a lure again for the web log to watch one. The access log
 is read in nginx's and Apache's default formats (`combined` and `common`), and only for a lure's page: this is not a
-general web attack detector. Behind a reverse proxy, the address the server logged is the proxy's.
+general web attack detector. Behind a reverse proxy, the address the server logged is the proxy's. One on this
+machine logs one of its own addresses, which is never blocked; one on another machine would be, so with such a
+proxy leave `lure-followed` out of [enforcement](enforcement.md)'s policy and act on the decision yourself.
 
 ### How read detection works and where it is blind
 
