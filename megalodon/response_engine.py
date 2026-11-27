@@ -883,9 +883,10 @@ def auth_signals(report, cursor=None):
         if len(signals) >= MAX_AUTH_SIGNALS:
             break                   # the rest next pass: the cursor stops at the last one taken
         evidence = f.get('evidence') if isinstance(f.get('evidence'), dict) else {}
-        # Its account and its own time, to the fraction: two accounts in one second are two findings.
-        key = (f"auth:{rule}:{str(f.get('subject', ''))[:128]}:{str(evidence.get('user', ''))[:64]}:"
-               f"{str(f.get('observed_at'))[:40]}")
+        # auth-review's own identity of the finding (address and account, account and group) and its own time, to
+        # the fraction: two accounts in one second, or one account joining two groups, are two findings.
+        identity = f.get('identity') or f"{f.get('subject', '')}:{evidence.get('user', '')}"
+        key = f"auth:{rule}:{str(identity)[:192]}:{str(f.get('observed_at'))[:40]}"
         if at < after or (at == after and key in done):
             continue
         if at > latest:

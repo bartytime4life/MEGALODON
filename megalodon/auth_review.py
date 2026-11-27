@@ -413,6 +413,8 @@ class AuthReviewer:
             "rule_id": rule, "severity": severity, "observed_at": when.isoformat(),
             "subject": subject, "message": message, "evidence": evidence,
             "attack": ATTACK[rule],
+            # What makes this finding itself: an account joining two groups at once is two findings.
+            "identity": key,
         }
         if self.on_finding is not None:
             self.on_finding(finding)

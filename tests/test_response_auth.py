@@ -217,3 +217,15 @@ def test_every_finding_in_the_cursors_second_is_remembered_however_many():
     signals, cursor = re_.auth_signals(dict(findings=findings))
     assert len(signals) == 300 and len(cursor["keys"]) == 300
     assert re_.auth_signals(dict(findings=findings), cursor)[0] == []
+
+
+def test_one_account_joining_two_groups_at_once_is_two_findings():
+    seen = []
+    reviewer = auth_review.AuthReviewer(on_finding=seen.append)
+    for group in ("sudo", "docker"):                     # what auth-review emits for each grant, as values
+        reviewer._emit("PRIVILEGE_GRANT", f"alice:{group}", NOW, "alice", f"placeholder {group}",
+                       {"user": "alice", "group": group})
+    assert [f["identity"] for f in seen] == ["alice:sudo", "alice:docker"]
+    signals, cursor = re_.auth_signals(dict(findings=seen))
+    assert len({s.key for s in signals}) == 2 and all(s.entities["account"] == {"alice"} for s in signals)
+    assert re_.auth_signals(dict(findings=seen), cursor)[0] == []
