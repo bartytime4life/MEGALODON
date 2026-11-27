@@ -45,6 +45,7 @@ class Settings:
     min_kinds: int = 3
     broad_kinds: int = 5
     cooldown_minutes: int = 30
+    ignore_addresses: tuple = ()      # networks, as text: the owner's own scanners
 
 
 BOUNDS = dict(window_seconds=(60, 86400), min_attempts=(2, MAX_ATTEMPTS), min_kinds=(2, 100), broad_kinds=(2, 100),
@@ -71,6 +72,11 @@ def _actors(signal):
         return [signal.actor]
     addresses = signal.entities.get('address', ())
     return list(addresses) if len(addresses) == 1 else []
+
+
+def _within(address, networks):
+    parsed = ipaddress.ip_address(address)
+    return any(parsed.version == network.version and parsed in network for network in networks)
 
 
 def _followed(address):
@@ -100,12 +106,13 @@ def observe(state, signals, now, settings, make_signal, *, exclude=frozenset()):
         return []
     book = state.setdefault('campaigns', {})
     touched, new = set(), {}
+    ignored = [ipaddress.ip_network(network) for network in settings.ignore_addresses]
     for signal in signals:
         if signal.source == SOURCE or signal.rule_id == RULE_ID:
             continue
         at = _time(signal.observed_at, now)
         for address in _actors(signal):
-            if address in exclude or not _followed(address):
+            if address in exclude or not _followed(address) or _within(address, ignored):
                 continue
             book.setdefault(address, dict(attempts=[], raised_at=None, raised_severity=None))
             new.setdefault(address, []).append([_iso(at), signal.rule_id, signal.source, _target(signal, address)])

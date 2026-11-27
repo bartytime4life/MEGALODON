@@ -95,16 +95,23 @@ NAMESPACE_ADDRESS = re.compile(r'([0-9A-Fa-f:.]{2,45})@(net:\[[0-9]{1,20}\])')
 PROCESS_ID = re.compile(r'([0-9]{1,10})@([0-9]{1,20}):(/.{0,4095})', re.S)
 SOURCES = ('network', 'process_review', 'ancestry', 'rootkit', 'listeners', 'persistence', 'binaries', 'logwatch',
            'devices', 'webroot', 'tamper', 'egress', 'credentials', 'logins', 'boot', 'ebpf', 'containers', 'hardening',
-           'packages', 'secrets', 'memory', 'canary', 'ingest', 'campaign')
+           'packages', 'secrets', 'memory', 'canary', 'ingest', 'campaign', 'auth')
 # Sources made from other findings, not sensors of their own: they never count as a second, independent source.
 DERIVED_SOURCES = frozenset({'campaign'})
 # Never acted on whatever a policy says: losing these cuts the machine off or breaks it.
+# Auth-review findings about a real local account: the account is linked. Failed logins name what was tried, not an
+# account of this machine's, so they are not.
+AUTH_ACCOUNT_RULES = frozenset({'AUTH_SUCCESS_AFTER_FAILURES', 'SUDO_DENIED', 'SUDO_FAILURES', 'PRIVILEGE_GRANT',
+                                'ACCOUNT_CREATED'})
 SYSTEM_PROGRAMS = frozenset({'/sbin/init', '/usr/sbin/init', '/lib/systemd/systemd', '/usr/lib/systemd/systemd',
                              '/usr/lib/systemd/systemd-journald', '/usr/lib/systemd/systemd-logind',
                              '/usr/sbin/sshd', '/usr/sbin/dbus-daemon', '/usr/bin/dbus-daemon'})
 SYSTEM_FOLDERS = ('/usr/', '/bin/', '/sbin/', '/lib/', '/lib64/', '/etc/', '/boot/', '/var/log/', '/var/lib/', '/proc/',
                   '/sys/', '/dev/')
 DEFAULT_QUARANTINE_ROOTS = ('/tmp/', '/var/tmp/', '/dev/shm/', '/home/', '/root/', '/srv/', '/opt/', '/var/www/')
+AUTH_LOGS = ('/var/log/auth.log', '/var/log/secure')
+# The first pass over an auth log looks back this far: a week of old log is history, not news.
+AUTH_FIRST_HOURS = 24
 PROCESS_SEVERITY = {'STDIO_SHELL_ON_NETWORK': 'HIGH', 'SHELL_HOLDS_SOCKET': 'HIGH', 'PIPED_TO_SHELL': 'HIGH',
                     'EXECUTABLE_IN_MEMORY': 'HIGH', 'STDIO_ON_NETWORK': 'MEDIUM', 'EXECUTABLE_DELETED': 'MEDIUM',
                     'EXECUTABLE_IN_TEMPORARY': 'MEDIUM'}
@@ -161,6 +168,10 @@ packages_manifest = "~/.config/megalodon/packages.json"
 # Keys, tokens and passwords others can read (`megalodon secrets baseline`).
 secrets_manifest = "~/.config/megalodon/secrets.json"
 canary_manifest = ""
+# Failed logins, password spraying and sudo misuse from the system's auth log (`megalodon auth-review`): they count
+# toward automated campaigns too. `respond init` writes the log this system keeps, if any; "" turns it off.
+# Reading it usually needs membership in the adm group.
+auth_log = ""
 
 [response.campaign]
 # One address trying many different attacks within minutes (scans, password guesses, decoys, login bursts) is an
@@ -173,6 +184,8 @@ min_attempts = 8
 min_kinds = 3
 broad_kinds = 5
 cooldown_minutes = 30
+# Your own scanners and test machines (addresses or networks): never counted toward a campaign.
+ignore_addresses = []
 
 [[response.playbook]]
 name = "reverse-shell"
@@ -366,8 +379,17 @@ actions = ["collect_evidence", "block_address", "notify"]
 block_minutes = 60
 
 [[response.playbook]]
+name = "guessed-login"
+rules = ["AUTH_SUCCESS_AFTER_FAILURES"]
+min_severity = "HIGH"
+# A login that succeeded from an address that had just failed many times: the password may have been guessed. The
+# account is a real person's, so it is not locked here; change its password, then `megalodon enforce undo ID`.
+actions = ["collect_evidence", "block_address", "notify"]
+block_minutes = 60
+
+[[response.playbook]]
 name = "attacker-at-the-door"
-rules = ["BRUTE_FORCE", "HOST_SWEEP", "DECOY_TOUCH", "SYN_FLOOD", "PORT_SCAN"]
+rules = ["BRUTE_FORCE", "HOST_SWEEP", "DECOY_TOUCH", "SYN_FLOOD", "PORT_SCAN", "AUTH_FAILURE_BURST", "PASSWORD_SPRAY"]
 min_severity = "HIGH"
 actions = ["block_address", "notify"]
 block_minutes = 30
@@ -569,7 +591,7 @@ def load_policy(path=DEFAULT_POLICY):
                'devices_manifest', 'webroot_manifest', 'tamper_manifest', 'egress_manifest',
                'credential_allow_file', 'logins_manifest', 'boot_manifest', 'ebpf_manifest', 'containers_manifest',
                'hardening_manifest', 'packages_manifest', 'secrets_manifest', 'memory_sweep',
-               'canary_manifest'}
+               'canary_manifest', 'auth_log'}
     switches = ('process_review', 'rootkit_check', 'rootkit_ports', 'memory_sweep')
     if not isinstance(sources, dict) or set(sources) - allowed:
         raise ResponseError('response.sources has unsupported settings')
@@ -594,7 +616,7 @@ def _campaign(table):
     """[response.campaign]: when one address trying many kinds of attack is an automated campaign."""
     if not isinstance(table, dict):
         raise ResponseError('response.campaign must be a table')
-    unknown = set(table) - {'enabled', *campaigns.BOUNDS}
+    unknown = set(table) - {'enabled', 'ignore_addresses', *campaigns.BOUNDS}
     if unknown:
         raise ResponseError('response.campaign has unsupported settings: ' + ', '.join(sorted(unknown)))
     enabled = table.get('enabled', True)
@@ -608,7 +630,12 @@ def _campaign(table):
         values[name] = value
     if values['broad_kinds'] < values['min_kinds']:
         raise ResponseError('response.campaign.broad_kinds must be at least min_kinds')
-    return campaigns.Settings(enabled=enabled, **values)
+    try:
+        ignore = tuple(str(ipaddress.ip_network(a, strict=False))
+                       for a in _strings(table.get('ignore_addresses', []), 'response.campaign.ignore_addresses'))
+    except ValueError:
+        raise ResponseError('response.campaign.ignore_addresses contains an invalid address or network') from None
+    return campaigns.Settings(enabled=enabled, ignore_addresses=ignore, **values)
 
 
 def _toml_string(text):
@@ -632,6 +659,9 @@ def write_default_policy(path=DEFAULT_POLICY, *, replace=False):
                             f'audit_db = {_toml_string(str(Path("data/megalodon.db").resolve()))}', 1)
     except UnicodeEncodeError:
         pass        # a folder name that is not UTF-8 cannot be written in TOML: the relative default stays
+    # The auth log this system keeps: Debian and Ubuntu's, or the RHEL family's.
+    log = next((log for log in AUTH_LOGS if os.path.isfile(log)), '')
+    text = text.replace('auth_log = ""', f'auth_log = {_toml_string(log)}', 1)
     _atomic_write(path, text.encode('utf-8'))
     return dict(action='init', policy=str(path), playbooks=len(load_policy(path).playbooks),
                 note='Shadow mode: decisions are recorded, never carried out. Review the playbooks before use.')
@@ -820,6 +850,42 @@ def credential_signals(report):
                               f.get('detail', ''), _entities(process=[program], process_id=ids,
                                                              file=f.get('files') or [f.get('path')])))
     return signals
+
+
+def auth_signals(report, cursor=None):
+    """Findings from `megalodon auth-review` over the auth log newer than `cursor`, and the new cursor.
+
+    The log is read whole each pass, so the same findings come back: `cursor` is the latest finding's time and the
+    keys of the findings at that time, so none is decided twice, even after the engine's daily dedupe forgets it.
+    An address the attacker used is linked; the usernames it tried are not, since every attacker tries `root`, and
+    linking on them would join unrelated attackers into one incident. A real local account is linked.
+    """
+    from .auth_review import NETWORK_RULES
+    cursor = cursor if isinstance(cursor, dict) else {}
+    after, done = str(cursor.get('at') or ''), set(cursor.get('keys') or ())
+    signals, latest, keys = [], after, set(done)
+    for f in report.get('findings', []):
+        rule = f.get('rule_id')
+        try:
+            when = datetime.fromisoformat(str(f.get('observed_at')))
+        except ValueError:
+            continue
+        if not isinstance(rule, str):
+            continue
+        at = _iso(when if when.tzinfo else when.replace(tzinfo=timezone.utc))
+        evidence = f.get('evidence') if isinstance(f.get('evidence'), dict) else {}
+        key = f"auth:{rule}:{str(f.get('subject', ''))[:128]}:{at}"
+        if at < after or (at == after and key in done):
+            continue
+        if at > latest:
+            latest, keys = at, set()
+        if at == latest:
+            keys.add(key)
+        signals.append(Signal(key, 'auth', rule[:64], _severity(f.get('severity')), at,
+                              str(f.get('message', ''))[:300],
+                              _entities(address=[evidence.get('source')] if rule in NETWORK_RULES else [],
+                                        account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES else [])))
+    return signals, dict(at=latest, keys=sorted(keys)[-256:])
 
 
 def login_signals(report):
@@ -1086,6 +1152,17 @@ def collect(policy, state, now, *, root='/'):
             signals += path_signals(dict(report, checked_at=_iso(now)), 'canary', 'path')
         except (ValueError, OSError) as exc:
             gaps.append(f'canary: {exc}')
+    if sources.get('auth_log'):
+        from . import auth_review
+        from .validation import ValidationError
+        try:
+            path = str(Path(sources['auth_log']).expanduser())
+            report, _ = auth_review.review(auth_review.read_lines(path), source=path)
+            cursor = state.get('auth_cursor') or dict(at=_iso(now - timedelta(hours=AUTH_FIRST_HOURS)))
+            found, state['auth_cursor'] = auth_signals(report, cursor)
+            signals += found
+        except (ValidationError, OSError) as exc:
+            gaps.append(f'auth: {exc}')
     return signals, gaps
 
 
@@ -1417,8 +1494,9 @@ def run(*, policy_path=DEFAULT_POLICY, ledger=DEFAULT_LEDGER, state_path=DEFAULT
     # state the last one wrote, so neither loses the other's incidents, seen findings or rate counts.
     with _StateLock(state_path):
         state = _read_state(state_path)
-        if 'cursor' in collected:
-            state['cursor'] = collected['cursor']
+        for cursor in ('cursor', 'auth_cursor'):        # how far the network store and the auth log were read
+            if cursor in collected:
+                state[cursor] = collected[cursor]
         observed = []
         decisions = decide(policy, state, signals, now,
                            guards=Guards(policy, state, now, root=root, protected=protected), observations=observed)

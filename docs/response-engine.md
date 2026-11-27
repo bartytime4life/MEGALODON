@@ -74,7 +74,15 @@ would otherwise go on meanwhile.
      [boot](boot-integrity.md), [eBPF](ebpf-watch.md), [container](container-watch.md),
      [hardening drift](hardening-drift.md), [package sources](package-sources.md) and
      [exposed secrets](exposed-secrets.md) checks, and
-     canaries.
+     canaries;
+   * the auth log (`auth_log`, which `respond init` sets to `/var/log/auth.log` or
+     `/var/log/secure` when the system keeps one): [login review](host-tripwires.md#login-review-auth-review)'s failed
+     login bursts, password spraying, logins that succeeded after many failures, sudo
+     misuse and new or privileged accounts. Each pass reads the log and decides only
+     findings newer than the last it read; a first pass looks back a day. Reading the
+     log usually needs membership in the `adm` group. The usernames an attacker tried
+     never link incidents (every attacker tries `root`); the address does, and so does
+     a real local account.
 
    Each check needs its baseline. A source that can't be read is listed
    under `gaps`.
@@ -180,7 +188,8 @@ Guards apply whatever the playbooks say:
 | new-hardware | HIGH `NEW_USB_KEYBOARD`, `NEW_NETWORK_ADAPTER`, `NEW_THUNDERBOLT_DEVICE`, `DEVICE_GAINED_FUNCTIONS` | Cut off the USB device, notify: only you know whether you plugged it in, and `enforce undo` lets it back |
 | program-from-memory | `EXECUTABLE_IN_MEMORY` | Collect evidence, notify |
 | automated-campaign | [`AUTOMATED_CAMPAIGN`](automated-campaigns.md): one address, many different kinds of attack within minutes | Collect evidence, block the address for 60 minutes, notify |
-| attacker-at-the-door | HIGH `BRUTE_FORCE`, `DECOY_TOUCH`, `SYN_FLOOD` | Block the source for 30 minutes, notify. `PORT_SCAN` and `HOST_SWEEP` are listed too, but are always MEDIUM, so they are alerted, not acted on |
+| guessed-login | `AUTH_SUCCESS_AFTER_FAILURES`: a login succeeded from an address that had just failed many times | Collect evidence, block the address for 60 minutes, notify. The account is a real person's, so it is not locked: change its password |
+| attacker-at-the-door | HIGH `BRUTE_FORCE`, `DECOY_TOUCH`, `SYN_FLOOD`, `AUTH_FAILURE_BURST`, `PASSWORD_SPRAY` | Block the source for 30 minutes, notify. `PORT_SCAN` and `HOST_SWEEP` are listed too, but are always MEDIUM, so they are alerted, not acted on |
 | command-and-control-or-exfiltration | HIGH `DATA_EXFILTRATION`, `IOC_MATCH`, `DNS_TUNNELING`, `DNS_TUNNEL_CHURN` | Only when corroborated: collect evidence, block for 60 minutes, notify. `BEACONING` and `DGA_DOMAIN` are listed too, but are always MEDIUM, so they are alerted, not acted on |
 | new-backdoor-account | CRITICAL account changes in the persistence watch | Collect evidence, lock the account, notify |
 | new-persistence-entry | `PERSISTENCE_ADDED`: a service, timer, cron or at job, startup file, SSH key file, preload, sudoers, PAM, init or module file the baseline did not have | Collect evidence, disable the entry, notify |
