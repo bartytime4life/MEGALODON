@@ -19,12 +19,12 @@ and the login records, for example): breadth no single scanner produces. Otherwi
 When a followed [agent lure](host-tripwires.md#agent-lures-catching-an-ai-agent-at-work) (`LURE_FOLLOWED`) from the same
 address is among the attempts, the campaign is CRITICAL and its summary ends "It followed an agent lure: an AI agent
 is driving it." That is evidence, not pace alone: the address read a note written for automated agents and acted on
-it. A campaign raised as HIGH is raised again when a lure is followed.
+it. A campaign already raised, HIGH or CRITICAL, is raised again once it follows a lure.
 
 Attempts are placed by when they happened, not when a pass read them, so findings read late, or across several
 passes, are counted the same. Every window that holds a new attempt is looked at, not only the latest: a backlog
 read at once can hold a campaign that ended before its newest finding. When several qualify, the most severe is
-raised, and of equals the latest.
+raised, of those one that followed a lure, and of equals the latest.
 
 A finding is counted against the address it says the activity came from: the source of a finding piped in, or the
 one address a finding names. A finding that names several addresses and no source is not counted, so an address
@@ -75,7 +75,8 @@ cooldown_minutes = 30     # 1 to 1440: before the same address is raised again
 ignore_addresses = []     # your own scanners and test machines: addresses or networks
 ```
 
-An address is raised again within `cooldown_minutes` only if its campaign becomes CRITICAL. A policy without the
+An address is raised again within `cooldown_minutes` only if its campaign becomes CRITICAL, or first follows a lure.
+A policy without the
 table uses these values. A policy written before this table existed also needs the `automated-campaign` playbook
 added before campaigns are decided. Until then they are still recorded, and reach the timeline and the report.
 

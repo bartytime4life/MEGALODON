@@ -310,7 +310,7 @@ class AuthReviewer:
     def _accepted(self, when: datetime, address: str, user: str, method: str) -> None:
         self.stats["successful_logins"] += 1
         # Accepted as a lure's account: the account exists after all, and someone has it.
-        self._lure(when, address, user, "accepted: the account exists, so check it at once")
+        self._lure(when, address, user, accepted=True)
         settings = self.settings
         state = self.failures.get(address)
         if state is None:
@@ -327,16 +327,18 @@ class AuthReviewer:
                  "prior_failures": prior, "usernames_tried": state.users_shown()},
             )
 
-    def _lure(self, when: datetime, address: str, user: str, outcome: str) -> None:
+    def _lure(self, when: datetime, address: str, user: str, *, accepted: bool) -> None:
         if user.casefold() not in self.lure_users:
             return
-        self._emit("LURE_FOLLOWED", f"{address}:{user.casefold()}", when, address,
-                   f"{address} tried to log in as {user}, the account an agent lure names ({outcome}).",
-                   {"source": address, "user": user, "outcome": outcome})
+        outcome = "accepted: the account exists, so check it at once" if accepted else "refused"
+        # Accepted and refused are kept apart: a login let in right after refused tries is never held back as a repeat.
+        self._emit("LURE_FOLLOWED", f"{address}:{user.casefold()}:{'accepted' if accepted else 'refused'}", when,
+                   address, f"{address} tried to log in as {user}, the account an agent lure names ({outcome}).",
+                   {"source": address, "user": user, "outcome": outcome, "accepted": accepted})
 
     def _failure(self, when: datetime, address: str, user: str) -> None:
         settings = self.settings
-        self._lure(when, address, user, "refused")
+        self._lure(when, address, user, accepted=False)
         self.stats["failed_logins"] += 1
         self.failures_by_source[address] += 1
         state = self.failures.pop(address, None) or _SourceState()

@@ -78,7 +78,8 @@ What it tells apart:
 So a login tried as the lure's account is reported as `LURE_FOLLOWED` (CRITICAL): something read a note written for
 automated agents and acted on it. It is found in the auth log, by `megalodon auth-review --lures MANIFEST` or by the
 response engine with both `canary_manifest` and `auth_log` set. A refused attempt is enough; an accepted one also
-means the account exists after all, so check it at once.
+means the account exists after all, so check it at once. An accepted one is reported even right after refused ones,
+and the response engine's summary says it was accepted and links the account.
 
 The response engine links the attempt to the lure's own `CANARY_READ` finding in one incident. When the read time
 is known, it says how soon the account was tried. Within two minutes, the summary says so plainly: "an AI agent

@@ -75,7 +75,7 @@ def test_any_login_tried_as_a_lure_account_is_reported_and_no_other():
     lured = [f for f in reviewer.findings if f["rule_id"] == "LURE_FOLLOWED"]
     assert [(f["severity"], f["evidence"]["source"], f["evidence"]["outcome"].split(":")[0]) for f in lured] == [
         ("CRITICAL", ATTACKER, "refused"), ("CRITICAL", "198.51.100.6", "accepted")]
-    assert auth_review.AuthReviewer()._lure(when, ATTACKER, "svc-k3x9qe", "refused") is None
+    assert auth_review.AuthReviewer()._lure(when, ATTACKER, "svc-k3x9qe", accepted=False) is None
 
 
 @pytest.mark.parametrize("gap,expected", [
@@ -199,3 +199,55 @@ def test_a_lure_makes_a_campaign_critical_even_from_one_sensor():
     [raised] = campaigns.observe({}, [guessing, _followed(10)], START + timedelta(minutes=1), few,
                                  re_._campaign_signal)
     assert raised.severity == "CRITICAL" and "seen by auth;" in raised.summary
+
+
+def test_an_accepted_lure_login_is_reported_even_right_after_a_refused_one():
+    reviewer = auth_review.AuthReviewer(lure_users=["svc-k3x9qe"])
+    when = datetime(2026, 11, 27, 12, 0, tzinfo=timezone.utc)
+    reviewer._failure(when, ATTACKER, "svc-k3x9qe")
+    reviewer._failure(when + timedelta(seconds=2), ATTACKER, "svc-k3x9qe")       # a repeat is held back
+    reviewer._accepted(when + timedelta(seconds=5), ATTACKER, "svc-k3x9qe", "password")
+    lured = [f for f in reviewer.findings if f["rule_id"] == "LURE_FOLLOWED"]
+    assert [f["evidence"]["accepted"] for f in lured] == [False, True]
+    assert len({f["identity"] for f in lured}) == 2
+
+
+def test_an_accepted_lure_login_says_so_in_the_decision_and_links_the_account():
+    reviewer = auth_review.AuthReviewer(lure_users=["svc-k3x9qe"])
+    reviewer._accepted(START, ATTACKER, "svc-k3x9qe", "password")
+    lure = dict(path="/srv/decoy/OPERATIONS-NOTE.txt", read_at=None)
+    [signal], _ = re_.auth_signals(dict(findings=reviewer.findings), None, {"svc-k3x9qe": lure})
+    assert signal.summary.endswith(re_.LURE_ACCEPTED) and len(signal.summary) <= 300
+    assert "svc-k3x9qe" in signal.entities["account"]
+    refused = auth_review.AuthReviewer(lure_users=["svc-k3x9qe"])
+    refused._failure(START, ATTACKER, "svc-k3x9qe")
+    [signal], _ = re_.auth_signals(dict(findings=refused.findings), None, {"svc-k3x9qe": lure})
+    assert re_.LURE_ACCEPTED not in signal.summary and not signal.entities.get("account")
+
+
+def test_the_window_that_followed_a_lure_is_the_one_raised():
+    def auth(n, rule, seconds):
+        return re_.Signal(f"auth:{n}", "auth", rule, "HIGH", (START + timedelta(seconds=seconds)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"), rule, re_._entities(address=[ATTACKER]))
+    signals = [_followed(0), auth(1, "AUTH_FAILURE_BURST", 10), auth(2, "AUTH_FAILURE_BURST", 100),
+               auth(3, "PASSWORD_SPRAY", 110)]
+    few = campaigns.Settings(window_seconds=60, min_attempts=2, min_kinds=2)
+    [raised] = campaigns.observe({}, signals, START + timedelta(minutes=3), few, re_._campaign_signal)
+    assert raised.severity == "CRITICAL" and "AI agent is driving it" in raised.summary
+    # Of two CRITICAL windows, a later one seen by two sensors, the one that followed the lure says the most.
+    signals[3] = _attempt(3, "PORT_SCAN", 110)
+    [raised] = campaigns.observe({}, signals, START + timedelta(minutes=3), few, re_._campaign_signal)
+    assert raised.severity == "CRITICAL" and "AI agent is driving it" in raised.summary
+
+
+def test_a_critical_campaign_is_raised_again_once_it_follows_a_lure():
+    state = {}
+    two_sensors = _burst(7) + [_attempt(99, "AUTH_FAILURE_BURST", 36, source="auth")]
+    [first] = campaigns.observe(state, two_sensors, START + timedelta(minutes=1), campaigns.Settings(),
+                                re_._campaign_signal)
+    [again] = campaigns.observe(state, [_followed(50)], START + timedelta(minutes=2), campaigns.Settings(),
+                                re_._campaign_signal)
+    assert first.severity == "CRITICAL" and "AI agent is driving it" not in first.summary
+    assert again.severity == "CRITICAL" and "AI agent is driving it" in again.summary and again.key != first.key
+    assert campaigns.observe(state, [_followed(55)], START + timedelta(minutes=3), campaigns.Settings(),
+                             re_._campaign_signal) == [], "once said, held back until the cooldown"

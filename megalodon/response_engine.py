@@ -116,6 +116,7 @@ AUTH_FIRST_HOURS = 24
 MAX_AUTH_SIGNALS = 5_000
 # A lure's account tried within this long of the lure being read: an agent, which acts on text in seconds.
 LURE_MACHINE_SECONDS = 120
+LURE_ACCEPTED = ' The login was accepted: the account exists, so check it and who has it at once.'
 PROCESS_SEVERITY = {'STDIO_SHELL_ON_NETWORK': 'HIGH', 'SHELL_HOLDS_SOCKET': 'HIGH', 'PIPED_TO_SHELL': 'HIGH',
                     'EXECUTABLE_IN_MEMORY': 'HIGH', 'STDIO_ON_NETWORK': 'MEDIUM', 'EXECUTABLE_DELETED': 'MEDIUM',
                     'EXECUTABLE_IN_TEMPORARY': 'MEDIUM'}
@@ -928,9 +929,14 @@ def auth_signals(report, cursor=None, lures=None):
                          if k.casefold() == str(evidence.get('user', '')).casefold()), None)
             summary = _lure_summary(evidence.get('source'), evidence.get('user'), lure, at)
             files = [lure['path']] if lure else []
+        # A lure account let in exists after all: it is a real account now, to be checked, and so linked.
+        accepted = rule == 'LURE_FOLLOWED' and evidence.get('accepted') is True
+        if accepted:
+            summary = summary[:300 - len(LURE_ACCEPTED)] + LURE_ACCEPTED
         signals.append(Signal(key, 'auth', rule[:64], _severity(f.get('severity')), at, summary,
                               _entities(address=[evidence.get('source')] if rule in NETWORK_RULES else [],
-                                        account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES else [],
+                                        account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES or accepted
+                                        else [],
                                         file=files)))
     # Every key at the cursor's second: one dropped would be decided again once the daily dedupe forgets it.
     return signals, dict(at=latest, keys=sorted(keys))
