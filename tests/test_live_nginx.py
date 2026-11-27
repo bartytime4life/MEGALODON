@@ -86,14 +86,17 @@ def site():
     # A folder the workers can reach: pytest's own temporary folders are the owner's alone.
     base = Path(tempfile.mkdtemp(prefix="megalodon-live-nginx-", dir="/tmp"))
     try:
+        # Modes set outright, not left to mkdir and the umask: under umask 077 the workers could reach nothing.
         base.chmod(0o755)
-        (base / "www").mkdir(mode=0o755)
+        (base / "www").mkdir()
+        (base / "www").chmod(0o755)
         (base / "temp").mkdir(mode=0o700)
         (base / "manifests").mkdir(mode=0o700)
         planted = {}
         for name, readable in (("plain", False), ("readable", True)):
             folder = base / "www" / name
-            folder.mkdir(mode=0o755)
+            folder.mkdir()
+            folder.chmod(0o755)
             planted[name] = canary.plant(str(folder), str(base / "manifests" / f"{name}.json"), count=1, lure=True,
                                          web_readable=readable)
         port = _port()
