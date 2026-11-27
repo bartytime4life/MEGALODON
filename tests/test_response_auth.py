@@ -45,7 +45,12 @@ def paths(tmp_path, monkeypatch):
 
 
 def reviewed(monkeypatch, findings):
-    monkeypatch.setattr(auth_review, "review", lambda lines, **_: (dict(findings=list(findings)), None))
+    """auth-review over a log, as the engine sees it: each finding handed over as it is made."""
+    def review(lines, *, on_finding=None, **_):
+        for f in findings:
+            on_finding(f)
+        return dict(findings=list(findings)[:auth_review.MAX_FINDINGS]), None
+    monkeypatch.setattr(auth_review, "review", review)
 
 
 def run(paths, now=NOW + timedelta(minutes=5)):
@@ -148,3 +153,67 @@ def test_the_owners_own_scanners_are_never_a_campaign(paths):
     Path(paths["policy_path"]).write_text(text.replace("ignore_addresses = []", 'ignore_addresses = ["scanner"]'))
     with pytest.raises(re_.ResponseError, match="ignore_addresses contains an invalid address"):
         re_.load_policy(paths["policy_path"])
+
+
+def real_review(monkeypatch, events):
+    """The real reviewer, given login attempts as values (never log text), through the engine's own call."""
+    def review(lines, *, source, on_finding=None, **_):
+        reviewer = auth_review.AuthReviewer(on_finding=on_finding)
+        for kind, *args in events:
+            getattr(reviewer, kind)(*args)
+        return reviewer.report(source), reviewer
+    monkeypatch.setattr(auth_review, "review", review)
+
+
+def bursts(count, start, prefix="10.9"):
+    return [("_failure", start + timedelta(seconds=n), f"{prefix}.{n // 250}.{n % 250 + 1}", "root")
+            for n in range(count) for _ in range(6)]
+
+
+def test_every_finding_is_handed_over_even_past_the_reports_display_cap():
+    seen = []
+    reviewer = auth_review.AuthReviewer(on_finding=seen.append)
+    for kind, *args in bursts(600, NOW):
+        getattr(reviewer, kind)(*args)
+    assert len(seen) == 600 and len(reviewer.findings) == auth_review.MAX_FINDINGS
+
+
+def test_findings_past_the_display_cap_still_reach_the_engine(paths, monkeypatch):
+    real_review(monkeypatch, bursts(600, NOW - timedelta(hours=2)) + bursts(1, NOW + timedelta(seconds=30), "203.0"))
+    policy = re_.load_policy(paths["policy_path"])
+    state = {}
+    signals, _ = re_.collect(policy, state, NOW + timedelta(minutes=5))
+    addresses = {a for s in signals for a in s.entities["address"]}
+    assert len(signals) == 601 and "203.0.0.1" in addresses
+    assert re_.collect(policy, state, NOW + timedelta(minutes=10))[0] == [], "and none of them again"
+
+
+def test_more_than_a_pass_takes_is_taken_over_the_next_passes(paths, monkeypatch):
+    monkeypatch.setattr(re_, "MAX_AUTH_SIGNALS", 100)
+    real_review(monkeypatch, bursts(250, NOW - timedelta(hours=1)))
+    policy, state, taken = re_.load_policy(paths["policy_path"]), {}, []
+    for minutes in (5, 10, 15, 20):
+        signals, _ = re_.collect(policy, state, NOW + timedelta(minutes=minutes))
+        taken.append(len(signals))
+        seen = {s.key for s in signals}
+        assert not seen & set(state.get("_keys", ())), "never twice"
+        state["_keys"] = sorted(set(state.get("_keys", ())) | seen)
+    assert taken == [100, 100, 50, 0] and len(state["_keys"]) == 250
+
+
+def test_two_accounts_logged_in_in_one_second_are_two_findings(paths, monkeypatch):
+    when = NOW + timedelta(minutes=1)
+    failures = [("_failure", when - timedelta(seconds=n), ATTACKER, "root") for n in range(1, 7)]
+    real_review(monkeypatch, failures + [("_accepted", when, ATTACKER, "alice", "password"),
+                                         ("_accepted", when, ATTACKER, "bob", "password")])
+    run(paths, now=when + timedelta(minutes=1))
+    guessed = [d for d in ledger(paths) if d["signal"]["rule_id"] == "AUTH_SUCCESS_AFTER_FAILURES"]
+    assert sorted(d["signal"]["entities"]["account"] for d in guessed) == [["alice"], ["bob"]]
+
+
+def test_every_finding_in_the_cursors_second_is_remembered_however_many():
+    findings = [finding("AUTH_FAILURE_BURST", 0, subject=f"10.8.{n // 250}.{n % 250 + 1}",
+                        source=f"10.8.{n // 250}.{n % 250 + 1}") for n in range(300)]
+    signals, cursor = re_.auth_signals(dict(findings=findings))
+    assert len(signals) == 300 and len(cursor["keys"]) == 300
+    assert re_.auth_signals(dict(findings=findings), cursor)[0] == []

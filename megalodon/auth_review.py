@@ -194,8 +194,11 @@ class _Clock:
 
 class AuthReviewer:
     def __init__(self, settings: AuthReviewSettings | None = None, *,
-                 reference: datetime | None = None, zone=None) -> None:
+                 reference: datetime | None = None, zone=None, on_finding=None) -> None:
         self.settings = settings or AuthReviewSettings()
+        # Called with every finding as it is made, before the report's display cap: a reader that must see all of
+        # them (the response engine) takes them here, not from the bounded report.
+        self.on_finding = on_finding
         reference = reference or datetime.now(timezone.utc)
         self.clock = _Clock(reference.astimezone(zone) if zone else reference.astimezone(),
                             zone or reference.astimezone().tzinfo)
@@ -298,23 +301,25 @@ class AuthReviewer:
             address = _address(found["ip"])
             if address is None:
                 return
-            self.stats["successful_logins"] += 1
-            user = _clean_user(found["user"])
-            settings = self.settings
-            state = self.failures.get(address)
-            if state is None:
-                return
-            state.prune(when, settings)
-            prior = len(state.recent)
-            if prior >= settings.success_min_failures:
-                self._emit(
-                    "AUTH_SUCCESS_AFTER_FAILURES", f"{address}:{user}", when, address,
-                    f"Login as {user} via {found['method']} succeeded from {address} after "
-                    f"{prior}{'+' if prior >= MAX_PER_SOURCE else ''} failed attempts in the "
-                    f"previous {settings.success_lookback_seconds}s.",
-                    {"source": address, "user": user, "method": found["method"],
-                     "prior_failures": prior, "usernames_tried": state.users_shown()},
-                )
+            self._accepted(when, address, _clean_user(found["user"]), found["method"])
+
+    def _accepted(self, when: datetime, address: str, user: str, method: str) -> None:
+        self.stats["successful_logins"] += 1
+        settings = self.settings
+        state = self.failures.get(address)
+        if state is None:
+            return
+        state.prune(when, settings)
+        prior = len(state.recent)
+        if prior >= settings.success_min_failures:
+            self._emit(
+                "AUTH_SUCCESS_AFTER_FAILURES", f"{address}:{user}", when, address,
+                f"Login as {user} via {method} succeeded from {address} after "
+                f"{prior}{'+' if prior >= MAX_PER_SOURCE else ''} failed attempts in the "
+                f"previous {settings.success_lookback_seconds}s.",
+                {"source": address, "user": user, "method": method,
+                 "prior_failures": prior, "usernames_tried": state.users_shown()},
+            )
 
     def _failure(self, when: datetime, address: str, user: str) -> None:
         settings = self.settings
@@ -409,6 +414,8 @@ class AuthReviewer:
             "subject": subject, "message": message, "evidence": evidence,
             "attack": ATTACK[rule],
         }
+        if self.on_finding is not None:
+            self.on_finding(finding)
         self._sequence += 1
         if len(self._retained) < MAX_FINDINGS:
             self._retained.append((self._sequence, finding))
@@ -499,7 +506,7 @@ def read_lines(path: str) -> Iterable[bytes]:
 
 
 def review(lines: Iterable[bytes], *, source: str, settings: AuthReviewSettings | None = None,
-           reference: datetime | None = None, zone=None) -> tuple[dict[str, Any], AuthReviewer]:
-    reviewer = AuthReviewer(settings, reference=reference, zone=zone)
+           reference: datetime | None = None, zone=None, on_finding=None) -> tuple[dict[str, Any], AuthReviewer]:
+    reviewer = AuthReviewer(settings, reference=reference, zone=zone, on_finding=on_finding)
     reviewer.feed(lines)
     return reviewer.report(source), reviewer

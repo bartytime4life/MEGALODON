@@ -112,6 +112,8 @@ DEFAULT_QUARANTINE_ROOTS = ('/tmp/', '/var/tmp/', '/dev/shm/', '/home/', '/root/
 AUTH_LOGS = ('/var/log/auth.log', '/var/log/secure')
 # The first pass over an auth log looks back this far: a week of old log is history, not news.
 AUTH_FIRST_HOURS = 24
+# Auth-log findings taken in one pass, as the network store's rows are; the rest are taken the next.
+MAX_AUTH_SIGNALS = 5_000
 PROCESS_SEVERITY = {'STDIO_SHELL_ON_NETWORK': 'HIGH', 'SHELL_HOLDS_SOCKET': 'HIGH', 'PIPED_TO_SHELL': 'HIGH',
                     'EXECUTABLE_IN_MEMORY': 'HIGH', 'STDIO_ON_NETWORK': 'MEDIUM', 'EXECUTABLE_DELETED': 'MEDIUM',
                     'EXECUTABLE_IN_TEMPORARY': 'MEDIUM'}
@@ -852,6 +854,15 @@ def credential_signals(report):
     return signals
 
 
+def _auth_at(finding):
+    """A finding's time as the engine writes times (UTC, to the second), or '' when it has none."""
+    try:
+        when = datetime.fromisoformat(str(finding.get('observed_at')))
+    except ValueError:
+        return ''
+    return _iso(when if when.tzinfo else when.replace(tzinfo=timezone.utc))
+
+
 def auth_signals(report, cursor=None):
     """Findings from `megalodon auth-review` over the auth log newer than `cursor`, and the new cursor.
 
@@ -864,17 +875,17 @@ def auth_signals(report, cursor=None):
     cursor = cursor if isinstance(cursor, dict) else {}
     after, done = str(cursor.get('at') or ''), set(cursor.get('keys') or ())
     signals, latest, keys = [], after, set(done)
-    for f in report.get('findings', []):
+    timed = sorted(((_auth_at(f), n, f) for n, f in enumerate(report.get('findings', []))), key=lambda t: t[:2])
+    for at, _, f in timed:
         rule = f.get('rule_id')
-        try:
-            when = datetime.fromisoformat(str(f.get('observed_at')))
-        except ValueError:
+        if not at or not isinstance(rule, str):
             continue
-        if not isinstance(rule, str):
-            continue
-        at = _iso(when if when.tzinfo else when.replace(tzinfo=timezone.utc))
+        if len(signals) >= MAX_AUTH_SIGNALS:
+            break                   # the rest next pass: the cursor stops at the last one taken
         evidence = f.get('evidence') if isinstance(f.get('evidence'), dict) else {}
-        key = f"auth:{rule}:{str(f.get('subject', ''))[:128]}:{at}"
+        # Its account and its own time, to the fraction: two accounts in one second are two findings.
+        key = (f"auth:{rule}:{str(f.get('subject', ''))[:128]}:{str(evidence.get('user', ''))[:64]}:"
+               f"{str(f.get('observed_at'))[:40]}")
         if at < after or (at == after and key in done):
             continue
         if at > latest:
@@ -885,7 +896,8 @@ def auth_signals(report, cursor=None):
                               str(f.get('message', ''))[:300],
                               _entities(address=[evidence.get('source')] if rule in NETWORK_RULES else [],
                                         account=[evidence.get('user')] if rule in AUTH_ACCOUNT_RULES else [])))
-    return signals, dict(at=latest, keys=sorted(keys)[-256:])
+    # Every key at the cursor's second: one dropped would be decided again once the daily dedupe forgets it.
+    return signals, dict(at=latest, keys=sorted(keys))
 
 
 def login_signals(report):
@@ -1157,9 +1169,12 @@ def collect(policy, state, now, *, root='/'):
         from .validation import ValidationError
         try:
             path = str(Path(sources['auth_log']).expanduser())
-            report, _ = auth_review.review(auth_review.read_lines(path), source=path)
             cursor = state.get('auth_cursor') or dict(at=_iso(now - timedelta(hours=AUTH_FIRST_HOURS)))
-            found, state['auth_cursor'] = auth_signals(report, cursor)
+            fresh = []
+            # Every finding as it is made, not the report's first 500: those the cursor has not passed yet.
+            auth_review.review(auth_review.read_lines(path), source=path,
+                               on_finding=lambda f: fresh.append(f) if _auth_at(f) >= cursor['at'] else None)
+            found, state['auth_cursor'] = auth_signals(dict(findings=fresh), cursor)
             signals += found
         except (ValidationError, OSError) as exc:
             gaps.append(f'auth: {exc}')
