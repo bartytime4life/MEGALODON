@@ -76,13 +76,17 @@ would otherwise go on meanwhile.
      [exposed secrets](exposed-secrets.md) checks, and
      canaries;
    * the auth log (`auth_log`, which `respond init` sets to `/var/log/auth.log` or
-     `/var/log/secure` when the system keeps one): [login review](host-tripwires.md#login-review-auth-review)'s failed
+     `/var/log/secure` when the system keeps one, or else to `"journal"` when journald runs: the systemd
+     journal's auth and authpriv messages, read with `journalctl`, from a day before the last finding read and
+     never more than two days back): [login review](host-tripwires.md#login-review-auth-review)'s failed
      login bursts, password spraying, logins that succeeded after many failures, sudo
      misuse and new or privileged accounts. Each pass reads the log and decides only
      findings newer than the last it read, every one of them, not only the 500
      `auth-review` shows; up to 5000 a pass, the rest the next. A first pass looks
      back a day. Reading the
-     log usually needs membership in the `adm` group. The usernames an attacker tried
+     log usually needs membership in the `adm` group (the journal: `adm` or `systemd-journal`; a journal that
+     holds no files, or shows only the engine's own user's messages, is a gap). `journalctl` is run only to read; the
+     engine never runs a program to act. The usernames an attacker tried
      never link incidents (every attacker tries `root`); the address does, and so does
      a real local account.
 

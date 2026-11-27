@@ -118,6 +118,7 @@ def test_an_unreadable_auth_log_is_a_gap(paths):
 
 def test_init_writes_the_auth_log_this_system_keeps(tmp_path, monkeypatch):
     monkeypatch.setattr(re_, "AUTH_LOGS", (str(tmp_path / "none"), str(tmp_path / "secure")))
+    monkeypatch.setattr(re_, "JOURNALD_RUNNING", str(tmp_path / "no-journald"))     # a machine without journald
     (tmp_path / "secure").write_text("")
     re_.write_default_policy(tmp_path / "one.toml")
     assert re_.load_policy(tmp_path / "one.toml").sources["auth_log"] == str(tmp_path / "secure")

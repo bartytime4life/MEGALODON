@@ -910,8 +910,13 @@ def build_parser() -> argparse.ArgumentParser:
         "auth-review",
         help="review an auth log for brute force, spraying and suspicious logins (exit 1 on HIGH+)",
     )
-    auth.add_argument("--input", required=True,
-                      help="auth log path (e.g. /var/log/auth.log), or - for journalctl -o short-iso on stdin")
+    auth_input = auth.add_mutually_exclusive_group(required=True)
+    auth_input.add_argument("--input",
+                            help="auth log path (e.g. /var/log/auth.log), or - for journalctl -o short-iso on stdin")
+    auth_input.add_argument("--journal", action="store_true",
+                            help="read the systemd journal's auth and authpriv messages (with journalctl)")
+    auth.add_argument("--hours", type=_bounded_cli_integer("hours", 1, 720), default=24,
+                      help="with --journal: how far back to read (default 24)")
     auth.add_argument("--utc", action="store_true",
                       help="classic syslog stamps are UTC rather than this computer's local time")
     auth.add_argument("--emit-watchlist", type=Path,
@@ -3377,15 +3382,24 @@ def _alerts(args: argparse.Namespace) -> int:
 def _auth_review(args: argparse.Namespace) -> int:
     from datetime import timezone
 
-    from .auth_review import read_lines, review
+    from datetime import datetime, timedelta
+
+    from .auth_review import read_journal, read_lines, review
     from .validation import ValidationError
     from .watchlist import parse_indicator, render, write_private
 
     try:
         from .canary import lures
         accounts = lures(str(args.lures)) if args.lures else {}
-        report, reviewer = review(read_lines(args.input), source=args.input,
+        notes: list[str] = []
+        if args.journal:
+            lines = read_journal(datetime.now(timezone.utc) - timedelta(hours=args.hours), notes)
+        else:
+            lines = read_lines(args.input)
+        report, reviewer = review(lines, source="journal" if args.journal else args.input,
                                   zone=timezone.utc if args.utc else None, lure_users=accounts)
+        if args.journal:
+            report["gaps"] = notes
         if args.emit_watchlist is not None:
             entries = [(parse_indicator(address), label)
                        for address, label in reviewer.attacker_sources()]

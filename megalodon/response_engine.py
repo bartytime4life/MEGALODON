@@ -112,6 +112,13 @@ DEFAULT_QUARANTINE_ROOTS = ('/tmp/', '/var/tmp/', '/dev/shm/', '/home/', '/root/
 AUTH_LOGS = ('/var/log/auth.log', '/var/log/secure')
 # The first pass over an auth log looks back this far: a week of old log is history, not news.
 AUTH_FIRST_HOURS = 24
+# `auth_log = "journal"`: the systemd journal's auth and authpriv messages, which /var/log/auth.log holds where kept.
+# auth-review reads it with journalctl, which only reads: the engine itself still runs nothing.
+JOURNAL = 'journal'
+JOURNALD_RUNNING = '/run/systemd/journal'
+# The journal is read from this long before the cursor, so auth-review sees each window and cooldown with the
+# attempts before it, as it does in a whole log file.
+JOURNAL_CONTEXT_HOURS = 24
 # Auth-log findings taken in one pass, as the network store's rows are; the rest are taken the next.
 MAX_AUTH_SIGNALS = 5_000
 # A lure's account tried within this long of the lure being read: an agent, which acts on text in seconds.
@@ -175,7 +182,8 @@ secrets_manifest = "~/.config/megalodon/secrets.json"
 canary_manifest = ""
 # Failed logins, password spraying and sudo misuse from the system's auth log (`megalodon auth-review`): they count
 # toward automated campaigns too. `respond init` writes the log this system keeps, if any; "" turns it off.
-# Reading it usually needs membership in the adm group.
+# "journal" reads the systemd journal instead, for systems that keep logins only there. Reading either usually
+# needs membership in the adm group (the journal: adm or systemd-journal).
 auth_log = ""
 
 [response.campaign]
@@ -673,8 +681,11 @@ def write_default_policy(path=DEFAULT_POLICY, *, replace=False):
                             f'audit_db = {_toml_string(str(Path("data/megalodon.db").resolve()))}', 1)
     except UnicodeEncodeError:
         pass        # a folder name that is not UTF-8 cannot be written in TOML: the relative default stays
-    # The auth log this system keeps: Debian and Ubuntu's, or the RHEL family's.
+    # The auth log this system keeps: Debian and Ubuntu's, or the RHEL family's; or else the journal, if journald runs.
     log = next((log for log in AUTH_LOGS if os.path.isfile(log)), '')
+    if not log and os.path.isdir(JOURNALD_RUNNING):
+        from .auth_review import JOURNALCTL
+        log = JOURNAL if any(os.path.isfile(program) for program in JOURNALCTL) else ''
     text = text.replace('auth_log = ""', f'auth_log = {_toml_string(log)}', 1)
     _atomic_write(path, text.encode('utf-8'))
     return dict(action='init', policy=str(path), playbooks=len(load_policy(path).playbooks),
@@ -1214,11 +1225,22 @@ def collect(policy, state, now, *, root='/'):
         from . import auth_review
         from .validation import ValidationError
         try:
-            path = str(Path(sources['auth_log']).expanduser())
             cursor = state.get('auth_cursor') or dict(at=_iso(now - timedelta(hours=AUTH_FIRST_HOURS)))
+            if sources['auth_log'] == JOURNAL:
+                path = JOURNAL
+                # From a day before the cursor, but never a cursor older than a first pass looks back: a quiet
+                # server's cursor stands still, and its journal would be read further back every pass.
+                at = datetime.fromisoformat(cursor['at'].replace('Z', '+00:00'))
+                since = max(at, now - timedelta(hours=AUTH_FIRST_HOURS)) - timedelta(hours=JOURNAL_CONTEXT_HOURS)
+                notes = []
+                lines = auth_review.read_journal(since, notes)
+                gaps += [f'auth: {note}' for note in notes]
+            else:
+                path = str(Path(sources['auth_log']).expanduser())
+                lines = auth_review.read_lines(path)
             fresh = []
             # Every finding as it is made, not the report's first 500: those the cursor has not passed yet.
-            auth_review.review(auth_review.read_lines(path), source=path, lure_users=lures,
+            auth_review.review(lines, source=path, lure_users=lures,
                                on_finding=lambda f: fresh.append(f) if _auth_at(f) >= cursor['at'] else None)
             found, state['auth_cursor'] = auth_signals(dict(findings=fresh), cursor, lures)
             signals += found

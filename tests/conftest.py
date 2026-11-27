@@ -75,3 +75,14 @@ def _results_kept_aside(tmp_path_factory):
     results.DEFAULT_FOLDER = str(tmp_path_factory.mktemp("results"))
     yield
     results.DEFAULT_FOLDER = before
+
+
+@pytest.fixture(autouse=True)
+def _no_journald():
+    """`respond init` reads the systemd journal where journald runs and no auth log file is kept. In tests it never
+    does, unless a test says journald runs, so no test reads this machine's journal."""
+    from megalodon import response_engine
+    before = response_engine.JOURNALD_RUNNING
+    response_engine.JOURNALD_RUNNING = "/nonexistent/megalodon-test/journald"
+    yield
+    response_engine.JOURNALD_RUNNING = before
