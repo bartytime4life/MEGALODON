@@ -132,6 +132,12 @@ that temporary log is projected to counts and removed. Sampling gaps and short
 snapshots mean incomplete flow/application coverage. Its counts never become
 packet totals or admitted detector findings. A failed sample stops retries until
 the operator retries background tools. Monitoring stop cancels the sampler.
+Samples are limited to 2 MiB and 4,000 lines before JSON parsing. Invalid JSON,
+excessive nesting, non-string protocol labels and timestamps outside the finite
+nonnegative UTC range fail the entire summary before it is forwarded or retained.
+Unknown string protocol labels and missing optional packet counters remain valid.
+A failed sample clears its old counts and timestamp and reports an error, so
+**Start background tools** can explicitly retry it after the cause is resolved.
 
 Suricata summaries read at most the last 256 KiB / 1,000 complete records and
 include timestamps no older than two minutes. Partial rows, stale/future records
