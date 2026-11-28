@@ -258,6 +258,16 @@ def _loopback():
     return f"127.{secrets.randbelow(254) + 1}.{secrets.randbelow(256)}.{secrets.randbelow(254) + 1}"
 
 
+def _distinct(make, count):
+    """`count` different values of `make()`: whichever value repeats one already drawn is drawn again."""
+    values = []
+    while len(values) < count:
+        value = make()
+        if value not in values:
+            values.append(value)
+    return values
+
+
 def _get(port, path, source, forwarded=None):
     """GET `path` from 127.0.0.1:`port`, connecting from the loopback address `source`; the status."""
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10, source_address=(source, 0))
@@ -284,12 +294,8 @@ def proxied():
         site.chmod(0o755)
         manifest = base / "manifests" / "site.json"
         [page] = canary.plant(str(site), str(manifest), count=1, lure=True, web_readable=True)["lure_pages"]
-        proxy, client, direct = _loopback(), _loopback(), _loopback()
-        while len({proxy, client, direct}) < 3:
-            direct = _loopback()
-        ports = dict(plain=_port(), trusting=_port(), to_plain=_port(), to_trusting=_port())
-        while len(set(ports.values())) < 4:
-            ports["to_trusting"] = _port()
+        proxy, client, direct = _distinct(_loopback, 3)
+        ports = dict(zip(("plain", "trusting", "to_plain", "to_trusting"), _distinct(_port, 4)))
         config = base / "nginx.conf"
         config.write_text(PROXIED.format(base=base, group=_group(), proxy=proxy, **ports))
         server = subprocess.Popen([NGINX, "-c", str(config), "-p", str(base), "-e", str(base / "error.log")],
