@@ -1451,20 +1451,30 @@ def _account_name():
 
 # ------------------------------------------------------------------ correlation and decisions
 
-def correlate(state, signals, now, window_minutes, merges=None):
+def correlate(state, signals, now, window_minutes, merges=None, *, exclude=frozenset()):
     """Attach each signal to an open incident sharing an entity, or open a new one. Returns {key: incident}.
 
     When one signal links two incidents they are merged, and (kept ID, merged ID) is added to `merges`.
+    Addresses in `exclude` remain evidence, but never join incidents: unrelated flows can share this machine,
+    its gateway or its DNS server without corroborating each other.
     """
     incidents = state.setdefault('incidents', [])
+    excluded_keys = {f'address:{address}' for address in exclude}
+    scope = hashlib.sha256('\n'.join(sorted(excluded_keys)).encode()).hexdigest()
     cutoff = now - timedelta(minutes=window_minutes)
-    open_ = [i for i in incidents if datetime.fromisoformat(i['last_seen'].replace('Z', '+00:00')) >= cutoff]
+    # Older incidents may already contain false joins through these addresses.
+    # The capped entity list may have lost the address that joined them, so its
+    # absence is not proof of safety. Preserve history, but with exclusions in
+    # force, inherit sources only from incidents correlated under this scope.
+    open_ = [i for i in incidents if datetime.fromisoformat(i['last_seen'].replace('Z', '+00:00')) >= cutoff
+             and (not excluded_keys or i.get('correlation_exclusions_sha256') == scope)]
     assigned = {}
     for signal in signals:
         # An address links incidents whichever role it had in each finding.
         keys = {f"{'address' if kind == 'peer' else kind}:{value}"
                 for kind, values in signal.entities.items() for value in values}
-        matches = [i for i in open_ if keys & set(i['entities'])]
+        join_keys = keys - excluded_keys
+        matches = [i for i in open_ if join_keys & set(i['entities'])]
         if matches:
             incident = matches[0]
             for other in matches[1:]:  # One signal links two incidents: merge them.
@@ -1487,6 +1497,7 @@ def correlate(state, signals, now, window_minutes, merges=None):
         incident['sources'] = sorted(set(incident['sources']) | {signal.source})
         incident['signals'] = list(dict.fromkeys(incident['signals'] + [signal.key]))[-64:]
         incident['last_seen'] = _iso(now)
+        incident['correlation_exclusions_sha256'] = scope
         assigned[signal.key] = incident
     del incidents[:-MAX_INCIDENTS]
     return assigned
@@ -1529,7 +1540,7 @@ def decide(policy, state, signals, now, *, guards=None, observations=None):
                                  _campaign_signal, exclude=guards.protected)
     # Every current observation keeps its incident alive; only new ones are decided.
     merges = []
-    assigned = correlate(state, current, now, policy.correlation_minutes, merges)
+    assigned = correlate(state, current, now, policy.correlation_minutes, merges, exclude=guards.protected)
     fresh = [s for s in current if s.key not in seen]
     if observations is not None:
         observations += [dict(schema=OBSERVATION_SCHEMA, kind='merge', at=_iso(now), incident=kept, merged=merged)
