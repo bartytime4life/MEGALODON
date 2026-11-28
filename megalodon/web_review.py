@@ -144,7 +144,8 @@ class WebReviewer:
             "limitations": [
                 "Only requests for an agent lure's page are reported; this is not a general web attack detector.",
                 "Only nginx's and Apache's combined and common formats are read; other lines are skipped.",
-                "The address is the one the server logged: behind a proxy, it is the proxy's.",
+                "The address is the one the server logged: behind a proxy, it is the proxy's, unless the server "
+                "takes the client's from that proxy alone (nginx real_ip, Apache mod_remoteip).",
             ],
         }
 

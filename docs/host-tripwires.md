@@ -83,10 +83,11 @@ only it, readable by others (mode 644); the folder must let the server in too. I
 it is never reported as changed. A local user reading it then trips `CANARY_READ`, as for any bait.
 
 To check web lures against a real nginx, run `MEGALODON_TEST_LIVE_NGINX=1 python -m pytest tests/test_live_nginx.py`
-as root on a machine with nginx. It runs nginx from a temporary folder on a free loopback port, its workers as
-`nobody`, and checks that only a `--web-readable` note is served, that nginx's own access log is read, and that
-a request for the lure's page in it is `LURE_FOLLOWED`, decided by the response engine. nginx is stopped and the
-folder removed after.
+as root on a machine with nginx. It runs nginx from a temporary folder on free loopback ports, its workers as
+`nobody`, and checks that only a `--web-readable` note is served, that nginx's own access log is read, and that a
+request for the lure's page in it is `LURE_FOLLOWED`, decided by the response engine. It also puts nginx behind nginx
+as a reverse proxy, each client and the proxy on loopback addresses of their own, and checks which address each server
+logs, as described below. nginx is stopped and the folders removed after.
 
 What it tells apart:
 
@@ -122,11 +123,21 @@ in the journal; sshd is stopped and the folders removed after.
 would follow the note too. Plant lures in decoy folders that only an intruder has reason to read: a fake backup
 share, a web root's old admin folder, a home directory no one uses.
 
-Lures planted before pages were named have none; plant a lure again for the web log to watch one. The access log
-is read in nginx's and Apache's default formats (`combined` and `common`), and only for a lure's page: this is not a
-general web attack detector. Behind a reverse proxy, the address the server logged is the proxy's. One on this
-machine logs one of its own addresses, which is never blocked; one on another machine would be, so with such a
-proxy leave `lure-followed` out of [enforcement](enforcement.md)'s policy and act on the decision yourself.
+Lures planted before pages were named have none; plant a lure again for the web log to watch one. The access log is
+read in nginx's and Apache's default formats (`combined` and `common`), and only for a lure's page: this is not a
+general web attack detector.
+
+**Behind a reverse proxy**, the address the server logs is the proxy's, unless the server is told to take the client's
+from the proxy. A proxy on this machine logs one of this machine's addresses, which is never blocked. For one on
+another machine, a load balancer or a CDN, have the server trust that proxy alone, and the log, the decision and any
+block name the client. In nginx, in the server behind the proxy: `set_real_ip_from` the proxy's address or range, and
+`real_ip_header X-Forwarded-For;`, with the proxy adding the client's (`proxy_set_header X-Forwarded-For
+$proxy_add_x_forwarded_for;`). Trust nothing but the proxy's addresses: a client reaching the server another way could
+then send any address it liked, and have that one blocked. The live nginx check above shows each of these against a
+real nginx: the proxy's address logged without `real_ip`, the client's with it, and a forged `X-Forwarded-For`
+ignored, whether it comes through the proxy or not. Apache's `mod_remoteip` (`RemoteIPHeader`,
+`RemoteIPInternalProxy`) does the same, but has not been tried here. Without either, leave `lure-followed` out of
+[enforcement](enforcement.md)'s policy and act on the decision yourself.
 
 ### How read detection works and where it is blind
 
