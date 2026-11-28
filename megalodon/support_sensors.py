@@ -14,6 +14,7 @@ from uuid import uuid4
 from threading import Event, Lock, Thread
 
 from .companion_automation import _run_fixed
+from .flow_ingestion import MAX_EPOCH
 from .managed_capture import now
 
 MAX_LOG = 2 * 1024 * 1024
@@ -48,8 +49,18 @@ def metric(label, value, unit=''):
 def summarize_zeek(raw):
     if len(raw) > MAX_LOG:
         raise ValueError('Zeek log bound exceeded')
-    rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
-    if len(rows) > 4000 or any(type(r) is not dict or type(r.get('ts')) not in (float,int) for r in rows):
+    lines = raw.splitlines()
+    if len(lines) > 4000:
+        raise ValueError('Zeek sample exceeds row bound')
+    try:
+        rows = [json.loads(line) for line in lines if line.strip()]
+    except (ValueError,RecursionError) as exc:
+        # Corrupt decoder output is a failed sample, not a dead worker left
+        # showing "collecting". Do not forward any part of that sample.
+        raise ValueError('Invalid Zeek summary input') from exc
+    if any(type(r) is not dict or type(r.get('ts')) not in (float,int)
+           or not 0 <= r['ts'] <= MAX_EPOCH
+           or type(r.get('proto','other')) is not str for r in rows):
         raise ValueError('Invalid Zeek summary input')
     protocols = Counter(r.get('proto') for r in rows)
     two_way = sum(type(r.get('orig_pkts')) is int and type(r.get('resp_pkts')) is int
@@ -179,7 +190,7 @@ class SupportSensors:
                             self._decoder = None
                 self._publish('zeek',state='connected',message='Latest bounded Zeek sample; 256-byte snapshots and sampling gaps limit protocol coverage. No raw capture saved.',updated_at=now(),metrics=result)
             except (OSError,ValueError,sqlite3.Error,subprocess.SubprocessError):
-                self._publish('zeek',state='error',message='Zeek sampling stopped: check capture access, executable and private workspace. Retry background tools.',metrics=[])
+                self._publish('zeek',state='error',message='Zeek sampling stopped: check sample output, capture access, executable and private workspace. Retry background tools.',updated_at=None,metrics=[])
                 return
             if self._stop.wait(50):
                 break
