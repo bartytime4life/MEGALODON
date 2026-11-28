@@ -128,6 +128,79 @@ def test_corroboration_turns_a_network_signal_into_an_action(paths):
     assert ("block_address", C2, "would_apply") in actions(third)
 
 
+@pytest.mark.parametrize("shared", ["192.168.1.20", "2001:db8::20", "8.8.8.8"])
+def test_protected_endpoint_does_not_corroborate_an_unrelated_remote(paths, shared):
+    # This PC, its gateway and its DNS server can be shared by unrelated flows.
+    # Keep the endpoint as evidence, but never let it join the remotes' incidents.
+    other = "203.0.114.78"
+    paths["protected"] = {shared}
+    re_.run(signals=[network_signal("BEACONING", C2, row=1, src=shared),
+                     network_signal("BEACONING", other, row=2, src=shared)], now=NOW, **paths)
+    # The next pass reads the shared endpoint back from retained incident state.
+    re_.run(signals=[*process_signal(remotes=[f"{C2}:443"]),
+                     network_signal("BEACONING", C2, row=3, src=shared),
+                     network_signal("BEACONING", other, row=4, src=shared)],
+            now=NOW + timedelta(minutes=1), **paths)
+    decisions = {d["signal"]["key"]: d for d in ledger(paths)}
+    related, unrelated = decisions["network:3"], decisions["network:4"]
+    assert related["incident"]["corroborated"] is True
+    assert ("block_address", C2, "would_apply") in actions(related)
+    assert unrelated["incident"]["corroborated"] is False
+    assert ("block_address", other, "refused") in actions(unrelated)
+    assert "second, independent source" in unrelated["actions"][1]["guard"]
+    assert related["incident"]["id"] != unrelated["incident"]["id"]
+    # Neither the incident's retained evidence nor the observation is redacted.
+    state = json.loads(Path(paths["state_path"]).read_text())
+    assert len(state["incidents"]) == 2
+    assert all(f"address:{shared}" in i["entities"] for i in state["incidents"])
+    observations = [json.loads(line) for line in re_.observations_path(paths["ledger"]).read_text().splitlines()]
+    assert not any(o["kind"] == "merge" for o in observations)
+    assert all(shared in o["signal"]["entities"]["peer"] for o in observations
+               if o["kind"] == "finding" and o["signal"]["source"] == "network")
+
+
+@pytest.mark.parametrize("marked", [False, True], ids=["legacy-state", "changed-protection-scope"])
+@pytest.mark.parametrize("truncated", [False, True], ids=["endpoint-retained", "endpoint-truncated"])
+def test_retained_shared_endpoint_incident_cannot_lend_old_corroboration(paths, marked, truncated):
+    shared, other = "fe80::20", "203.0.114.78"
+    old_signals = [network_signal("BEACONING", C2, row=1, src=shared),
+                   network_signal("BEACONING", other, row=2, src=shared),
+                   *process_signal(remotes=[f"{C2}:443"])]
+    state = {}
+    # Previously discovered without the shared infrastructure in the exclusion
+    # set, or retained from an engine that did not record exclusion provenance.
+    re_.correlate(state, old_signals, NOW, 30)
+    old_incident, = state["incidents"]
+    if truncated:
+        # The bounded state can lose the very endpoint that caused an older
+        # false join. Its absence cannot prove those source labels are safe.
+        crowded = re_.Signal("old-many", "network", "BRUTE_FORCE", "HIGH", NOW.isoformat(), "",
+                             re_._entities(address=[C2], account=[f"old-{i:03d}" for i in range(254)]))
+        re_.correlate(state, [crowded], NOW, 30)
+        assert len(old_incident["entities"]) == 256
+        assert f"address:{shared}" not in old_incident["entities"]
+    if not marked:
+        old_incident.pop("correlation_exclusions_sha256", None)
+    expected_old = json.loads(json.dumps(old_incident))
+    Path(paths["state_path"]).write_text(json.dumps(state))
+    Path(paths["state_path"]).chmod(0o600)
+    paths["protected"] = {shared}
+    re_.run(signals=[network_signal("BEACONING", C2, row=3, src=shared),
+                     network_signal("BEACONING", other, row=4, src=shared),
+                     *process_signal(remotes=[f"{C2}:443"])],
+            now=NOW + timedelta(minutes=1), **paths)
+    decisions = {d["signal"]["key"]: d for d in ledger(paths)}
+    assert decisions["network:3"]["incident"]["corroborated"] is True
+    assert ("block_address", C2, "would_apply") in actions(decisions["network:3"])
+    unrelated = decisions["network:4"]
+    assert unrelated["incident"]["corroborated"] is False
+    assert ("block_address", other, "refused") in actions(unrelated)
+    retained = json.loads(Path(paths["state_path"]).read_text())["incidents"]
+    assert len(retained) == 3
+    assert next(i for i in retained if i["id"] == expected_old["id"]) == expected_old
+    assert all(d["incident"]["id"] != expected_old["id"] for d in decisions.values())
+
+
 def test_each_finding_is_decided_once_and_rate_limits_hold(paths):
     re_.run(signals=process_signal(), now=NOW, **paths)
     assert re_.run(signals=process_signal(), now=NOW + timedelta(minutes=10), **paths)["decisions"] == 0
@@ -305,6 +378,7 @@ def test_gaps_reported_by_the_source_checks_are_kept(paths, monkeypatch):
 
 
 def test_a_finding_that_links_two_incidents_corroborates_both(paths):
+    paths["protected"] = {"192.168.1.21", "192.168.1.22"}
     other = "203.0.114.78"
     signals = [network_signal("BEACONING", C2, row=1, src="192.168.1.21"),
                network_signal("BEACONING", other, row=2, src="192.168.1.22"),

@@ -105,6 +105,19 @@ would otherwise go on meanwhile.
    minutes is also raised as an [automated campaign](automated-campaigns.md)
    (`AUTOMATED_CAMPAIGN`), a finding of its own that joins the incident; it is
    made from the others, so it never corroborates them.
+   This machine's known own addresses, gateways and DNS servers remain in
+   the recorded evidence but cannot join incidents. Two destinations using
+   the same PC or DNS server therefore need their own connecting evidence;
+   a host finding naming only destination A does not corroborate destination B.
+   Previously recorded decisions and incident membership are preserved.
+   Whenever known protected addresses are excluded, a retained incident is
+   reused only if it records that the same exclusions were in force. Its
+   bounded entity list may no longer contain an address that caused an older
+   join, so absence alone cannot establish compatibility. Otherwise, new
+   observations start separate incidents rather than inheriting possibly
+   unrelated old source labels. This does not reconstruct or split history.
+   `never_touch_addresses` restricts actions, including address ranges; it
+   does not identify shared infrastructure or change correlation.
 3. **Match.** The first playbook whose `rules` include the finding's rule,
    at or above `min_severity`, applies. A playbook can also require
    particular `sources` or `categories`, or `require_corroboration`.
