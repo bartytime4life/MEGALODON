@@ -130,7 +130,8 @@ def tool():
     """A program run from a temporary folder, the way a dropped tool is."""
     folder = Path(f"/tmp/e2e-tool-{os.getpid()}")
     folder.mkdir(exist_ok=True)
-    program = folder / "updater"
+    # Multicall sleep implementations select their applet by the copied name.
+    program = folder / "sleep"
     shutil.copy("/bin/sleep", program)
     process = subprocess.Popen([str(program), "120"])
     time.sleep(0.1)
