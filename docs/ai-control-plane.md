@@ -176,16 +176,50 @@ broker output from INFERRED model text and displays the operation state and
 receipt ID. No browser request can apply firewall changes or choose an
 arbitrary executable, file or URL.
 
-`POST /api/ai/cancel` stops this HUD's own operator check or question: it sets
-the request's cancellation flag and interrupts the in-flight model call only
-when the HUD operator owns it, so background pattern explanations keep their
-own slot rules. It requires the same per-launch token, exact `Origin`, JSON
-content type and an exact `{}` body, and it is served outside the maintenance
-lock that a running `/api/ai/ask` holds. A cancel between the two calls of one
-question is not lost: the next call is refused with `REQUEST_CANCELLED`. The
-browser waits for the ten minute question budget (plus one configured request
-timeout for the model-health question's own live check) and a short margin,
-and asks the server to cancel if it stops waiting.
+Each new HUD Verify or Ask operation creates a fresh cryptographic 32-character
+lowercase hexadecimal request ID and sends it in `X-Megalodon-AI-Request`.
+`POST /api/ai/cancel` uses an exact `{"request_id":"<that ID>"}` object to flag
+only that operation. The ID is a correlation key, not authorization: the
+per-launch token, exact same-origin envelope and existing model/UNBOUND checks
+remain required. The cancellation route stays outside the maintenance lock
+that a running `/api/ai/ask` holds. A cancellation between model calls is retained
+in that operation's event so its next model call is refused.
+
+The browser captures the original controller, request ID and token. Cancel
+stops waiting for that browser response immediately; it waits at most three
+seconds for a bounded, matching cancellation acknowledgement before admitting
+another operation. The same scoped cancellation is requested when a browser
+deadline expires. A delayed acknowledgement or POST can never target a later
+operation's fresh ID. Accepted cancellation means a matching active operation
+was flagged; it does not prove model termination. A false reply means no active
+matching operation was observed, and a missing, mismatched, invalid or timed-out
+reply leaves cancellation unconfirmed. No partial model answer is shown after
+the browser stops waiting.
+
+One process-local registry holds at most 128 request IDs. Pre-cancelled IDs
+remain flagged for 60 seconds to cover ordinary reordered HTTP arrival;
+completed IDs cannot be reused during that grace period. Active IDs cannot be
+reused or evicted. If the registry is full, existing entries stay in place and
+new named operations are refused until space is available. Pre-cancellation
+and replay protection are bounded by this grace period, not a guarantee about
+arbitrarily delayed HTTP handlers. The browser always generates a fresh ID.
+There is no persistent request history or additional database.
+
+For compatibility, clients that omit the request header still work, and an
+exact legacy `{}` cancellation body still flags all active HUD operator
+operations. New browser code never sends that broad form or falls back to it.
+Background model explanations retain their separate cancellation rules.
+Cancellation bodies must be fully received, contain no duplicate keys or
+additional fields, and fit the fixed 96-byte request limit.
+
+The browser waits for the ten minute question budget (plus one configured
+request timeout for the model-health question's own live check) and a short
+margin. Inert DOM, HTTP and provider tests in
+[`tests/test_ai_request_cancellation.py`](../tests/test_ai_request_cancellation.py)
+cover original-controller binding, delayed replies, scoped provider flags,
+pre-cancellation, completed-ID replay, capacity/expiry, malformed framing,
+authorization and the unchanged UNBOUND fence. These tests do not run Ollama
+or establish installed-runtime acceptance.
 
 ## Operator setup and checks
 
