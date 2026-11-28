@@ -211,9 +211,19 @@ password or session cookie; missing/invalid authentication returns 401.
 `POST /api/ai/ask` has a separate fixed-question body and per-launch token,
 Origin, Host, content-type, and length checks. It writes to the separate
 private AI receipt ledger; see the [AI control plane](ai-control-plane.md).
-`POST /api/ai/cancel` takes the same token and envelope with an exact `{}`
-body, writes nothing, and only interrupts this HUD operator's own model
-request; it stays reachable while a question holds the maintenance lock.
+New HUD Verify/Ask requests include one fresh 32-character lowercase hexadecimal
+`X-Megalodon-AI-Request` identity. `POST /api/ai/cancel` takes the same token and
+envelope with exactly `{"request_id":"<that ID>"}` and a fully received body of
+at most 96 bytes. Its reply echoes that ID and reports whether an active matching
+operation was flagged; it does not establish provider termination. It writes no
+durable history and stays reachable while a question holds the maintenance lock.
+New browser code stops its original response wait immediately and bounds the
+matching acknowledgement wait to three seconds. A later operation always has a
+fresh identity, so a delayed cancel cannot target it. Missing headers and an exact
+legacy `{}` broad cancellation body remain compatible for older clients; the new
+HUD never falls back to broad cancellation. The bounded process-local identity
+registry, 60-second pre-cancel/replay grace and refusal behavior are documented in
+the [AI control plane](ai-control-plane.md).
 
 `POST /api/install` requires a non-root Linux HUD with management explicitly
 enabled by its settings or `--enable-tool-management`, exactly one matching per-launch

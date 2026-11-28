@@ -185,7 +185,7 @@ const aiCancel = document.getElementById('ai-cancel');
 const aiQuestion = document.getElementById('ai-question');
 const aiQuestionChips = document.getElementById('ai-question-chips');
 let aiBusy = false;
-let aiActiveController = null;
+let aiActiveOperation = null;
 let aiUserCanceled = false;
 let aiVerified = false;
 let aiTimeoutSeconds = null;
@@ -361,51 +361,98 @@ aiPanel.addEventListener('toggle', event => {
   document.getElementById('ai-control-action').textContent = event.currentTarget.open ? 'Close AI controls' : 'Open AI controls';
   if (event.currentTarget.open) aiLoadToken();
 });
-async function aiRequestServerCancel() {
-  // Frees the one inference slot on the server; aborting the browser fetch alone would not.
+async function aiReadJSON(response, maximum = 16384) {
+  const declared = response.headers.get('Content-Length');
+  if (declared !== null && (!/^[0-9]{1,5}$/.test(declared) || Number(declared) > maximum)) {
+    await response.body?.cancel(); throw new Error('AI response exceeded the display limit');
+  }
+  if (!response.body || !response.body.getReader) throw new Error('AI response stream unavailable');
+  const reader = response.body.getReader(), chunks = []; let size = 0;
   try {
-    await fetch('/api/ai/cancel', {method: 'POST', body: '{}', cache: 'no-store', credentials: 'same-origin',
-      headers: {'X-Megalodon-AI-Token': aiTokenInput.value, 'Content-Type': 'application/json'}});
-  } catch (_) { /* the server deadline still bounds the request */ }
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > maximum) { await reader.cancel(); throw new Error('AI response exceeded the display limit'); }
+      chunks.push(part.value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(size); let offset = 0;
+  chunks.forEach(chunk => { bytes.set(chunk, offset); offset += chunk.byteLength; });
+  const value = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('AI response invalid');
+  return value;
+}
+const AI_CANCEL_WAIT_MS = 3000;
+async function aiRequestServerCancel(operation) {
+  // Only this immutable request identity is sent; never fall back to broad {} cancellation.
+  const controller = new AbortController(); let timer;
+  const bounded = new Promise(resolve => {
+    timer = setTimeout(() => { controller.abort(); resolve('unconfirmed'); }, AI_CANCEL_WAIT_MS);
+  });
+  const attempt = (async () => {
+    try {
+      const response = await fetch('/api/ai/cancel', {method: 'POST', body: JSON.stringify({request_id: operation.id}),
+        cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error', signal: controller.signal,
+        headers: {'X-Megalodon-AI-Token': operation.token, 'Content-Type': 'application/json'}});
+      if (!response.ok) { await response.body?.cancel(); return 'unconfirmed'; }
+      const value = await aiReadJSON(response, 512);
+      if (value.schema !== 'megalodon-ai-cancel-v1' || value.request_id !== operation.id || typeof value.cancelled !== 'boolean') return 'unconfirmed';
+      return value.cancelled ? 'accepted' : 'inactive';
+    } catch (_) { return 'unconfirmed'; }
+  })();
+  try { return await Promise.race([attempt, bounded]); }
+  finally { clearTimeout(timer); }
+}
+function aiStopOperation(operation, reason) {
+  if (!operation || operation.cancellation) return;
+  operation.reason = reason;
+  operation.cancellation = aiRequestServerCancel(operation);
+  operation.controller.abort();
+}
+function aiStoppedStatus(error, label) {
+  const prefix = error.aiStopReason === 'operator' ? `Stopped waiting for ${label}. ` : `The browser deadline for ${label} was reached. `;
+  const detail = error.aiCancellation === 'accepted'
+    ? 'The server accepted cancellation for this request; model termination is not verified.'
+    : error.aiCancellation === 'inactive'
+      ? 'The server found no active matching request; model termination is not verified.'
+      : 'Server cancellation was not confirmed; its own deadline still applies.';
+  aiSetStatus(prefix + detail + ' No partial model output is shown.', 'warn',
+    error.aiCancellation === 'accepted' ? 'Cancel requested' : 'Cancellation unconfirmed');
 }
 aiCancel.addEventListener('click', () => {
+  if (!aiBusy || !aiActiveOperation) return;
   aiUserCanceled = true; aiCancel.disabled = true;
-  aiSetStatus('Cancelling the local model request…', 'busy');
-  aiRequestServerCancel().finally(() => { if (aiActiveController) aiActiveController.abort(); });
+  aiSetStatus('Stopped waiting for model output. Requesting cancellation of this operation…', 'busy', 'Cancelling');
+  aiStopOperation(aiActiveOperation, 'operator');
 });
 async function aiFetch(path, header, body = null, deadlineMs = 50000) {
   const controller = new AbortController();
-  aiActiveController = controller;
-  const timer = setTimeout(() => { aiRequestServerCancel(); controller.abort(); }, deadlineMs);
-  const options = {headers: {[header]: '1', 'X-Megalodon-AI-Token': aiTokenInput.value},
-                   cache: 'no-store', credentials: 'same-origin', signal: controller.signal};
+  const operation = {controller, token: aiTokenInput.value, id: [...crypto.getRandomValues(new Uint8Array(16))]
+    .map(value => value.toString(16).padStart(2, '0')).join(''), cancellation: null, reason: null};
+  aiActiveOperation = operation;
+  const timer = setTimeout(() => aiStopOperation(operation, 'timeout'), deadlineMs);
+  const options = {headers: {[header]: '1', 'X-Megalodon-AI-Token': operation.token, 'X-Megalodon-AI-Request': operation.id},
+                   cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', redirect: 'error', signal: controller.signal};
   try {
-  if (body !== null) {
-    options.method = 'POST'; options.body = JSON.stringify(body);
-    options.headers = {'X-Megalodon-AI-Token': aiTokenInput.value,
-                       'Content-Type': 'application/json'};
-  }
-  const response = await fetch(path, options);
-  const declared = response.headers.get('Content-Length');
-  if (declared !== null && (!/^[0-9]{1,5}$/.test(declared) || Number(declared) > 16384)) throw new Error('AI response exceeded the display limit');
-  if (!response.body || !response.body.getReader) throw new Error('AI response stream unavailable');
-  const reader = response.body.getReader();
-  const chunks = []; let size = 0;
-  while (true) {
-    const part = await reader.read();
-    if (part.done) break;
-    size += part.value.byteLength;
-    if (size > 16384) { await reader.cancel(); throw new Error('AI response exceeded the display limit'); }
-    chunks.push(part.value);
-  }
-  const bytes = new Uint8Array(size); let offset = 0;
-  chunks.forEach(chunk => { bytes.set(chunk, offset); offset += chunk.byteLength; });
-  const responseText = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
-  const value = JSON.parse(responseText);
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('AI response invalid');
-  return {response, value};
-  } finally { clearTimeout(timer); if (aiActiveController === controller) aiActiveController = null; }
+    if (body !== null) {
+      options.method = 'POST'; options.body = JSON.stringify(body);
+      options.headers['Content-Type'] = 'application/json';
+    }
+    const response = await fetch(path, options);
+    const value = await aiReadJSON(response);
+    if (controller.signal.aborted) throw new Error('Obsolete AI response');
+    return {response, value};
+  } catch (error) {
+    if (operation.cancellation) {
+      const stopped = new Error('Browser stopped waiting for this AI operation'); stopped.name = 'AbortError';
+      stopped.aiCancellation = await operation.cancellation; stopped.aiStopReason = operation.reason;
+      throw stopped;
+    }
+    throw error;
+  } finally { clearTimeout(timer); if (aiActiveOperation === operation) aiActiveOperation = null; }
 }
+
 function aiBeginBusy(button, label) {
   aiBusy = true; aiUserCanceled = false;
   aiCheck.disabled = true; aiAsk.disabled = true; aiQuestion.disabled = true; aiSyncQuestionChips();
@@ -423,6 +470,7 @@ function aiEndBusy() {
 aiCheck.addEventListener('click', async () => {
   if (aiBusy) return;
   if (!aiTokenInput.value.trim()) await aiLoadToken();
+  if (aiBusy) return;
   if (!aiTokenInput.value.trim()) {
     aiSetStatus('Paste the AI operator token first. The background HUD writes it to its log: journalctl --user -u megalodon-hud.service | grep "AI operator token".', 'warn', 'Token needed');
     aiTokenInput.focus(); return;
@@ -450,7 +498,7 @@ aiCheck.addEventListener('click', async () => {
     aiVerified = false;
     if (err && err.name === 'AbortError') {
       phase = 'idle';
-      aiSetStatus(aiUserCanceled ? 'AI check canceled by operator.' : 'AI check timed out client-side.', 'warn', aiUserCanceled ? 'Cancelled' : 'Timed out');
+      aiStoppedStatus(err, 'the AI check');
     } else {
       aiSetStatus('AI check failed. Core MEGALODON remains available.', 'error', 'Check failed');
     }
@@ -499,7 +547,7 @@ aiAsk.addEventListener('click', async () => {
   } catch (err) {
     phase = 'error';
     if (err && err.name === 'AbortError') {
-      aiSetStatus(aiUserCanceled ? 'AI request canceled by operator. No partial model output is shown.' : 'AI did not return a complete answer within 10 minutes. No partial model output is shown.', 'warn', aiUserCanceled ? 'Cancelled' : 'Timed out');
+      aiStoppedStatus(err, 'the AI question');
     } else {
       aiSetStatus('AI request failed. No partial model output is shown.', 'error', 'Failed');
     }
