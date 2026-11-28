@@ -16,6 +16,89 @@ def test_zeek_counts_stay_flows_and_reverse_observations():
     with pytest.raises(ValueError): sensor.summarize_zeek(b'x'*(sensor.MAX_LOG+1))
 
 
+@pytest.mark.parametrize('row', [
+    dict(ts=1,proto=[]), dict(ts=1,proto={}), dict(ts=1,proto=1),
+    dict(ts=1,proto=None), dict(ts=1,proto=True),
+    dict(ts=float('nan'),proto='tcp'), dict(ts=float('inf'),proto='tcp'),
+    dict(ts=float('-inf'),proto='tcp'), dict(ts=-1,proto='tcp'),
+    dict(ts=10**100,proto='tcp'), dict(ts=True,proto='tcp'),
+])
+def test_zeek_summary_refuses_malformed_fields(row):
+    with pytest.raises(ValueError):
+        sensor.summarize_zeek(json.dumps(row).encode())
+
+
+def test_zeek_summary_refuses_deep_json_as_a_data_error():
+    with pytest.raises(ValueError):
+        sensor.summarize_zeek(b'['*10000+b'0'+b']'*10000)
+
+
+def test_zeek_summary_checks_row_bound_before_parsing(monkeypatch):
+    def forbidden(*args,**kwargs):
+        pytest.fail('Oversized row count reached the JSON parser')
+    monkeypatch.setattr(sensor.json,'loads',forbidden)
+    with pytest.raises(ValueError):
+        sensor.summarize_zeek(b'{}\n'*4001)
+
+
+def test_zeek_summary_preserves_other_protocols_and_missing_packet_counts():
+    rows=[dict(ts=0,proto='icmp'),dict(ts=1,proto='other'),dict(ts=253402300799),
+          dict(ts=2.5,proto='tcp',orig_pkts=1,resp_pkts=1)]
+    metrics=sensor.summarize_zeek(b'\n'.join(json.dumps(row).encode() for row in rows))
+    assert [metric['value'] for metric in metrics]==[4,1,1,0]
+    assert [metric['value'] for metric in sensor.summarize_zeek(b'')]==[0,0,0,0]
+
+
+@pytest.mark.parametrize('corrupt', [
+    json.dumps(dict(ts=1,proto=[])).encode(),
+    json.dumps(dict(ts=float('nan'),proto='tcp')).encode(),
+    b'['*10000+b'0'+b']'*10000,
+],ids=['protocol-shape','nonfinite-time','deep-json'])
+def test_zeek_bad_sample_reports_error_cleans_up_and_allows_explicit_retry(tmp_path,monkeypatch,corrupt):
+    sampler=sensor.SupportSensors(tmp_path)
+    sampler.root.mkdir(parents=True)
+    sampler._publish('zeek',state='connected',updated_at='old sample',metrics=[sensor.metric('Old',1)])
+    forwarded=[];retained=[];reservations=[];waited=[]
+    valid=json.dumps(dict(ts=1,proto='tcp',orig_pkts=1,resp_pkts=1)).encode()
+    # A valid prefix must not escape from a sample whose later row is corrupt.
+    samples=iter((valid+b'\n'+corrupt,valid))
+    @contextmanager
+    def reserve(amount):
+        reservations.append('enter')
+        try:yield
+        finally:reservations.append('exit')
+    sampler.evidence=SimpleNamespace(enabled=True,working_reservation=reserve,
+        append_records=lambda *args:retained.append(args))
+    sampler.flow_ingestor=SimpleNamespace(ingest_zeek_sample=lambda *args,**kw:forwarded.append((args,kw)))
+    monkeypatch.setattr(sensor,'zeek_binary',lambda home:'/fake/zeek')
+    monkeypatch.setattr(sensor,'_run_fixed',lambda *args:(b'bounded pcap header data!!',0))
+    monkeypatch.setattr(sampler._stop,'wait',lambda interval:True)
+    class Process:
+        returncode=0
+        def __init__(self,argv,**kwargs):self.directory=Path(kwargs['cwd'])
+        def communicate(self,**kwargs):(self.directory/'conn.log').write_bytes(next(samples))
+        def poll(self):return 0
+        def wait(self):waited.append(self.directory);return 0
+    monkeypatch.setattr(sensor.subprocess,'Popen',Process)
+
+    sampler._zeek('eth0')
+    failed=sampler.snapshot()['zeek']
+    assert failed['state']=='error' and failed['metrics']==[] and failed['updated_at'] is None
+    assert 'Retry background tools' in failed['message']
+    assert not forwarded and not retained
+    assert sampler._decoder is None and not list(sampler.root.iterdir())
+    assert reservations==['enter','exit'] and len(waited)==1
+
+    # The existing explicit background-tools retry starts a fresh worker after error.
+    sampler._zeek('eth0')
+    recovered=sampler.snapshot()['zeek']
+    assert recovered['state']=='connected' and recovered['updated_at'] is not None
+    assert [metric['value'] for metric in recovered['metrics']]==[1,1,1,0]
+    assert len(forwarded)==len(retained)==1 and forwarded[0][0][0]==valid
+    assert sampler._decoder is None and not list(sampler.root.iterdir())
+    assert reservations==['enter','exit','enter','exit'] and len(waited)==2
+
+
 def test_eve_tail_excludes_stale_future_and_incomplete_records(tmp_path):
     path=tmp_path/'eve.json'
     now=datetime.now(timezone(timedelta(hours=-5)))
